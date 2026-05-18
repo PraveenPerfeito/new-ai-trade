@@ -33,3 +33,13 @@ slowapi==0.1.9
 
 # Utilities
 python-ulid==3.0.0
+
+# ── Core engine: trading calculations ─────────────────────────────────────────
+numpy>=1.26.0
+pandas>=2.2.0
+# pandas-ta is used in Docker (Python 3.12). Local Python 3.14 uses pure pandas.
+# pandas-ta>=0.3.14b
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest>=8.3.0
+pytest-asyncio>=0.23.0
