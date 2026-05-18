@@ -10,14 +10,16 @@ import { SignalsFeed }     from './signals-feed';
 import { TopCoinsTable }   from './top-coins-table';
 import { MarketWidgets }   from './market-widgets';
 import { TopMovers }       from './top-movers';
-import { BacktestPanel }   from './backtest-panel';
+import { BacktestPanel }          from './backtest-panel';
+import { PerformanceAnalytics }  from './performance-analytics';
+import { PaperTrading }          from './paper-trading';
 
 const POLL_SIGNALS_MS   = 30_000;
 const POLL_COINS_MS     = 5 * 60_000;
 const POLL_SCHEDULER_MS = 5_000;
 
 export function MarketScanner() {
-  const [activeTab, setActiveTab]                 = useState<'scanner' | 'backtest'>('scanner');
+  const [activeTab, setActiveTab]                 = useState<'scanner' | 'backtest' | 'analytics' | 'trade'>('scanner');
   const [mode, setMode]                           = useState<ScannerMode>('spot');
   const [signals, setSignals]                     = useState<TradingSignal[]>([]);
   const [coins, setCoins]                         = useState<CoinData[]>([]);
@@ -130,6 +132,21 @@ export function MarketScanner() {
     }
   }, [schedulerStatus?.scanning, mode, fetchSignals]);
 
+  // ── Paper trade entry ─────────────────────────────────────────────────────
+  const handleEnterTrade = useCallback(async (signal: TradingSignal) => {
+    try {
+      const res  = await fetch('/api/paper-trading/enter', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ signal }),
+      });
+      const json = await res.json();
+      return { success: json.success as boolean, error: json.error as string | undefined };
+    } catch {
+      return { success: false, error: 'Network error' };
+    }
+  }, []);
+
   // ── Auto-scan toggle ───────────────────────────────────────────────────────
   const handleToggleAutoScan = useCallback(async () => {
     const isOn = schedulerStatus?.started ?? false;
@@ -218,7 +235,7 @@ export function MarketScanner() {
 
         {/* Tab navigation */}
         <div className="flex-shrink-0 flex gap-1 glass-surface rounded-xl p-1 border border-terminal-border/40 mb-0 self-start w-fit">
-          {(['scanner', 'backtest'] as const).map(tab => (
+          {(['scanner', 'backtest', 'analytics', 'trade'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -229,7 +246,10 @@ export function MarketScanner() {
                   : 'text-terminal-muted hover:text-terminal-text',
               )}
             >
-              {tab === 'scanner' ? '⬡ Scanner' : '◈ Backtest'}
+              {tab === 'scanner'   ? '⬡ Scanner'
+               : tab === 'backtest'  ? '◈ Backtest'
+               : tab === 'analytics' ? '◇ Analytics'
+               : '▸ Paper Trade'}
             </button>
           ))}
         </div>
@@ -250,7 +270,7 @@ export function MarketScanner() {
               className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[390px_1fr] gap-4"
               style={{ minHeight: 480 }}
             >
-              <SignalsFeed signals={signals} loading={sigsLoading} />
+              <SignalsFeed signals={signals} loading={sigsLoading} onEnterTrade={handleEnterTrade} />
               <TopCoinsTable coins={coins} signals={signals} loading={coinsLoading} />
             </div>
           </>
@@ -259,6 +279,18 @@ export function MarketScanner() {
         {activeTab === 'backtest' && (
           <div className="flex-1 min-h-0 overflow-y-auto">
             <BacktestPanel />
+          </div>
+        )}
+
+        {activeTab === 'analytics' && (
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <PerformanceAnalytics />
+          </div>
+        )}
+
+        {activeTab === 'trade' && (
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <PaperTrading />
           </div>
         )}
       </main>

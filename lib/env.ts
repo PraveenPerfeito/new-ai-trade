@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { createLogger } from './logger';
+
+const log = createLogger('lib/env');
 
 const schema = z.object({
   // Runtime
@@ -31,6 +34,9 @@ const schema = z.object({
   RATE_LIMIT_MAX:       z.coerce.number().int().min(1).default(100),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(60_000),
 
+  // Redis
+  REDIS_URL: z.string().url().optional(), // redis://localhost:6379/0
+
   // CORS
   ALLOWED_ORIGINS: z.string().optional(), // comma-separated list e.g. "https://app.example.com"
 });
@@ -54,10 +60,10 @@ function validate(): Env {
 
   // Warn about optional-but-recommended vars
   if (!e.ANTHROPIC_API_KEY) {
-    console.warn('[env] ANTHROPIC_API_KEY not set — AI validation will use heuristic fallback');
+    log.warn('ANTHROPIC_API_KEY not set — AI validation will use heuristic fallback');
   }
   if (!e.TELEGRAM_BOT_TOKEN || !e.TELEGRAM_CHAT_ID) {
-    console.warn('[env] Telegram not configured — signal alerts disabled');
+    log.warn('Telegram not configured — signal alerts disabled');
   }
 
   return e;

@@ -1,5 +1,7 @@
 import { TradingSignal, TPHitEvent, SLHitEvent, DailySummaryData } from '@/types';
+import { createLogger } from './logger';
 
+const log = createLogger('lib/telegram');
 const TOKEN   = process.env.TELEGRAM_BOT_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
@@ -39,12 +41,12 @@ async function sendMessage(text: string): Promise<boolean> {
       }),
     });
     if (!res.ok) {
-      console.error('[Telegram] sendMessage failed:', await res.text());
+      log.error({ body: await res.text() }, 'sendMessage failed');
       return false;
     }
     return true;
   } catch (err) {
-    console.error('[Telegram] network error:', err);
+    log.error({ err }, 'sendMessage network error');
     return false;
   }
 }
@@ -74,6 +76,17 @@ export function formatSpotAlert(s: TradingSignal): string {
   const strengths = s.strengths?.map(x => `✅ ${x}`).join('\n') ?? '';
   const risks     = s.risks?.map(x => `⚠️ ${x}`).join('\n') ?? '';
   const separator = strengths && risks ? '\n' : '';
+  const ex        = s.aiExplainability;
+
+  const aiSection = ex
+    ? `🧠 <b>AI Analysis</b>
+<i>${ex.summary}</i>
+  📈 <i>${ex.trend}</i>
+  ⚡ <i>${ex.momentum}</i>
+  🌡 <i>${ex.volatility}</i>
+  💡 <i>${ex.rationale}</i>`
+    : `🤖 <b>AI Analysis</b>
+<i>${s.aiReasoning ?? s.setupDescription}</i>`;
 
   return `${header}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -98,8 +111,7 @@ export function formatSpotAlert(s: TradingSignal): string {
   Volume:  ${s.indicators.volumeSpike.toFixed(2)}× avg
   ATR:     ${fmt(s.indicators.atr)}
 
-🤖 <b>AI Analysis</b>
-<i>${s.aiReasoning ?? s.setupDescription}</i>
+${aiSection}
 
 ${strengths}${separator}${risks}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -119,6 +131,17 @@ export function formatFuturesAlert(s: TradingSignal): string {
   const strengths = s.strengths?.map(x => `✅ ${x}`).join('\n') ?? '';
   const risks     = s.risks?.map(x => `⚠️ ${x}`).join('\n') ?? '';
   const separator = strengths && risks ? '\n' : '';
+  const ex        = s.aiExplainability;
+
+  const aiSection = ex
+    ? `🧠 <b>AI Analysis</b>
+<i>${ex.summary}</i>
+  📈 <i>${ex.trend}</i>
+  ⚡ <i>${ex.momentum}</i>
+  🌡 <i>${ex.volatility}</i>
+  💡 <i>${ex.rationale}</i>`
+    : `🤖 <b>AI Analysis</b>
+<i>${s.aiReasoning ?? s.setupDescription}</i>`;
 
   return `${header}  [PERP]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -147,8 +170,7 @@ export function formatFuturesAlert(s: TradingSignal): string {
 Use 5-10× leverage max. Set stop as hard SL order immediately.
 Scale out: 40% at TP1 → 35% at TP2 → trail rest to TP3.
 
-🤖 <b>AI Analysis</b>
-<i>${s.aiReasoning ?? s.setupDescription}</i>
+${aiSection}
 
 ${strengths}${separator}${risks}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━

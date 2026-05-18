@@ -71,6 +71,7 @@ export interface TradingSignal {
   setupDescription: string;
   aiValidated: boolean;
   aiReasoning?: string;
+  aiExplainability?: AIExplainability;
   risks?: string[];
   strengths?: string[];
   telegramSent: boolean;
@@ -97,12 +98,21 @@ export interface ScanRun {
   error?: string;
 }
 
+export interface AIExplainability {
+  trend:      string;  // multi-timeframe trend structure (1-2 sentences)
+  momentum:   string;  // RSI / MACD / volume quality (1-2 sentences)
+  volatility: string;  // ATR-based volatility and stop reliability (1 sentence)
+  rationale:  string;  // why the confidence score is at this level (1 sentence)
+  summary:    string;  // one-line human-readable trade thesis
+}
+
 export interface AIValidationResult {
-  confidence: number;
-  validated: boolean;
-  reasoning: string;
-  risks: string[];
-  strengths: string[];
+  confidence:     number;
+  validated:      boolean;
+  reasoning:      string;
+  risks:          string[];
+  strengths:      string[];
+  explainability?: AIExplainability;
 }
 
 export interface ScannerConfig {
@@ -240,6 +250,116 @@ export interface FuturesData {
   trendContinuation:     TrendContinuationData;
 }
 
+// ─── Signal Performance Analytics ───────────────────────────────────────────
+
+export type SignalOutcome = 'PENDING' | 'TP_HIT' | 'SL_HIT' | 'TIMEOUT';
+export type VolatilityRegime = 'LOW' | 'NORMAL' | 'HIGH' | 'EXTREME';
+
+export interface SignalOutcomeRecord {
+  id: string;
+  signalId: string;
+  symbol: string;
+  signalType: SignalType;
+  timeframe: Timeframe;
+  scannerMode: ScannerMode;
+  entryPrice: number;
+  targetPrice: number;
+  stopLoss: number;
+  rrRatio: number;
+  confidence: number;
+  aiValidated: boolean;
+  volatilityRegime: VolatilityRegime;
+  riskGrade?: RiskGrade;
+  riskScore?: number;
+  qualityScore?: number;
+  outcome: SignalOutcome;
+  exitPrice?: number;
+  exitTime?: Date;
+  rrAchieved?: number;
+  pnlPct?: number;
+  durationHours?: number;
+  createdAt: Date;
+  resolvedAt?: Date;
+  checkedAt?: Date;
+  checkCount: number;
+}
+
+export interface PerformanceMetrics {
+  totalSignals: number;
+  resolvedSignals: number;
+  pendingSignals: number;
+  tpHitRate: number;
+  slHitRate: number;
+  timeoutRate: number;
+  winRate: number;
+  avgRRAchieved: number;
+  avgWin: number;
+  avgLoss: number;
+  expectancy: number;
+  profitFactor: number;
+  maxDrawdown: number;
+  totalReturn: number;
+  sharpeRatio: number;
+  avgConfidence: number;
+  aiValidatedWinRate: number;
+  nonAiWinRate: number;
+}
+
+export interface BreakdownMetrics {
+  key: string;
+  label: string;
+  totalSignals: number;
+  resolvedSignals: number;
+  winRate: number;
+  avgRR: number;
+  expectancy: number;
+  profitFactor: number;
+  tpHitRate: number;
+  avgConfidence: number;
+}
+
+export interface SetupPattern {
+  symbol: string;
+  timeframe: Timeframe;
+  scannerMode: ScannerMode;
+  signalType: SignalType;
+  totalTrades: number;
+  winRate: number;
+  avgRR: number;
+  expectancy: number;
+  profitFactor: number;
+  avgConfidence: number;
+  lastSignalAt?: Date;
+}
+
+export interface AIAccuracyBucket {
+  band: string;
+  minConfidence: number;
+  maxConfidence: number;
+  total: number;
+  winRate: number;
+  avgRRAchieved: number;
+  tpHitRate: number;
+}
+
+export interface AnalyticsData {
+  overall: PerformanceMetrics;
+  byCoin: BreakdownMetrics[];
+  byTimeframe: BreakdownMetrics[];
+  byMode: BreakdownMetrics[];
+  byVolatility: BreakdownMetrics[];
+  bestSetups: SetupPattern[];
+  worstSetups: SetupPattern[];
+  aiAccuracy: AIAccuracyBucket[];
+  resolutionStatus: {
+    total: number;
+    resolved: number;
+    pending: number;
+    resolvedToday: number;
+  };
+  lastUpdated: Date;
+}
+
 // ─── Telegram alert event types ─────────────────────────────────────────────
 
 export interface TPHitEvent {
@@ -264,6 +384,84 @@ export interface DailySummaryData {
   buySignals: number;
   sellSignals: number;
   bestSignal?: TradingSignal;
+}
+
+// ─── Paper Trading ───────────────────────────────────────────────────────────
+
+export type PaperTradeStatus     = 'OPEN' | 'CLOSED_TP' | 'CLOSED_SL' | 'CLOSED_MANUAL' | 'CLOSED_EXPIRED';
+export type PaperTradeExitReason = 'TP_HIT' | 'SL_HIT' | 'MANUAL' | 'EXPIRED';
+
+export interface PaperPortfolio {
+  id:               string;
+  name:             string;
+  initialCapital:   number;
+  availableCapital: number;   // cash not locked in positions
+  realizedPnl:      number;   // cumulative closed-trade PnL in USDT
+  totalTrades:      number;
+  wins:             number;
+  losses:           number;
+  createdAt:        Date;
+  updatedAt:        Date;
+}
+
+export interface PaperTrade {
+  id:             string;
+  portfolioId:    string;
+  signalId?:      string;
+  symbol:         string;
+  signalType:     'BUY' | 'SELL';
+  timeframe:      Timeframe;
+  scannerMode:    ScannerMode;
+  confidence:     number;
+  entryPrice:     number;
+  targetPrice:    number;
+  stopLoss:       number;
+  rrRatio:        number;
+  leverage:       number;
+  riskPct:        number;          // fraction of portfolio equity risked (0.01 = 1%)
+  notionalUsdt:   number;          // position face value
+  marginUsdt:     number;          // capital locked = notionalUsdt / leverage
+  riskAmountUsdt: number;          // max loss in USDT
+  quantity:       number;
+  status:         PaperTradeStatus;
+  exitPrice?:     number;
+  exitReason?:    PaperTradeExitReason;
+  realizedPnl?:   number;
+  realizedPnlPct?: number;
+  durationHours?: number;
+  createdAt:      Date;
+  closedAt?:      Date;
+  lastCheckedAt?: Date;
+}
+
+export interface OpenTradeView extends PaperTrade {
+  currentPrice:    number;
+  unrealizedPnl:   number;
+  unrealizedPnlPct: number;
+  progressPct:     number;   // 0–100: 0 = at SL, 100 = at TP
+  distanceToTpPct: number;   // % from current to target
+  distanceToSlPct: number;   // % from current to stop-loss
+}
+
+export interface PortfolioMetrics {
+  totalTrades:    number;
+  openTrades:     number;
+  winRate:        number;
+  avgRR:          number;
+  totalReturnPct: number;
+  profitFactor:   number;
+  bestTrade:      number;
+  worstTrade:     number;
+}
+
+export interface PortfolioSnapshot {
+  portfolio:     PaperPortfolio;
+  totalEquity:   number;           // availableCapital + marginLocked + unrealizedPnl
+  unrealizedPnl: number;
+  marginLocked:  number;
+  openTrades:    OpenTradeView[];
+  recentTrades:  PaperTrade[];
+  metrics:       PortfolioMetrics;
 }
 
 // ─── SaaS / Monetisation ─────────────────────────────────────────────────────

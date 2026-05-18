@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { TradingSignal, CoinData, BacktestTrade, BacktestMetrics, BacktestConfig, BacktestRun } from '@/types';
+import { TradingSignal, AIExplainability, CoinData, BacktestTrade, BacktestMetrics, BacktestConfig, BacktestRun } from '@/types';
 
 let _client: ReturnType<typeof createClient> | null = null;
 
@@ -67,10 +67,11 @@ export async function saveSignal(signal: TradingSignal): Promise<string | null> 
       atr: signal.indicators.atr,
       volume_spike: signal.indicators.volumeSpike,
       setup_description: signal.setupDescription,
-      ai_validated: signal.aiValidated,
-      ai_reasoning: signal.aiReasoning ?? null,
-      risks: signal.risks ?? [],
-      strengths: signal.strengths ?? [],
+      ai_validated:      signal.aiValidated,
+      ai_reasoning:      signal.aiReasoning      ?? null,
+      ai_explainability: signal.aiExplainability ?? null,
+      risks:             signal.risks             ?? [],
+      strengths:         signal.strengths         ?? [],
       telegram_sent: signal.telegramSent,
     })
     .select('id')
@@ -343,10 +344,11 @@ function rowToSignal(row: Record<string, unknown>): TradingSignal {
       trend: (row.ema_trend as TechnicalTrend) || 'RANGING',
     },
     setupDescription: (row.setup_description as string) || '',
-    aiValidated: Boolean(row.ai_validated),
-    aiReasoning: row.ai_reasoning as string | undefined,
-    risks: (row.risks as string[]) || [],
-    strengths: (row.strengths as string[]) || [],
+    aiValidated:      Boolean(row.ai_validated),
+    aiReasoning:      row.ai_reasoning      as string | undefined,
+    aiExplainability: row.ai_explainability as AIExplainability | undefined ?? undefined,
+    risks:            (row.risks     as string[]) || [],
+    strengths:        (row.strengths as string[]) || [],
     telegramSent: Boolean(row.telegram_sent),
     createdAt: new Date(row.created_at as string),
   };

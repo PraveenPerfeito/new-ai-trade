@@ -1,0 +1,98 @@
+"""
+Distributed scheduler coordinator backed by Redis.
+Uses SET NX EX (atomic) for distributed locks so only one worker runs
+a scan at a time — replaces the globalThis singleton in lib/scheduler.ts.
+"""
+from __future__ import annotations
+
+import time
+from typing import Literal
+
+import redis as sync_redis
+
+from backend.config import get_settings
+from backend.logging.setup import get_logger
+from backend.metrics.prometheus import scheduler_active, scheduler_scanning
+
+log = get_logger(__name__)
+
+ScanMode = Literal["standard", "high_confidence", "futures"]
+
+_SCHEDULER_STATE_KEY = "scheduler:state"
+_LOCK_KEY_PREFIX     = "scheduler:lock:"
+_ENABLED_KEY         = "scheduler:enabled"
+
+
+class SchedulerCoordinator:
+    """
+    Thin wrapper around Redis for distributed scheduler state.
+    All methods are synchronous (called from Celery task context).
+    """
+
+    def __init__(self) -> None:
+        settings = get_settings()
+        self._redis = sync_redis.from_url(
+            settings.redis_url,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
+
+    # ── Scan lock ─────────────────────────────────────────────────────────────
+
+    def acquire_scan_lock(self, mode: ScanMode, ttl_seconds: int = 660) -> bool:
+        """
+        Attempt to acquire the distributed scan lock for `mode`.
+        Returns True if the lock was acquired, False if another worker holds it.
+        """
+        key = f"{_LOCK_KEY_PREFIX}{mode}"
+        acquired = self._redis.set(key, "1", nx=True, ex=ttl_seconds)
+        if acquired:
+            scheduler_scanning.set(1)
+            log.debug("scan_lock_acquired", mode=mode)
+        return bool(acquired)
+
+    def release_scan_lock(self, mode: ScanMode) -> None:
+        key = f"{_LOCK_KEY_PREFIX}{mode}"
+        self._redis.delete(key)
+        scheduler_scanning.set(0)
+        log.debug("scan_lock_released", mode=mode)
+
+    def is_scan_running(self, mode: ScanMode) -> bool:
+        key = f"{_LOCK_KEY_PREFIX}{mode}"
+        return self._redis.exists(key) == 1
+
+    # ── Scheduler enable / disable ────────────────────────────────────────────
+
+    def enable(self) -> None:
+        self._redis.set(_ENABLED_KEY, "1")
+        scheduler_active.set(1)
+        log.info("scheduler_enabled")
+
+    def disable(self) -> None:
+        self._redis.set(_ENABLED_KEY, "0")
+        scheduler_active.set(0)
+        log.info("scheduler_disabled")
+
+    def is_enabled(self) -> bool:
+        val = self._redis.get(_ENABLED_KEY)
+        return val != "0"   # enabled by default if key doesn't exist
+
+    # ── Status snapshot ───────────────────────────────────────────────────────
+
+    def status(self) -> dict:
+        enabled = self.is_enabled()
+        running_modes = [
+            m for m in ("standard", "high_confidence", "futures")
+            if self.is_scan_running(m)  # type: ignore[arg-type]
+        ]
+        last_ts_raw = self._redis.get("scheduler:last_scan_ts")
+        return {
+            "enabled":      enabled,
+            "scanning":     bool(running_modes),
+            "running_modes": running_modes,
+            "last_scan_at": float(last_ts_raw) if last_ts_raw else None,
+        }
+
+    def record_scan_complete(self) -> None:
+        self._redis.set("scheduler:last_scan_ts", str(time.time()))

@@ -14,9 +14,13 @@ import {
 import { validateSignal } from './ai-validator';
 import { validateRisk } from './risk';
 import { analyzeFuturesIntelligence } from './futures-intelligence';
+import { runMarketStructureChecks } from './market-structure';
 import { saveSignal, createScanRun, updateScanRun, upsertCoins } from './supabase';
 import { sendSignalAlert, sendScanSummary } from './telegram';
 import { sleep } from './utils';
+import { createLogger } from './logger';
+
+const log = createLogger('lib/scanner');
 
 // ─── Scanner configurations per mode ───────────────────────────────────────
 // NOTE: `timeframes` is kept for API compatibility but the scanner now always
@@ -223,10 +227,14 @@ async function fetchKlines(coin: CoinData, interval: string, limit: number, mode
  *   2. Calculate indicators for both timeframes
  *   3. Multi-timeframe confirmation — reject if 1h/4h trends conflict
  *   4. Volatility gate — reject EXTREME (ATR > 8% of price on 1h)
- *   5. Trend strength gate — reject weak/choppy trends
+ *   5. Trend strength gate — reject weak/choppy trends (combined < 30)
+ *   5b. Market structure gate — sideways, overextension, candle structure,
+ *       trend exhaustion, fake volume, S/R rejection, weak breakout
  *   6. Setup scoring (pre-AI) — must score ≥ 65/100
  *   7. Trade level calculation (ATR-based) — must achieve RR ≥ 2.0
- *   8. AI validation — final confidence scoring and reasoning
+ *   8. Risk engine — grade A-F gating
+ *   9. Futures intelligence — funding rate, OI, momentum
+ *  10. AI validation — final confidence scoring and reasoning
  *
  * Returns null at any rejection step to avoid noisy signals.
  */
@@ -268,7 +276,7 @@ export async function scanCoin(
     // Uses 1h ATR as it reflects current short-term volatility
     const volatility: VolatilityRating = calcVolatilityRating(ind1h.atr, ind1h.currentPrice);
     if (volatility === 'EXTREME') {
-      console.log(`[Scanner] ${coin.symbol} rejected — EXTREME volatility (ATR > 8%)`);
+      log.info({ symbol: coin.symbol }, 'rejected — EXTREME volatility');
       return null;
     }
 
@@ -279,6 +287,22 @@ export async function scanCoin(
 
     // Minimum combined strength of 30 — below this the trend is too weak/choppy
     if (combinedStrength < 30) return null;
+
+    // Step 5b: Market structure gate — 7 structural filters run before setup scoring
+    // This rejects sideways markets, overextended moves, bad candle structure,
+    // exhausted trends, fake volume, S/R rejection zones, and weak breakouts.
+    const structure = runMarketStructureChecks(
+      candles1h,
+      ind1h.atr,
+      ind1h.currentPrice,
+      ind1h.volumeSpike,
+      signalType,
+    );
+    if (!structure.pass) {
+      log.info({ symbol: coin.symbol, reason: structure.rejectionReason }, 'structure gate rejected');
+      return null;
+    }
+    // ADX available for context in subsequent steps (included in setupDescription)
 
     // Step 7: Setup quality scoring (pre-AI, fast)
     const { hasSetup, description } = detectSetup(ind1h, ind4h, signalType, strength1h, strength4h);
@@ -306,7 +330,7 @@ export async function scanCoin(
     });
 
     if (!risk.pass) {
-      console.log(`[Scanner] ${coin.symbol} rejected by risk engine — ${risk.summary}`);
+      log.info({ symbol: coin.symbol, summary: risk.summary }, 'risk engine rejected');
       return null;
     }
 
@@ -328,7 +352,7 @@ export async function scanCoin(
         // Gate: reject when funding rate is extreme (>0.2% per 8h = 0.002)
         // — extreme funding means overcrowded trade and imminent flush risk
         if (Math.abs(futuresData.fundingRate) > 0.002) {
-          console.log(`[Scanner] ${coin.symbol} rejected — extreme funding rate ${(futuresData.fundingRate * 100).toFixed(4)}%`);
+          log.info({ symbol: coin.symbol, fundingRate: futuresData.fundingRate }, 'rejected — extreme funding rate');
           return null;
         }
       } catch {
@@ -346,7 +370,7 @@ export async function scanCoin(
       ...levels,
       confidence: 0,
       indicators: ind1h,
-      setupDescription: description,
+      setupDescription: `${description} | ADX: ${structure.adx.toFixed(0)}`,
       riskScore:              risk.riskScore,
       qualityScore:           risk.qualityScore,
       riskGrade:              risk.riskGrade,
@@ -362,15 +386,16 @@ export async function scanCoin(
     return {
       ...draft,
       confidence:  ai.confidence,
-      aiValidated: ai.validated,
-      aiReasoning: ai.reasoning,
-      risks:       ai.risks,
-      strengths:   ai.strengths,
+      aiValidated:      ai.validated,
+      aiReasoning:      ai.reasoning,
+      aiExplainability: ai.explainability,
+      risks:            ai.risks,
+      strengths:        ai.strengths,
       telegramSent: false,
       createdAt:   new Date(),
     };
   } catch (err) {
-    console.error(`[Scanner] scanCoin error for ${coin.symbol}:`, err);
+    log.error({ symbol: coin.symbol, err }, 'scanCoin error');
     return null;
   }
 }
@@ -383,13 +408,13 @@ export async function runScan(mode: ScannerMode = 'spot'): Promise<ScanResult> {
   const delayMs = parseInt(process.env.SCANNER_DELAY_MS ?? '300', 10);
   const alertThreshold = parseInt(process.env.SCANNER_MIN_CONFIDENCE_ALERT ?? '85', 10);
 
-  console.log(`[Scanner] ▶ ${mode} scan starting`);
+  log.info({ mode }, 'scan starting');
   const scanRunId = await createScanRun(mode);
 
   try {
     // 1. Fetch top 100 from CoinGecko
     const allCoins = await getTop100ByMarketCap();
-    console.log(`[Scanner] Fetched ${allCoins.length} coins from CoinGecko`);
+    log.info({ count: allCoins.length }, 'fetched coins from CoinGecko');
 
     // 2. Apply market-cap and volume filters
     let filtered = filterHighVolume(allCoins, config.minVolume24h);
@@ -412,7 +437,7 @@ export async function runScan(mode: ScannerMode = 'spot'): Promise<ScanResult> {
 
     // 5. Prioritise priority coins (BTC, ETH, SOL, …) then sort by quality score
     filtered = prioritizeCoins(filtered).slice(0, config.maxCoinsToScan);
-    console.log(`[Scanner] Scanning ${filtered.length} coins (mode: ${mode})`);
+    log.info({ count: filtered.length, mode }, 'scanning coins');
 
     // 6. Cache coin list in Supabase for the dashboard
     await upsertCoins(allCoins);
@@ -445,7 +470,7 @@ export async function runScan(mode: ScannerMode = 'spot'): Promise<ScanResult> {
         if (sent) signal.telegramSent = true;
       }
 
-      console.log(`[Scanner] ✓ ${signal.type} ${coin.symbol} — conf: ${signal.confidence}% | RR: 1:${signal.rrRatio.toFixed(1)} | ${signal.indicators.trend}`);
+      log.info({ type: signal.type, symbol: coin.symbol, confidence: signal.confidence, rrRatio: signal.rrRatio }, 'signal accepted');
     }
 
     const duration = Date.now() - t0;
@@ -461,7 +486,7 @@ export async function runScan(mode: ScannerMode = 'spot'): Promise<ScanResult> {
     }
 
     await sendScanSummary(coinsScanned, signals.length, highConf, duration, mode);
-    console.log(`[Scanner] ■ Done: ${coinsScanned} coins | ${signals.length} signals | ${duration}ms`);
+    log.info({ mode, coinsScanned, signals: signals.length, duration }, 'scan complete');
 
     return { scanRunId, signals, coinsScanned, duration, mode };
   } catch (err: unknown) {

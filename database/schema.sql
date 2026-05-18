@@ -52,12 +52,16 @@ CREATE TABLE IF NOT EXISTS signals (
   volume_spike    NUMERIC(8, 2),
   setup_description TEXT,
   ai_validated    BOOLEAN NOT NULL DEFAULT FALSE,
-  ai_reasoning    TEXT,
-  risks           TEXT[],
-  strengths       TEXT[],
-  telegram_sent   BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  ai_reasoning      TEXT,
+  ai_explainability JSONB,        -- {trend, momentum, volatility, rationale, summary}
+  risks             TEXT[],
+  strengths         TEXT[],
+  telegram_sent     BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Migration: add ai_explainability if upgrading from an earlier schema
+-- ALTER TABLE signals ADD COLUMN IF NOT EXISTS ai_explainability JSONB;
 
 -- Indexes for common query patterns
 CREATE INDEX IF NOT EXISTS idx_signals_created_at   ON signals(created_at DESC);

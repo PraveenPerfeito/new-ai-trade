@@ -1,0 +1,35 @@
+# FastAPI core
+fastapi[standard]==0.115.5
+uvicorn[standard]==0.32.1
+
+# Async task queue
+celery[redis]==5.4.0
+redis==5.2.1
+
+# Database
+asyncpg==0.30.0
+sqlalchemy[asyncio]==2.0.36
+
+# Config & validation
+pydantic-settings==2.6.1
+python-dotenv==1.0.1
+
+# Observability
+structlog==24.4.0
+prometheus-client==0.21.1
+prometheus-fastapi-instrumentator==7.0.0
+
+# HTTP client
+httpx==0.28.0
+
+# Anthropic SDK
+anthropic==0.40.0
+
+# Stripe
+stripe==11.2.0
+
+# Rate limiting
+slowapi==0.1.9
+
+# Utilities
+python-ulid==3.0.0

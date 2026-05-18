@@ -1,7 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { TradingSignal, AIValidationResult, CoinData, TechnicalIndicators } from '@/types';
+import { TradingSignal, AIValidationResult, AIExplainability, CoinData, TechnicalIndicators } from '@/types';
 import { VolatilityRating } from './indicators';
 import { clamp } from './utils';
+import { createLogger } from './logger';
+import { getEnv } from './env';
+
+const log = createLogger('lib/ai-validator');
 
 type DraftSignal = Omit<TradingSignal,
   'id' | 'scanRunId' | 'aiValidated' | 'aiReasoning' | 'risks' | 'strengths' | 'telegramSent' | 'createdAt'
@@ -9,8 +13,9 @@ type DraftSignal = Omit<TradingSignal,
 
 let _client: Anthropic | null = null;
 function getClient(): Anthropic | null {
-  if (!process.env.ANTHROPIC_API_KEY) return null;
-  if (!_client) _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const key = getEnv().ANTHROPIC_API_KEY;
+  if (!key) return null;
+  if (!_client) _client = new Anthropic({ apiKey: key });
   return _client;
 }
 
@@ -102,13 +107,13 @@ Reject (confidence < 80) if ANY of these apply:
 • Futures only: funding rate bias strongly against trade direction
 • Futures only: momentum score < 35 (poor futures market structure)
 
-Respond ONLY with valid JSON (no markdown, no explanation outside JSON):
-{"confidence":<integer 0-100>,"validated":<boolean>,"reasoning":"<2-3 sentences>","risks":["<risk>","<risk>"],"strengths":["<strength>","<strength>"]}`;
+Respond ONLY with valid JSON (no markdown, no text outside the JSON object):
+{"confidence":<integer 0-100>,"validated":<boolean>,"reasoning":"<1-sentence overall verdict>","risks":["<risk>","<risk>"],"strengths":["<strength>","<strength>"],"trend":"<1-2 sentences on multi-TF trend structure and EMA alignment>","momentum":"<1-2 sentences on RSI zone, MACD histogram direction, and volume confirmation>","volatility":"<1 sentence on ATR-based volatility regime and stop reliability>","rationale":"<1 sentence explaining why confidence is at this specific level>","summary":"<one concise line: trade thesis + key edge>"}`;
 
   try {
     const msg = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 512,
+      max_tokens: 768,
       messages: [{ role: 'user', content: prompt }],
     });
 
@@ -116,15 +121,27 @@ Respond ONLY with valid JSON (no markdown, no explanation outside JSON):
     const parsed = JSON.parse(text);
     const confidence = clamp(Number(parsed.confidence) || 0, 0, 100);
 
+    const explainability: AIExplainability | undefined =
+      parsed.trend && parsed.momentum && parsed.volatility && parsed.rationale && parsed.summary
+        ? {
+            trend:      String(parsed.trend),
+            momentum:   String(parsed.momentum),
+            volatility: String(parsed.volatility),
+            rationale:  String(parsed.rationale),
+            summary:    String(parsed.summary),
+          }
+        : undefined;
+
     return {
       confidence,
-      validated:  parsed.validated === true && confidence >= 80,
-      reasoning:  String(parsed.reasoning || ''),
-      risks:      Array.isArray(parsed.risks) ? parsed.risks.map(String) : [],
-      strengths:  Array.isArray(parsed.strengths) ? parsed.strengths.map(String) : [],
+      validated:      parsed.validated === true && confidence >= 80,
+      reasoning:      String(parsed.reasoning || ''),
+      risks:          Array.isArray(parsed.risks)     ? parsed.risks.map(String)     : [],
+      strengths:      Array.isArray(parsed.strengths) ? parsed.strengths.map(String) : [],
+      explainability,
     };
   } catch (err) {
-    console.error('[AI Validator] API error, using heuristic fallback:', err);
+    log.error({ err }, 'AI API error — using heuristic fallback');
     return heuristic(signal, ind4h, trendStrength, volatilityRating);
   }
 }
@@ -255,11 +272,42 @@ function heuristic(
 
   score = clamp(score, 10, 95);
 
+  const tfAlignedForDesc = (type === 'BUY' && i1h.trend === 'BULLISH' && ind4h.trend === 'BULLISH')
+                        || (type === 'SELL' && i1h.trend === 'BEARISH' && ind4h.trend === 'BEARISH');
+  const macdAlignedForDesc = (type === 'BUY' && i1h.macd.histogram > 0)
+                           || (type === 'SELL' && i1h.macd.histogram < 0);
+  const dir = type === 'BUY' ? 'bullish' : 'bearish';
+
+  const trendDesc = tfAlignedForDesc
+    ? `Both 1h and 4h trends are ${dir}, with EMA alignment confirming the ${type === 'BUY' ? 'upward' : 'downward'} bias. Trend strength: ${trendStrength.toFixed(0)}/100.`
+    : `Timeframe conflict: 1h is ${i1h.trend.toLowerCase()} but 4h is ${ind4h.trend.toLowerCase()}, reducing setup reliability. Trend strength: ${trendStrength.toFixed(0)}/100.`;
+
+  const momentumDesc = `RSI at ${i1h.rsi.toFixed(1)} ${type === 'BUY' ? '(bullish zone: 48–70)' : '(bearish zone: 30–52)'} with MACD histogram ${macdAlignedForDesc ? 'confirming' : 'conflicting with'} entry direction. Volume spike: ${i1h.volumeSpike.toFixed(1)}× average${i1h.volumeSpike >= 2 ? ' — strong conviction' : i1h.volumeSpike >= 1.4 ? ' — above average' : ' — weak'}.`;
+
+  const volatilityDesc = volatilityRating === 'EXTREME'
+    ? 'EXTREME volatility — stop placement is unreliable and likely driven by news. Avoid entry.'
+    : volatilityRating === 'HIGH'
+    ? 'HIGH volatility — wider-than-normal stops required; reduce position size accordingly.'
+    : volatilityRating === 'LOW'
+    ? 'LOW volatility environment — momentum is limited and breakout potential is reduced.'
+    : 'Normal volatility with reliable ATR-based stop placement.';
+
+  const rationaleDesc = `Score ${score}/100 based on ${strengths.length} confirming factor${strengths.length !== 1 ? 's' : ''} and ${risks.length} risk flag${risks.length !== 1 ? 's' : ''}; ${tfAlignedForDesc ? 'MTF aligned' : 'MTF conflict'}, R:R 1:${rrRatio.toFixed(1)}.`;
+
+  const summaryDesc = `${tfAlignedForDesc ? 'Multi-TF aligned' : 'Single-TF'} ${type === 'BUY' ? 'long' : 'short'} — R:R 1:${rrRatio.toFixed(1)}, trend strength ${trendStrength.toFixed(0)}/100, ${volatilityRating.toLowerCase()} volatility.`;
+
   return {
     confidence: score,
     validated:  score >= 80,
-    reasoning:  `Heuristic validation: ${strengths.length} strength(s), ${risks.length} concern(s). Trend strength: ${trendStrength.toFixed(0)}/100. Volatility: ${volatilityRating}. Score: ${score}/100.`,
+    reasoning:  `Heuristic: ${strengths.length} strength(s), ${risks.length} concern(s). Trend strength ${trendStrength.toFixed(0)}/100. Volatility: ${volatilityRating}. Score: ${score}/100.`,
     risks,
     strengths,
+    explainability: {
+      trend:      trendDesc,
+      momentum:   momentumDesc,
+      volatility: volatilityDesc,
+      rationale:  rationaleDesc,
+      summary:    summaryDesc,
+    },
   };
 }

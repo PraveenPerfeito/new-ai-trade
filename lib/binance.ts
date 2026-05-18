@@ -144,6 +144,21 @@ export interface LongShortData {
   timestamp:           number;
 }
 
+// Lightweight price fetch — avoids pulling full kline history just for a current price
+export async function getCurrentPrice(symbol: string, isFutures = false): Promise<number | null> {
+  try {
+    const base = isFutures ? FUTURES_BASE : SPOT_BASE;
+    const { data } = await axios.get(`${base}/ticker/price`, {
+      params: { symbol },
+      timeout: 5000,
+    });
+    const price = parseFloat(data.price);
+    return isNaN(price) ? null : price;
+  } catch {
+    return null;
+  }
+}
+
 export async function getLongShortRatio(
   symbol: string,
   period = '1h',

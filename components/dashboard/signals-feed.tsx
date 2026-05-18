@@ -1,15 +1,17 @@
 'use client';
 
+import { useState } from 'react';
 import { TradingSignal, RiskGrade } from '@/types';
 import { formatPrice, timeAgo, cn } from '@/lib/utils';
-import { TrendingUp, TrendingDown, Brain, Send, Zap, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Brain, Send, Zap, ShieldCheck, AlertTriangle, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface Props {
   signals: TradingSignal[];
   loading: boolean;
+  onEnterTrade?: (signal: TradingSignal) => Promise<{ success: boolean; error?: string }>;
 }
 
-export function SignalsFeed({ signals, loading }: Props) {
+export function SignalsFeed({ signals, loading, onEnterTrade }: Props) {
   const filtered = signals.filter(s => s.confidence >= 80);
 
   return (
@@ -62,6 +64,7 @@ export function SignalsFeed({ signals, loading }: Props) {
             key={signal.id ?? `${signal.symbol}-${signal.timeframe}-${String(signal.createdAt)}`}
             signal={signal}
             index={idx}
+            onEnterTrade={onEnterTrade}
           />
         ))}
       </div>
@@ -71,7 +74,36 @@ export function SignalsFeed({ signals, loading }: Props) {
 
 // ─── Signal card ─────────────────────────────────────────────────────────────
 
-function SignalCard({ signal, index }: { signal: TradingSignal; index: number }) {
+function SignalCard({
+  signal, index, onEnterTrade,
+}: {
+  signal: TradingSignal;
+  index: number;
+  onEnterTrade?: (signal: TradingSignal) => Promise<{ success: boolean; error?: string }>;
+}) {
+  const [trading, setTrading]       = useState(false);
+  const [tradeState, setTradeState] = useState<'idle' | 'ok' | 'dup' | 'err'>('idle');
+  const [aiExpanded, setAiExpanded] = useState(false);
+
+  const handleTrade = async () => {
+    if (!onEnterTrade || trading) return;
+    setTrading(true);
+    setTradeState('idle');
+    try {
+      const result = await onEnterTrade(signal);
+      if (result.success) {
+        setTradeState('ok');
+        setTimeout(() => setTradeState('idle'), 3000);
+      } else {
+        const isDup = result.error?.toLowerCase().includes('already have') || result.error?.toLowerCase().includes('duplicate');
+        setTradeState(isDup ? 'dup' : 'err');
+        setTimeout(() => setTradeState('idle'), 4000);
+      }
+    } finally {
+      setTrading(false);
+    }
+  };
+
   const isBuy = signal.type === 'BUY';
   const dir   = isBuy ? 1 : -1;
   const atr   = signal.indicators.atr;
@@ -272,13 +304,55 @@ function SignalCard({ signal, index }: { signal: TradingSignal; index: number })
           </div>
         )}
 
-        {/* AI reasoning */}
-        {signal.aiReasoning && (
-          <div className="mt-1.5 flex gap-1.5 items-start">
-            <Brain size={9} className="text-terminal-muted mt-0.5 flex-shrink-0" />
-            <p className="text-[9px] text-terminal-muted leading-relaxed line-clamp-2">
-              {signal.aiReasoning}
-            </p>
+        {/* AI analysis — expandable */}
+        {(signal.aiExplainability || signal.aiReasoning) && (
+          <div className="mt-1.5">
+            <button
+              onClick={() => setAiExpanded(v => !v)}
+              className="flex items-center gap-1 text-[9px] text-terminal-muted hover:text-terminal-text transition-colors w-full"
+            >
+              <Brain size={9} className="flex-shrink-0" />
+              {signal.aiExplainability
+                ? <span className="flex-1 text-left truncate">{signal.aiExplainability.summary}</span>
+                : <span className="flex-1 text-left truncate line-clamp-1">{signal.aiReasoning}</span>
+              }
+              {signal.aiExplainability && (
+                aiExpanded ? <ChevronUp size={8} className="flex-shrink-0" /> : <ChevronDown size={8} className="flex-shrink-0" />
+              )}
+            </button>
+
+            {aiExpanded && signal.aiExplainability && (
+              <div className="mt-1.5 glass-surface rounded-lg border border-terminal-border/40 p-2 space-y-1.5">
+                <AIExplainRow icon="📈" label="Trend"      text={signal.aiExplainability.trend} />
+                <AIExplainRow icon="⚡" label="Momentum"   text={signal.aiExplainability.momentum} />
+                <AIExplainRow icon="🌡" label="Volatility" text={signal.aiExplainability.volatility} />
+                <AIExplainRow icon="💡" label="Why"        text={signal.aiExplainability.rationale} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Paper trade button */}
+        {onEnterTrade && (
+          <div className="mt-2 flex items-center justify-end">
+            <button
+              onClick={handleTrade}
+              disabled={trading || tradeState === 'ok' || tradeState === 'dup'}
+              className={cn(
+                'inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[9px] font-semibold border transition-all',
+                tradeState === 'ok'  && 'bg-bull-muted text-bull-text border-bull-DEFAULT/30',
+                tradeState === 'dup' && 'bg-yellow-900/20 text-yellow-400 border-yellow-500/30',
+                tradeState === 'err' && 'bg-bear-muted text-bear-text border-bear-DEFAULT/30',
+                tradeState === 'idle' && 'glass-surface text-terminal-muted border-terminal-border/40 hover:text-terminal-text hover:border-bull-DEFAULT/40',
+              )}
+            >
+              {trading
+                ? <><Loader2 size={8} className="animate-spin" /> Entering…</>
+                : tradeState === 'ok'  ? '✓ Entered'
+                : tradeState === 'dup' ? '⚠ Duplicate'
+                : tradeState === 'err' ? '⚠ Failed'
+                : '◈ Paper Trade'}
+            </button>
           </div>
         )}
       </div>
@@ -361,6 +435,15 @@ function BreakoutBadge({ direction, pct, volConfirmed }: { direction: 'UP' | 'DO
     )}>
       {isBull ? '⬆' : '⬇'} BRK +{pct.toFixed(1)}%{volConfirmed ? ' ✓V' : ''}
     </span>
+  );
+}
+
+function AIExplainRow({ icon, label, text }: { icon: string; label: string; text: string }) {
+  return (
+    <div className="flex items-start gap-1.5">
+      <span className="text-[9px] flex-shrink-0 w-[60px] text-terminal-dim">{icon} {label}</span>
+      <span className="text-[9px] text-terminal-muted leading-relaxed">{text}</span>
+    </div>
   );
 }
 
