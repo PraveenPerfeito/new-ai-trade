@@ -1,0 +1,479 @@
+import {
+  CoinData, TradingSignal, ScannerMode,
+  ScannerConfig, ScanResult, TechnicalIndicators,
+} from '@/types';
+import { getTop100ByMarketCap, filterHighVolume, filterByLiquidity, prioritizeCoins } from './coingecko';
+import { getSpotKlines, getFuturesKlines, getFuturesSymbols } from './binance';
+import {
+  calculateAllIndicators,
+  calcTrendStrength,
+  calcVolatilityRating,
+  confirmMultiTimeframe,
+  VolatilityRating,
+} from './indicators';
+import { validateSignal } from './ai-validator';
+import { validateRisk } from './risk';
+import { analyzeFuturesIntelligence } from './futures-intelligence';
+import { saveSignal, createScanRun, updateScanRun, upsertCoins } from './supabase';
+import { sendSignalAlert, sendScanSummary } from './telegram';
+import { sleep } from './utils';
+
+// ─── Scanner configurations per mode ───────────────────────────────────────
+// NOTE: `timeframes` is kept for API compatibility but the scanner now always
+// fetches 1h (entry) + 4h (trend filter) internally via confirmMultiTimeframe.
+// minRRRatio is 2.0 across all modes — enforcing minimum 1:2 risk/reward.
+
+const CONFIGS: Record<ScannerMode, ScannerConfig> = {
+  spot: {
+    minMarketCap:   500_000_000,
+    minVolume24h:    50_000_000,
+    minRRRatio:          2.0,   // 1:2 minimum
+    minConfidence:       80,
+    maxCoinsToScan:      50,
+    timeframes:        ['1h', '4h'],
+    scannerMode:       'spot',
+  },
+  futures: {
+    minMarketCap: 1_000_000_000,
+    minVolume24h:   200_000_000,
+    minRRRatio:           2.0,
+    minConfidence:        82,
+    maxCoinsToScan:       40,
+    timeframes:         ['1h', '4h'],
+    scannerMode:        'futures',
+  },
+  high_confidence: {
+    minMarketCap: 2_000_000_000,
+    minVolume24h:   500_000_000,
+    minRRRatio:           2.0,
+    minConfidence:        87,   // tighter threshold for HC mode
+    maxCoinsToScan:       30,
+    timeframes:         ['1h', '4h'],
+    scannerMode:        'high_confidence',
+  },
+  trending: {
+    minMarketCap:   100_000_000,
+    minVolume24h:    20_000_000,
+    minRRRatio:          2.0,
+    minConfidence:       78,
+    maxCoinsToScan:      60,
+    timeframes:        ['1h', '4h'],
+    scannerMode:       'trending',
+  },
+};
+
+// ─── Setup quality detection ────────────────────────────────────────────────
+
+/**
+ * Scores the quality of a trading setup using both the 1h (entry) and 4h
+ * (trend) indicators. Returns a pre-AI score and a human-readable description.
+ *
+ * Scoring (max ~100, threshold 65 to proceed to AI):
+ *   4h trend aligned:        +30  — higher TF is the trend filter (most weight)
+ *   1h trend aligned:        +20  — entry TF must confirm
+ *   RSI momentum zone (1h):  +15  — avoid overbought/oversold entries
+ *   MACD histogram (1h):     +15  — entry TF momentum direction
+ *   Volume spike >= 1.5×:    +10  — volume confirms move is real
+ *   Trend strength bonus:    +10  — extra points for high-scoring trends
+ *
+ * Penalties:
+ *   RSI extreme (>78 or <22): -25  — high reversal risk at extremes
+ *   Volume below average:     -10  — weak conviction, likely to fail
+ *   MACD conflicted:          -10  — momentum divergence is a warning
+ */
+export function detectSetup(
+  ind1h: TechnicalIndicators,
+  ind4h: TechnicalIndicators,
+  type: 'BUY' | 'SELL',
+  strength1h: number,
+  strength4h: number,
+): { hasSetup: boolean; description: string; preScore: number } {
+  let score = 0;
+  const reasons: string[] = [];
+
+  if (type === 'BUY') {
+    // 4h trend alignment — primary filter
+    if (ind4h.trend === 'BULLISH') {
+      score += 30;
+      reasons.push(`4h bullish (EMA20 ${ind4h.ema20 > ind4h.ema50 ? '>' : '<'} EMA50)`);
+    }
+    // 1h trend alignment — entry confirmation
+    if (ind1h.trend === 'BULLISH') {
+      score += 20;
+      reasons.push('1h bullish trend confirmed');
+    }
+    // RSI: ideal BUY zone is 48-70 — above neutral but not yet overbought
+    if (ind1h.rsi >= 48 && ind1h.rsi <= 70) {
+      score += 15;
+      reasons.push(`RSI ${ind1h.rsi.toFixed(1)} in bullish momentum zone (48-70)`);
+    } else if (ind1h.rsi > 78) {
+      score -= 25; // overbought penalty — high reversal risk
+    } else if (ind1h.rsi < 40) {
+      score -= 5;
+    }
+    // MACD histogram (1h): positive = bullish momentum building
+    if (ind1h.macd.histogram > 0) {
+      score += 15;
+      reasons.push('1h MACD histogram positive');
+    } else {
+      score -= 10; // MACD divergence is a warning sign
+    }
+    // Volume: spike confirms institutional buying
+    if (ind1h.volumeSpike >= 1.5) {
+      score += 10;
+      reasons.push(`Volume spike ${ind1h.volumeSpike.toFixed(1)}× (${ind1h.volumeSpike >= 2 ? 'strong' : 'moderate'})`);
+    } else if (ind1h.volumeSpike < 0.8) {
+      score -= 10; // below-average volume = weak conviction
+    }
+  } else {
+    // SELL setup — mirror logic
+    if (ind4h.trend === 'BEARISH') {
+      score += 30;
+      reasons.push(`4h bearish (EMA20 ${ind4h.ema20 < ind4h.ema50 ? '<' : '>'} EMA50)`);
+    }
+    if (ind1h.trend === 'BEARISH') {
+      score += 20;
+      reasons.push('1h bearish trend confirmed');
+    }
+    // RSI: ideal SELL zone is 30-52 — below neutral but not yet oversold
+    if (ind1h.rsi >= 30 && ind1h.rsi <= 52) {
+      score += 15;
+      reasons.push(`RSI ${ind1h.rsi.toFixed(1)} in bearish momentum zone (30-52)`);
+    } else if (ind1h.rsi < 22) {
+      score -= 25; // oversold penalty
+    } else if (ind1h.rsi > 60) {
+      score -= 5;
+    }
+    if (ind1h.macd.histogram < 0) {
+      score += 15;
+      reasons.push('1h MACD histogram negative');
+    } else {
+      score -= 10;
+    }
+    if (ind1h.volumeSpike >= 1.5) {
+      score += 10;
+      reasons.push(`Volume spike ${ind1h.volumeSpike.toFixed(1)}×`);
+    } else if (ind1h.volumeSpike < 0.8) {
+      score -= 10;
+    }
+  }
+
+  // Bonus: strong trend scores on both timeframes add up to +10
+  const combinedStrength = strength1h * 0.4 + strength4h * 0.6;
+  if (combinedStrength > 60) {
+    score += 10;
+    reasons.push(`Strong trend score: ${combinedStrength.toFixed(0)}/100`);
+  }
+
+  return {
+    hasSetup:    score >= 65,
+    description: reasons.join('. '),
+    preScore:    score,
+  };
+}
+
+// ─── Trade level calculation ────────────────────────────────────────────────
+
+/**
+ * Calculates ATR-based entry, target, and stop-loss levels.
+ *
+ * ATR multipliers by mode:
+ *   spot/trending:      target = 2× ATR, stop = 1× ATR → RR 1:2.0
+ *   futures:            target = 2.5× ATR, stop = 1× ATR → RR 1:2.5
+ *   high_confidence:    target = 3× ATR, stop = 1× ATR → RR 1:3.0
+ *
+ * Using ATR for levels is important because:
+ *   1. It adapts to each coin's inherent volatility (BTC vs. altcoin)
+ *   2. Stops are placed outside normal noise (1 ATR from entry)
+ *   3. Target is a realistic multiple of the expected daily range
+ */
+export function tradeLevels(price: number, atr: number, type: 'BUY' | 'SELL', mode: ScannerMode) {
+  const targetMult = mode === 'high_confidence' ? 3.0
+                   : mode === 'futures'          ? 2.5
+                   : 2.0; // spot and trending
+  const stopMult = 1.0;
+
+  const entry  = price;
+  const target = type === 'BUY' ? price + atr * targetMult : price - atr * targetMult;
+  const stop   = type === 'BUY' ? price - atr * stopMult   : price + atr * stopMult;
+  const risk   = Math.abs(entry - stop);
+  const reward = Math.abs(target - entry);
+
+  return {
+    entryPrice:  entry,
+    targetPrice: target,
+    stopLoss:    stop,
+    rrRatio:     risk > 0 ? reward / risk : 0,
+  };
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+async function fetchKlines(coin: CoinData, interval: string, limit: number, mode: ScannerMode) {
+  return mode === 'futures'
+    ? getFuturesKlines(coin.binanceSymbol, interval, limit)
+    : getSpotKlines(coin.binanceSymbol, interval, limit);
+}
+
+// ─── Single coin scan ───────────────────────────────────────────────────────
+
+/**
+ * Full pipeline for a single coin:
+ *   1. Fetch 1h + 4h candles (100 each)
+ *   2. Calculate indicators for both timeframes
+ *   3. Multi-timeframe confirmation — reject if 1h/4h trends conflict
+ *   4. Volatility gate — reject EXTREME (ATR > 8% of price on 1h)
+ *   5. Trend strength gate — reject weak/choppy trends
+ *   6. Setup scoring (pre-AI) — must score ≥ 65/100
+ *   7. Trade level calculation (ATR-based) — must achieve RR ≥ 2.0
+ *   8. AI validation — final confidence scoring and reasoning
+ *
+ * Returns null at any rejection step to avoid noisy signals.
+ */
+export async function scanCoin(
+  coin: CoinData,
+  mode: ScannerMode,
+  config: ScannerConfig,
+): Promise<TradingSignal | null> {
+  try {
+    // Step 1: Fetch both timeframes in parallel
+    const [candles1h, candles4h] = await Promise.all([
+      fetchKlines(coin, '1h', 100, mode),
+      fetchKlines(coin, '4h', 100, mode),
+    ]);
+
+    // Need at least 60 candles for indicators to be reliable (EMA-50 + buffer)
+    if (candles1h.length < 60 || candles4h.length < 60) return null;
+
+    // Step 2: Calculate indicators
+    const ind1h = calculateAllIndicators(candles1h);
+    const ind4h = calculateAllIndicators(candles4h);
+
+    // Step 3: Determine direction from 4h (higher TF leads)
+    // 4h chart is the trend filter — we only take signals in its direction
+    let signalType: 'BUY' | 'SELL';
+    if      (ind4h.trend === 'BULLISH') signalType = 'BUY';
+    else if (ind4h.trend === 'BEARISH') signalType = 'SELL';
+    else return null; // 4h ranging → no clear direction, skip
+
+    // Step 4: Multi-timeframe confirmation (1h must align with 4h)
+    const mtf = confirmMultiTimeframe(ind1h, ind4h, signalType);
+    if (!mtf.confirmed) {
+      // Uncomment for verbose debugging:
+      // console.log(`[Scanner] ${coin.symbol} MTF rejected: ${mtf.reason}`);
+      return null;
+    }
+
+    // Step 5: Volatility gate — reject during extreme moves
+    // Uses 1h ATR as it reflects current short-term volatility
+    const volatility: VolatilityRating = calcVolatilityRating(ind1h.atr, ind1h.currentPrice);
+    if (volatility === 'EXTREME') {
+      console.log(`[Scanner] ${coin.symbol} rejected — EXTREME volatility (ATR > 8%)`);
+      return null;
+    }
+
+    // Step 6: Trend strength scoring
+    const strength1h = calcTrendStrength(ind1h);
+    const strength4h = calcTrendStrength(ind4h);
+    const combinedStrength = strength1h * 0.4 + strength4h * 0.6;
+
+    // Minimum combined strength of 30 — below this the trend is too weak/choppy
+    if (combinedStrength < 30) return null;
+
+    // Step 7: Setup quality scoring (pre-AI, fast)
+    const { hasSetup, description } = detectSetup(ind1h, ind4h, signalType, strength1h, strength4h);
+    if (!hasSetup) return null;
+
+    // Step 8: Trade level calculation
+    if (ind1h.atr === 0) return null; // not enough data
+    const levels = tradeLevels(ind1h.currentPrice, ind1h.atr, signalType, mode);
+
+    // Enforce RR ≥ 2.0 — reject poor risk/reward before expensive AI call
+    if (levels.rrRatio < config.minRRRatio) return null;
+
+    // Step 9: Risk engine validation — reject unsafe setups before AI call
+    const risk = validateRisk({
+      entry:            levels.entryPrice,
+      stopLoss:         levels.stopLoss,
+      rrRatio:          levels.rrRatio,
+      ind1h,
+      ind4h,
+      coin,
+      signalType,
+      mode,
+      volatility,
+      combinedStrength,
+    });
+
+    if (!risk.pass) {
+      console.log(`[Scanner] ${coin.symbol} rejected by risk engine — ${risk.summary}`);
+      return null;
+    }
+
+    // Step 10: Futures intelligence (only for futures / high_confidence modes)
+    let futuresData = undefined;
+    if (mode === 'futures' || mode === 'high_confidence') {
+      try {
+        futuresData = await analyzeFuturesIntelligence({
+          symbol:     coin.binanceSymbol,
+          baseSymbol: coin.symbol,
+          candles1h,
+          ema20:      ind1h.ema20,
+          atr:        ind1h.atr,
+          rsi:        ind1h.rsi,
+          trend:      ind1h.trend,
+          signalType,
+        });
+
+        // Gate: reject when funding rate is extreme (>0.2% per 8h = 0.002)
+        // — extreme funding means overcrowded trade and imminent flush risk
+        if (Math.abs(futuresData.fundingRate) > 0.002) {
+          console.log(`[Scanner] ${coin.symbol} rejected — extreme funding rate ${(futuresData.fundingRate * 100).toFixed(4)}%`);
+          return null;
+        }
+      } catch {
+        // Non-fatal: proceed without futures data if API fails
+      }
+    }
+
+    // Step 11: AI validation (most expensive step — gated by all checks above)
+    const draft = {
+      symbol: coin.symbol,
+      name: coin.name,
+      type: signalType,
+      timeframe: '1h' as const,  // entry timeframe
+      scannerMode: mode,
+      ...levels,
+      confidence: 0,
+      indicators: ind1h,
+      setupDescription: description,
+      riskScore:              risk.riskScore,
+      qualityScore:           risk.qualityScore,
+      riskGrade:              risk.riskGrade,
+      riskWarnings:           risk.warnings,
+      maxSafeLeverage:        risk.maxSafeLeverage,
+      positionSizeMultiplier: risk.positionSizeMultiplier,
+      futuresData,
+    };
+
+    const ai = await validateSignal(draft, coin, ind4h, combinedStrength, volatility);
+    if (!ai.validated || ai.confidence < config.minConfidence) return null;
+
+    return {
+      ...draft,
+      confidence:  ai.confidence,
+      aiValidated: ai.validated,
+      aiReasoning: ai.reasoning,
+      risks:       ai.risks,
+      strengths:   ai.strengths,
+      telegramSent: false,
+      createdAt:   new Date(),
+    };
+  } catch (err) {
+    console.error(`[Scanner] scanCoin error for ${coin.symbol}:`, err);
+    return null;
+  }
+}
+
+// ─── Full scan orchestration ────────────────────────────────────────────────
+
+export async function runScan(mode: ScannerMode = 'spot'): Promise<ScanResult> {
+  const t0 = Date.now();
+  const config = CONFIGS[mode];
+  const delayMs = parseInt(process.env.SCANNER_DELAY_MS ?? '300', 10);
+  const alertThreshold = parseInt(process.env.SCANNER_MIN_CONFIDENCE_ALERT ?? '85', 10);
+
+  console.log(`[Scanner] ▶ ${mode} scan starting`);
+  const scanRunId = await createScanRun(mode);
+
+  try {
+    // 1. Fetch top 100 from CoinGecko
+    const allCoins = await getTop100ByMarketCap();
+    console.log(`[Scanner] Fetched ${allCoins.length} coins from CoinGecko`);
+
+    // 2. Apply market-cap and volume filters
+    let filtered = filterHighVolume(allCoins, config.minVolume24h);
+    filtered = filterByLiquidity(filtered, config.minMarketCap);
+
+    // 3. Futures mode: restrict to symbols that trade on Binance USDT-M futures
+    if (mode === 'futures') {
+      const futSet = await getFuturesSymbols();
+      filtered = filtered
+        .filter(c => futSet.has(c.binanceSymbol))
+        .map(c => ({ ...c, hasFutures: true }));
+    }
+
+    // 4. Trending mode: sort by volume/marketcap ratio to find hot movers
+    if (mode === 'trending') {
+      filtered = filtered
+        .filter(c => c.priceChange24h > 2 || c.volume24h / c.marketCap > 0.08)
+        .sort((a, b) => (b.volume24h / b.marketCap) - (a.volume24h / a.marketCap));
+    }
+
+    // 5. Prioritise priority coins (BTC, ETH, SOL, …) then sort by quality score
+    filtered = prioritizeCoins(filtered).slice(0, config.maxCoinsToScan);
+    console.log(`[Scanner] Scanning ${filtered.length} coins (mode: ${mode})`);
+
+    // 6. Cache coin list in Supabase for the dashboard
+    await upsertCoins(allCoins);
+
+    const signals: TradingSignal[] = [];
+    let coinsScanned = 0;
+
+    // 7. Main scan loop — one scanCoin call per coin (MTF handled inside)
+    for (const coin of filtered) {
+      // Rate limiting: 300ms between coins → ~50 coins ≈ 15s scan time
+      // Each scanCoin makes 2 Binance API calls (1h + 4h) plus 1 Claude call
+      await sleep(delayMs);
+
+      const signal = await scanCoin(coin, mode, config);
+      coinsScanned++;
+
+      if (!signal) continue;
+
+      signal.scanRunId = scanRunId ?? undefined;
+
+      // Save to Supabase
+      const id = await saveSignal(signal);
+      if (id) signal.id = id;
+
+      signals.push(signal);
+
+      // Telegram alert only for high-confidence signals (default ≥ 85%)
+      if (signal.confidence >= alertThreshold) {
+        const sent = await sendSignalAlert(signal);
+        if (sent) signal.telegramSent = true;
+      }
+
+      console.log(`[Scanner] ✓ ${signal.type} ${coin.symbol} — conf: ${signal.confidence}% | RR: 1:${signal.rrRatio.toFixed(1)} | ${signal.indicators.trend}`);
+    }
+
+    const duration = Date.now() - t0;
+    const highConf = signals.filter(s => s.confidence >= alertThreshold).length;
+
+    if (scanRunId) {
+      await updateScanRun(scanRunId, {
+        coins_scanned: coinsScanned,
+        signals_found: signals.length,
+        status:        'completed',
+        completed_at:  new Date().toISOString(),
+      });
+    }
+
+    await sendScanSummary(coinsScanned, signals.length, highConf, duration, mode);
+    console.log(`[Scanner] ■ Done: ${coinsScanned} coins | ${signals.length} signals | ${duration}ms`);
+
+    return { scanRunId, signals, coinsScanned, duration, mode };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+
+    if (scanRunId) {
+      await updateScanRun(scanRunId, {
+        status:       'failed',
+        error:        msg,
+        completed_at: new Date().toISOString(),
+      });
+    }
+    throw err;
+  }
+}

@@ -1,0 +1,149 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: #06080f;
+  color: #e2e8f0;
+  font-family: ui-monospace, 'SFMono-Regular', 'Cascadia Code', monospace;
+  -webkit-font-smoothing: antialiased;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 10% 30%, rgba(0, 208, 132, 0.04) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 90% 70%, rgba(59, 130, 246, 0.04) 0%, transparent 60%);
+  min-height: 100vh;
+}
+
+/* ─── Glassmorphism ─────────────────────────────────────────────────────── */
+
+.glass-card {
+  background: rgba(15, 20, 34, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.glass-surface {
+  background: rgba(11, 14, 26, 0.9);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+/* ─── Glow effects ──────────────────────────────────────────────────────── */
+
+.glow-bull { box-shadow: 0 0 20px rgba(0, 208, 132, 0.2), 0 0 40px rgba(0, 208, 132, 0.08); }
+.glow-bear { box-shadow: 0 0 20px rgba(255, 59, 92, 0.2),  0 0 40px rgba(255, 59, 92, 0.08); }
+.glow-blue { box-shadow: 0 0 20px rgba(59, 130, 246, 0.2); }
+
+/* ─── Gradient text ─────────────────────────────────────────────────────── */
+
+.text-gradient-bull {
+  background: linear-gradient(135deg, #00d084, #4ade80);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-bear {
+  background: linear-gradient(135deg, #ff3b5c, #f87171);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Skeleton shimmer ──────────────────────────────────────────────────── */
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(26, 32, 53, 0.8) 25%,
+    rgba(34, 40, 64, 0.9) 50%,
+    rgba(26, 32, 53, 0.8) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s infinite;
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+/* ─── Signal card animation ─────────────────────────────────────────────── */
+
+@keyframes signalIn {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.signal-card-enter {
+  animation: signalIn 0.3s ease-out both;
+}
+
+/* ─── Confidence bar pulse ──────────────────────────────────────────────── */
+
+@keyframes barPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.65; }
+}
+
+.conf-bar-high {
+  animation: barPulse 2.5s ease-in-out infinite;
+}
+
+/* ─── Price ticker scroll ───────────────────────────────────────────────── */
+
+@keyframes tickerScroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.ticker-scroll {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: tickerScroll 55s linear infinite;
+}
+
+.ticker-scroll:hover {
+  animation-play-state: paused;
+}
+
+/* ─── Radar ping (scan button) ──────────────────────────────────────────── */
+
+@keyframes radarPing {
+  0%   { transform: scale(1);   opacity: 0.8; }
+  70%  { transform: scale(1.8); opacity: 0; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+.animate-radar-ping {
+  animation: radarPing 1.8s ease-out infinite;
+}
+
+/* ─── No scrollbar (for horizontal strip) ───────────────────────────────── */
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ─── Thin custom scrollbar ─────────────────────────────────────────────── */
+
+::-webkit-scrollbar       { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(26, 32, 53, 0.9); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(34, 40, 64, 0.9); }
+
+/* ─── Base resets ───────────────────────────────────────────────────────── */
+
+button { font-family: inherit; }
+table  { border-collapse: collapse; width: 100%; }

@@ -1,0 +1,56 @@
+# Version control
+.git
+.gitignore
+
+# Dependencies (rebuilt in Docker)
+node_modules
+
+# Build output
+.next
+
+# Development
+.env
+.env.local
+.env.*.local
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage
+__tests__
+*.test.ts
+*.spec.ts
+
+# IDE / editor
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+
+# Docs / tooling
+README.md
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.cursorrules
+.windsurfrules
+.mcp.json
+.opencode.json
+
+# Local scripts / tmp
+scripts
+tmp
+temp
+
+# Python (virtual env)
+.venv
+__pycache__
+
+# Kiro / Cursor / Claude
+.kiro
+.cursor
+.claude
+.code-review-graph
