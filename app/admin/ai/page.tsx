@@ -1,0 +1,164 @@
+'use client'
+
+import { useCallback } from 'react'
+import { adminApi, AiSummaryResponse, EdgeReport } from '@/lib/admin-api'
+import { useAutoRefresh } from '@/lib/use-auto-refresh'
+import { MetricCard } from '@/components/admin/metric-card'
+import { Brain, Zap, AlertTriangle, CheckCircle } from 'lucide-react'
+
+function pct(v: number | null | undefined, d = 1) {
+  return v != null ? `${(v * 100).toFixed(d)}%` : '—'
+}
+
+function VerdictBar({ label, count, total }: { label: string; count: number; total: number }) {
+  const w = total > 0 ? (count / total) * 100 : 0
+  const isGood = label === 'claude_adds_value'
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-terminal-muted text-[10px] font-mono w-48 truncate capitalize">
+        {label.replace(/_/g, ' ')}
+      </span>
+      <div className="flex-1 h-1.5 bg-terminal-bright rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full ${isGood ? 'bg-bull-default' : 'bg-terminal-muted/50'}`}
+          style={{ width: `${w}%` }}
+        />
+      </div>
+      <span className="font-mono text-[11px] text-terminal-text w-12 text-right">{count}</span>
+      <span className="font-mono text-[11px] text-terminal-muted w-12 text-right">{w.toFixed(0)}%</span>
+    </div>
+  )
+}
+
+export default function AiPage() {
+  const aiFetcher   = useCallback(() => adminApi.analytics.ai(24), [])
+  const edgeFetcher = useCallback(() => adminApi.analytics.edgeReport(), [])
+
+  const { data: ai, loading: ail }   = useAutoRefresh<AiSummaryResponse>(aiFetcher, 30_000)
+  const { data: edge, loading: el }  = useAutoRefresh<EdgeReport>(edgeFetcher, 120_000)
+
+  const claude    = edge?.claude_effectiveness
+  const verdicts  = ai?.verdicts ?? ai?.verdict_distribution ?? {}
+  const totalVerd = Object.values(verdicts).reduce((a, b) => a + b, 0)
+
+  const claudeVerdictColors: Record<string, string> = {
+    claude_adds_value:        'text-bull-default',
+    no_significant_difference:'text-signal-medium',
+    insufficient_data:         'text-terminal-muted',
+    heuristic_outperforms:    'text-bear-default',
+    unclear:                  'text-signal-high',
+  }
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div>
+        <h1 className="text-terminal-text text-lg font-semibold">AI Intelligence</h1>
+        <p className="text-terminal-muted text-xs mt-0.5">Claude API health · Effectiveness measurement · Confidence analysis</p>
+      </div>
+
+      {/* Key metrics */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MetricCard
+          label="Total AI Calls"
+          value={ai?.total_calls ?? 0}
+          sub="last 24h"
+          accent="info"
+          icon={<Brain size={13} />}
+          loading={ail}
+        />
+        <MetricCard
+          label="Success Rate"
+          value={pct(ai?.success_rate)}
+          sub="API calls OK"
+          accent={!ai ? 'neutral' : ai.success_rate >= 0.95 ? 'bull' : 'warning'}
+          icon={<CheckCircle size={13} />}
+          loading={ail}
+        />
+        <MetricCard
+          label="Error Rate"
+          value={pct(ai?.error_rate)}
+          sub="API failures"
+          accent={!ai ? 'neutral' : ai.error_rate >= 0.15 ? 'bear' : ai.error_rate >= 0.08 ? 'warning' : 'bull'}
+          icon={<AlertTriangle size={13} />}
+          loading={ail}
+        />
+        <MetricCard
+          label="Fallback Rate"
+          value={pct(ai?.fallback_rate)}
+          sub="heuristic used"
+          accent={!ai ? 'neutral' : ai.fallback_rate >= 0.40 ? 'warning' : 'bull'}
+          icon={<Zap size={13} />}
+          loading={ail}
+        />
+      </div>
+
+      {/* Claude effectiveness */}
+      <div>
+        <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Claude Effectiveness (30d)</p>
+        <div className="glass-card rounded-lg p-5">
+          {el ? (
+            <div className="space-y-2">
+              <div className="skeleton h-6 w-48 rounded" />
+              <div className="skeleton h-3 w-full rounded" />
+            </div>
+          ) : claude ? (
+            <>
+              <div className="flex items-center gap-3 mb-4 flex-wrap">
+                <span className={`font-mono font-bold text-xl uppercase ${claudeVerdictColors[claude.verdict] ?? 'text-terminal-text'}`}>
+                  {claude.verdict.replace(/_/g, ' ')}
+                </span>
+                <span className="text-terminal-muted text-[11px]">
+                  {claude.total_with_ai_log} signals with AI log
+                </span>
+              </div>
+              {claude.heuristic && (
+                <div className="flex gap-6 text-xs font-mono text-terminal-muted">
+                  {Object.entries(claude.heuristic).map(([k, v]) => (
+                    <span key={k}>{k}: <span className="text-terminal-text">{String(v)}</span></span>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-terminal-muted text-sm">No effectiveness data available</p>
+          )}
+        </div>
+      </div>
+
+      {/* Verdict distribution */}
+      {Object.keys(verdicts).length > 0 && (
+        <div>
+          <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Verdict Distribution (24h)</p>
+          <div className="glass-card rounded-lg p-5 space-y-2.5">
+            {Object.entries(verdicts)
+              .sort(([, a], [, b]) => b - a)
+              .map(([label, count]) => (
+                <VerdictBar key={label} label={label} count={count} total={totalVerd} />
+              ))}
+          </div>
+        </div>
+      )}
+
+      {/* Latency */}
+      {ai?.avg_latency_ms != null && (
+        <div>
+          <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">API Performance</p>
+          <div className="glass-card rounded-lg px-5 py-4 flex items-center gap-8">
+            <div>
+              <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Avg Latency</p>
+              <p className={`font-mono font-bold text-2xl ${ai.avg_latency_ms > 5000 ? 'text-signal-high' : 'text-bull-default'}`}>
+                {ai.avg_latency_ms < 1000
+                  ? `${ai.avg_latency_ms.toFixed(0)}ms`
+                  : `${(ai.avg_latency_ms / 1000).toFixed(1)}s`}
+              </p>
+            </div>
+            <div>
+              <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Window</p>
+              <p className="font-mono text-terminal-text text-lg">{ai.window_hours}h</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

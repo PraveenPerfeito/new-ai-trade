@@ -1,0 +1,161 @@
+'use client'
+
+import { useCallback } from 'react'
+import { adminApi, EdgeReport } from '@/lib/admin-api'
+import { useAutoRefresh } from '@/lib/use-auto-refresh'
+
+type Signal = {
+  id: string
+  symbol: string
+  signal_type: string
+  confidence: number
+  entry_price: number
+  target_price: number
+  stop_loss: number
+  risk_grade: string
+  scanner_mode: string
+  outcome?: string
+  created_at: string
+  ai_validated?: boolean
+}
+
+function GradeBadge({ grade }: { grade: string }) {
+  const colors: Record<string, string> = {
+    A: 'text-bull-default border-bull-default/30 bg-bull-default/5',
+    B: 'text-signal-medium border-signal-medium/30 bg-signal-medium/5',
+    C: 'text-signal-high border-signal-high/30 bg-signal-high/5',
+    D: 'text-orange-400 border-orange-400/30 bg-orange-400/5',
+    F: 'text-bear-default border-bear-default/30 bg-bear-default/5',
+  }
+  return (
+    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${colors[grade] ?? 'text-terminal-muted border-terminal-border'}`}>
+      {grade}
+    </span>
+  )
+}
+
+function OutcomePill({ outcome }: { outcome?: string }) {
+  if (!outcome || outcome === 'PENDING') return <span className="text-terminal-muted/40 text-[10px]">PENDING</span>
+  const cfg: Record<string, string> = {
+    TP_HIT:  'text-bull-default',
+    SL_HIT:  'text-bear-default',
+    TIMEOUT: 'text-signal-high',
+  }
+  return <span className={`text-[10px] font-mono font-bold ${cfg[outcome] ?? 'text-terminal-muted'}`}>{outcome}</span>
+}
+
+export default function SignalsPage() {
+  const edgeFetcher = useCallback(() => adminApi.analytics.edgeReport(168), [])
+  const { data: edge, loading: el } = useAutoRefresh<EdgeReport>(edgeFetcher, 60_000)
+
+  // Fetch from the existing Next.js /api/signals endpoint (reads from Supabase directly)
+  const signalsFetcher = useCallback(async () => {
+    const res = await fetch('/api/signals?limit=50', { cache: 'no-store' })
+    if (!res.ok) throw new Error('signals fetch failed')
+    return res.json()
+  }, [])
+  const { data: signalsData, loading: sl } = useAutoRefresh<{ signals: Signal[] }>(signalsFetcher, 30_000)
+
+  const signals = signalsData?.signals ?? []
+
+  const rrRatio = (entry: number, target: number, stop: number) => {
+    const reward = Math.abs(target - entry)
+    const risk   = Math.abs(entry - stop)
+    return risk > 0 ? (reward / risk).toFixed(1) : '—'
+  }
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div>
+        <h1 className="text-terminal-text text-lg font-semibold">Signal Intelligence</h1>
+        <p className="text-terminal-muted text-xs mt-0.5">Live feed · Outcomes · Edge analysis</p>
+      </div>
+
+      {/* Edge summary from validation */}
+      {edge && (
+        <div className="glass-card rounded-lg px-5 py-4 flex items-center gap-6 flex-wrap text-xs font-mono">
+          <div>
+            <span className="text-terminal-muted">WIN RATE</span>{' '}
+            <span className={edge.overall.win_rate != null && edge.overall.win_rate >= 0.55 ? 'text-bull-default font-bold' : 'text-bear-default font-bold'}>
+              {edge.overall.win_rate != null ? `${(edge.overall.win_rate * 100).toFixed(1)}%` : '—'}
+            </span>
+          </div>
+          <div>
+            <span className="text-terminal-muted">EXPECTANCY</span>{' '}
+            <span className={edge.overall.expectancy != null && edge.overall.expectancy > 0 ? 'text-bull-default font-bold' : 'text-bear-default font-bold'}>
+              {edge.overall.expectancy != null ? `${edge.overall.expectancy > 0 ? '+' : ''}${edge.overall.expectancy.toFixed(2)}R` : '—'}
+            </span>
+          </div>
+          <div>
+            <span className="text-terminal-muted">SIGNALS (7d)</span>{' '}
+            <span className="text-terminal-text font-bold">{edge.overall.total}</span>
+          </div>
+          <div>
+            <span className="text-terminal-muted">EDGE</span>{' '}
+            <span className={edge.edge_verdict.has_edge ? 'text-bull-default font-bold' : 'text-bear-default font-bold'}>
+              {edge.edge_verdict.confidence_level.toUpperCase().replace(/_/g, ' ')}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Signal feed */}
+      <div>
+        <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Recent Signals</p>
+        <div className="glass-card rounded-lg overflow-hidden">
+          {sl ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="px-4 py-3 border-b border-terminal-border/40 flex items-center gap-3">
+                <div className="skeleton h-3 w-20 rounded" />
+                <div className="skeleton h-3 w-12 rounded" />
+                <div className="skeleton h-3 w-16 rounded" />
+                <div className="skeleton h-3 w-24 rounded ml-auto" />
+              </div>
+            ))
+          ) : !signals.length ? (
+            <div className="px-5 py-10 text-center">
+              <p className="text-terminal-muted text-sm">No signals found</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs min-w-[700px]">
+                <thead>
+                  <tr className="border-b border-terminal-border">
+                    {['Symbol', 'Type', 'Conf', 'Entry', 'RR', 'Grade', 'Mode', 'Outcome', 'Created'].map(h => (
+                      <th key={h} className="text-terminal-muted text-[9px] uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {signals.map(sig => (
+                    <tr key={sig.id} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
+                      <td className="py-2.5 px-3 font-mono text-terminal-text font-bold">{sig.symbol}</td>
+                      <td className="py-2.5 px-3">
+                        <span className={`font-mono text-[10px] font-bold ${sig.signal_type === 'BUY' ? 'text-bull-default' : 'text-bear-default'}`}>
+                          {sig.signal_type}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 font-mono">
+                        <span className={sig.confidence >= 85 ? 'text-signal-high' : sig.confidence >= 75 ? 'text-signal-medium' : 'text-terminal-muted'}>
+                          {sig.confidence}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 font-mono text-terminal-text">{sig.entry_price?.toFixed(4)}</td>
+                      <td className="py-2.5 px-3 font-mono text-terminal-muted">{rrRatio(sig.entry_price, sig.target_price, sig.stop_loss)}R</td>
+                      <td className="py-2.5 px-3"><GradeBadge grade={sig.risk_grade} /></td>
+                      <td className="py-2.5 px-3 text-terminal-muted font-mono text-[10px] uppercase">{sig.scanner_mode}</td>
+                      <td className="py-2.5 px-3"><OutcomePill outcome={sig.outcome} /></td>
+                      <td className="py-2.5 px-3 text-terminal-muted/50 font-mono text-[10px]">
+                        {new Date(sig.created_at).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
