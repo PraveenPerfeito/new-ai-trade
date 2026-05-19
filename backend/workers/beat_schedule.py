@@ -55,4 +55,32 @@ celery_app.conf.beat_schedule = {
             "queue": "paper_trading",
         },
     },
+    # ── Analytics burn-in ─────────────────────────────────────────────────────
+    # Daily edge validation + 7-day signal summary: 23:59 UTC
+    "daily-analytics-snapshot": {
+        "task": "backend.workers.analytics_tasks.daily_analytics_snapshot",
+        "schedule": crontab(hour="23", minute="59"),
+        "options": {
+            "expires": 11 * 60,   # discard if worker is down for the night
+            "queue": "celery",
+        },
+    },
+    # Hourly anomaly check: at the top of every hour
+    "hourly-anomaly-check": {
+        "task": "backend.workers.analytics_tasks.hourly_anomaly_check",
+        "schedule": crontab(minute="0"),
+        "options": {
+            "expires": 55 * 60,
+            "queue": "celery",
+        },
+    },
+    # Refresh mv_daily_outcome_summary after midnight data lands: 00:05 UTC
+    "refresh-daily-view": {
+        "task": "backend.workers.analytics_tasks.refresh_daily_view",
+        "schedule": crontab(hour="0", minute="5"),
+        "options": {
+            "expires": 55 * 60,
+            "queue": "celery",
+        },
+    },
 }
