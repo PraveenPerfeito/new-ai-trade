@@ -128,6 +128,20 @@ paper_trades_closed_total = Counter(
     ["exit_reason"],             # TP_HIT | SL_HIT | MANUAL | EXPIRED
 )
 
+# ── Concurrency / per-coin metrics ───────────────────────────────────────────
+
+scanner_coin_duration_seconds = Histogram(
+    "scanner_coin_duration_seconds",
+    "Time spent processing a single coin through the full pipeline",
+    ["mode"],
+    buckets=[0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 30.0],
+)
+
+scanner_concurrency_active = Gauge(
+    "scanner_concurrency_active",
+    "Number of coin scans currently executing in parallel",
+)
+
 # ── Celery task metrics ───────────────────────────────────────────────────────
 
 celery_tasks_total = Counter(

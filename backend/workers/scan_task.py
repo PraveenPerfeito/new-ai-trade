@@ -1,9 +1,10 @@
 """
 Celery tasks for scanner and paper trading.
-Phase 2 will fill in the full scanner logic; stubs here keep the architecture wired.
+run_scheduled_scan delegates to orchestrator.run_scan() via asyncio.run().
 """
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Literal
 
@@ -51,11 +52,25 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
     try:
         logger.info("scan_started", mode=mode)
 
-        # ── Phase 2: invoke full scanner pipeline here ────────────────────────
-        # result = asyncio.run(run_full_scan(mode))
-        # For now, return a placeholder so the Beat schedule is wired correctly.
-        result: dict = {"signals": [], "mode": mode, "coins_scanned": 0}
-        # ─────────────────────────────────────────────────────────────────────
+        # Map Celery mode names → ScannerMode enum values
+        from backend.core.scanner.models import ScannerMode
+        from backend.core.scanner.orchestrator import run_scan
+
+        mode_map: dict[str, ScannerMode] = {
+            "standard":        ScannerMode.SPOT,
+            "high_confidence": ScannerMode.HIGH_CONFIDENCE,
+            "futures":         ScannerMode.FUTURES,
+        }
+        scanner_mode = mode_map.get(mode, ScannerMode.SPOT)
+
+        scan_result = asyncio.run(run_scan(scanner_mode))
+        result: dict = {
+            "signals":       scan_result.signals_found,
+            "mode":          scan_result.mode.value,
+            "coins_scanned": scan_result.coins_scanned,
+            "duration_ms":   scan_result.duration_ms,
+            "errors":        scan_result.errors,
+        }
 
         elapsed = time.monotonic() - start
         scheduler_last_scan_timestamp.set(time.time())

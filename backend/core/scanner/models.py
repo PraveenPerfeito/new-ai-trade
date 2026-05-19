@@ -6,7 +6,7 @@ either side without conversion.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -41,6 +41,7 @@ class ScannerMode(str, Enum):
     SPOT            = "spot"
     FUTURES         = "futures"
     HIGH_CONFIDENCE = "high_confidence"
+    TRENDING        = "trending"
 
 
 class RiskGrade(str, Enum):
@@ -109,7 +110,7 @@ class RiskWarning(BaseModel):
 
 
 class CoinData(BaseModel):
-    """Minimal coin fields used by the risk engine."""
+    """Coin fields used by the risk engine and scanner orchestrator."""
     id:               str
     symbol:           str
     name:             str
@@ -119,6 +120,8 @@ class CoinData(BaseModel):
     price_change_24h: float
     rank:             int
     image:            str = ""
+    binance_symbol:   str = ""
+    has_futures:      bool = False
 
 
 class RiskInput(BaseModel):
@@ -156,3 +159,157 @@ class MarketStructureResult(BaseModel):
     adx:              float
 
     model_config = {"populate_by_name": True}
+
+
+# ── Scanner configuration ─────────────────────────────────────────────────────
+
+class ScannerConfig(BaseModel):
+    min_market_cap:    float
+    min_volume_24h:    float
+    min_rr_ratio:      float
+    min_confidence:    int
+    max_coins_to_scan: int
+    scanner_mode:      ScannerMode
+
+
+# ── Futures intelligence models ───────────────────────────────────────────────
+
+class LiquidationZone(BaseModel):
+    price:        float
+    side:         Literal["LONG_LIQ", "SHORT_LIQ"]
+    strength:     Literal["STRONG", "MODERATE", "WEAK"]
+    distance_pct: float
+
+
+class BreakoutSignal(BaseModel):
+    detected:         bool
+    direction:        Literal["UP", "DOWN"]
+    breakout_pct:     float
+    range_high:       float
+    range_low:        float
+    volume_confirmed: bool
+    age_candles:      int
+
+
+class TrendContinuationData(BaseModel):
+    is_pullback:              bool
+    pullback_depth:           float
+    holding_key_level:        bool
+    key_level:                float
+    continuation_confidence:  int
+
+
+class FundingBias(str, Enum):
+    LONG_HEAVY  = "LONG_HEAVY"
+    SHORT_HEAVY = "SHORT_HEAVY"
+    NEUTRAL     = "NEUTRAL"
+
+
+class OITrend(str, Enum):
+    RISING  = "RISING"
+    FALLING = "FALLING"
+    STABLE  = "STABLE"
+
+
+class FuturesData(BaseModel):
+    funding_rate:            float
+    funding_rate_annualized: float
+    funding_bias:            FundingBias
+    open_interest:           float
+    oi_change_24h:           float
+    oi_trend:                OITrend
+    long_short_ratio:        float
+    long_account_percent:    float
+    short_account_percent:   float
+    liquidation_zones:       list[LiquidationZone]
+    momentum_score:          int
+    breakout:                BreakoutSignal | None = None
+    trend_continuation:      TrendContinuationData
+
+
+# ── Signal pipeline models ────────────────────────────────────────────────────
+
+class TradeLevels(BaseModel):
+    entry_price:  float
+    target_price: float
+    stop_loss:    float
+    rr_ratio:     float
+
+
+class SetupResult(BaseModel):
+    has_setup:   bool
+    description: str
+    pre_score:   int
+
+
+class AIExplainability(BaseModel):
+    trend:      str
+    momentum:   str
+    volatility: str
+    rationale:  str
+    summary:    str
+
+
+class AIValidationResult(BaseModel):
+    confidence:     int
+    validated:      bool
+    reasoning:      str
+    risks:          list[str]
+    strengths:      list[str]
+    explainability: AIExplainability | None = None
+
+
+class Signal(BaseModel):
+    """Full trading signal — output of scan_coin()."""
+    symbol:                  str
+    name:                    str
+    type:                    SignalType
+    timeframe:               str = "1h"
+    scanner_mode:            ScannerMode
+    entry_price:             float
+    target_price:            float
+    stop_loss:               float
+    rr_ratio:                float
+    confidence:              int
+    indicators:              TechnicalIndicators
+    setup_description:       str
+    risk_score:              float
+    quality_score:           float
+    risk_grade:              RiskGrade
+    risk_warnings:           list[RiskWarning]
+    max_safe_leverage:       int
+    position_size_multiplier: float
+    futures_data:            FuturesData | None = None
+    ai_validated:            bool = False
+    ai_reasoning:            str = ""
+    ai_explainability:       AIExplainability | None = None
+    risks:                   list[str] = []
+    strengths:               list[str] = []
+    telegram_sent:           bool = False
+    scan_run_id:             str | None = None
+    id:                      str | None = None
+
+
+# ── Scan orchestration models ─────────────────────────────────────────────────
+
+class ScanProgress(BaseModel):
+    scan_id:      str
+    mode:         ScannerMode
+    status:       Literal["running", "completed", "failed"]
+    total:        int = 0
+    scanned:      int = 0
+    signals_found: int = 0
+    errors:       int = 0
+    started_at:   str
+    completed_at: str | None = None
+    duration_ms:  int | None = None
+
+
+class ScanResult(BaseModel):
+    scan_run_id:   str | None
+    mode:          ScannerMode
+    signals:       list[Signal]
+    coins_scanned: int
+    duration_ms:   int
+    signals_found: int
+    errors:        int = 0
