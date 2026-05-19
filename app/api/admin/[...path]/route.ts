@@ -56,3 +56,15 @@ export async function GET(req: NextRequest, { params }: Ctx) {
 export async function POST(req: NextRequest, { params }: Ctx) {
   return proxy(req, params.path)
 }
+
+export async function PUT(req: NextRequest, { params }: Ctx) {
+  return proxy(req, params.path)
+}
+
+export async function PATCH(req: NextRequest, { params }: Ctx) {
+  return proxy(req, params.path)
+}
+
+export async function DELETE(req: NextRequest, { params }: Ctx) {
+  return proxy(req, params.path)
+}

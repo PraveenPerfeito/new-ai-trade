@@ -1,52 +1,62 @@
 """
-Settings service — DB-backed runtime configuration with layered caching.
+Settings service — layered cache in front of settings_groups table.
 
 Cache hierarchy (fastest → authoritative):
-  1. In-memory dict         — 30 s TTL, zero I/O
-  2. Redis key              — 1 h TTL, shared across workers
-  3. PostgreSQL             — source of truth
+  1. In-process dict   30 s TTL — zero I/O, single-process fast path
+  2. Redis             1 h TTL  — shared across Uvicorn workers / Celery
+  3. PostgreSQL        source of truth, written on every change
 
-On every write:
-  - DB row is upserted
-  - Audit log row is inserted
-  - Redis key is deleted (cache bust)
-  - In-memory TTL is reset (next read reloads)
-  - "settings_changed" Redis pub/sub channel is published
+Write protocol:
+  1. Validate merged data through Pydantic model
+  2. Upsert settings_groups (data_version atomically incremented in SQL)
+  3. Insert settings_group_audit with field-level diff
+  4. Delete Redis keys for that group (cache bust)
+  5. Evict in-memory entry
+  6. Publish "settings_changed" Redis pub/sub channel
 
-On startup call seed_defaults() once so all keys exist in the DB.
+The module exposes get_settings_service() as a process-level singleton.
 """
 from __future__ import annotations
 
 import json
 import time
-from typing import Any, Optional
+from dataclasses import dataclass
+from typing import Any, Optional, TypeVar
 
 from backend.cache.redis_cache import get_redis
 from backend.logging.setup import get_logger
-from backend.system_settings.definitions import (
-    ALL_DEFINITIONS,
-    DEFINITIONS_BY_CATEGORY,
-    DEFINITIONS_BY_KEY,
-    SettingDef,
+from backend.system_settings.groups import (
+    ALL_GROUPS,
+    GROUP_REGISTRY,
+    BaseSettingsGroup,
+    FieldMeta,
 )
 
 log = get_logger(__name__)
 
-_REDIS_KEY   = "settings:snapshot"
-_MEM_TTL     = 30       # seconds — in-process cache TTL
-_REDIS_TTL   = 3600     # seconds — cross-worker cache TTL
+T = TypeVar('T', bound=BaseSettingsGroup)
 
+_MEM_TTL   = 30      # seconds
+_REDIS_TTL = 3_600   # 1 hour
+
+
+# ── Cache entry ───────────────────────────────────────────────────────────────
+
+@dataclass
+class _CacheEntry:
+    data:       dict[str, Any]
+    version:    int
+    loaded_at:  float
+
+
+# ── Service ───────────────────────────────────────────────────────────────────
 
 class SettingsService:
 
     def __init__(self) -> None:
-        self._mem: dict[str, Any] = {}       # key -> current value
-        self._mem_loaded_at: float = 0.0
+        self._mem: dict[str, _CacheEntry] = {}
 
     # ── Internal helpers ──────────────────────────────────────────────────────
-
-    def _mem_stale(self) -> bool:
-        return (time.monotonic() - self._mem_loaded_at) > _MEM_TTL
 
     async def _pool(self):
         try:
@@ -56,191 +66,325 @@ class SettingsService:
             log.warning("settings_db_unavailable", error=str(exc))
             return None
 
-    async def _load_from_db(self) -> dict[str, Any]:
+    def _is_stale(self, entry: _CacheEntry) -> bool:
+        return (time.monotonic() - entry.loaded_at) > _MEM_TTL
+
+    async def _load_from_db(self, group_name: str) -> tuple[dict, int] | None:
         pool = await self._pool()
         if pool is None:
-            return {}
+            return None
         try:
-            rows = await pool.fetch("SELECT key, value FROM system_settings")
-            return {row["key"]: row["value"] for row in rows}
+            row = await pool.fetchrow(
+                "SELECT data, data_version FROM settings_groups WHERE group_name = $1",
+                group_name,
+            )
+            if row:
+                return row["data"], row["data_version"]
+            return None
         except Exception as exc:
-            log.warning("settings_db_load_failed", error=str(exc))
-            return {}
+            log.warning("settings_load_failed", group=group_name, error=str(exc))
+            return None
 
-    async def _refresh_mem(self) -> None:
-        """Repopulate in-memory cache from Redis or DB."""
+    async def _get_group_raw(self, group_name: str) -> tuple[dict[str, Any], int]:
+        """
+        Return (field_values_dict, data_version).
+        Values are merged: model defaults ← DB overrides.
+        Version is 0 if the group has never been written.
+        """
+        model_class = GROUP_REGISTRY.get(group_name)
+        defaults = model_class.defaults_dict() if model_class else {}
+
+        # 1. In-memory cache
+        entry = self._mem.get(group_name)
+        if entry and not self._is_stale(entry):
+            return entry.data, entry.version
+
+        # 2. Redis
         try:
             redis = await get_redis()
-            raw = await redis.get(_REDIS_KEY)
-            if raw:
-                self._mem = json.loads(raw)
-                self._mem_loaded_at = time.monotonic()
-                return
-        except Exception:
-            pass
-        db_values = await self._load_from_db()
-        self._mem = db_values
-        self._mem_loaded_at = time.monotonic()
-        try:
-            redis = await get_redis()
-            await redis.setex(_REDIS_KEY, _REDIS_TTL, json.dumps(self._mem, default=str))
+            raw  = await redis.get(f"settings:d:{group_name}")
+            ver  = await redis.get(f"settings:v:{group_name}")
+            if raw and ver:
+                data = {**defaults, **json.loads(raw)}
+                version = int(ver)
+                self._mem[group_name] = _CacheEntry(data=data, version=version,
+                                                     loaded_at=time.monotonic())
+                return data, version
         except Exception:
             pass
 
-    async def _invalidate(self) -> None:
-        self._mem_loaded_at = 0.0
+        # 3. DB
+        db_result = await self._load_from_db(group_name)
+        if db_result:
+            db_data, version = db_result
+            data = {**defaults, **db_data}
+        else:
+            data, version = defaults, 0
+
+        # Populate caches
+        self._mem[group_name] = _CacheEntry(data=data, version=version,
+                                             loaded_at=time.monotonic())
         try:
             redis = await get_redis()
-            await redis.delete(_REDIS_KEY)
-            await redis.publish("settings_changed", "1")
+            await redis.setex(f"settings:d:{group_name}", _REDIS_TTL,
+                              json.dumps(data, default=str))
+            await redis.setex(f"settings:v:{group_name}", _REDIS_TTL, str(version))
         except Exception:
             pass
 
-    @staticmethod
-    def _coerce(defn: SettingDef, value: Any) -> Any:
-        if defn.data_type == 'bool':
-            if isinstance(value, str):
-                return value.lower() not in ('false', '0', 'no', '')
-            return bool(value)
-        if defn.data_type == 'int':
-            return int(value)
-        if defn.data_type == 'float':
-            return float(value)
-        return str(value)
+        return data, version
+
+    async def _invalidate(self, group_name: str) -> None:
+        """Bust caches and notify other workers."""
+        self._mem.pop(group_name, None)
+        try:
+            redis = await get_redis()
+            await redis.delete(f"settings:d:{group_name}", f"settings:v:{group_name}")
+            await redis.publish("settings_changed", group_name)
+        except Exception:
+            pass
 
     # ── Public read API ───────────────────────────────────────────────────────
 
-    async def get(self, key: str) -> Any:
-        """Return current value for key, or the definition default."""
-        if self._mem_stale():
-            await self._refresh_mem()
-        defn = DEFINITIONS_BY_KEY.get(key)
-        if defn is None:
-            return None
-        return self._mem.get(key, defn.default)
+    async def get_group(self, model_class: type[T]) -> T:
+        """Return a typed, fully-validated settings instance."""
+        data, _ = await self._get_group_raw(model_class.GROUP_NAME)
+        try:
+            return model_class.model_validate(data)
+        except Exception:
+            log.warning("group_validation_failed_using_defaults",
+                        group=model_class.GROUP_NAME)
+            return model_class()
 
-    async def get_all(self) -> dict[str, list[dict]]:
-        """Return all settings grouped by category, each merged with definition metadata."""
-        if self._mem_stale():
-            await self._refresh_mem()
-        result: dict[str, list[dict]] = {}
-        for defn in ALL_DEFINITIONS:
-            result.setdefault(defn.category, []).append({
-                "key":             defn.key,
-                "category":        defn.category,
-                "data_type":       defn.data_type,
-                "label":           defn.label,
-                "description":     defn.description,
-                "value":           self._mem.get(defn.key, defn.default),
-                "default":         defn.default,
-                "min_val":         defn.min_val,
-                "max_val":         defn.max_val,
-                "allowed_values":  defn.allowed_values,
-                "requires_restart":defn.requires_restart,
-            })
+    async def get_version(self, group_name: str) -> int:
+        _, version = await self._get_group_raw(group_name)
+        return version
+
+    async def get_all_groups(self) -> dict[str, dict]:
+        """
+        Return all groups in a format ready for the settings API:
+        { group_name: { meta: {...}, fields: [SettingEntry, ...] } }
+        """
+        # Fetch DB meta for all groups in one query
+        pool = await self._pool()
+        db_meta: dict[str, dict] = {}
+        if pool:
+            try:
+                rows = await pool.fetch(
+                    """
+                    SELECT group_name, schema_version, data_version,
+                           updated_at, updated_by
+                    FROM settings_groups
+                    """
+                )
+                for r in rows:
+                    db_meta[r["group_name"]] = {
+                        "schema_version": r["schema_version"],
+                        "data_version":   r["data_version"],
+                        "updated_at":     r["updated_at"].isoformat()
+                                          if r["updated_at"] else None,
+                        "updated_by":     r["updated_by"],
+                    }
+            except Exception:
+                pass
+
+        result: dict[str, dict] = {}
+        for model_class in ALL_GROUPS:
+            name = model_class.GROUP_NAME
+            data, _ = await self._get_group_raw(name)
+            gm = db_meta.get(name, {})
+
+            fields = []
+            for fm in model_class.fields_meta():
+                fields.append({
+                    "key":              fm.key,
+                    "category":         name,   # kept for frontend compat
+                    "data_type":        fm.data_type,
+                    "label":            fm.label,
+                    "description":      fm.description,
+                    "value":            data.get(fm.key, fm.default),
+                    "default":          fm.default,
+                    "min_val":          fm.min_val,
+                    "max_val":          fm.max_val,
+                    "allowed_values":   fm.allowed_values,
+                    "requires_restart": fm.requires_restart,
+                })
+
+            result[name] = {
+                "meta": {
+                    "group_name":     name,
+                    "schema_version": gm.get("schema_version", model_class.SCHEMA_VERSION),
+                    "data_version":   gm.get("data_version", 0),
+                    "updated_at":     gm.get("updated_at"),
+                    "updated_by":     gm.get("updated_by", "system"),
+                },
+                "fields": fields,
+            }
         return result
-
-    async def get_category(self, category: str) -> list[dict]:
-        all_settings = await self.get_all()
-        return all_settings.get(category, [])
 
     # ── Public write API ──────────────────────────────────────────────────────
 
-    async def set_value(self, key: str, value: Any, updated_by: str = "admin") -> None:
-        defn = DEFINITIONS_BY_KEY.get(key)
-        if defn is None:
-            raise ValueError(f"Unknown setting key: {key!r}")
-        value = self._coerce(defn, value)
-        old_value = await self.get(key)
+    async def patch_group(
+        self,
+        group_name: str,
+        fields: dict[str, Any],
+        updated_by: str = "admin",
+    ) -> dict:
+        """
+        Merge `fields` into the current group data, validate through Pydantic,
+        then persist atomically. Returns {"data_version": N, "changed": [...keys]}.
+        Raises ValueError on validation failure, RuntimeError if DB unavailable.
+        """
+        model_class = GROUP_REGISTRY.get(group_name)
+        if model_class is None:
+            raise ValueError(f"Unknown settings group: {group_name!r}")
+
+        current_data, current_version = await self._get_group_raw(group_name)
+
+        # Validate merged result
+        try:
+            validated = model_class.model_validate({**current_data, **fields})
+        except Exception as exc:
+            raise ValueError(str(exc)) from exc
+
+        new_data = validated.model_dump()
+        changed_fields: dict[str, dict] = {
+            k: {"old": current_data.get(k), "new": v}
+            for k, v in new_data.items()
+            if current_data.get(k) != v
+        }
+        if not changed_fields:
+            return {"data_version": current_version, "changed": []}
 
         pool = await self._pool()
         if pool is None:
-            raise RuntimeError("Database unavailable — cannot persist setting")
+            raise RuntimeError("Database unavailable — cannot persist settings")
 
-        await pool.execute(
+        row = await pool.fetchrow(
             """
-            INSERT INTO system_settings (category, key, value, updated_by)
-            VALUES ($1, $2, $3::jsonb, $4)
-            ON CONFLICT (key) DO UPDATE
-              SET value      = EXCLUDED.value,
-                  updated_at = NOW(),
-                  updated_by = EXCLUDED.updated_by
+            INSERT INTO settings_groups
+              (group_name, schema_version, data_version, data, updated_by)
+            VALUES ($1, $2, 1, $3::jsonb, $4)
+            ON CONFLICT (group_name) DO UPDATE SET
+              schema_version = EXCLUDED.schema_version,
+              data_version   = settings_groups.data_version + 1,
+              data           = EXCLUDED.data,
+              updated_at     = NOW(),
+              updated_by     = EXCLUDED.updated_by
+            RETURNING data_version
             """,
-            defn.category, key, json.dumps(value, default=str), updated_by,
-        )
-        await pool.execute(
-            """
-            INSERT INTO settings_audit_log (category, key, old_value, new_value, updated_by)
-            VALUES ($1, $2, $3::jsonb, $4::jsonb, $5)
-            """,
-            defn.category, key,
-            json.dumps(old_value, default=str),
-            json.dumps(value, default=str),
+            group_name,
+            model_class.SCHEMA_VERSION,
+            json.dumps(new_data, default=str),
             updated_by,
         )
-        await self._invalidate()
-        log.info("setting_updated", key=key, old=old_value, new=value, by=updated_by)
+        new_version: int = row["data_version"]
 
-    async def set_many(self, updates: dict[str, Any], updated_by: str = "admin") -> None:
-        for key, value in updates.items():
-            await self.set_value(key, value, updated_by)
+        await pool.execute(
+            """
+            INSERT INTO settings_group_audit
+              (group_name, old_version, new_version, changed_fields, schema_version, updated_by)
+            VALUES ($1, $2, $3, $4::jsonb, $5, $6)
+            """,
+            group_name,
+            current_version,
+            new_version,
+            json.dumps(changed_fields, default=str),
+            model_class.SCHEMA_VERSION,
+            updated_by,
+        )
 
-    async def reset_to_defaults(
-        self, category: str | None = None, updated_by: str = "admin"
-    ) -> None:
-        defs = DEFINITIONS_BY_CATEGORY.get(category, []) if category else ALL_DEFINITIONS
-        for defn in defs:
-            await self.set_value(defn.key, defn.default, updated_by)
+        await self._invalidate(group_name)
+        log.info(
+            "group_patched",
+            group=group_name,
+            version=new_version,
+            changed=list(changed_fields.keys()),
+            by=updated_by,
+        )
+        return {"data_version": new_version, "changed": list(changed_fields.keys())}
+
+    async def update_group(
+        self, model: BaseSettingsGroup, updated_by: str = "admin"
+    ) -> dict:
+        """Replace the entire group with a pre-validated model instance."""
+        return await self.patch_group(model.GROUP_NAME, model.model_dump(), updated_by)
+
+    async def reset_group(
+        self, group_name: str, updated_by: str = "admin"
+    ) -> dict:
+        """Reset group to model-defined defaults."""
+        model_class = GROUP_REGISTRY.get(group_name)
+        if model_class is None:
+            raise ValueError(f"Unknown settings group: {group_name!r}")
+        return await self.patch_group(
+            group_name, model_class.defaults_dict(), updated_by
+        )
+
+    # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     async def seed_defaults(self) -> None:
-        """Insert default values for any keys not yet in the DB. Safe to call on every startup."""
+        """
+        Insert default values for any group not yet in settings_groups.
+        Safe to call on every startup — existing rows are left untouched.
+        """
         pool = await self._pool()
         if pool is None:
             log.warning("settings_seed_skipped_no_db")
             return
         try:
-            for defn in ALL_DEFINITIONS:
+            for model_class in ALL_GROUPS:
                 await pool.execute(
                     """
-                    INSERT INTO system_settings (category, key, value, updated_by)
+                    INSERT INTO settings_groups
+                      (group_name, schema_version, data, updated_by)
                     VALUES ($1, $2, $3::jsonb, 'system')
-                    ON CONFLICT (key) DO NOTHING
+                    ON CONFLICT (group_name) DO NOTHING
                     """,
-                    defn.category, defn.key, json.dumps(defn.default, default=str),
+                    model_class.GROUP_NAME,
+                    model_class.SCHEMA_VERSION,
+                    json.dumps(model_class.defaults_dict(), default=str),
                 )
-            await self._invalidate()
-            log.info("settings_seeded", count=len(ALL_DEFINITIONS))
+            log.info("settings_seeded", groups=len(ALL_GROUPS))
         except Exception as exc:
             log.warning("settings_seed_failed", error=str(exc))
 
-    # ── Audit log ─────────────────────────────────────────────────────────────
+    # ── Audit ─────────────────────────────────────────────────────────────────
 
     async def get_audit_log(
-        self, limit: int = 50, category: Optional[str] = None
+        self,
+        limit: int = 50,
+        group_name: Optional[str] = None,
     ) -> list[dict]:
         pool = await self._pool()
         if pool is None:
             return []
         try:
-            if category:
+            if group_name:
                 rows = await pool.fetch(
-                    "SELECT * FROM settings_audit_log WHERE category=$1 ORDER BY updated_at DESC LIMIT $2",
-                    category, limit,
+                    """
+                    SELECT * FROM settings_group_audit
+                    WHERE group_name = $1
+                    ORDER BY updated_at DESC LIMIT $2
+                    """,
+                    group_name, limit,
                 )
             else:
                 rows = await pool.fetch(
-                    "SELECT * FROM settings_audit_log ORDER BY updated_at DESC LIMIT $1",
+                    "SELECT * FROM settings_group_audit ORDER BY updated_at DESC LIMIT $1",
                     limit,
                 )
             return [
                 {
-                    "id":         row["id"],
-                    "category":   row["category"],
-                    "key":        row["key"],
-                    "old_value":  row["old_value"],
-                    "new_value":  row["new_value"],
-                    "updated_by": row["updated_by"],
-                    "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
+                    "id":             row["id"],
+                    "group_name":     row["group_name"],
+                    "old_version":    row["old_version"],
+                    "new_version":    row["new_version"],
+                    "changed_fields": row["changed_fields"],
+                    "schema_version": row["schema_version"],
+                    "updated_by":     row["updated_by"],
+                    "updated_at":     row["updated_at"].isoformat()
+                                      if row["updated_at"] else None,
                 }
                 for row in rows
             ]
@@ -249,7 +393,7 @@ class SettingsService:
             return []
 
 
-# ── Module-level singleton ────────────────────────────────────────────────────
+# ── Singleton ─────────────────────────────────────────────────────────────────
 
 _service: Optional[SettingsService] = None
 
