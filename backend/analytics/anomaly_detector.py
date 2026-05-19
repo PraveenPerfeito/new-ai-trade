@@ -52,6 +52,21 @@ QUEUE_DEPTH_WARN       = 10
 QUEUE_DEPTH_CRIT       = 30
 
 
+# ── Runtime threshold overrides ───────────────────────────────────────────────
+
+_active: dict = {}
+
+
+def configure(thresholds: dict) -> None:
+    """Hot-swap thresholds from AnomalySettings without restarting."""
+    global _active
+    _active = dict(thresholds)
+
+
+def _g(key: str, fallback):
+    return _active.get(key, fallback)
+
+
 # ── Data class ────────────────────────────────────────────────────────────────
 
 @dataclass
@@ -83,7 +98,7 @@ def check_win_rate_degradation(stats_7d: dict, stats_30d: dict) -> Anomaly | Non
         return None
 
     drop = wr_30d - wr_7d
-    if drop >= WIN_RATE_DROP_CRIT:
+    if drop >= _g('win_rate_drop_crit', WIN_RATE_DROP_CRIT):
         return Anomaly(
             anomaly_type="win_rate_degradation",
             severity="critical",
@@ -92,9 +107,9 @@ def check_win_rate_degradation(stats_7d: dict, stats_30d: dict) -> Anomaly | Non
                 f"Drop of {drop:.1%}. Edge may be lost."
             ),
             metric_value=round(drop, 4),
-            threshold=WIN_RATE_DROP_CRIT,
+            threshold=_g('win_rate_drop_crit', WIN_RATE_DROP_CRIT),
         )
-    if drop >= WIN_RATE_DROP_WARN:
+    if drop >= _g('win_rate_drop_warn', WIN_RATE_DROP_WARN):
         return Anomaly(
             anomaly_type="win_rate_degradation",
             severity="warning",
@@ -103,7 +118,7 @@ def check_win_rate_degradation(stats_7d: dict, stats_30d: dict) -> Anomaly | Non
                 f"Drop of {drop:.1%}."
             ),
             metric_value=round(drop, 4),
-            threshold=WIN_RATE_DROP_WARN,
+            threshold=_g('win_rate_drop_warn', WIN_RATE_DROP_WARN),
         )
     return None
 
@@ -115,7 +130,7 @@ def check_expectancy_negative(stats: dict, window_label: str = "7d") -> Anomaly 
     if exp is None or total < 20:
         return None
 
-    if exp < EXPECTANCY_CRIT:
+    if exp < _g('expectancy_crit', EXPECTANCY_CRIT):
         sev = "critical" if exp < -0.3 else "warning"
         return Anomaly(
             anomaly_type="expectancy_negative",
@@ -125,7 +140,7 @@ def check_expectancy_negative(stats: dict, window_label: str = "7d") -> Anomaly 
                 "Edge may be lost — review recent signal quality."
             ),
             metric_value=round(exp, 4),
-            threshold=EXPECTANCY_CRIT,
+            threshold=_g('expectancy_crit', EXPECTANCY_CRIT),
         )
     return None
 
@@ -138,7 +153,7 @@ def check_false_positive_spike(stats: dict) -> Anomaly | None:
         return None
 
     sl_rate = sl_hits / total
-    if sl_rate > FALSE_POSITIVE_WARN:
+    if sl_rate > _g('false_positive_warn', FALSE_POSITIVE_WARN):
         return Anomaly(
             anomaly_type="false_positive_spike",
             severity="warning",
@@ -147,7 +162,7 @@ def check_false_positive_spike(stats: dict) -> Anomaly | None:
                 f"({sl_hits}/{total} in window)."
             ),
             metric_value=round(sl_rate, 4),
-            threshold=FALSE_POSITIVE_WARN,
+            threshold=_g('false_positive_warn', FALSE_POSITIVE_WARN),
         )
     return None
 
@@ -158,21 +173,21 @@ def check_drawdown_spike(stats: dict) -> Anomaly | None:
     if mdd is None:
         return None
 
-    if mdd >= DRAWDOWN_CRIT:
+    if mdd >= _g('drawdown_crit', DRAWDOWN_CRIT):
         return Anomaly(
             anomaly_type="drawdown_spike",
             severity="critical",
             description=f"Extreme drawdown: {mdd:.1f}R. Review position sizing and filters.",
             metric_value=round(mdd, 2),
-            threshold=DRAWDOWN_CRIT,
+            threshold=_g('drawdown_crit', DRAWDOWN_CRIT),
         )
-    if mdd >= DRAWDOWN_WARN:
+    if mdd >= _g('drawdown_warn', DRAWDOWN_WARN):
         return Anomaly(
             anomaly_type="drawdown_spike",
             severity="warning",
             description=f"Elevated drawdown: {mdd:.1f}R. Monitor closely.",
             metric_value=round(mdd, 2),
-            threshold=DRAWDOWN_WARN,
+            threshold=_g('drawdown_warn', DRAWDOWN_WARN),
         )
     return None
 
@@ -186,7 +201,7 @@ def check_calibration_drift(
     if ece is None:
         return None
 
-    if ece >= ECE_CRIT:
+    if ece >= _g('ece_crit', ECE_CRIT):
         return Anomaly(
             anomaly_type="calibration_drift",
             severity="critical",
@@ -196,20 +211,20 @@ def check_calibration_drift(
                 "Recalibration required."
             ),
             metric_value=round(ece, 4),
-            threshold=ECE_CRIT,
+            threshold=_g('ece_crit', ECE_CRIT),
         )
-    if ece >= ECE_WARN:
+    if ece >= _g('ece_warn', ECE_WARN):
         return Anomaly(
             anomaly_type="calibration_drift",
             severity="warning",
             description=f"Confidence calibration is moderately poor (ECE={ece:.3f}).",
             metric_value=round(ece, 4),
-            threshold=ECE_WARN,
+            threshold=_g('ece_warn', ECE_WARN),
         )
     # Check drift from previous snapshot
     if previous_calibration:
         prev_ece = previous_calibration.get("calibration", {}).get("ece")
-        if prev_ece is not None and (ece - prev_ece) >= ECE_DRIFT_THRESHOLD:
+        if prev_ece is not None and (ece - prev_ece) >= _g('ece_drift_threshold', ECE_DRIFT_THRESHOLD):
             return Anomaly(
                 anomaly_type="calibration_drift",
                 severity="info",
@@ -218,7 +233,7 @@ def check_calibration_drift(
                     f"(+{ece - prev_ece:.3f}). Monitor for further degradation."
                 ),
                 metric_value=round(ece - prev_ece, 4),
-                threshold=ECE_DRIFT_THRESHOLD,
+                threshold=_g('ece_drift_threshold', ECE_DRIFT_THRESHOLD),
             )
     return None
 
@@ -232,21 +247,21 @@ def check_scan_failure_spike(scan_summary: dict) -> Anomaly | None:
     if rate is None or total < 2:
         return None
 
-    if rate >= SCAN_FAILURE_CRIT:
+    if rate >= _g('scan_failure_crit', SCAN_FAILURE_CRIT):
         return Anomaly(
             anomaly_type="scan_failure_spike",
             severity="critical",
             description=f"Scan failure rate critical: {rate:.1%} ({total} scans). Check workers and external APIs.",
             metric_value=round(rate, 4),
-            threshold=SCAN_FAILURE_CRIT,
+            threshold=_g('scan_failure_crit', SCAN_FAILURE_CRIT),
         )
-    if rate >= SCAN_FAILURE_WARN:
+    if rate >= _g('scan_failure_warn', SCAN_FAILURE_WARN):
         return Anomaly(
             anomaly_type="scan_failure_spike",
             severity="warning",
             description=f"Elevated scan failure rate: {rate:.1%} ({total} scans).",
             metric_value=round(rate, 4),
-            threshold=SCAN_FAILURE_WARN,
+            threshold=_g('scan_failure_warn', SCAN_FAILURE_WARN),
         )
     return None
 
@@ -261,24 +276,24 @@ def check_ai_health(ai_summary: dict) -> list[Anomaly]:
     error_rate    = ai_summary.get("error_rate", 0.0)
     fallback_rate = ai_summary.get("fallback_rate", 0.0)
 
-    if error_rate >= AI_ERROR_CRIT:
+    if error_rate >= _g('ai_error_crit', AI_ERROR_CRIT):
         anomalies.append(Anomaly(
             anomaly_type="ai_error_spike",
             severity="critical",
             description=f"AI API error rate critical: {error_rate:.1%}. Check Anthropic quota / API key.",
             metric_value=round(error_rate, 4),
-            threshold=AI_ERROR_CRIT,
+            threshold=_g('ai_error_crit', AI_ERROR_CRIT),
         ))
-    elif error_rate >= AI_ERROR_WARN:
+    elif error_rate >= _g('ai_error_warn', AI_ERROR_WARN):
         anomalies.append(Anomaly(
             anomaly_type="ai_error_spike",
             severity="warning",
             description=f"Elevated AI API error rate: {error_rate:.1%}.",
             metric_value=round(error_rate, 4),
-            threshold=AI_ERROR_WARN,
+            threshold=_g('ai_error_warn', AI_ERROR_WARN),
         ))
 
-    if fallback_rate >= AI_FALLBACK_WARN:
+    if fallback_rate >= _g('ai_fallback_warn', AI_FALLBACK_WARN):
         anomalies.append(Anomaly(
             anomaly_type="ai_error_spike",
             severity="warning",
@@ -287,7 +302,7 @@ def check_ai_health(ai_summary: dict) -> list[Anomaly]:
                 "Claude API may be unreliable — validation quality degraded."
             ),
             metric_value=round(fallback_rate, 4),
-            threshold=AI_FALLBACK_WARN,
+            threshold=_g('ai_fallback_warn', AI_FALLBACK_WARN),
         ))
 
     return anomalies
@@ -297,21 +312,21 @@ def check_queue_backlog(queue_depths: dict[str, int]) -> list[Anomaly]:
     """Detect Celery queue backlog growth."""
     anomalies: list[Anomaly] = []
     for queue_name, depth in queue_depths.items():
-        if depth >= QUEUE_DEPTH_CRIT:
+        if depth >= _g('queue_depth_crit', QUEUE_DEPTH_CRIT):
             anomalies.append(Anomaly(
                 anomaly_type="queue_backlog",
                 severity="critical",
                 description=f"Queue '{queue_name}' has {depth} pending tasks. Workers may be stalled.",
                 metric_value=float(depth),
-                threshold=float(QUEUE_DEPTH_CRIT),
+                threshold=float(_g('queue_depth_crit', QUEUE_DEPTH_CRIT)),
             ))
-        elif depth >= QUEUE_DEPTH_WARN:
+        elif depth >= _g('queue_depth_warn', QUEUE_DEPTH_WARN):
             anomalies.append(Anomaly(
                 anomaly_type="queue_backlog",
                 severity="warning",
                 description=f"Queue '{queue_name}' backlog growing: {depth} pending tasks.",
                 metric_value=float(depth),
-                threshold=float(QUEUE_DEPTH_WARN),
+                threshold=float(_g('queue_depth_warn', QUEUE_DEPTH_WARN)),
             ))
     return anomalies
 

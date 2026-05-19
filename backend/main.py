@@ -34,12 +34,19 @@ log = get_logger(__name__)
 async def lifespan(app: FastAPI):
     log.info("startup_begin")
     from backend.metrics.infra_collector import start_infra_collector
+    from backend.system_settings.propagation import (
+        start_propagation_listener,
+        stop_propagation_listener,
+    )
     from backend.system_settings.service import get_settings_service
     start_infra_collector()
-    await get_settings_service().seed_defaults()
+    svc = get_settings_service()
+    await svc.seed_defaults()
+    await start_propagation_listener(svc)
     yield
     # ── Graceful shutdown ─────────────────────────────────────────────────────
     log.info("shutdown_begin")
+    await stop_propagation_listener()
     await close_redis()
     await close_pool()
     log.info("shutdown_complete")

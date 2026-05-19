@@ -36,8 +36,9 @@ log = get_logger(__name__)
 
 T = TypeVar('T', bound=BaseSettingsGroup)
 
-_MEM_TTL   = 30      # seconds
-_REDIS_TTL = 3_600   # 1 hour
+_MEM_TTL            = 30       # seconds
+_REDIS_TTL          = 3_600    # 1 hour
+_GEN_CHECK_INTERVAL = 5.0      # seconds between generation counter checks
 
 
 # ── Cache entry ───────────────────────────────────────────────────────────────
@@ -54,7 +55,9 @@ class _CacheEntry:
 class SettingsService:
 
     def __init__(self) -> None:
-        self._mem: dict[str, _CacheEntry] = {}
+        self._mem:          dict[str, _CacheEntry] = {}
+        self._gen_check_at: float = 0.0
+        self._last_gen:     str   = ""
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -68,6 +71,21 @@ class SettingsService:
 
     def _is_stale(self, entry: _CacheEntry) -> bool:
         return (time.monotonic() - entry.loaded_at) > _MEM_TTL
+
+    async def _check_generation(self) -> None:
+        """Flush the in-process cache if the global generation counter changed."""
+        now = time.monotonic()
+        if now - self._gen_check_at < _GEN_CHECK_INTERVAL:
+            return
+        self._gen_check_at = now
+        try:
+            redis = await get_redis()
+            gen = await redis.get("settings:generation") or "0"
+            if gen != self._last_gen:
+                self._last_gen = gen
+                self._mem.clear()
+        except Exception:
+            pass
 
     async def _load_from_db(self, group_name: str) -> tuple[dict, int] | None:
         pool = await self._pool()
@@ -91,6 +109,8 @@ class SettingsService:
         Values are merged: model defaults ← DB overrides.
         Version is 0 if the group has never been written.
         """
+        await self._check_generation()
+
         model_class = GROUP_REGISTRY.get(group_name)
         defaults = model_class.defaults_dict() if model_class else {}
 
@@ -140,6 +160,8 @@ class SettingsService:
         try:
             redis = await get_redis()
             await redis.delete(f"settings:d:{group_name}", f"settings:v:{group_name}")
+            await redis.incr("settings:generation")
+            await redis.expire("settings:generation", 86_400)
             await redis.publish("settings_changed", group_name)
         except Exception:
             pass
