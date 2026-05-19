@@ -8,9 +8,10 @@ Scheduled scans still execute through Celery Beat → scan_task.py.
 from __future__ import annotations
 
 import asyncio
+import uuid
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel
 
 from backend.core.scanner.models import ScannerMode, ScanProgress
@@ -20,6 +21,7 @@ from backend.core.scanner.orchestrator import (
     get_latest_progress,
 )
 from backend.logging.setup import get_logger
+from backend.middleware.rate_limit import limiter, SCAN_LIMIT
 
 log = get_logger(__name__)
 
@@ -45,7 +47,8 @@ class TriggerResponse(BaseModel):
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("/trigger", response_model=TriggerResponse)
-async def trigger_scan(body: TriggerRequest, background_tasks: BackgroundTasks):
+@limiter.limit(SCAN_LIMIT)
+async def trigger_scan(request: Request, body: TriggerRequest, background_tasks: BackgroundTasks):
     """
     Trigger an on-demand scan. Returns immediately with a scan_id.
     Poll GET /api/scanner/progress/{scan_id} for live updates.
@@ -70,7 +73,6 @@ async def trigger_scan(body: TriggerRequest, background_tasks: BackgroundTasks):
 
     # Launch scan as a background asyncio task
     task = asyncio.create_task(_run_scan_task(mode))
-    import uuid
     scan_id = str(uuid.uuid4())
     _active_tasks[f"{mode.value}:{scan_id}"] = task
 
@@ -86,7 +88,21 @@ async def trigger_scan(body: TriggerRequest, background_tasks: BackgroundTasks):
 
 async def _run_scan_task(mode: ScannerMode) -> None:
     try:
-        await run_scan(mode)
+        result = await run_scan(mode)
+        # Record metrics for on-demand scans (scheduled scans record via scan_task.py)
+        try:
+            from backend.analytics.scan_metrics import record_scan
+            await record_scan(
+                scan_id=str(result.scan_run_id or ""),
+                mode=mode.value,
+                coins_scanned=result.coins_scanned,
+                signals_found=result.signals_found,
+                duration_ms=result.duration_ms,
+                errors=result.errors,
+                gate_rejections={},
+            )
+        except Exception as exc:
+            log.warning("record_scan_failed", mode=mode.value, error=str(exc))
     except Exception as exc:
         log.error("background_scan_failed", mode=mode.value, error=str(exc))
 

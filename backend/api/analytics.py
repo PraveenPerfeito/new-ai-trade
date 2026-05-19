@@ -15,6 +15,12 @@ from backend.analytics.performance_engine import get_dashboard_summary
 from backend.analytics.realtime_metrics import sse_metrics_stream
 from backend.analytics.scan_metrics import get_scan_summary
 from backend.analytics.signal_metrics import get_analytics
+from backend.analytics.signal_validation import (
+    confidence_vs_outcome,
+    setup_score_analysis,
+    ai_vs_heuristic,
+    get_signal_validation_report,
+)
 from backend.logging.setup import get_logger
 
 log = get_logger(__name__)
@@ -107,6 +113,43 @@ async def paper_trades(
     except Exception as exc:
         log.warning("paper_trades_fetch_failed", error=str(exc))
         return {"trades": [], "total": 0}
+
+
+@router.get("/signal-validation")
+async def signal_validation(
+    window_hours: int = Query(default=168, ge=1, le=720),
+) -> dict[str, Any]:
+    """
+    Combined signal validation report:
+    - confidence_vs_outcome: TP_HIT rate per 5-point confidence band
+    - setup_score_analysis:  TP_HIT rate per pre_score bucket
+    - ai_vs_heuristic:       Claude vs fallback outcome comparison
+    """
+    return await get_signal_validation_report(window_hours)
+
+
+@router.get("/signal-validation/confidence")
+async def signal_validation_confidence(
+    window_hours: int = Query(default=168, ge=1, le=720),
+) -> dict[str, Any]:
+    """TP_HIT rate by AI confidence band — shows whether confidence is a real predictor."""
+    return await confidence_vs_outcome(window_hours)
+
+
+@router.get("/signal-validation/setup-score")
+async def signal_validation_setup_score(
+    window_hours: int = Query(default=168, ge=1, le=720),
+) -> dict[str, Any]:
+    """TP_HIT rate by setup quality (pre_score) — shows whether scoring gates are effective."""
+    return await setup_score_analysis(window_hours)
+
+
+@router.get("/signal-validation/ai-vs-heuristic")
+async def signal_validation_ai_vs_heuristic(
+    window_hours: int = Query(default=168, ge=1, le=720),
+) -> dict[str, Any]:
+    """Compare Claude-validated vs heuristic-fallback signal outcomes."""
+    return await ai_vs_heuristic(window_hours)
 
 
 @router.get("/stream")

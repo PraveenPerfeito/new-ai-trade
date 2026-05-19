@@ -31,6 +31,8 @@ log = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log.info("startup_begin")
+    from backend.metrics.infra_collector import start_infra_collector
+    start_infra_collector()
     yield
     # ── Graceful shutdown ─────────────────────────────────────────────────────
     log.info("shutdown_begin")
@@ -54,7 +56,7 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestIdMiddleware)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000"],
+        allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

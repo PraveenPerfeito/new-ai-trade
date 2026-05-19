@@ -1,0 +1,190 @@
+groups:
+  # ── Scanner health ──────────────────────────────────────────────────────────
+  - name: scanner_health
+    rules:
+      - alert: ScanFailureRateHigh
+        expr: |
+          rate(scanner_runs_total{status="failed"}[15m])
+          / (rate(scanner_runs_total[15m]) + 1e-9) > 0.25
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Scanner failure rate above 25% for 5 min"
+          description: "Mode={{ $labels.mode }} failure_rate={{ $value | humanizePercentage }}"
+
+      - alert: NoScansFor30Min
+        expr: |
+          time() - max(scanner_last_scan_timestamp_seconds) > 1800
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No completed scans in the last 30 minutes"
+          description: "The scanner may be stuck, crashed, or Celery Beat may be down."
+
+      - alert: ScanDurationHigh
+        expr: |
+          histogram_quantile(0.95, rate(scanner_duration_seconds_bucket[30m])) > 300
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 scan duration exceeds 5 minutes"
+          description: "p95={{ $value | humanizeDuration }}. Check Binance/CoinGecko latency."
+
+  # ── AI validator ────────────────────────────────────────────────────────────
+  - name: ai_health
+    rules:
+      - alert: AIFallbackRateHigh
+        expr: |
+          rate(ai_validation_total{outcome="fallback"}[30m])
+          / (rate(ai_validation_total[30m]) + 1e-9) > 0.30
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AI heuristic fallback rate above 30%"
+          description: "Claude API may be degraded. fallback_rate={{ $value | humanizePercentage }}"
+
+      - alert: AIErrorRateHigh
+        expr: |
+          rate(ai_validation_total{outcome="error"}[15m])
+          / (rate(ai_validation_total[15m]) + 1e-9) > 0.10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "AI API error rate above 10%"
+          description: "error_rate={{ $value | humanizePercentage }}. Check ANTHROPIC_API_KEY and quota."
+
+      - alert: AILatencyHigh
+        expr: |
+          histogram_quantile(0.95, rate(ai_validation_duration_seconds_bucket[15m])) > 8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AI p95 latency above 8 seconds"
+          description: "p95={{ $value | humanizeDuration }}. Anthropic may be slow."
+
+  # ── External APIs ────────────────────────────────────────────────────────────
+  - name: external_api_health
+    rules:
+      - alert: BinanceErrorRateHigh
+        expr: |
+          rate(external_api_errors_total{service="binance"}[10m])
+          / (rate(external_api_duration_seconds_count{service="binance"}[10m]) + 1e-9) > 0.10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Binance API error rate above 10%"
+          description: "error_rate={{ $value | humanizePercentage }}. Check API key and rate limits."
+
+      - alert: CoinGeckoErrorRateHigh
+        expr: |
+          rate(external_api_errors_total{service="coingecko"}[10m])
+          / (rate(external_api_duration_seconds_count{service="coingecko"}[10m]) + 1e-9) > 0.10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CoinGecko API error rate above 10%"
+          description: "error_rate={{ $value | humanizePercentage }}"
+
+      - alert: TelegramSendFailuresHigh
+        expr: rate(external_api_errors_total{service="telegram"}[15m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Telegram send failures occurring"
+          description: "rate={{ $value }}. Alerts may not be reaching users."
+
+  # ── Worker / Celery ──────────────────────────────────────────────────────────
+  - name: celery_health
+    rules:
+      - alert: CeleryWorkerCrash
+        expr: celery_tasks_total{status="failure"} > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Celery task failures detected"
+          description: "task={{ $labels.task_name }} failures={{ $value }}"
+
+      - alert: CeleryQueueDepthHigh
+        expr: celery_queue_depth{queue="scanner"} > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Celery scanner queue depth above 20"
+          description: "depth={{ $value }}. Workers may be overwhelmed or stalled."
+
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  - name: redis_health
+    rules:
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes > 400 * 1024 * 1024
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory usage above 400MB"
+          description: "used={{ $value | humanize1024 }}. Check for key accumulation."
+
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is unreachable"
+          description: "Rate limiting, progress tracking, and pub/sub will all fail."
+
+  # ── Paper trading ────────────────────────────────────────────────────────────
+  - name: paper_trading
+    rules:
+      - alert: TooManyOpenPaperPositions
+        expr: paper_positions_open > 5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Paper trading has more than 5 open positions"
+          description: "open={{ $value }}. Position cap logic may have a bug."
+
+  # ── API ──────────────────────────────────────────────────────────────────────
+  - name: api_health
+    rules:
+      - alert: APIErrorRateHigh
+        expr: |
+          rate(http_requests_total{status=~"5.."}[5m])
+          / (rate(http_requests_total[5m]) + 1e-9) > 0.05
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API 5xx error rate above 5%"
+          description: "error_rate={{ $value | humanizePercentage }}"
+
+      - alert: APILatencyHigh
+        expr: |
+          histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API p99 latency above 5 seconds"
+          description: "p99={{ $value | humanizeDuration }}"
+
+      - alert: RateLimitSpikeHigh
+        expr: rate(api_errors_total{status_code="429"}[5m]) > 5
+        for: 2m
+        labels:
+          severity: info
+        annotations:
+          summary: "High rate of 429 responses"
+          description: "rate={{ $value }}/s. A client may be hammering the API."

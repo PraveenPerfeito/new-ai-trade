@@ -63,7 +63,9 @@ async def _set_progress(progress: ScanProgress) -> None:
             PROGRESS_TTL,
             progress.model_dump_json(),
         )
-        await redis.setex("scan:latest", PROGRESS_TTL, progress.model_dump_json())
+        await redis.setex(
+            f"scan:latest:{progress.mode.value}", PROGRESS_TTL, progress.model_dump_json()
+        )
     except Exception as exc:
         log.warning("progress_update_failed", error=str(exc))
 
@@ -77,11 +79,25 @@ async def get_progress(scan_id: str) -> ScanProgress | None:
         return None
 
 
-async def get_latest_progress() -> ScanProgress | None:
+async def get_latest_progress(mode: str | None = None) -> ScanProgress | None:
+    """Return the most recent ScanProgress for a given mode, or the newest across all modes."""
     try:
         redis = await get_redis()
-        raw = await redis.get("scan:latest")
-        return ScanProgress.model_validate_json(raw) if raw else None
+        if mode:
+            raw = await redis.get(f"scan:latest:{mode}")
+            return ScanProgress.model_validate_json(raw) if raw else None
+        # No mode specified — find the most recently completed across all modes
+        candidates: list[ScanProgress] = []
+        for m in ("spot", "futures", "trending", "high_confidence"):
+            raw = await redis.get(f"scan:latest:{m}")
+            if raw:
+                try:
+                    candidates.append(ScanProgress.model_validate_json(raw))
+                except Exception:
+                    pass
+        if not candidates:
+            return None
+        return max(candidates, key=lambda p: p.started_at or "")
     except Exception:
         return None
 

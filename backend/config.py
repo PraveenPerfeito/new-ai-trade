@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
 
+    # ── CORS ─────────────────────────────────────────────────────────────────
+    cors_origins: list[str] = ["http://localhost:3000"]
+
     # ── Scanner defaults ──────────────────────────────────────────────────────
     scanner_delay_ms: int = 300
     scanner_min_confidence_alert: int = 85

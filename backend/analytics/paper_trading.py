@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from backend.core.scanner.market_fetcher import fetch_klines
 from backend.core.scanner.models import Signal
 from backend.logging.setup import get_logger
+from backend.metrics.prometheus import paper_positions_open, paper_trades_closed_total
 
 log = get_logger(__name__)
 
@@ -147,6 +148,7 @@ async def open_trade(signal: Signal) -> dict | None:
             round(margin, 4), portfolio_id,
         )
 
+        paper_positions_open.inc()
         log.info("paper_trade_opened", symbol=signal.symbol, notional=round(notional, 2), leverage=leverage)
         return dict(row) if row else None
 
@@ -285,6 +287,8 @@ async def _close_trade(pool, trade: dict, exit_reason: str) -> None:
             0 if is_win else 1,
             trade["portfolio_id"],
         )
+        paper_positions_open.dec()
+        paper_trades_closed_total.labels(exit_reason=exit_reason).inc()
         log.info("paper_trade_closed", symbol=trade["symbol"], reason=exit_reason, pnl=round(pnl_usdt, 2))
     except Exception as exc:
         log.error("close_trade_failed", trade_id=str(trade["id"]), error=str(exc))

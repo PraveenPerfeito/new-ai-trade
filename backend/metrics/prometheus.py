@@ -156,3 +156,26 @@ celery_task_duration_seconds = Histogram(
     ["task_name"],
     buckets=[1, 5, 30, 60, 120, 300, 600],
 )
+
+celery_queue_depth = Gauge(
+    "celery_queue_depth",
+    "Number of pending tasks in a Celery queue (from Redis LLEN)",
+    ["queue"],
+)
+
+# ── Infrastructure / pool metrics ─────────────────────────────────────────────
+
+redis_memory_used_bytes = Gauge(
+    "redis_memory_used_bytes",
+    "Redis used_memory from INFO memory",
+)
+
+asyncpg_pool_size = Gauge(
+    "asyncpg_pool_size",
+    "Current asyncpg connection pool size",
+)
+
+asyncpg_pool_free = Gauge(
+    "asyncpg_pool_free",
+    "Number of idle asyncpg connections available in the pool",
+)
