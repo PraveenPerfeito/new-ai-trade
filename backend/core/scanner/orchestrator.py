@@ -208,6 +208,10 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                     sent = await send_signal_alert(signal)
                     signal.telegram_sent = sent
 
+                # Analytics: register outcome tracker + paper trade (best-effort)
+                if signal.id:
+                    asyncio.create_task(_register_analytics(signal))
+
                 signals.append(signal)
                 progress.signals_found += 1
                 log.info(
@@ -283,3 +287,19 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
 
         scan_runs_total.labels(mode=mode.value, status="failed").inc()
         raise
+
+
+# ── Analytics integration (fire-and-forget) ───────────────────────────────────
+
+async def _register_analytics(signal) -> None:
+    """Register a signal with the outcome tracker and open a paper trade."""
+    try:
+        from backend.analytics.signal_metrics import register_signal_outcome
+        await register_signal_outcome(signal)
+    except Exception as exc:
+        log.warning("register_outcome_failed", symbol=signal.symbol, error=str(exc))
+    try:
+        from backend.analytics.paper_trading import open_trade
+        await open_trade(signal)
+    except Exception as exc:
+        log.warning("open_paper_trade_failed", symbol=signal.symbol, error=str(exc))

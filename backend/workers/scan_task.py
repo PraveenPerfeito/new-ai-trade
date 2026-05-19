@@ -72,6 +72,20 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
             "errors":        scan_result.errors,
         }
 
+        # Record scan metrics (best-effort)
+        try:
+            from backend.analytics.scan_metrics import record_scan
+            asyncio.run(record_scan(
+                scan_id=scan_result.scan_run_id or mode,
+                mode=mode,
+                coins_scanned=scan_result.coins_scanned,
+                signals_found=scan_result.signals_found,
+                duration_ms=scan_result.duration_ms,
+                errors=scan_result.errors,
+            ))
+        except Exception:
+            pass
+
         elapsed = time.monotonic() - start
         scheduler_last_scan_timestamp.set(time.time())
         celery_task_duration_seconds.labels(task_name=task_label).observe(elapsed)
@@ -104,13 +118,41 @@ def monitor_paper_positions(self) -> dict:
     """Check open paper-trading positions against current prices."""
     start = time.monotonic()
     try:
-        # Phase 2: call paper trading engine
-        closed = 0
+        from backend.analytics.paper_trading import monitor_open_positions
+        result = asyncio.run(monitor_open_positions())
+        closed = result.get("closed", 0)
+
         elapsed = time.monotonic() - start
         celery_task_duration_seconds.labels(task_name="paper_monitor").observe(elapsed)
         celery_tasks_total.labels(task_name="paper_monitor", status="success").inc()
-        return {"closed_positions": closed}
+        return {"closed_positions": closed, **result}
     except Exception as exc:
         celery_tasks_total.labels(task_name="paper_monitor", status="failure").inc()
         logger.error("paper_monitor_failed", error=str(exc))
+        raise
+
+
+@shared_task(
+    bind=True,
+    name="backend.workers.scan_task.check_signal_outcomes",
+    max_retries=0,
+    queue="paper_trading",
+    soft_time_limit=5 * 60,
+    time_limit=6 * 60,
+)
+def check_signal_outcomes(self) -> dict:
+    """Resolve PENDING signal outcomes by checking Binance klines."""
+    start = time.monotonic()
+    try:
+        from backend.analytics.signal_metrics import check_pending_outcomes
+        result = asyncio.run(check_pending_outcomes())
+
+        elapsed = time.monotonic() - start
+        celery_task_duration_seconds.labels(task_name="outcome_tracker").observe(elapsed)
+        celery_tasks_total.labels(task_name="outcome_tracker", status="success").inc()
+        logger.info("outcome_check_complete", **result)
+        return result
+    except Exception as exc:
+        celery_tasks_total.labels(task_name="outcome_tracker", status="failure").inc()
+        logger.error("outcome_check_failed", error=str(exc))
         raise

@@ -76,3 +76,61 @@ CREATE POLICY "allow_insert_signal_outcomes"
 
 CREATE POLICY "allow_update_signal_outcomes"
   ON signal_outcomes FOR UPDATE USING (true);
+
+
+-- ── AI call log ───────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS ai_call_log (
+  id                  UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  signal_id           UUID          REFERENCES signals(id) ON DELETE SET NULL,
+  model               TEXT          NOT NULL,
+  latency_ms          INTEGER       NOT NULL DEFAULT 0,
+  prompt_tokens       INTEGER,
+  completion_tokens   INTEGER,
+  validated           BOOLEAN       NOT NULL DEFAULT FALSE,
+  confidence          INTEGER       NOT NULL DEFAULT 0,
+  used_fallback       BOOLEAN       NOT NULL DEFAULT FALSE,
+  error               TEXT,
+  created_at          TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_call_log_created_at
+  ON ai_call_log(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ai_call_log_validated
+  ON ai_call_log(validated);
+
+
+-- ── Scan metrics log ──────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS scan_metrics_log (
+  id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  scan_id         TEXT          NOT NULL,
+  mode            TEXT          NOT NULL,
+  coins_scanned   INTEGER       NOT NULL DEFAULT 0,
+  signals_found   INTEGER       NOT NULL DEFAULT 0,
+  duration_ms     INTEGER       NOT NULL DEFAULT 0,
+  errors          INTEGER       NOT NULL DEFAULT 0,
+  gate_rejections JSONB,
+  created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_scan_metrics_log_created_at
+  ON scan_metrics_log(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_scan_metrics_log_mode
+  ON scan_metrics_log(mode);
+
+
+-- ── Analytics snapshots (cached computed analytics) ───────────────────────────
+
+CREATE TABLE IF NOT EXISTS analytics_snapshots (
+  id            UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  snapshot_type TEXT          NOT NULL,   -- 'overall' | 'by_mode' | 'ai' | 'scan'
+  window_hours  INTEGER       NOT NULL DEFAULT 168,
+  data          JSONB         NOT NULL,
+  computed_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_analytics_snapshots_type_window
+  ON analytics_snapshots(snapshot_type, window_hours, computed_at DESC);

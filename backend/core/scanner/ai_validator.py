@@ -5,6 +5,7 @@ Falls back to heuristic scoring when the API key is absent or the call fails.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 
@@ -52,7 +53,9 @@ async def validate_signal(
 ) -> AIValidationResult:
     client = _get_client()
     if not client:
-        return _heuristic(signal, ind4h, trend_strength, volatility)
+        result = _heuristic(signal, ind4h, trend_strength, volatility)
+        _record(signal.id, "heuristic", 0, result.confidence, result.validated, used_fallback=True)
+        return result
 
     prompt = _build_prompt(signal, coin, ind4h, trend_strength, volatility)
     t0 = time.perf_counter()
@@ -63,11 +66,12 @@ async def validate_signal(
             max_tokens=768,
             messages=[{"role": "user", "content": prompt}],
         )
-        elapsed = time.perf_counter() - t0
+        elapsed    = time.perf_counter() - t0
+        latency_ms = int(elapsed * 1000)
         ai_validation_duration_seconds.observe(elapsed)
 
         text = msg.content[0].text.strip() if msg.content[0].type == "text" else ""
-        parsed = json.loads(text)
+        parsed     = json.loads(text)
         confidence = _clamp(float(parsed.get("confidence") or 0), 0, 100)
 
         expl: AIExplainability | None = None
@@ -81,10 +85,16 @@ async def validate_signal(
             )
 
         validated = parsed.get("validated") is True and confidence >= 80
-        outcome = "validated" if validated else "rejected"
+        outcome   = "validated" if validated else "rejected"
         ai_validation_total.labels(outcome=outcome).inc()
         if validated:
             ai_confidence_histogram.observe(confidence)
+
+        _record(
+            signal.id, "claude-haiku-4-5-20251001", latency_ms, confidence, validated,
+            prompt_tokens=msg.usage.input_tokens if msg.usage else None,
+            completion_tokens=msg.usage.output_tokens if msg.usage else None,
+        )
 
         return AIValidationResult(
             confidence=confidence,
@@ -98,11 +108,17 @@ async def validate_signal(
     except json.JSONDecodeError:
         log.warning("ai_json_parse_failed")
         ai_validation_total.labels(outcome="error").inc()
-        return _heuristic(signal, ind4h, trend_strength, volatility)
+        result = _heuristic(signal, ind4h, trend_strength, volatility)
+        _record(signal.id, "claude-haiku-4-5-20251001", int((time.perf_counter() - t0) * 1000),
+                result.confidence, result.validated, error="json_parse_failed")
+        return result
     except Exception as exc:
         log.warning("ai_api_failed", error=str(exc))
         ai_validation_total.labels(outcome="fallback").inc()
-        return _heuristic(signal, ind4h, trend_strength, volatility)
+        result = _heuristic(signal, ind4h, trend_strength, volatility)
+        _record(signal.id, "claude-haiku-4-5-20251001", int((time.perf_counter() - t0) * 1000),
+                result.confidence, result.validated, used_fallback=True, error=str(exc))
+        return result
 
 
 def _build_prompt(
@@ -186,6 +202,40 @@ Reject (confidence < 80) if ANY of these apply:
 
 Respond ONLY with valid JSON (no markdown):
 {{"confidence":<integer 0-100>,"validated":<boolean>,"reasoning":"<1-sentence verdict>","risks":["<risk>"],"strengths":["<strength>"],"trend":"<1-2 sentences on MTF trend>","momentum":"<1-2 sentences on RSI/MACD/volume>","volatility":"<1 sentence on ATR regime>","rationale":"<1 sentence on why this confidence level>","summary":"<one concise trade thesis>"}}"""
+
+
+# ── Analytics fire-and-forget helper ─────────────────────────────────────────
+
+def _record(
+    signal_id: str | None,
+    model: str,
+    latency_ms: int,
+    confidence: int,
+    validated: bool,
+    *,
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
+    used_fallback: bool = False,
+    error: str | None = None,
+) -> None:
+    """Non-blocking DB write — best effort, never raises."""
+    try:
+        from backend.analytics.ai_metrics import record_ai_call
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.create_task(record_ai_call(
+                signal_id=signal_id,
+                model=model,
+                latency_ms=latency_ms,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                validated=validated,
+                confidence=confidence,
+                used_fallback=used_fallback,
+                error=error,
+            ))
+    except Exception:
+        pass
 
 
 # ── Heuristic fallback ────────────────────────────────────────────────────────

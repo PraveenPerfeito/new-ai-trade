@@ -46,4 +46,13 @@ celery_app.conf.beat_schedule = {
             "queue": "paper_trading",
         },
     },
+    # Signal outcome tracker: every 10 minutes
+    "check-signal-outcomes": {
+        "task": "backend.workers.scan_task.check_signal_outcomes",
+        "schedule": crontab(minute="*/10"),
+        "options": {
+            "expires": 9 * 60,
+            "queue": "paper_trading",
+        },
+    },
 }
