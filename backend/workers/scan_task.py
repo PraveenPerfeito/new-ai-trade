@@ -63,7 +63,23 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
         }
         scanner_mode = mode_map.get(mode, ScannerMode.SPOT)
 
-        scan_result = asyncio.run(run_scan(scanner_mode))
+        async def _run_and_record():
+            result = await run_scan(scanner_mode)
+            try:
+                from backend.analytics.scan_metrics import record_scan
+                await record_scan(
+                    scan_id=result.scan_run_id or mode,
+                    mode=mode,
+                    coins_scanned=result.coins_scanned,
+                    signals_found=result.signals_found,
+                    duration_ms=result.duration_ms,
+                    errors=result.errors,
+                )
+            except Exception:
+                pass
+            return result
+
+        scan_result = asyncio.run(_run_and_record())
         result: dict = {
             "signals":       scan_result.signals_found,
             "mode":          scan_result.mode.value,
@@ -71,20 +87,6 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
             "duration_ms":   scan_result.duration_ms,
             "errors":        scan_result.errors,
         }
-
-        # Record scan metrics (best-effort)
-        try:
-            from backend.analytics.scan_metrics import record_scan
-            asyncio.run(record_scan(
-                scan_id=scan_result.scan_run_id or mode,
-                mode=mode,
-                coins_scanned=scan_result.coins_scanned,
-                signals_found=scan_result.signals_found,
-                duration_ms=scan_result.duration_ms,
-                errors=scan_result.errors,
-            ))
-        except Exception:
-            pass
 
         elapsed = time.monotonic() - start
         scheduler_last_scan_timestamp.set(time.time())

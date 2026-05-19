@@ -64,10 +64,12 @@ async def trigger_scan(body: TriggerRequest, background_tasks: BackgroundTasks):
                 detail=f"A {mode.value} scan is already in progress. Poll /api/scanner/status for progress.",
             )
 
+    # Purge completed tasks to prevent unbounded dict growth
+    for k in [k for k, t in _active_tasks.items() if t.done()]:
+        _active_tasks.pop(k, None)
+
     # Launch scan as a background asyncio task
     task = asyncio.create_task(_run_scan_task(mode))
-    # Capture scan_id from progress once set (it's set at the start of run_scan)
-    # We generate a preliminary scan_id here to return immediately
     import uuid
     scan_id = str(uuid.uuid4())
     _active_tasks[f"{mode.value}:{scan_id}"] = task

@@ -45,13 +45,12 @@ async def get_or_create_portfolio(name: str = DEFAULT_PORTFOLIO_NAME) -> dict | 
     if pool is None:
         return None
     try:
+        # Use INSERT ... ON CONFLICT DO NOTHING to handle concurrent creation safely
+        await pool.execute(
+            "INSERT INTO paper_portfolios (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", name
+        )
         row = await pool.fetchrow(
             "SELECT * FROM paper_portfolios WHERE name=$1 LIMIT 1", name
-        )
-        if row:
-            return dict(row)
-        row = await pool.fetchrow(
-            "INSERT INTO paper_portfolios (name) VALUES ($1) RETURNING *", name
         )
         return dict(row) if row else None
     except Exception as exc:

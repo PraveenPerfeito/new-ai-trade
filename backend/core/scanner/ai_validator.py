@@ -221,7 +221,10 @@ def _record(
     """Non-blocking DB write — best effort, never raises."""
     try:
         from backend.analytics.ai_metrics import record_ai_call
-        loop = asyncio.get_event_loop()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return  # not in async context — skip
         if loop.is_running():
             asyncio.create_task(record_ai_call(
                 signal_id=signal_id,

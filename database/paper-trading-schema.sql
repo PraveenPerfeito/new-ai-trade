@@ -17,6 +17,10 @@ CREATE TABLE IF NOT EXISTS paper_portfolios (
   updated_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
 
+-- Prevent duplicate portfolios created under race conditions
+CREATE UNIQUE INDEX IF NOT EXISTS idx_paper_portfolios_name
+  ON paper_portfolios(name);
+
 -- Individual paper trades
 CREATE TABLE IF NOT EXISTS paper_trades (
   id                UUID          PRIMARY KEY DEFAULT gen_random_uuid(),

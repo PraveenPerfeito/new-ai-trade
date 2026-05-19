@@ -37,7 +37,7 @@ async def sse_metrics_stream(timeout_seconds: int = 300) -> AsyncGenerator[str, 
         pubsub = redis.pubsub()
         await pubsub.subscribe(CHANNEL)
 
-        loop     = asyncio.get_event_loop()
+        loop     = asyncio.get_running_loop()
         deadline = loop.time() + timeout_seconds
 
         async for message in pubsub.listen():
