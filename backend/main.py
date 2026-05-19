@@ -23,6 +23,7 @@ from backend.api.burnin import router as burnin_router
 from backend.api.health import router as health_router
 from backend.api.scanner import router as scanner_router
 from backend.api.scheduler import router as scheduler_router
+from backend.api.settings import router as settings_router
 
 # Initialise logging before anything else
 configure_logging()
@@ -33,7 +34,9 @@ log = get_logger(__name__)
 async def lifespan(app: FastAPI):
     log.info("startup_begin")
     from backend.metrics.infra_collector import start_infra_collector
+    from backend.system_settings.service import get_settings_service
     start_infra_collector()
+    await get_settings_service().seed_defaults()
     yield
     # ── Graceful shutdown ─────────────────────────────────────────────────────
     log.info("shutdown_begin")
@@ -86,6 +89,7 @@ def create_app() -> FastAPI:
     app.include_router(scheduler_router)
     app.include_router(analytics_router)
     app.include_router(burnin_router)
+    app.include_router(settings_router)
 
     return app
 

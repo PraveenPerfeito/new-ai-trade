@@ -7,6 +7,20 @@ const BASE = '/api/admin'
 
 // ── Generic fetchers ──────────────────────────────────────────────────────────
 
+async function put<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(BASE + path, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail ?? `[admin-api] PUT ${path} → HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
 async function get<T>(path: string, params?: Record<string, string | number>): Promise<T> {
   const url = new URL(BASE + path, window.location.origin)
   if (params) {
@@ -188,6 +202,34 @@ export interface HealthReady {
   checks: Record<string, string>
 }
 
+export type SettingDataType = 'bool' | 'int' | 'float' | 'string' | 'enum'
+
+export interface SettingEntry {
+  key:              string
+  category:         string
+  data_type:        SettingDataType
+  label:            string
+  description:      string
+  value:            boolean | number | string
+  default:          boolean | number | string
+  min_val:          number | null
+  max_val:          number | null
+  allowed_values:   string[] | null
+  requires_restart: boolean
+}
+
+export type SettingsData = Record<string, SettingEntry[]>
+
+export interface AuditEntry {
+  id:          number
+  category:    string
+  key:         string
+  old_value:   unknown
+  new_value:   unknown
+  updated_by:  string
+  updated_at:  string
+}
+
 // ── Typed API surface ─────────────────────────────────────────────────────────
 
 export const adminApi = {
@@ -220,5 +262,17 @@ export const adminApi = {
   },
   scanner: {
     trigger: (mode: string) => post<{ task_id: string; message: string }>('/scanner/trigger', { mode }),
+  },
+  settings: {
+    all:      ()                                         => get<SettingsData>('/settings'),
+    category: (cat: string)                              => get<SettingEntry[]>(`/settings/${cat}`),
+    audit:    (limit = 50, cat?: string)                 =>
+      get<{ entries: AuditEntry[] }>('/settings/audit', cat ? { limit, category: cat } : { limit }),
+    update:   (cat: string, key: string, value: unknown, updated_by = 'admin') =>
+      put<{ success: boolean; key: string }>(`/settings/${cat}/${key}`, { value, updated_by }),
+    reset:    (category?: string, updated_by = 'admin')  =>
+      post<{ success: boolean }>('/settings/reset', { category, updated_by }),
+    bulkUpdate: (updates: Record<string, unknown>, updated_by = 'admin') =>
+      post<{ success: boolean }>('/settings/bulk', { updates, updated_by }),
   },
 }
