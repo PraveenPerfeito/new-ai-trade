@@ -168,9 +168,23 @@ class SettingsService:
 
     # ── Public read API ───────────────────────────────────────────────────────
 
-    async def get_group(self, model_class: type[T]) -> T:
-        """Return a typed, fully-validated settings instance."""
+    async def _apply_experiments(
+        self,
+        group_name: str,
+        data: dict[str, Any],
+        context: dict | None,
+    ) -> dict[str, Any]:
+        """Apply active experiment overrides (no-op if none configured)."""
+        try:
+            from backend.system_settings.experiments import get_experiment_service
+            return await get_experiment_service().resolve_overrides(group_name, data, context)
+        except Exception:
+            return data
+
+    async def get_group(self, model_class: type[T], context: dict | None = None) -> T:
+        """Return a typed, fully-validated settings instance with experiment overrides applied."""
         data, _ = await self._get_group_raw(model_class.GROUP_NAME)
+        data = await self._apply_experiments(model_class.GROUP_NAME, data, context)
         try:
             return model_class.model_validate(data)
         except Exception:

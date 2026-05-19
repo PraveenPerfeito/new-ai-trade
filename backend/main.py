@@ -20,6 +20,7 @@ from backend.middleware.request_id import RequestIdMiddleware
 # Import routers
 from backend.api.analytics import router as analytics_router
 from backend.api.burnin import router as burnin_router
+from backend.api.experiments import router as experiments_router
 from backend.api.health import router as health_router
 from backend.api.scanner import router as scanner_router
 from backend.api.scheduler import router as scheduler_router
@@ -97,6 +98,7 @@ def create_app() -> FastAPI:
     app.include_router(analytics_router)
     app.include_router(burnin_router)
     app.include_router(settings_router)
+    app.include_router(experiments_router)
 
     return app
 

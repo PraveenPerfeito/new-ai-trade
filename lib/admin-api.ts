@@ -56,6 +56,12 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
   return res.json()
 }
 
+async function del<T>(path: string): Promise<T> {
+  const res = await fetch(BASE + path, { method: 'DELETE', cache: 'no-store' })
+  if (!res.ok) throw new Error(`[admin-api] DELETE ${path} → HTTP ${res.status}`)
+  return res.json()
+}
+
 // ── Response types ────────────────────────────────────────────────────────────
 
 export interface BurninStatus {
@@ -270,6 +276,58 @@ export interface PatchResult {
   changed:      string[]
 }
 
+export type ExperimentStatus = 'draft' | 'active' | 'paused' | 'concluded'
+
+export interface Experiment {
+  id:             number
+  name:           string
+  description:    string
+  group_name:     string
+  overrides:      Record<string, unknown>
+  status:         ExperimentStatus
+  rollout_pct:    number
+  context_filter: Record<string, string | number | boolean>
+  dry_run:        boolean
+  expires_at:     string | null
+  created_by:     string
+  created_at:     string
+  updated_at:     string
+}
+
+export interface ExperimentPreview {
+  experiment_id:   number
+  name:            string
+  group_name:      string
+  status:          ExperimentStatus
+  would_apply:     boolean
+  invalid_keys:    string[]
+  diff:            Record<string, { base: unknown; experiment: unknown }>
+  base:            Record<string, unknown>
+  with_experiment: Record<string, unknown>
+}
+
+export interface CreateExperimentBody {
+  name:           string
+  group_name:     string
+  overrides:      Record<string, unknown>
+  description?:   string
+  rollout_pct?:   number
+  context_filter?: Record<string, string | number | boolean>
+  dry_run?:       boolean
+  expires_at?:    string | null
+  created_by?:    string
+}
+
+export interface PatchExperimentBody {
+  name?:           string
+  description?:    string
+  overrides?:      Record<string, unknown>
+  rollout_pct?:    number
+  context_filter?: Record<string, string | number | boolean>
+  dry_run?:        boolean
+  expires_at?:     string | null
+}
+
 // ── Typed API surface ─────────────────────────────────────────────────────────
 
 export const adminApi = {
@@ -342,6 +400,53 @@ export const adminApi = {
       get<{ entries: AuditEntry[] }>(
         '/settings/audit',
         group_name ? { limit, group_name } : { limit },
+      ),
+  },
+  experiments: {
+    /** List experiments — filterable by group_name and/or status */
+    list: (group_name?: string, status?: ExperimentStatus, limit = 100) =>
+      get<{ experiments: Experiment[]; total: number }>(
+        '/experiments',
+        {
+          ...(group_name ? { group_name } : {}),
+          ...(status     ? { status }     : {}),
+          limit,
+        },
+      ),
+
+    /** Single experiment */
+    get: (id: number) =>
+      get<Experiment>(`/experiments/${id}`),
+
+    /** Create in draft state */
+    create: (body: CreateExperimentBody) =>
+      post<Experiment>('/experiments', body),
+
+    /** Update mutable fields (only provided fields change) */
+    update: (id: number, body: PatchExperimentBody) =>
+      patch<Experiment>(`/experiments/${id}`, body),
+
+    /** Delete — only draft or concluded experiments */
+    delete: (id: number) =>
+      del<{ deleted: boolean; id: number }>(`/experiments/${id}`),
+
+    activate: (id: number) =>
+      post<Experiment>(`/experiments/${id}/activate`),
+
+    pause: (id: number) =>
+      post<Experiment>(`/experiments/${id}/pause`),
+
+    conclude: (id: number) =>
+      post<Experiment>(`/experiments/${id}/conclude`),
+
+    /**
+     * Show what the experiment would change vs current base settings.
+     * Pass context as JSON-encoded string, e.g. '{"trading_context":"paper_trading"}'.
+     */
+    preview: (id: number, context?: Record<string, string | number | boolean>) =>
+      get<ExperimentPreview>(
+        `/experiments/${id}/preview`,
+        context ? { context: JSON.stringify(context) } : undefined,
       ),
   },
 }

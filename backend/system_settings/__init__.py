@@ -1,3 +1,4 @@
+from backend.system_settings.experiments import Experiment, ExperimentService, get_experiment_service
 from backend.system_settings.groups import (
     ScannerSettings,
     SignalThresholdSettings,
@@ -26,4 +27,7 @@ __all__ = [
     "GROUP_REGISTRY",
     "ALL_GROUPS",
     "get_settings_service",
+    "Experiment",
+    "ExperimentService",
+    "get_experiment_service",
 ]
