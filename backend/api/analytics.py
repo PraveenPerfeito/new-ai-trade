@@ -10,6 +10,15 @@ from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 
 from backend.analytics.ai_metrics import get_ai_summary
+from backend.analytics.edge_validation import (
+    confidence_calibration,
+    claude_effectiveness,
+    setup_score_analysis as edge_setup_score,
+    market_regime_analysis,
+    scanner_mode_analysis,
+    coin_performance,
+    generate_edge_validation_report,
+)
 from backend.analytics.paper_trading import get_or_create_portfolio, get_portfolio_metrics
 from backend.analytics.performance_engine import get_dashboard_summary
 from backend.analytics.realtime_metrics import sse_metrics_stream
@@ -150,6 +159,88 @@ async def signal_validation_ai_vs_heuristic(
 ) -> dict[str, Any]:
     """Compare Claude-validated vs heuristic-fallback signal outcomes."""
     return await ai_vs_heuristic(window_hours)
+
+
+@router.get("/edge/report")
+async def edge_validation_report(
+    window_hours: int = Query(default=720, ge=24, le=2160),
+) -> dict[str, Any]:
+    """
+    Full Phase 4.7 edge validation report — all 7 analyses in one call.
+    Includes: edge verdict, calibration, Claude effectiveness, setup score,
+    market regime, scanner mode, coin performance, and threshold recommendations.
+    window_hours default = 720 (30 days).
+    """
+    return await generate_edge_validation_report(window_hours)
+
+
+@router.get("/edge/calibration")
+async def edge_calibration(
+    window_hours: int = Query(default=720, ge=24, le=2160),
+) -> dict[str, Any]:
+    """
+    Confidence calibration analysis.
+    Returns actual win rate vs expected win rate per 5-point confidence band,
+    ECE (Expected Calibration Error), reliability score, and 7/30-day rolling trends.
+    """
+    return await confidence_calibration(window_hours)
+
+
+@router.get("/edge/claude")
+async def edge_claude(
+    window_hours: int = Query(default=720, ge=24, le=2160),
+) -> dict[str, Any]:
+    """
+    Claude AI effectiveness report.
+    Compares Claude-validated vs heuristic-fallback signal outcomes.
+    Includes win rate lift and two-proportion z-test for statistical significance.
+    """
+    return await claude_effectiveness(window_hours)
+
+
+@router.get("/edge/setup-score")
+async def edge_setup_score_view(
+    window_hours: int = Query(default=720, ge=24, le=2160),
+) -> dict[str, Any]:
+    """
+    Setup score (quality_score) analysis by band.
+    Determines the optimal quality_score threshold for maximum profitability.
+    """
+    return await edge_setup_score(window_hours)
+
+
+@router.get("/edge/regime")
+async def edge_regime(
+    window_hours: int = Query(default=720, ge=24, le=2160),
+) -> dict[str, Any]:
+    """
+    Market regime analysis by volatility_regime (LOW/NORMAL/HIGH/EXTREME).
+    Determines which regimes produce profitable signals and which to avoid.
+    """
+    return await market_regime_analysis(window_hours)
+
+
+@router.get("/edge/modes")
+async def edge_modes(
+    window_hours: int = Query(default=720, ge=24, le=2160),
+) -> dict[str, Any]:
+    """
+    Scanner mode comparison: spot, futures, high_confidence, trending.
+    Ranked by expectancy with per-mode signal frequency and drawdown.
+    """
+    return await scanner_mode_analysis(window_hours)
+
+
+@router.get("/edge/coins")
+async def edge_coins(
+    window_hours: int = Query(default=720, ge=24, le=2160),
+    top_n:        int = Query(default=20, ge=5, le=50),
+) -> dict[str, Any]:
+    """
+    Per-coin performance analysis.
+    Best and worst performers by win rate, expectancy, and drawdown.
+    """
+    return await coin_performance(window_hours, top_n)
 
 
 @router.get("/stream")
