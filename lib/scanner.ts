@@ -403,7 +403,10 @@ export async function scanCoin(
 
 // ─── Full scan orchestration ────────────────────────────────────────────────
 
-export async function runScan(mode: ScannerMode = 'spot'): Promise<ScanResult> {
+export async function runScan(
+  mode: ScannerMode = 'spot',
+  options?: { filterCoins?: string[] },
+): Promise<ScanResult> {
   const t0 = Date.now();
   const config = CONFIGS[mode];
   const { SCANNER_DELAY_MS: delayMs, SCANNER_MIN_CONFIDENCE_ALERT: alertThreshold } = getEnv();
@@ -437,6 +440,19 @@ export async function runScan(mode: ScannerMode = 'spot'): Promise<ScanResult> {
 
     // 5. Prioritise priority coins (BTC, ETH, SOL, …) then sort by quality score
     filtered = prioritizeCoins(filtered).slice(0, config.maxCoinsToScan);
+
+    // 5b. Optional coin filter: restrict to specific symbols (single/multi/watchlist modes)
+    if (options?.filterCoins?.length) {
+      const targetSet = new Set(options.filterCoins.map(s => s.toUpperCase()));
+      filtered = filtered.filter(c => targetSet.has(c.symbol.toUpperCase()));
+      // If none of the requested coins made it through the market-cap/volume gates,
+      // fall back to the unfiltered prioritised list so the scan always returns data.
+      if (filtered.length === 0) {
+        log.warn({ requested: options.filterCoins }, 'coin filter matched 0 after gates — falling back to full list');
+        filtered = prioritizeCoins(await getTop100ByMarketCap()).slice(0, config.maxCoinsToScan);
+      }
+    }
+
     log.info({ count: filtered.length, mode }, 'scanning coins');
 
     // 6. Cache coin list in Supabase for the dashboard

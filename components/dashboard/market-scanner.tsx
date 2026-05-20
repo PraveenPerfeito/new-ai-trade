@@ -13,13 +13,14 @@ import { TopMovers }       from './top-movers';
 import { BacktestPanel }          from './backtest-panel';
 import { PerformanceAnalytics }  from './performance-analytics';
 import { PaperTrading }          from './paper-trading';
+import { ScanCommandCenter }     from './scan-command-center';
 
 const POLL_SIGNALS_MS   = 30_000;
 const POLL_COINS_MS     = 5 * 60_000;
 const POLL_SCHEDULER_MS = 10_000;
 
 export function MarketScanner() {
-  const [activeTab, setActiveTab]                 = useState<'scanner' | 'backtest' | 'analytics' | 'trade'>('scanner');
+  const [activeTab, setActiveTab]                 = useState<'command' | 'scanner' | 'backtest' | 'analytics' | 'trade'>('command');
   const [mode, setMode]                           = useState<ScannerMode>('spot');
   const [signals, setSignals]                     = useState<TradingSignal[]>([]);
   const [coins, setCoins]                         = useState<CoinData[]>([]);
@@ -241,7 +242,7 @@ export function MarketScanner() {
 
         {/* Tab navigation */}
         <div className="flex-shrink-0 flex gap-1 glass-surface rounded-xl p-1 border border-terminal-border/40 mb-0 self-start w-fit">
-          {(['scanner', 'backtest', 'analytics', 'trade'] as const).map(tab => (
+          {(['command', 'scanner', 'backtest', 'analytics', 'trade'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -252,13 +253,26 @@ export function MarketScanner() {
                   : 'text-terminal-muted hover:text-terminal-text',
               )}
             >
-              {tab === 'scanner'   ? '⬡ Scanner'
+              {tab === 'command'   ? '⌘ Command'
+               : tab === 'scanner'   ? '⬡ Scanner'
                : tab === 'backtest'  ? '◈ Backtest'
                : tab === 'analytics' ? '◇ Analytics'
                : '▸ Paper Trade'}
             </button>
           ))}
         </div>
+
+        {activeTab === 'command' && (
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <ScanCommandCenter
+              coins={coins}
+              externalSignals={signals}
+              schedulerStatus={schedulerStatus}
+              isScanning={isScanning}
+              onEnterTrade={handleEnterTrade}
+            />
+          </div>
+        )}
 
         {activeTab === 'scanner' && (
           <>

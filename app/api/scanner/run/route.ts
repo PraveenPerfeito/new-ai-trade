@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   // ── Body validation ────────────────────────────────────────────────────────
   const { data, error: validationError } = await parseBody(req, scanBodySchema);
   if (validationError) return validationError;
-  const { mode } = data;
+  const { mode, coins } = data;
 
   // ── Plan access check ──────────────────────────────────────────────────────
   const ctx = await getAccessContext(req);
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
   const scanId = scheduler.beginScan(mode, 'manual');
 
   try {
-    const result = await runScan(mode);
+    const result = await runScan(mode, coins?.length ? { filterCoins: coins } : undefined);
     scheduler.completeScan(scanId, result);
 
     const durationMs = Date.now() - t0;

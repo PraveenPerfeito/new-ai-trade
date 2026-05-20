@@ -56,7 +56,9 @@ export const paginationSchema = z.object({
 export const scannerModeSchema = z.enum(['spot', 'futures', 'high_confidence', 'trending']);
 
 export const scanBodySchema = z.object({
-  mode: scannerModeSchema.default('spot'),
+  mode:  scannerModeSchema.default('spot'),
+  // Optional list of coin symbols to restrict scan to (e.g. single/multi/watchlist modes)
+  coins: z.array(z.string().min(1).max(20).toUpperCase()).max(100).optional(),
 });
 
 export const signalsQuerySchema = z.object({
