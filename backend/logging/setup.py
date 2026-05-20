@@ -45,7 +45,8 @@ def configure_logging() -> None:
 
     shared_processors: list[Any] = [
         structlog.contextvars.merge_contextvars,
-        structlog.stdlib.add_logger_name,
+        # add_logger_name is stdlib-only (needs logger.name); we use PrintLoggerFactory
+        # so the name is injected via get_logger(name).bind(logger=name) instead.
         structlog.stdlib.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
         _add_severity,
@@ -93,4 +94,4 @@ def configure_logging() -> None:
 
 def get_logger(name: str) -> structlog.BoundLogger:
     """Return a named structlog logger. Usage: log = get_logger(__name__)"""
-    return structlog.get_logger(name)
+    return structlog.get_logger().bind(logger=name)
