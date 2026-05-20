@@ -1,5 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  webpack(config, { dev }) {
+    if (dev) {
+      // Webpack's gzip cache serialization fails under memory pressure on Windows.
+      // Disable filesystem cache in dev — hot reload still works via in-memory cache.
+      config.cache = false;
+    }
+    return config;
+  },
+
   // Produce a self-contained .next/standalone directory for Docker
   output: 'standalone',
 
