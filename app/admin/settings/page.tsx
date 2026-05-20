@@ -40,6 +40,78 @@ const GROUP_DESCRIPTIONS: Record<string, string> = {
   infra:         'Infrastructure limits, pool sizes, and cache TTLs',
 }
 
+// ── Settings presets ──────────────────────────────────────────────────────────
+
+type PresetId = 'conservative' | 'balanced' | 'aggressive' | 'institutional'
+
+interface SettingsPreset {
+  id:          PresetId
+  label:       string
+  icon:        string
+  description: string
+  color:       string
+  groups:      Record<string, Record<string, number | boolean>>
+}
+
+const SETTINGS_PRESETS: SettingsPreset[] = [
+  {
+    id:          'conservative',
+    label:       'Conservative',
+    icon:        '◇',
+    description: 'High-confluence only · tight risk · low frequency · ideal for real capital',
+    color:       '#00d084',
+    groups: {
+      scanner:  { min_confidence: 87, alert_confidence: 92, max_coins_per_run: 50 },
+      signals:  { min_rr_ratio: 2.5, min_quality_score: 60 },
+      risk:     { max_portfolio_risk_pct: 0.01, reject_f_grade: true },
+      telegram: { min_confidence: 90, max_alerts_per_hour: 5 },
+      ai:       { temperature: 0.2 },
+    },
+  },
+  {
+    id:          'balanced',
+    label:       'Balanced',
+    icon:        '◈',
+    description: 'Default production profile · good signal/noise ratio · recommended starting point',
+    color:       '#3b82f6',
+    groups: {
+      scanner:  { min_confidence: 80, alert_confidence: 85, max_coins_per_run: 100 },
+      signals:  { min_rr_ratio: 2.0, min_quality_score: 40 },
+      risk:     { max_portfolio_risk_pct: 0.02, reject_f_grade: true },
+      telegram: { min_confidence: 85, max_alerts_per_hour: 10 },
+      ai:       { temperature: 0.3 },
+    },
+  },
+  {
+    id:          'aggressive',
+    label:       'Aggressive',
+    icon:        '▲',
+    description: 'Lower thresholds · higher signal volume · accepts D-grade setups · paper trading / research',
+    color:       '#f97316',
+    groups: {
+      scanner:  { min_confidence: 72, alert_confidence: 78, max_coins_per_run: 100 },
+      signals:  { min_rr_ratio: 1.5, min_quality_score: 30 },
+      risk:     { max_portfolio_risk_pct: 0.04, reject_f_grade: false },
+      telegram: { min_confidence: 78, max_alerts_per_hour: 20 },
+      ai:       { temperature: 0.45 },
+    },
+  },
+  {
+    id:          'institutional',
+    label:       'Institutional',
+    icon:        '⬡',
+    description: 'Highest bar · A-grade only · 3× R:R minimum · very low alert noise · for large positions',
+    color:       '#f59e0b',
+    groups: {
+      scanner:  { min_confidence: 90, alert_confidence: 94, max_coins_per_run: 30 },
+      signals:  { min_rr_ratio: 3.0, min_quality_score: 70 },
+      risk:     { max_portfolio_risk_pct: 0.01, reject_f_grade: true },
+      telegram: { min_confidence: 92, max_alerts_per_hour: 3 },
+      ai:       { temperature: 0.15 },
+    },
+  },
+]
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatRelative(iso: string | null | undefined): string {
@@ -228,6 +300,66 @@ function FeatureFlagCard({
   )
 }
 
+// ── SettingsPresetsBar ────────────────────────────────────────────────────────
+
+function SettingsPresetsBar({
+  applying,
+  applied,
+  onApply,
+}: {
+  applying: string | null
+  applied:  string | null
+  onApply:  (preset: SettingsPreset) => void
+}) {
+  return (
+    <div className="glass-card rounded-lg p-3.5 border border-terminal-border/50">
+      <div className="flex items-center gap-2 mb-2.5">
+        <Settings2 size={11} className="text-terminal-muted/60" />
+        <span className="text-[10px] text-terminal-muted uppercase tracking-widest">
+          Quick Presets
+        </span>
+        <span className="text-[9px] text-terminal-muted/40 ml-1">
+          — patches scanner · signals · risk · telegram · ai in one click
+        </span>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        {SETTINGS_PRESETS.map(p => {
+          const isApplying = applying === p.id
+          const isApplied  = applied  === p.id
+          const isDisabled = !!applying
+          return (
+            <button
+              key={p.id}
+              onClick={() => !isDisabled && onApply(p)}
+              disabled={isDisabled}
+              title={p.description}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-[11px] font-semibold border transition-all ${
+                isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:scale-[1.02] active:scale-[0.98]'
+              }`}
+              style={{
+                borderColor:     (isApplied || isApplying) ? p.color + '55' : 'rgba(255,255,255,0.07)',
+                backgroundColor: isApplied  ? p.color + '18'
+                               : isApplying ? p.color + '10'
+                               : 'transparent',
+                color: isApplied || isApplying ? p.color : '#6b7280',
+              }}
+            >
+              {isApplying ? (
+                <span className="inline-block animate-spin text-sm leading-none">◌</span>
+              ) : isApplied ? (
+                <CheckCircle2 size={12} style={{ color: p.color }} />
+              ) : (
+                <span className="leading-none" style={{ color: p.color + '90' }}>{p.icon}</span>
+              )}
+              {p.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -242,8 +374,10 @@ export default function SettingsPage() {
   const [auditLog,     setAuditLog]     = useState<AuditEntry[]>([])
   const [auditGroup,   setAuditGroup]   = useState('all')
   const [auditLoading, setAuditLoading] = useState(false)
-  const [resetConfirm, setResetConfirm] = useState<string | null>(null)
-  const [saveWarnings, setSaveWarnings] = useState<Record<string, string[]>>({})
+  const [resetConfirm,   setResetConfirm]   = useState<string | null>(null)
+  const [saveWarnings,   setSaveWarnings]   = useState<Record<string, string[]>>({})
+  const [applyingPreset, setApplyingPreset] = useState<string | null>(null)
+  const [presetApplied,  setPresetApplied]  = useState<string | null>(null)
 
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
@@ -389,6 +523,30 @@ export default function SettingsPage() {
     } catch {}
   }
 
+  const applyPreset = useCallback(async (preset: SettingsPreset) => {
+    setApplyingPreset(preset.id)
+    const allWarnings: Record<string, string[]> = {}
+    try {
+      await Promise.all(
+        Object.entries(preset.groups).map(async ([group, fields]) => {
+          const result = await adminApi.settings.patch(group, fields)
+          if (result.warnings?.length) allWarnings[group] = result.warnings
+        }),
+      )
+      if (Object.keys(allWarnings).length) {
+        setSaveWarnings(prev => ({ ...prev, ...allWarnings }))
+      }
+      setDirty({})
+      await fetchSettings()
+      setPresetApplied(preset.id)
+      setTimeout(() => setPresetApplied(null), 3_000)
+    } catch (e) {
+      setFetchError(`Preset "${preset.label}" failed: ${String(e).replace(/^Error: /, '')}`)
+    } finally {
+      setApplyingPreset(null)
+    }
+  }, [fetchSettings])
+
   // ── Loading / error ────────────────────────────────────────────────────────
 
   if (loading) {
@@ -457,6 +615,13 @@ export default function SettingsPage() {
           effect after a process restart.
         </span>
       </div>
+
+      {/* Settings Presets */}
+      <SettingsPresetsBar
+        applying={applyingPreset}
+        applied={presetApplied}
+        onApply={applyPreset}
+      />
 
       {/* Tab bar */}
       <div className="flex gap-0.5 flex-wrap border-b border-terminal-border">
