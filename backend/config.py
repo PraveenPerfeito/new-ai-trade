@@ -1,11 +1,20 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Resolve the project root from this file's location so pydantic-settings
+# finds .env regardless of the process working directory (e.g. uvicorn --reload
+# subprocess on Windows loses CWD context).
+_ROOT      = Path(__file__).resolve().parent.parent
+_ENV       = str(_ROOT / ".env")
+_ENV_LOCAL = str(_ROOT / ".env.local")
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=(".env", ".env.local"),   # .env.local overrides .env if both exist
+        env_file=(_ENV, _ENV_LOCAL),  # .env.local overrides .env when both exist
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -14,6 +23,11 @@ class Settings(BaseSettings):
     # ── Application ───────────────────────────────────────────────────────────
     environment: Literal["development", "production", "test"] = "development"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+
+    @field_validator("log_level", mode="before")
+    @classmethod
+    def _upper_log_level(cls, v: object) -> object:
+        return v.upper() if isinstance(v, str) else v
     fastapi_port: int = 8000
 
     # ── Supabase / Postgres ───────────────────────────────────────────────────
@@ -47,6 +61,10 @@ class Settings(BaseSettings):
     # ── Scanner defaults ──────────────────────────────────────────────────────
     scanner_delay_ms: int = 300
     scanner_min_confidence_alert: int = 85
+
+    # ── Stripe ───────────────────────────────────────────────────────────────
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
 
     @property
     def broker_url(self) -> str:
