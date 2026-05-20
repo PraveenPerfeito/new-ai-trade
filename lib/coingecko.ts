@@ -1,128 +1,13 @@
-import axios from 'axios';
 import { CoinData } from '@/types';
-import { sleep } from './utils';
-import { withApiRetry } from './retry';
+import { getMarketDataService } from './market-data/service';
 
-const BASE_URL = 'https://api.coingecko.com/api/v3';
-const API_KEY = process.env.COINGECKO_API_KEY;
-
-// Maps CoinGecko coin IDs → Binance USDT symbols
-const BINANCE_SYMBOL_MAP: Record<string, string> = {
-  'bitcoin': 'BTCUSDT',
-  'ethereum': 'ETHUSDT',
-  'solana': 'SOLUSDT',
-  'binancecoin': 'BNBUSDT',
-  'ripple': 'XRPUSDT',
-  'dogecoin': 'DOGEUSDT',
-  'cardano': 'ADAUSDT',
-  'avalanche-2': 'AVAXUSDT',
-  'chainlink': 'LINKUSDT',
-  'sui': 'SUIUSDT',
-  'polkadot': 'DOTUSDT',
-  'shiba-inu': 'SHIBUSDT',
-  'tron': 'TRXUSDT',
-  'litecoin': 'LTCUSDT',
-  'matic-network': 'MATICUSDT',
-  'internet-computer': 'ICPUSDT',
-  'bitcoin-cash': 'BCHUSDT',
-  'near': 'NEARUSDT',
-  'uniswap': 'UNIUSDT',
-  'aptos': 'APTUSDT',
-  'stellar': 'XLMUSDT',
-  'monero': 'XMRUSDT',
-  'ethereum-classic': 'ETCUSDT',
-  'cosmos': 'ATOMUSDT',
-  'filecoin': 'FILUSDT',
-  'hedera-hashgraph': 'HBARUSDT',
-  'arbitrum': 'ARBUSDT',
-  'optimism': 'OPUSDT',
-  'injective-protocol': 'INJUSDT',
-  'sei-network': 'SEIUSDT',
-  'the-graph': 'GRTUSDT',
-  'fetch-ai': 'FETUSDT',
-  'render-token': 'RENDERUSDT',
-  'algorand': 'ALGOUSDT',
-  'sandbox': 'SANDUSDT',
-  'decentraland': 'MANAUSDT',
-  'axie-infinity': 'AXSUSDT',
-  'flow': 'FLOWUSDT',
-  'immutable-x': 'IMXUSDT',
-  'pepe': 'PEPEUSDT',
-  'floki': 'FLOKIUSDT',
-  'dogwifcoin': 'WIFUSDT',
-  'kaspa': 'KASUSDT',
-  'thorchain': 'RUNEUSDT',
-  'pendle': 'PENDLEUSDT',
-  'toncoin': 'TONUSDT',
-  'notcoin': 'NOTUSDT',
-  'ethena': 'ENAUSDT',
-  'starknet': 'STRKUSDT',
-  'dydx-chain': 'DYDXUSDT',
-  'aave': 'AAVEUSDT',
-  'maker': 'MKRUSDT',
-  'curve-dao-token': 'CRVUSDT',
-  'fantom': 'FTMUSDT',
-  'eos': 'EOSUSDT',
-  'vechain': 'VETUSDT',
-  'theta-token': 'THETAUSDT',
-  'gala': 'GALAUSDT',
-  'worldcoin-wld': 'WLDUSDT',
-  'celestia': 'TIAUSDT',
-  'pyth-network': 'PYTHUSDT',
-  'jupiter-exchange-solana': 'JUPUSDT',
-  'bonk': 'BONKUSDT',
-  'ondo-finance': 'ONDOUSDT',
-  'eigenlayer': 'EIGENUSDT',
-};
-
+/**
+ * Fetch top 100 coins — delegates to MarketDataService which handles
+ * provider selection, failover, caching, and health tracking.
+ * All callers (scanner, etc.) continue to use this stable export.
+ */
 export async function getTop100ByMarketCap(): Promise<CoinData[]> {
-  const headers: Record<string, string> = { 'Accept': 'application/json' };
-  if (API_KEY) headers['x-cg-demo-api-key'] = API_KEY;
-
-  const coinParams = (page: number) => ({
-    vs_currency:              'usd',
-    order:                    'market_cap_desc',
-    per_page:                 50,
-    page,
-    sparkline:                false,
-    price_change_percentage:  '24h',
-  });
-
-  // CoinGecko free tier: two pages of 50 to get 100 coins
-  const [page1, page2] = await Promise.all([
-    withApiRetry(
-      () => axios.get(`${BASE_URL}/coins/markets`, { headers, params: coinParams(1), timeout: 15000 }),
-      'coingecko-page1',
-    ),
-    (async () => {
-      await sleep(400); // stagger to avoid rate limit
-      return withApiRetry(
-        () => axios.get(`${BASE_URL}/coins/markets`, { headers, params: coinParams(2), timeout: 15000 }),
-        'coingecko-page2',
-      );
-    })(),
-  ]);
-
-  const raw = [...page1.data, ...page2.data];
-
-  return raw.map((coin: Record<string, unknown>, i: number): CoinData => {
-    const cgId = String(coin.id).toLowerCase();
-    const symbol = String(coin.symbol).toUpperCase();
-    const binanceSymbol = BINANCE_SYMBOL_MAP[cgId] ?? `${symbol}USDT`;
-
-    return {
-      id: cgId,
-      symbol,
-      name: String(coin.name),
-      rank: (coin.market_cap_rank as number) || i + 1,
-      price: (coin.current_price as number) || 0,
-      marketCap: (coin.market_cap as number) || 0,
-      volume24h: (coin.total_volume as number) || 0,
-      priceChange24h: (coin.price_change_percentage_24h as number) || 0,
-      binanceSymbol,
-      hasFutures: false,
-    };
-  });
+  return getMarketDataService().getTopCoins(100);
 }
 
 export function filterHighVolume(coins: CoinData[], minVolume = 50_000_000): CoinData[] {
