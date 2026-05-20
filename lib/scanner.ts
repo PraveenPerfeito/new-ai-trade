@@ -18,7 +18,8 @@ import { runMarketStructureChecks } from './market-structure';
 import { saveSignal, createScanRun, updateScanRun, upsertCoins } from './supabase';
 import { sendSignalAlert, sendScanSummary } from './telegram';
 import { sleep } from './utils';
-import { createLogger } from './logger';
+import { createLogger } from './logger'
+import { getEnv } from './env';
 
 const log = createLogger('lib/scanner');
 
@@ -405,8 +406,7 @@ export async function scanCoin(
 export async function runScan(mode: ScannerMode = 'spot'): Promise<ScanResult> {
   const t0 = Date.now();
   const config = CONFIGS[mode];
-  const delayMs = parseInt(process.env.SCANNER_DELAY_MS ?? '300', 10);
-  const alertThreshold = parseInt(process.env.SCANNER_MIN_CONFIDENCE_ALERT ?? '85', 10);
+  const { SCANNER_DELAY_MS: delayMs, SCANNER_MIN_CONFIDENCE_ALERT: alertThreshold } = getEnv();
 
   log.info({ mode }, 'scan starting');
   const scanRunId = await createScanRun(mode);

@@ -110,12 +110,17 @@ Reject (confidence < 80) if ANY of these apply:
 Respond ONLY with valid JSON (no markdown, no text outside the JSON object):
 {"confidence":<integer 0-100>,"validated":<boolean>,"reasoning":"<1-sentence overall verdict>","risks":["<risk>","<risk>"],"strengths":["<strength>","<strength>"],"trend":"<1-2 sentences on multi-TF trend structure and EMA alignment>","momentum":"<1-2 sentences on RSI zone, MACD histogram direction, and volume confirmation>","volatility":"<1 sentence on ATR-based volatility regime and stop reliability>","rationale":"<1 sentence explaining why confidence is at this specific level>","summary":"<one concise line: trade thesis + key edge>"}`;
 
+  const AI_TIMEOUT_MS = 15_000; // 15 s hard ceiling — prevents scan pipeline stall
+
   try {
-    const msg = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 768,
-      messages: [{ role: 'user', content: prompt }],
-    });
+    const msg = await client.messages.create(
+      {
+        model:      'claude-haiku-4-5-20251001',
+        max_tokens: 768,
+        messages:   [{ role: 'user', content: prompt }],
+      },
+      { timeout: AI_TIMEOUT_MS },
+    );
 
     const text = msg.content[0].type === 'text' ? msg.content[0].text.trim() : '';
     const parsed = JSON.parse(text);
@@ -141,7 +146,18 @@ Respond ONLY with valid JSON (no markdown, no text outside the JSON object):
       explainability,
     };
   } catch (err) {
-    log.error({ err }, 'AI API error — using heuristic fallback');
+    const isTimeout =
+      err instanceof Error &&
+      (err.message.includes('timeout') || err.message.includes('timed out') || err.name === 'APIConnectionTimeoutError');
+
+    if (isTimeout) {
+      log.warn(
+        { symbol: signal.symbol, timeoutMs: AI_TIMEOUT_MS },
+        'AI validator timeout — using heuristic fallback',
+      );
+    } else {
+      log.error({ err, symbol: signal.symbol }, 'AI API error — using heuristic fallback');
+    }
     return heuristic(signal, ind4h, trendStrength, volatilityRating);
   }
 }

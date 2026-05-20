@@ -18,6 +18,7 @@
 
 import { runScan } from './scanner';
 import { ScannerMode, ScanResult } from '@/types';
+import { runStartupCheck } from './startup-check';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -346,6 +347,11 @@ class ScanScheduler {
 // ─── Singleton (survives Next.js HMR) ────────────────────────────────────────
 
 const g = globalThis as typeof globalThis & { __market_scanner_sched?: ScanScheduler };
-if (!g.__market_scanner_sched) g.__market_scanner_sched = new ScanScheduler();
+if (!g.__market_scanner_sched) {
+  // Validate required environment before the scheduler starts accepting work.
+  // Throws in production if ADMIN_EMAILS, ADMIN_SECRET, etc. are missing.
+  runStartupCheck();
+  g.__market_scanner_sched = new ScanScheduler();
+}
 
 export const scheduler = g.__market_scanner_sched;

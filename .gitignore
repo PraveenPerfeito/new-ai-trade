@@ -50,12 +50,22 @@ Thumbs.db
 .windsurfrules
 .code-review-graph/
 
-# ── Misc ─────────────────────────────────────────────────────────────────────
-.vercel
-*.tgz
+# ── Python virtual environments ──────────────────────────────────────────────
+.venv/
+venv/
+env/
+.Python
+*.egg-info/
+dist/
+*.egg
+
+# ── Python cache ─────────────────────────────────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
+
+# ── Misc ─────────────────────────────────────────────────────────────────────
+.vercel
+*.tgz
 

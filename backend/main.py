@@ -36,6 +36,11 @@ log = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log.info("startup_begin")
+
+    # Fail fast on missing required env vars before accepting any requests.
+    from backend.startup_check import run_startup_check
+    run_startup_check()
+
     from backend.metrics.infra_collector import start_infra_collector
     from backend.system_settings.propagation import (
         start_propagation_listener,

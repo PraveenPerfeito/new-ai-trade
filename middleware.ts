@@ -20,7 +20,9 @@ function isAdminPath(pathname: string): boolean {
 
 // ─── Admin e-mail allowlist ───────────────────────────────────────────────────
 // Set ADMIN_EMAILS=you@example.com in .env.local (comma-separated for multiple).
-// If unset, all authenticated users are blocked (safe default — must opt-in).
+// DENY-BY-DEFAULT: empty allowlist blocks ALL access in production.
+// In development (NODE_ENV !== 'production') an empty list allows any
+// authenticated user — useful for local dev without needing to set ADMIN_EMAILS.
 
 function getAllowedEmails(): string[] {
   return (process.env.ADMIN_EMAILS ?? '')
@@ -29,14 +31,21 @@ function getAllowedEmails(): string[] {
     .filter(Boolean)
 }
 
+function isProduction(): boolean {
+  return process.env.NODE_ENV === 'production'
+}
+
 // ─── Security headers ─────────────────────────────────────────────────────────
 
 const SECURITY_HEADERS: [string, string][] = [
-  ['X-Frame-Options',        'DENY'],
-  ['X-Content-Type-Options', 'nosniff'],
-  ['X-XSS-Protection',       '1; mode=block'],
-  ['Referrer-Policy',        'strict-origin-when-cross-origin'],
-  ['Permissions-Policy',     'camera=(), microphone=(), geolocation=()'],
+  ['X-Frame-Options',           'DENY'],
+  ['X-Content-Type-Options',    'nosniff'],
+  ['X-XSS-Protection',          '1; mode=block'],
+  ['Referrer-Policy',           'strict-origin-when-cross-origin'],
+  ['Permissions-Policy',        'camera=(), microphone=(), geolocation=()'],
+  // HSTS: tell browsers to always use HTTPS for the next year (sent over HTTP too
+  // but only enforced once the first HTTPS response is seen).
+  ['Strict-Transport-Security', 'max-age=31536000; includeSubDomains'],
 ]
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
@@ -44,7 +53,12 @@ const SECURITY_HEADERS: [string, string][] = [
 function isCorsAllowed(origin: string | null): boolean {
   if (!origin) return false
   const allowed = process.env.ALLOWED_ORIGINS
-  if (!allowed) return true // open in dev; tighten via ALLOWED_ORIGINS in prod
+  if (!allowed) {
+    // In production, deny all cross-origin requests when no allowlist is set.
+    // In development, allow localhost origins for convenience.
+    if (isProduction()) return false
+    return origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')
+  }
   return allowed.split(',').map(o => o.trim()).includes(origin)
 }
 
@@ -82,8 +96,14 @@ export async function middleware(req: NextRequest) {
     const email     = user?.email?.toLowerCase() ?? null
     const allowlist = getAllowedEmails()
 
-    // Must be authenticated AND either the allowlist is unconfigured (dev) or email is listed
-    const isAllowed = !!user && (allowlist.length === 0 || (!!email && allowlist.includes(email)))
+    // Must be authenticated AND email must be in the allowlist.
+    // In production, an empty allowlist blocks everyone (fail-safe).
+    // In development, an empty allowlist allows any authenticated user.
+    const allowlistConfigured = allowlist.length > 0
+    const isAllowed = !!user && (
+      (!isProduction() && !allowlistConfigured) ||
+      (allowlistConfigured && !!email && allowlist.includes(email))
+    )
 
     if (!isAllowed) {
       console.warn(

@@ -48,10 +48,6 @@ class Settings(BaseSettings):
     scanner_delay_ms: int = 300
     scanner_min_confidence_alert: int = 85
 
-    # ── Stripe ───────────────────────────────────────────────────────────────
-    stripe_secret_key: str = ""
-    stripe_webhook_secret: str = ""
-
     @property
     def broker_url(self) -> str:
         return self.celery_broker_url or self.redis_url

@@ -82,6 +82,41 @@ SAFETY_CAPS: dict[str, dict[str, tuple[float, float]]] = {
         'drawdown_crit':      (1.0, 50.0),
         'queue_depth_crit':   (2, 500),
     },
+    # ── Provider / failover groups (Phase 5.2) ────────────────────────────────
+    'failover': {
+        # A threshold of 0 disables failover entirely; 100 makes every provider
+        # immediately fail over. Sensible operating range: 10–90.
+        'health_score_threshold':    (10, 90),
+        # Zero cooldown causes instant oscillation; 1 hour is the practical max.
+        'cooldown_secs':             (30, 3_600),
+        # Consecutive errors: 1 means failover on any single error (too hair-trigger);
+        # 20 means near-total failure before failover.
+        'max_consecutive_errors':    (1, 20),
+        # Quota alert at 1% is too noisy; 99% means alert only when already exhausted.
+        'quota_alert_pct':           (1, 99),
+        # Latency alert: 500ms minimum (sub-500ms alerts are noise on free tiers),
+        # 60 s maximum (above this the provider is effectively offline).
+        'latency_alert_ms':          (500, 60_000),
+    },
+    'market_cache': {
+        # Sub-60s TTL hammers providers; above 1 hour stale data risks bad signals.
+        'coins_ttl_secs':            (60, 3_600),
+        # Ring buffers: minimum 10 for statistically valid p95; max 1000 for RAM.
+        'latency_ring_size':         (10, 1_000),
+        'error_ring_size':           (10, 1_000),
+        # Failover log: at least 5 entries to diagnose flap; 500 is a sane ceiling.
+        'failover_log_max':          (5, 500),
+    },
+    'quota': {
+        # 0 = unlimited (allowed). Upper cap of 10M requests/day is generous but
+        # prevents fat-finger entries that would never reset.
+        'coingecko_daily_limit':     (0, 10_000_000),
+        'coinmarketcap_daily_limit': (0, 10_000_000),
+        'binance_daily_limit':       (0, 10_000_000),
+        'dexscreener_daily_limit':   (0, 10_000_000),
+        'coinpaprika_daily_limit':   (0, 10_000_000),
+        'geckoterm_daily_limit':     (0, 10_000_000),
+    },
 }
 
 
@@ -256,6 +291,43 @@ def _check_paper_trading(data: dict[str, Any]) -> list[Violation]:
     return violations
 
 
+def _check_providers(data: dict[str, Any]) -> list[Violation]:
+    violations: list[Violation] = []
+
+    provider_fields = [
+        'coingecko_enabled', 'coinmarketcap_enabled', 'binance_enabled',
+        'dexscreener_enabled', 'coinpaprika_enabled', 'geckoterm_enabled',
+    ]
+    enabled_count = sum(
+        1 for f in provider_fields if data.get(f, True)
+    )
+
+    if enabled_count == 0:
+        violations.append(Violation(
+            code='ALL_PROVIDERS_DISABLED',
+            severity='error',
+            fields=provider_fields,
+            message=(
+                'All market data providers are disabled. At least one provider must '
+                'remain enabled or the scanner cannot fetch coin data. '
+                'Enable at least coingecko, binance, or coinpaprika.'
+            ),
+        ))
+    elif enabled_count == 1:
+        violations.append(Violation(
+            code='SINGLE_PROVIDER_NO_FAILOVER',
+            severity='warning',
+            fields=provider_fields,
+            message=(
+                f'Only {enabled_count} provider is enabled — there is no failover '
+                'if that provider becomes unreachable. Enable at least 2 providers '
+                'for basic redundancy.'
+            ),
+        ))
+
+    return violations
+
+
 def _check_infra(data: dict[str, Any]) -> list[Violation]:
     violations: list[Violation] = []
 
@@ -293,11 +365,12 @@ def _check_infra(data: dict[str, Any]) -> list[Violation]:
 # ── Public entry point ────────────────────────────────────────────────────────
 
 _SEMANTIC_RULES = {
-    'signals':      _check_signals,
-    'risk':         _check_risk,
-    'scanner':      _check_scanner,
+    'signals':       _check_signals,
+    'risk':          _check_risk,
+    'scanner':       _check_scanner,
     'paper_trading': _check_paper_trading,
-    'infra':        _check_infra,
+    'infra':         _check_infra,
+    'providers':     _check_providers,
 }
 
 

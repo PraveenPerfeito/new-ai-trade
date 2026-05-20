@@ -8,9 +8,11 @@ import asyncio
 import time
 from typing import Literal
 
+import requests
 from celery import shared_task
 from celery.utils.log import get_task_logger
 
+from backend.config import get_settings
 from backend.metrics.prometheus import (
     celery_tasks_total,
     celery_task_duration_seconds,
@@ -23,11 +25,54 @@ logger = get_task_logger(__name__)
 
 ScanMode = Literal["standard", "high_confidence", "futures"]
 
+# ── Transient error classification ───────────────────────────────────────────
+# These error substrings indicate connectivity / resource issues that are safe
+# to retry.  Logic errors and scanner assertion failures are NOT retried.
+_TRANSIENT_PATTERNS = (
+    "connection",
+    "timeout",
+    "timed out",
+    "temporarily unavailable",
+    "redis",
+    "network",
+    "rate limit",
+    "429",
+    "503",
+    "502",
+)
+
+
+def _is_transient(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return any(p in msg for p in _TRANSIENT_PATTERNS)
+
+
+def _send_failure_alert(mode: str, error: str, attempt: int) -> None:
+    """Fire-and-forget Telegram alert when a scan permanently fails."""
+    settings = get_settings()
+    token = settings.telegram_bot_token
+    chat_id = settings.telegram_chat_id
+    if not token or not chat_id:
+        return
+    text = (
+        f"🚨 <b>Scan Failed — {mode.upper()}</b>\n"
+        f"Attempts: {attempt}\n"
+        f"Error: {error[:200]}"
+    )
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
+            timeout=5,
+        )
+    except Exception:
+        pass
+
 
 @shared_task(
     bind=True,
     name="backend.workers.scan_task.run_scheduled_scan",
-    max_retries=0,          # don't retry a failed scan — wait for next cycle
+    max_retries=2,           # retry transient failures up to 2 times
     queue="scanner",
     soft_time_limit=10 * 60,  # 10-minute soft kill
     time_limit=12 * 60,       # 12-minute hard kill
@@ -101,6 +146,25 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
         celery_task_duration_seconds.labels(task_name=task_label).observe(elapsed)
         celery_tasks_total.labels(task_name=task_label, status="failure").inc()
         logger.error("scan_failed", mode=mode, error=str(exc), elapsed_s=round(elapsed, 2))
+
+        # Retry transient errors with exponential backoff (60s, 120s).
+        # The distributed lock is released in `finally` before the retry fires.
+        if _is_transient(exc) and self.request.retries < self.max_retries:
+            countdown = 60 * (2 ** self.request.retries)
+            logger.warning(
+                "scan_retry_scheduled",
+                mode=mode,
+                attempt=self.request.retries + 1,
+                countdown_s=countdown,
+            )
+            raise self.retry(exc=exc, countdown=countdown)
+
+        # All retries exhausted (or non-transient error) — send Telegram alert.
+        _send_failure_alert(
+            mode=mode,
+            error=str(exc),
+            attempt=self.request.retries + 1,
+        )
         raise
 
     finally:
