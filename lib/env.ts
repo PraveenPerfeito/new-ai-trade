@@ -20,8 +20,9 @@ const schema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_CHAT_ID:   z.string().optional(),
 
-  // CoinGecko (optional)
-  COINGECKO_API_KEY: z.string().optional(),
+  // Market data providers (all optional — fallback chain handles missing keys)
+  COINGECKO_API_KEY:     z.string().optional(),
+  COINMARKETCAP_API_KEY: z.string().optional(),
 
   // Scanner tuning
   SCANNER_MIN_CONFIDENCE_ALERT: z.coerce.number().int().min(50).max(100).default(85),

@@ -559,6 +559,116 @@ class InfrastructureSettings(BaseSettingsGroup):
         return self
 
 
+# ── 10. Market Data Providers ─────────────────────────────────────────────────
+
+class ProviderSettings(BaseSettingsGroup):
+    GROUP_NAME:     ClassVar[str] = 'providers'
+    SCHEMA_VERSION: ClassVar[int] = 1
+
+    active_provider: Literal[
+        'coingecko', 'coinmarketcap', 'binance', 'dexscreener', 'coinpaprika', 'geckoterm'
+    ] = Field(
+        'coingecko',
+        title='Active Provider',
+        description='Primary market data provider — others are failover only',
+    )
+    coingecko_enabled:     bool = Field(True,  title='CoinGecko Enabled',      description='Allow CoinGecko as a provider')
+    coinmarketcap_enabled: bool = Field(False, title='CoinMarketCap Enabled',  description='Allow CoinMarketCap as a provider (requires API key)')
+    binance_enabled:       bool = Field(True,  title='Binance Enabled',        description='Allow Binance ticker as a fallback provider')
+    dexscreener_enabled:   bool = Field(True,  title='DexScreener Enabled',    description='Allow DexScreener as a fallback provider')
+    coinpaprika_enabled:   bool = Field(True,  title='CoinPaprika Enabled',    description='Allow CoinPaprika as a fallback provider')
+    geckoterm_enabled:     bool = Field(True,  title='GeckoTerminal Enabled',  description='Allow GeckoTerminal as a fallback provider')
+
+    # Priority order (1 = highest): controls failover sequence
+    coingecko_priority:     int = Field(1, ge=1, le=6, title='CoinGecko Priority')
+    coinmarketcap_priority: int = Field(2, ge=1, le=6, title='CoinMarketCap Priority')
+    binance_priority:       int = Field(3, ge=1, le=6, title='Binance Priority')
+    dexscreener_priority:   int = Field(4, ge=1, le=6, title='DexScreener Priority')
+    coinpaprika_priority:   int = Field(5, ge=1, le=6, title='CoinPaprika Priority')
+    geckoterm_priority:     int = Field(6, ge=1, le=6, title='GeckoTerminal Priority')
+
+
+# ── 11. Failover ──────────────────────────────────────────────────────────────
+
+class FailoverSettings(BaseSettingsGroup):
+    GROUP_NAME:     ClassVar[str] = 'failover'
+    SCHEMA_VERSION: ClassVar[int] = 1
+
+    auto_failover_enabled: bool = Field(
+        True,
+        title='Auto-Failover Enabled',
+        description='Automatically switch to the next healthy provider on failure',
+    )
+    health_score_threshold: int = Field(
+        40, ge=0, le=100,
+        title='Health Score Threshold',
+        description='Providers with health score below this are skipped during failover',
+    )
+    max_consecutive_errors: int = Field(
+        3, ge=1, le=20,
+        title='Max Consecutive Errors',
+        description='Disable a provider temporarily after this many consecutive failures',
+    )
+    cooldown_secs: int = Field(
+        300, ge=30, le=3_600,
+        title='Failover Cooldown (s)',
+        description='Seconds a provider is suspended after reaching max_consecutive_errors',
+    )
+    quota_alert_pct: int = Field(
+        80, ge=50, le=99,
+        title='Quota Alert Threshold (%)',
+        description='Send Telegram alert when a provider quota reaches this percentage',
+    )
+    latency_alert_ms: int = Field(
+        5_000, ge=500, le=60_000,
+        title='Latency Alert Threshold (ms)',
+        description='Send Telegram alert when p95 latency exceeds this value',
+    )
+
+
+# ── 12. Quota ─────────────────────────────────────────────────────────────────
+
+class QuotaSettings(BaseSettingsGroup):
+    """Daily quota limits for paid providers (0 = unlimited)."""
+    GROUP_NAME:     ClassVar[str] = 'quota'
+    SCHEMA_VERSION: ClassVar[int] = 1
+
+    coingecko_daily_limit:     int = Field(0,      ge=0, le=10_000_000, title='CoinGecko Daily Limit',     description='0 = unlimited (free/pro tier)')
+    coinmarketcap_daily_limit: int = Field(10_000, ge=0, le=10_000_000, title='CoinMarketCap Daily Limit', description='CMC Basic free tier = 10,000 credits/month (~333/day)')
+    binance_daily_limit:       int = Field(0,      ge=0, le=10_000_000, title='Binance Daily Limit',       description='0 = effectively unlimited for REST polling')
+    dexscreener_daily_limit:   int = Field(0,      ge=0, le=10_000_000, title='DexScreener Daily Limit',   description='0 = unlimited (free API)')
+    coinpaprika_daily_limit:   int = Field(0,      ge=0, le=10_000_000, title='CoinPaprika Daily Limit',   description='0 = unlimited (free API)')
+    geckoterm_daily_limit:     int = Field(0,      ge=0, le=10_000_000, title='GeckoTerminal Daily Limit', description='0 = unlimited (free API)')
+
+
+# ── 13. Market Cache ──────────────────────────────────────────────────────────
+
+class MarketCacheSettings(BaseSettingsGroup):
+    GROUP_NAME:     ClassVar[str] = 'market_cache'
+    SCHEMA_VERSION: ClassVar[int] = 1
+
+    coins_ttl_secs: int = Field(
+        300, ge=30, le=1_800,
+        title='Coins Cache TTL (s)',
+        description='How long top-coins results are cached before a fresh provider fetch',
+    )
+    provider_metrics_latency_window: int = Field(
+        100, ge=10, le=1_000,
+        title='Latency Ring-Buffer Size',
+        description='Number of latency samples kept per provider for p95 calculation',
+    )
+    provider_metrics_error_window: int = Field(
+        100, ge=10, le=1_000,
+        title='Error Ring-Buffer Size',
+        description='Number of error timestamps kept per provider for error-rate calculation',
+    )
+    failover_log_max: int = Field(
+        50, ge=10, le=500,
+        title='Failover Log Size',
+        description='Maximum failover events retained in Redis history',
+    )
+
+
 # ── Registry ──────────────────────────────────────────────────────────────────
 
 GROUP_REGISTRY: dict[str, type[BaseSettingsGroup]] = {
@@ -573,6 +683,10 @@ GROUP_REGISTRY: dict[str, type[BaseSettingsGroup]] = {
         AnomalySettings,
         FeatureFlags,
         InfrastructureSettings,
+        ProviderSettings,
+        FailoverSettings,
+        QuotaSettings,
+        MarketCacheSettings,
     ]
 }
 

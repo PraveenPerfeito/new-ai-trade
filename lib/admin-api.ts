@@ -277,6 +277,43 @@ export interface PatchResult {
   warnings?:    string[]
 }
 
+// ── Provider types ────────────────────────────────────────────────────────────
+
+export type ProviderName = 'coingecko' | 'coinmarketcap' | 'binance' | 'dexscreener' | 'coinpaprika' | 'geckoterm'
+export type ProviderStatus = 'healthy' | 'degraded' | 'offline' | 'quota_exhausted'
+
+export interface ProviderQuota {
+  dailyLimit: number
+  used: number
+  remaining: number
+  pct: number
+  resetAt: string | null
+}
+
+export interface ProviderHealth {
+  name: ProviderName
+  enabled: boolean
+  priority: number
+  status: ProviderStatus
+  healthScore: number
+  latencyMs: number
+  errorRate: number
+  requestsToday: number
+  lastSuccess: string | null
+  lastError: string | null
+  quota: ProviderQuota
+}
+
+export interface FailoverEvent {
+  id: string
+  fromProvider: ProviderName
+  toProvider: ProviderName | 'auto'
+  reason: string
+  occurredAt: string
+  durationMs: number | null
+  resolved: boolean
+}
+
 export type ExperimentStatus = 'draft' | 'active' | 'paused' | 'concluded'
 
 export interface Experiment {
@@ -402,6 +439,39 @@ export const adminApi = {
         '/settings/audit',
         group_name ? { limit, group_name } : { limit },
       ),
+  },
+  providers: {
+    /** All providers with live health + metrics */
+    list: () =>
+      get<{ success: boolean; providers: ProviderHealth[] }>('/providers'),
+
+    failoverHistory: (limit = 20) =>
+      get<{ success: boolean; events: FailoverEvent[] }>('/providers/failover-history', { limit }),
+
+    config: () =>
+      get<{ success: boolean; config: Record<string, unknown> }>('/providers/config'),
+
+    enable: (name: ProviderName) =>
+      post<{ success: boolean; provider: ProviderName; enabled: boolean }>(`/providers/${name}/enable`),
+
+    disable: (name: ProviderName) =>
+      post<{ success: boolean; provider: ProviderName; enabled: boolean }>(`/providers/${name}/disable`),
+
+    setPriority: (name: ProviderName, priority: number) =>
+      post<{ success: boolean; provider: ProviderName; priority: number }>(
+        `/providers/${name}/priority`, { priority },
+      ),
+
+    resetMetrics: (name: ProviderName) =>
+      post<{ success: boolean; provider: ProviderName }>(`/providers/${name}/reset-metrics`),
+
+    forceFailover: (from_provider: ProviderName) =>
+      post<{ success: boolean; disabled: ProviderName; event: FailoverEvent }>(
+        '/providers/force-failover', { from_provider },
+      ),
+
+    clearCache: () =>
+      post<{ success: boolean; keysDeleted: number }>('/providers/clear-cache'),
   },
   experiments: {
     /** List experiments — filterable by group_name and/or status */
