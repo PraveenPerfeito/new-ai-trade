@@ -2,6 +2,8 @@
 Celery application factory.
 Import this module to get the configured Celery instance.
 """
+import ssl
+
 from celery import Celery
 from backend.config import get_settings
 
@@ -39,8 +41,9 @@ def create_celery() -> Celery:
     # Upstash (and any other rediss:// provider) requires explicit SSL options.
     # CERT_NONE skips certificate verification — correct for managed cloud Redis.
     if settings.broker_url.startswith("rediss://"):
-        _ssl = {"ssl_cert_reqs": "CERT_NONE"}
-        conf["broker_use_ssl"]       = _ssl
+        # ssl.CERT_NONE is the integer constant (0); the string "CERT_NONE" is rejected by redis-py ≥ 5.x
+        _ssl = {"ssl_cert_reqs": ssl.CERT_NONE}
+        conf["broker_use_ssl"]        = _ssl
         conf["redis_backend_use_ssl"] = _ssl
 
     app.conf.update(conf)

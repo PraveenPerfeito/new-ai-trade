@@ -121,10 +121,14 @@ COINMARKETCAP_API_KEY=<optional>
 SCANNER_DELAY_MS=300
 SCANNER_MIN_CONFIDENCE_ALERT=85
 
-# Environment
+# Environment — BOTH are required. Python reads ENVIRONMENT; Node.js reads NODE_ENV.
 ENVIRONMENT=production
 NODE_ENV=production
 LOG_LEVEL=info
+
+# CORS — FastAPI accepts requests from Vercel frontend and its own Railway URL
+# Leave empty until you know your Vercel URL, then fill in:
+# CORS_ORIGINS=https://your-app.vercel.app,https://your-api.up.railway.app
 ```
 
 ### 3e. Get Railway service URL
@@ -247,6 +251,8 @@ Expected FastAPI health response:
 | `COINGECKO_API_KEY` | ✅ | ✅ | ✅ |
 | `SCANNER_DELAY_MS` | ✅ | ✅ | ✅ |
 | `NODE_ENV` | ✅ | ✅ | ✅ |
+| `ENVIRONMENT` | ❌ | ✅ | ✅ |
+| `CORS_ORIGINS` | ❌ | ✅ | ❌ |
 
 ---
 

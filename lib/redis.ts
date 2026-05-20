@@ -12,6 +12,8 @@ function createClient(): Redis {
     maxRetriesPerRequest: 2,
     connectTimeout: 2000,
     lazyConnect: true,
+    // Vercel serverless requires explicit TLS options for rediss:// URLs
+    ...(url.startsWith('rediss://') ? { tls: {} } : {}),
   });
   client.on('error', (err) => {
     // Non-fatal: in-memory fallback kicks in when Redis is unavailable
