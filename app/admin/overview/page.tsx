@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useCallback } from 'react'
 import { Activity, Brain, Clock, Database, Target, TrendingUp, Zap } from 'lucide-react'
@@ -33,7 +33,7 @@ export default function OverviewPage() {
   const { data: a, loading: al } = useAutoRefresh<AiSummaryResponse>(aiFetcher, 30_000)
   const { data: sc, loading: scl } = useAutoRefresh<ScanSummaryResponse>(scanFetcher, 30_000)
 
-  const verdictLabel = r?.verdict.label ?? 'unknown'
+  const verdictLabel = r?.verdict?.label ?? 'unknown'
   const verdictBadge = VERDICT_BADGE[verdictLabel] ?? 'bg-terminal-card text-terminal-muted border-terminal-border'
   const coverage     = s?.data_coverage
 
@@ -41,8 +41,8 @@ export default function OverviewPage() {
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div>
-        <h1 className="text-terminal-text text-lg font-semibold">Command Overview</h1>
-        <p className="text-terminal-muted text-xs mt-0.5">System status · Signal edge · Operational health</p>
+        <h1 className="text-terminal-text text-xl font-semibold">Command Overview</h1>
+        <p className="text-terminal-muted text-sm mt-1">System status · Signal edge · Operational health</p>
       </div>
 
       {/* Readiness hero */}
@@ -53,12 +53,12 @@ export default function OverviewPage() {
             ? <div className="skeleton w-28 h-28 rounded-full" />
             : <ScoreRing score={r?.overall_score ?? 0} size={112} />
           }
-          <p className="text-terminal-muted text-[9px] uppercase tracking-widest">Readiness Score</p>
+          <p className="text-terminal-muted text-xs uppercase tracking-wider">Readiness Score</p>
         </div>
 
         {/* Verdict */}
         <div className="col-span-12 sm:col-span-5 glass-card rounded-lg p-5">
-          <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">System Verdict</p>
+          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">System Verdict</p>
           {rl ? (
             <div className="space-y-2">
               <div className="skeleton h-6 w-32 rounded" />
@@ -68,15 +68,15 @@ export default function OverviewPage() {
           ) : (
             <>
               <div className="flex items-center gap-2 mb-3 flex-wrap">
-                <span className={`font-mono font-bold text-lg ${r?.verdict.go ? 'text-bull-default' : 'text-bear-default'}`}>
-                  {r?.verdict.go ? '✓ GO' : '✗ NOT GO'}
+                <span className={`font-mono font-bold text-lg ${r?.verdict?.go ? 'text-bull-default' : 'text-bear-default'}`}>
+                  {r?.verdict?.go ? '✓ GO' : '✗ NOT GO'}
                 </span>
-                <span className={`text-[10px] px-2 py-0.5 rounded border font-bold uppercase tracking-wider ${verdictBadge}`}>
+                <span className={`text-xs px-2 py-0.5 rounded border font-bold uppercase tracking-wider ${verdictBadge}`}>
                   {verdictLabel.replace(/_/g, ' ')}
                 </span>
               </div>
               <p className="text-terminal-muted text-xs leading-relaxed">
-                {r?.verdict.rationale ?? 'No readiness data available.'}
+                {r?.verdict?.rationale ?? 'No readiness data available.'}
               </p>
             </>
           )}
@@ -84,14 +84,14 @@ export default function OverviewPage() {
 
         {/* Burn-in progress */}
         <div className="col-span-12 sm:col-span-4 glass-card rounded-lg p-5">
-          <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Burn-In Progress</p>
+          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Burn-In Progress</p>
           {sl ? (
             <div className="skeleton h-16 rounded" />
           ) : (
             <div>
               <div className="flex items-baseline justify-between mb-2">
                 <span className="font-mono font-bold text-2xl text-terminal-text">{coverage?.resolved ?? 0}</span>
-                <span className="text-terminal-muted text-[11px]">/ {s?.min_for_report} signals</span>
+                <span className="text-terminal-muted text-xs">/ {s?.min_for_report} signals</span>
               </div>
               <div className="w-full h-1.5 bg-terminal-bright rounded-full overflow-hidden mb-2">
                 <div
@@ -99,7 +99,7 @@ export default function OverviewPage() {
                   style={{ width: `${Math.min(100, s?.progress_pct ?? 0)}%` }}
                 />
               </div>
-              <div className="flex justify-between text-[10px] text-terminal-muted">
+              <div className="flex justify-between text-xs text-terminal-muted">
                 <span>{(s?.progress_pct ?? 0).toFixed(0)}% complete</span>
                 <span>{coverage?.days?.toFixed(1) ?? '0'} days · {coverage?.pending ?? 0} pending</span>
               </div>
@@ -110,24 +110,24 @@ export default function OverviewPage() {
 
       {/* Metrics grid */}
       <div>
-        <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Live Metrics</p>
+        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Live Metrics</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <MetricCard
             label="Win Rate (7d)"
-            value={pct(s?.live_metrics.win_rate_7d)}
+            value={pct(s?.live_metrics?.win_rate_7d)}
             sub="7-day rolling"
-            accent={s?.live_metrics.win_rate_7d != null
-              ? (s.live_metrics.win_rate_7d >= 0.55 ? 'bull' : 'bear')
+            accent={s?.live_metrics?.win_rate_7d != null
+              ? (s.live_metrics!.win_rate_7d >= 0.55 ? 'bull' : 'bear')
               : 'neutral'}
             icon={<TrendingUp size={13} />}
             loading={sl}
           />
           <MetricCard
             label="Expectancy (7d)"
-            value={fmt(s?.live_metrics.expectancy_7d, 'R')}
+            value={fmt(s?.live_metrics?.expectancy_7d, 'R')}
             sub="avg per trade"
-            accent={s?.live_metrics.expectancy_7d != null
-              ? (s.live_metrics.expectancy_7d > 0 ? 'bull' : 'bear')
+            accent={s?.live_metrics?.expectancy_7d != null
+              ? (s.live_metrics!.expectancy_7d > 0 ? 'bull' : 'bear')
               : 'neutral'}
             icon={<Target size={13} />}
             loading={sl}
@@ -186,7 +186,7 @@ export default function OverviewPage() {
       {/* Anomaly summary strip */}
       {s?.anomaly_summary && (
         <div>
-          <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Last Anomaly Check</p>
+          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Last Anomaly Check</p>
           <div className="glass-card rounded-lg px-5 py-4 flex items-center gap-6 flex-wrap">
             {[
               { label: 'Critical', v: s.anomaly_summary.critical, color: s.anomaly_summary.critical > 0 ? 'text-bear-default' : 'text-bull-default' },
@@ -194,18 +194,18 @@ export default function OverviewPage() {
               { label: 'Total',    v: s.anomaly_summary.total,    color: 'text-terminal-text' },
             ].map(({ label, v, color }) => (
               <div key={label} className="flex flex-col gap-1">
-                <span className="text-terminal-muted text-[10px] uppercase tracking-wider">{label}</span>
+                <span className="text-terminal-muted text-xs uppercase tracking-wider">{label}</span>
                 <span className={`font-mono font-bold text-xl ${color}`}>{v}</span>
               </div>
             ))}
             <div className="h-8 w-px bg-terminal-border mx-2 hidden sm:block" />
             <div className="flex flex-col gap-1">
-              <span className="text-terminal-muted text-[10px] uppercase tracking-wider">Status</span>
+              <span className="text-terminal-muted text-xs uppercase tracking-wider">Status</span>
               <span className={`font-mono font-bold text-sm ${s.anomaly_summary.ok ? 'text-bull-default' : 'text-bear-default'}`}>
                 {s.anomaly_summary.ok ? '✓ CLEAN' : '⚠ ISSUES'}
               </span>
             </div>
-            <div className="ml-auto text-terminal-muted/50 text-[10px] font-mono">
+            <div className="ml-auto text-terminal-muted/50 text-xs font-mono">
               {new Date(s.anomaly_summary.checked_at).toLocaleTimeString()}
             </div>
           </div>

@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
@@ -186,7 +186,7 @@ function SourceBadge({ value, defaultVal }: { value: unknown; defaultVal: unknow
 function VersionBadge({ version }: { version: number }) {
   if (!version) return null
   return (
-    <span className="ml-1.5 text-[9px] font-mono px-1 py-0.5 rounded bg-terminal-bright/50 text-terminal-muted/60 border border-terminal-border/50">
+    <span className="ml-1.5 text-xs font-mono px-1 py-0.5 rounded bg-terminal-bright/50 text-terminal-muted/60 border border-terminal-border/50">
       v{version}
     </span>
   )
@@ -282,15 +282,15 @@ function FeatureFlagCard({
             </span>
           )}
           {isSaving && (
-            <span className="text-[9px] text-terminal-muted animate-pulse">saving…</span>
+            <span className="text-xs text-terminal-muted animate-pulse">saving…</span>
           )}
           {isSaved && <CheckCircle2 size={10} className="text-bull-default" />}
         </div>
-        <p className="text-[11px] text-terminal-muted/60 mt-1 leading-relaxed">
+        <p className="text-xs text-terminal-muted/60 mt-1 leading-relaxed">
           {entry.description}
         </p>
         {error && (
-          <p className="text-[10px] text-bear-default mt-1">{error}</p>
+          <p className="text-xs text-bear-default mt-1">{error}</p>
         )}
       </div>
       <div className="shrink-0 pt-0.5">
@@ -315,10 +315,10 @@ function SettingsPresetsBar({
     <div className="glass-card rounded-lg p-3.5 border border-terminal-border/50">
       <div className="flex items-center gap-2 mb-2.5">
         <Settings2 size={11} className="text-terminal-muted/60" />
-        <span className="text-[10px] text-terminal-muted uppercase tracking-widest">
+        <span className="text-xs text-terminal-muted uppercase tracking-widest">
           Quick Presets
         </span>
-        <span className="text-[9px] text-terminal-muted/40 ml-1">
+        <span className="text-xs text-terminal-muted/40 ml-1">
           — patches scanner · signals · risk · telegram · ai in one click
         </span>
       </div>
@@ -333,7 +333,7 @@ function SettingsPresetsBar({
               onClick={() => !isDisabled && onApply(p)}
               disabled={isDisabled}
               title={p.description}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-[11px] font-semibold border transition-all ${
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold border transition-all ${
                 isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:scale-[1.02] active:scale-[0.98]'
               }`}
               style={{
@@ -552,7 +552,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="space-y-5 animate-fade-in">
-        <h1 className="text-terminal-text text-lg font-semibold">Settings</h1>
+        <h1 className="text-terminal-text text-xl font-semibold">Settings</h1>
         <div className="glass-card rounded-lg p-10 text-center text-terminal-muted text-sm">
           Loading configuration…
         </div>
@@ -563,7 +563,7 @@ export default function SettingsPage() {
   if (fetchError) {
     return (
       <div className="space-y-5 animate-fade-in">
-        <h1 className="text-terminal-text text-lg font-semibold">Settings</h1>
+        <h1 className="text-terminal-text text-xl font-semibold">Settings</h1>
         <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-bear-default/5 border border-bear-default/20 text-bear-default text-xs">
           <AlertCircle size={13} />
           <span>Failed to load settings: {fetchError}</span>
@@ -597,8 +597,8 @@ export default function SettingsPage() {
       {/* Header */}
       <div className="flex items-start gap-3">
         <div className="flex-1">
-          <h1 className="text-terminal-text text-lg font-semibold">Settings</h1>
-          <p className="text-terminal-muted text-xs mt-0.5">
+          <h1 className="text-terminal-text text-xl font-semibold">Settings</h1>
+          <p className="text-terminal-muted text-sm mt-1">
             Strongly-typed groups · Schema validation · Versioned · Auto-save
           </p>
         </div>
@@ -634,7 +634,7 @@ export default function SettingsPage() {
             <button
               key={tab}
               onClick={() => { setActiveTab(tab); setResetConfirm(null) }}
-              className={`px-3 py-1.5 text-[11px] font-mono rounded-t transition-colors relative -mb-px border-b ${
+              className={`px-3 py-1.5 text-xs font-mono rounded-t transition-colors relative -mb-px border-b ${
                 isActive
                   ? 'bg-terminal-surface border-x border-t border-terminal-border border-b-terminal-surface text-terminal-text'
                   : 'border-transparent text-terminal-muted hover:text-terminal-text'
@@ -643,7 +643,7 @@ export default function SettingsPage() {
               {label}
               {grpMeta && <VersionBadge version={grpMeta.data_version} />}
               {count > 0 && (
-                <span className="ml-1 text-[9px] px-1 py-0.5 rounded bg-signal-medium/20 text-signal-medium font-bold">
+                <span className="ml-1 text-xs px-1 py-0.5 rounded bg-signal-medium/20 text-signal-medium font-bold">
                   {count}
                 </span>
               )}
@@ -661,11 +661,11 @@ export default function SettingsPage() {
               <p className="text-terminal-text text-sm font-medium">
                 {GROUP_LABELS[activeTab] ?? activeTab}
               </p>
-              <p className="text-terminal-muted/60 text-[11px] mt-0.5">
+              <p className="text-terminal-muted/60 text-xs mt-0.5">
                 {GROUP_DESCRIPTIONS[activeTab]}
               </p>
               {meta && (
-                <div className="flex items-center gap-3 mt-1.5 text-[10px] font-mono text-terminal-muted/40">
+                <div className="flex items-center gap-3 mt-1.5 text-xs font-mono text-terminal-muted/40">
                   <span className="flex items-center gap-1">
                     <Clock size={9} />
                     {formatRelative(meta.updated_at)}
@@ -678,14 +678,14 @@ export default function SettingsPage() {
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={() => { setAuditGroup(activeTab); setActiveTab('audit') }}
-                className="flex items-center gap-1.5 text-[10px] px-2 py-1 rounded border transition-colors font-mono text-terminal-muted border-terminal-border hover:text-terminal-text"
+                className="flex items-center gap-1.5 text-xs px-2 py-1 rounded border transition-colors font-mono text-terminal-muted border-terminal-border hover:text-terminal-text"
               >
                 <History size={10} />
                 History
               </button>
               <button
                 onClick={() => handleResetGroup(activeTab)}
-                className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded border transition-colors font-mono ${
+                className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded border transition-colors font-mono ${
                   resetConfirm === activeTab
                     ? 'text-bear-default border-bear-default/40 bg-bear-default/5'
                     : 'text-terminal-muted border-terminal-border hover:text-terminal-text'
@@ -709,7 +709,7 @@ export default function SettingsPage() {
               </div>
               <button
                 onClick={() => setSaveWarnings(p => { const n = { ...p }; delete n[activeTab]; return n })}
-                className="ml-auto text-signal-high/50 hover:text-signal-high shrink-0 font-mono text-[10px]"
+                className="ml-auto text-signal-high/50 hover:text-signal-high shrink-0 font-mono text-xs"
               >
                 ✕
               </button>
@@ -747,19 +747,19 @@ export default function SettingsPage() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-terminal-border">
-                      <th className="text-terminal-muted text-[9px] uppercase tracking-wider text-left py-2 px-4 w-44">
+                      <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-4 w-44">
                         Setting
                       </th>
-                      <th className="text-terminal-muted text-[9px] uppercase tracking-wider text-left py-2 px-4">
+                      <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-4">
                         Value
                       </th>
-                      <th className="text-terminal-muted text-[9px] uppercase tracking-wider text-left py-2 px-4 w-20 hidden sm:table-cell">
+                      <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-4 w-20 hidden sm:table-cell">
                         Source
                       </th>
-                      <th className="text-terminal-muted text-[9px] uppercase tracking-wider text-left py-2 px-4 w-24 hidden md:table-cell">
+                      <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-4 w-24 hidden md:table-cell">
                         Default
                       </th>
-                      <th className="text-terminal-muted text-[9px] uppercase tracking-wider text-left py-2 px-4 hidden lg:table-cell">
+                      <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-4 hidden lg:table-cell">
                         Description
                       </th>
                       <th className="py-2 px-4 w-20" />
@@ -788,11 +788,11 @@ export default function SettingsPage() {
                           {/* Label */}
                           <td className="py-2.5 px-4">
                             <p className="text-terminal-text font-mono">{entry.label}</p>
-                            <p className="text-terminal-muted/50 text-[10px] font-mono">
+                            <p className="text-terminal-muted/50 text-xs font-mono">
                               {entry.key}
                             </p>
                             {entry.requires_restart && (
-                              <span className="text-[9px] text-signal-high">↻ restart</span>
+                              <span className="text-xs text-signal-high">↻ restart</span>
                             )}
                           </td>
 
@@ -805,7 +805,7 @@ export default function SettingsPage() {
                               disabled={isSaving}
                             />
                             {errMsg && (
-                              <p className="text-bear-default text-[10px] mt-1 flex items-center gap-1">
+                              <p className="text-bear-default text-xs mt-1 flex items-center gap-1">
                                 <AlertCircle size={9} />
                                 {errMsg}
                               </p>
@@ -821,7 +821,7 @@ export default function SettingsPage() {
                           </td>
 
                           {/* Default */}
-                          <td className="py-2.5 px-4 font-mono text-terminal-muted/50 text-[10px] hidden md:table-cell">
+                          <td className="py-2.5 px-4 font-mono text-terminal-muted/50 text-xs hidden md:table-cell">
                             {String(entry.default)}
                           </td>
 
@@ -839,7 +839,7 @@ export default function SettingsPage() {
                           <td className="py-2.5 px-4">
                             <div className="flex items-center justify-end gap-1.5">
                               {isSaving && (
-                                <span className="text-[9px] text-terminal-muted font-mono animate-pulse">
+                                <span className="text-xs text-terminal-muted font-mono animate-pulse">
                                   saving…
                                 </span>
                               )}
@@ -849,7 +849,7 @@ export default function SettingsPage() {
                               {isFieldDirty && !isSaving && !errMsg && (
                                 <button
                                   onClick={() => handleManualSave(entry)}
-                                  className="flex items-center gap-1 px-2 py-1 rounded bg-signal-medium/10 border border-signal-medium/30 text-signal-medium text-[10px] hover:bg-signal-medium/20 font-mono transition-colors"
+                                  className="flex items-center gap-1 px-2 py-1 rounded bg-signal-medium/10 border border-signal-medium/30 text-signal-medium text-xs hover:bg-signal-medium/20 font-mono transition-colors"
                                 >
                                   <Save size={9} />
                                   Save
@@ -872,13 +872,13 @@ export default function SettingsPage() {
       {activeTab === 'audit' && (
         <>
           <div className="flex items-center gap-3 flex-wrap">
-            <p className="text-terminal-muted text-[9px] uppercase tracking-widest flex-1">
+            <p className="text-terminal-muted text-xs uppercase tracking-wider flex-1">
               Configuration Change History
             </p>
             <select
               value={auditGroup}
               onChange={e => setAuditGroup(e.target.value)}
-              className="bg-terminal-bg border border-terminal-border rounded px-2 py-1 text-[10px] font-mono text-terminal-text focus:outline-none cursor-pointer"
+              className="bg-terminal-bg border border-terminal-border rounded px-2 py-1 text-xs font-mono text-terminal-text focus:outline-none cursor-pointer"
             >
               <option value="all">All groups</option>
               {Object.keys(settings).map(g => (
@@ -887,7 +887,7 @@ export default function SettingsPage() {
             </select>
             <button
               onClick={() => fetchAudit(auditGroup)}
-              className="flex items-center gap-1 text-terminal-muted text-[10px] hover:text-terminal-text font-mono transition-colors"
+              className="flex items-center gap-1 text-terminal-muted text-xs hover:text-terminal-text font-mono transition-colors"
             >
               <RefreshCw size={10} />
               Refresh
@@ -915,7 +915,7 @@ export default function SettingsPage() {
                       {['Group', 'Version', 'Changed Fields', 'By', 'When'].map(h => (
                         <th
                           key={h}
-                          className="text-terminal-muted text-[9px] uppercase tracking-wider text-left py-2 px-3"
+                          className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3"
                         >
                           {h}
                         </th>
@@ -928,15 +928,15 @@ export default function SettingsPage() {
                         key={entry.id}
                         className="border-b border-terminal-border/30 hover:bg-terminal-bright/10"
                       >
-                        <td className="py-2.5 px-3 font-mono text-terminal-muted/60 text-[10px]">
+                        <td className="py-2.5 px-3 font-mono text-terminal-muted/60 text-xs">
                           {GROUP_LABELS[entry.group_name] ?? entry.group_name}
                         </td>
-                        <td className="py-2.5 px-3 font-mono text-[10px] whitespace-nowrap">
+                        <td className="py-2.5 px-3 font-mono text-xs whitespace-nowrap">
                           <span className="text-bear-default/60">v{entry.old_version}</span>
                           <span className="text-terminal-muted/30"> → </span>
                           <span className="text-bull-default">v{entry.new_version}</span>
                         </td>
-                        <td className="py-2.5 px-3 text-[10px] max-w-xs">
+                        <td className="py-2.5 px-3 text-xs max-w-xs">
                           <div className="space-y-0.5">
                             {Object.entries(
                               entry.changed_fields as Record<string, AuditChangedField>,
@@ -955,10 +955,10 @@ export default function SettingsPage() {
                             ))}
                           </div>
                         </td>
-                        <td className="py-2.5 px-3 font-mono text-terminal-muted text-[10px]">
+                        <td className="py-2.5 px-3 font-mono text-terminal-muted text-xs">
                           {entry.updated_by}
                         </td>
-                        <td className="py-2.5 px-3 font-mono text-terminal-muted/50 text-[10px] whitespace-nowrap">
+                        <td className="py-2.5 px-3 font-mono text-terminal-muted/50 text-xs whitespace-nowrap">
                           <span title={new Date(entry.updated_at).toLocaleString()}>
                             {formatRelative(entry.updated_at)}
                           </span>

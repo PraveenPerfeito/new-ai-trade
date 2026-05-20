@@ -18,16 +18,16 @@ export function AdminTopbar({ email, lastSignIn }: Props) {
 
   const critical = data?.anomaly_summary?.critical ?? 0
   const warnings = data?.anomaly_summary?.warning  ?? 0
-  const winRate  = data?.live_metrics.win_rate_7d
+  const winRate  = data?.live_metrics?.win_rate_7d
   const progress = data?.progress_pct ?? 0
 
   return (
-    <header className="h-9 shrink-0 bg-terminal-surface border-b border-terminal-border flex items-center px-4 gap-3 text-[11px] font-mono select-none">
+    <header className="h-11 shrink-0 bg-terminal-surface border-b border-terminal-border flex items-center px-5 gap-4 text-xs font-mono select-none">
 
       {/* Live indicator */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
         <span className={[
-          'w-1.5 h-1.5 rounded-full',
+          'w-2 h-2 rounded-full',
           error ? 'bg-bear-default' : 'bg-bull-default animate-pulse-slow',
         ].join(' ')} />
         <span className={error ? 'text-bear-default' : 'text-bull-default/80'}>
@@ -35,38 +35,38 @@ export function AdminTopbar({ email, lastSignIn }: Props) {
         </span>
       </div>
 
-      <div className="h-3 w-px bg-terminal-border shrink-0" />
+      <div className="h-4 w-px bg-terminal-border shrink-0" />
 
       {/* Anomaly status */}
       {critical > 0 ? (
-        <div className="flex items-center gap-1 text-bear-default">
-          <AlertOctagon size={11} />
+        <div className="flex items-center gap-1.5 text-bear-default">
+          <AlertOctagon size={13} />
           <span>{critical} CRITICAL</span>
         </div>
       ) : warnings > 0 ? (
-        <div className="flex items-center gap-1 text-signal-high">
-          <AlertTriangle size={11} />
+        <div className="flex items-center gap-1.5 text-signal-high">
+          <AlertTriangle size={13} />
           <span>{warnings} WARN</span>
         </div>
       ) : (
-        <div className="flex items-center gap-1 text-terminal-muted/60">
-          <CheckCircle size={11} />
+        <div className="flex items-center gap-1.5 text-terminal-muted/60">
+          <CheckCircle size={13} />
           <span>CLEAN</span>
         </div>
       )}
 
-      <div className="h-3 w-px bg-terminal-border shrink-0" />
+      <div className="h-4 w-px bg-terminal-border shrink-0" />
 
       {/* Burn-in progress */}
       <span className="text-terminal-muted/60">BURN-IN</span>
-      <span className="text-terminal-text">{progress.toFixed(0)}%</span>
+      <span className="text-terminal-text font-semibold">{progress.toFixed(0)}%</span>
 
       {/* Win rate */}
       {winRate != null && (
         <>
-          <div className="h-3 w-px bg-terminal-border shrink-0" />
-          <span className="text-terminal-muted/60">WR 7D</span>
-          <span className={winRate >= 0.55 ? 'text-bull-default' : 'text-bear-default'}>
+          <div className="h-4 w-px bg-terminal-border shrink-0" />
+          <span className="text-terminal-muted/60">WIN 7D</span>
+          <span className={`font-semibold ${winRate >= 0.55 ? 'text-bull-default' : 'text-bear-default'}`}>
             {(winRate * 100).toFixed(1)}%
           </span>
         </>
@@ -76,7 +76,7 @@ export function AdminTopbar({ email, lastSignIn }: Props) {
 
       {/* Last refresh timestamp */}
       {lastUpdated && (
-        <span className="text-terminal-muted/35 hidden sm:block">
+        <span className="text-terminal-muted/40 hidden sm:block">
           {lastUpdated.toLocaleTimeString()}
         </span>
       )}
@@ -85,12 +85,12 @@ export function AdminTopbar({ email, lastSignIn }: Props) {
       <button
         onClick={refresh}
         title="Refresh"
-        className="p-1 text-terminal-muted/40 hover:text-terminal-muted transition-colors rounded"
+        className="p-1.5 text-terminal-muted/40 hover:text-terminal-muted transition-colors rounded"
       >
-        <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
+        <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
       </button>
 
-      <div className="h-3 w-px bg-terminal-border shrink-0" />
+      <div className="h-4 w-px bg-terminal-border shrink-0" />
 
       {/* Session info + logout */}
       <SessionBadge email={email} lastSignIn={lastSignIn} />

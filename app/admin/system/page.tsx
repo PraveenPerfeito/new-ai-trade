@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useCallback } from 'react'
 import { adminApi, HealthReady, ScanSummaryResponse, AiSummaryResponse } from '@/lib/admin-api'
@@ -18,14 +18,14 @@ function ServiceCard({ name, status, detail }: { name: string; status: string; d
           !isConfigured ? 'bg-terminal-muted/40' : ok ? 'bg-bull-default' : 'bg-bear-default animate-pulse'
         }`} />
         <span className="text-terminal-text text-sm font-medium">{name}</span>
-        <span className={`ml-auto font-mono text-[11px] font-bold uppercase ${
+        <span className={`ml-auto font-mono text-xs font-bold uppercase ${
           !isConfigured ? 'text-terminal-muted/60'
           : ok ? 'text-bull-default' : 'text-bear-default'
         }`}>
           {status.replace(/_/g, ' ')}
         </span>
       </div>
-      {detail && <p className="text-terminal-muted/50 text-[10px] font-mono mt-1 ml-4.5 pl-0">{detail}</p>}
+      {detail && <p className="text-terminal-muted/50 text-xs font-mono mt-1 ml-4.5 pl-0">{detail}</p>}
     </div>
   )
 }
@@ -42,8 +42,8 @@ export default function SystemPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-terminal-text text-lg font-semibold">System Health</h1>
-        <p className="text-terminal-muted text-xs mt-0.5">Service status · Database · Redis · API connectivity</p>
+        <h1 className="text-terminal-text text-xl font-semibold">System Health</h1>
+        <p className="text-terminal-muted text-sm mt-1">Service status · Database · Redis · API connectivity</p>
       </div>
 
       {/* Overall status banner */}
@@ -62,7 +62,7 @@ export default function SystemPage() {
 
       {/* Service grid */}
       <div>
-        <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Service Status</p>
+        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Service Status</p>
         {hl ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-12 rounded-lg" />)}
@@ -84,7 +84,7 @@ export default function SystemPage() {
 
       {/* Operational metrics */}
       <div>
-        <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Operational Metrics (24h)</p>
+        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Operational Metrics (24h)</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <MetricCard
             label="Total Scans"
@@ -119,7 +119,7 @@ export default function SystemPage() {
 
       {/* Stack reference */}
       <div>
-        <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">System Stack</p>
+        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">System Stack</p>
         <div className="glass-card rounded-lg overflow-hidden">
           <table className="w-full text-xs">
             <tbody>
@@ -135,8 +135,8 @@ export default function SystemPage() {
                 ['Monitoring','Prometheus + alertmanager'],
               ].map(([layer, detail]) => (
                 <tr key={layer} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
-                  <td className="py-2.5 px-4 text-terminal-muted text-[10px] uppercase tracking-wider w-28">{layer}</td>
-                  <td className="py-2.5 px-4 font-mono text-terminal-text text-[11px]">{detail}</td>
+                  <td className="py-2.5 px-4 text-terminal-muted text-xs uppercase tracking-wider w-28">{layer}</td>
+                  <td className="py-2.5 px-4 font-mono text-terminal-text text-xs">{detail}</td>
                 </tr>
               ))}
             </tbody>

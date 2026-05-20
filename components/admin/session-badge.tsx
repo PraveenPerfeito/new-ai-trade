@@ -26,9 +26,7 @@ export function SessionBadge({ email, lastSignIn }: Props) {
   async function handleSignOut() {
     setLoading(true)
     try {
-      // Server route clears cookies + writes audit log
       await fetch('/api/auth/signout', { method: 'POST' })
-      // Client-side clear (catches any in-memory state)
       await createSupabaseBrowserClient().auth.signOut()
       router.replace('/login')
     } finally {
@@ -36,15 +34,15 @@ export function SessionBadge({ email, lastSignIn }: Props) {
     }
   }
 
-  const shortEmail = email.length > 24 ? `${email.slice(0, 21)}…` : email
+  const shortEmail = email.length > 26 ? `${email.slice(0, 23)}…` : email
 
   return (
-    <div className="flex items-center gap-2 shrink-0">
+    <div className="flex items-center gap-2.5 shrink-0">
       {/* Identity */}
-      <div className="hidden sm:flex items-center gap-1.5 text-[10px] font-mono text-terminal-muted/50 select-none">
-        <User size={9} className="shrink-0" />
+      <div className="hidden sm:flex items-center gap-1.5 text-xs font-mono text-terminal-muted/60 select-none">
+        <User size={11} className="shrink-0" />
         <span title={email}>{shortEmail}</span>
-        <span className="text-terminal-muted/25">·</span>
+        <span className="text-terminal-muted/30">·</span>
         <span title={lastSignIn ? new Date(lastSignIn).toLocaleString() : undefined}>
           {relativeTime(lastSignIn)}
         </span>
@@ -55,11 +53,11 @@ export function SessionBadge({ email, lastSignIn }: Props) {
         onClick={handleSignOut}
         disabled={loading}
         title="Sign out"
-        className="flex items-center gap-1 px-1.5 py-1 rounded border border-terminal-border/50 text-terminal-muted/40 hover:text-bear-default hover:border-bear-default/25 transition-colors text-[10px] font-mono disabled:opacity-40"
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded border border-terminal-border/50 text-terminal-muted/50 hover:text-bear-default hover:border-bear-default/30 transition-colors text-xs font-mono disabled:opacity-40"
       >
         {loading
-          ? <Loader2 size={10} className="animate-spin" />
-          : <><LogOut size={10} /><span className="hidden sm:inline ml-0.5">Out</span></>
+          ? <Loader2 size={11} className="animate-spin" />
+          : <><LogOut size={11} /><span className="hidden sm:inline">Sign out</span></>
         }
       </button>
     </div>

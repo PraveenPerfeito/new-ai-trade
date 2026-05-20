@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useCallback } from 'react'
 import { adminApi, PortfolioMetrics } from '@/lib/admin-api'
@@ -42,16 +42,16 @@ export default function PaperTradingPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-terminal-text text-lg font-semibold">Paper Trading</h1>
-        <p className="text-terminal-muted text-xs mt-0.5">Virtual portfolio · Position tracking · Performance validation</p>
+        <h1 className="text-terminal-text text-xl font-semibold">Paper Trading</h1>
+        <p className="text-terminal-muted text-sm mt-1">Virtual portfolio · Position tracking · Performance validation</p>
       </div>
 
       {/* Portfolio metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <MetricCard
           label="Balance"
-          value={portfolio ? `$${portfolio.balance.toFixed(0)}` : '—'}
-          sub={portfolio?.initial_balance ? `started $${portfolio.initial_balance.toFixed(0)}` : ''}
+          value={portfolio?.balance != null ? `$${portfolio.balance.toFixed(0)}` : '—'}
+          sub={portfolio?.initial_balance != null ? `started $${portfolio.initial_balance.toFixed(0)}` : ''}
           accent="info"
           icon={<DollarSign size={13} />}
           loading={pl}
@@ -65,8 +65,8 @@ export default function PaperTradingPage() {
         />
         <MetricCard
           label="Realized PnL"
-          value={portfolio ? `${portfolio.total_pnl > 0 ? '+' : ''}$${portfolio.total_pnl.toFixed(2)}` : '—'}
-          accent={!portfolio ? 'neutral' : portfolio.total_pnl > 0 ? 'bull' : 'bear'}
+          value={portfolio?.total_pnl != null ? `${portfolio.total_pnl > 0 ? '+' : ''}$${portfolio.total_pnl.toFixed(2)}` : '—'}
+          accent={portfolio?.total_pnl == null ? 'neutral' : portfolio.total_pnl > 0 ? 'bull' : 'bear'}
           icon={<DollarSign size={13} />}
           loading={pl}
         />
@@ -82,7 +82,7 @@ export default function PaperTradingPage() {
 
       {/* Open positions */}
       <div>
-        <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">
+        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">
           Open Positions ({portfolio?.open_trades ?? 0})
         </p>
         <div className="glass-card rounded-lg overflow-hidden">
@@ -102,7 +102,7 @@ export default function PaperTradingPage() {
                 <thead>
                   <tr className="border-b border-terminal-border">
                     {['Symbol', 'Type', 'Entry', 'Target', 'SL', 'Size', 'Unr. PnL', 'Opened'].map(h => (
-                      <th key={h} className="text-terminal-muted text-[9px] uppercase tracking-wider text-left py-2 px-3">{h}</th>
+                      <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -120,7 +120,7 @@ export default function PaperTradingPage() {
                       <td className={`py-2.5 px-3 font-mono font-bold ${pnlColor(t.unrealized_pnl ?? 0)}`}>
                         {t.unrealized_pnl != null ? `${t.unrealized_pnl > 0 ? '+' : ''}$${t.unrealized_pnl.toFixed(2)}` : '—'}
                       </td>
-                      <td className="py-2.5 px-3 font-mono text-terminal-muted/50 text-[10px]">
+                      <td className="py-2.5 px-3 font-mono text-terminal-muted/50 text-xs">
                         {new Date(t.created_at).toLocaleString()}
                       </td>
                     </tr>
@@ -135,14 +135,14 @@ export default function PaperTradingPage() {
       {/* Recent closed trades */}
       {closed.length > 0 && (
         <div>
-          <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Recent Closed Trades</p>
+          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Recent Closed Trades</p>
           <div className="glass-card rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-xs min-w-[500px]">
                 <thead>
                   <tr className="border-b border-terminal-border">
                     {['Symbol', 'Type', 'Status', 'Realized PnL', 'Opened', 'Closed'].map(h => (
-                      <th key={h} className="text-terminal-muted text-[9px] uppercase tracking-wider text-left py-2 px-3">{h}</th>
+                      <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -154,17 +154,17 @@ export default function PaperTradingPage() {
                         <span className={t.signal_type === 'BUY' ? 'text-bull-default' : 'text-bear-default'}>{t.signal_type}</span>
                       </td>
                       <td className="py-2 px-3">
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border font-mono ${
+                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded border font-mono ${
                           t.status.includes('TP') ? 'text-bull-default border-bull-default/30' : 'text-bear-default border-bear-default/30'
                         }`}>{t.status.replace('CLOSED_', '')}</span>
                       </td>
                       <td className={`py-2 px-3 font-mono font-bold ${pnlColor(t.realized_pnl ?? 0)}`}>
                         {t.realized_pnl != null ? `${t.realized_pnl > 0 ? '+' : ''}$${t.realized_pnl.toFixed(2)}` : '—'}
                       </td>
-                      <td className="py-2 px-3 font-mono text-terminal-muted/50 text-[10px]">
+                      <td className="py-2 px-3 font-mono text-terminal-muted/50 text-xs">
                         {new Date(t.created_at).toLocaleDateString()}
                       </td>
-                      <td className="py-2 px-3 font-mono text-terminal-muted/50 text-[10px]">
+                      <td className="py-2 px-3 font-mono text-terminal-muted/50 text-xs">
                         {t.closed_at ? new Date(t.closed_at).toLocaleDateString() : '—'}
                       </td>
                     </tr>

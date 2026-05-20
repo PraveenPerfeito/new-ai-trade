@@ -21,7 +21,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           email={user.email ?? ''}
           lastSignIn={user.last_sign_in_at ?? null}
         />
-        <main className="flex-1 overflow-y-auto p-5 space-y-0">
+        <main className="flex-1 overflow-y-auto p-6 space-y-0">
           {children}
         </main>
       </div>

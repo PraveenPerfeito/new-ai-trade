@@ -34,31 +34,31 @@ export function MetricCard({
 
   if (loading) {
     return (
-      <div className={`glass-card rounded-lg p-4 border border-terminal-border ${className}`}>
-        <Skel w="w-20" h="h-2.5" />
-        <div className="mt-3 mb-1"><Skel w="w-16" h="h-7" /></div>
-        <Skel w="w-24" h="h-2.5" />
+      <div className={`glass-card rounded-xl p-5 border border-terminal-border ${className}`}>
+        <Skel w="w-24" h="h-3" />
+        <div className="mt-3 mb-1.5"><Skel w="w-20" h="h-8" /></div>
+        <Skel w="w-28" h="h-3" />
       </div>
     )
   }
 
   return (
-    <div className={`glass-card rounded-lg p-4 border ${border} ${className}`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-terminal-muted text-[9px] uppercase tracking-[0.13em] font-semibold">{label}</span>
-        {icon && <span className={`${text} opacity-50`}>{icon}</span>}
+    <div className={`glass-card rounded-xl p-5 border ${border} ${className}`}>
+      <div className="flex items-center justify-between mb-2.5">
+        <span className="text-terminal-muted text-[11px] uppercase tracking-wider font-semibold">{label}</span>
+        {icon && <span className={`${text} opacity-60`}>{icon}</span>}
       </div>
 
-      <div className={`font-mono font-bold text-[22px] leading-none ${text}`}>{value}</div>
+      <div className={`font-mono font-bold text-2xl leading-none ${text}`}>{value}</div>
 
-      <div className="flex items-center gap-2 mt-1.5">
-        {sub && <span className="text-terminal-muted text-[11px]">{sub}</span>}
+      <div className="flex items-center gap-2 mt-2">
+        {sub && <span className="text-terminal-muted text-xs">{sub}</span>}
         {delta != null && (
           <span className={[
-            'flex items-center gap-0.5 text-[11px] font-mono',
+            'flex items-center gap-0.5 text-xs font-mono',
             delta > 0 ? 'text-bull-default' : delta < 0 ? 'text-bear-default' : 'text-terminal-muted',
           ].join(' ')}>
-            {delta > 0 ? <TrendingUp size={9} /> : delta < 0 ? <TrendingDown size={9} /> : <Minus size={9} />}
+            {delta > 0 ? <TrendingUp size={10} /> : delta < 0 ? <TrendingDown size={10} /> : <Minus size={10} />}
             {delta > 0 ? '+' : ''}{delta.toFixed(1)}%
           </span>
         )}

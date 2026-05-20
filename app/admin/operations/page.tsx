@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useCallback } from 'react'
 import { Activity, Clock, Layers, TrendingDown } from 'lucide-react'
@@ -16,17 +16,17 @@ function HealthDot({ status }: { status: string }) {
 function ModeRow({ mode, data }: { mode: string; data: { total: number; success_rate: number } }) {
   return (
     <div className="flex items-center gap-4 py-2.5 border-b border-terminal-border/40 last:border-0">
-      <span className="text-terminal-muted font-mono text-[11px] w-28 uppercase">{mode}</span>
+      <span className="text-terminal-muted font-mono text-xs w-28 uppercase">{mode}</span>
       <div className="flex-1 h-1.5 bg-terminal-bright rounded-full overflow-hidden">
         <div
           className="h-full rounded-full bg-bull-default/60"
           style={{ width: `${data.success_rate * 100}%` }}
         />
       </div>
-      <span className="font-mono text-[11px] text-bull-default w-14 text-right">
+      <span className="font-mono text-xs text-bull-default w-14 text-right">
         {(data.success_rate * 100).toFixed(0)}%
       </span>
-      <span className="font-mono text-[11px] text-terminal-muted w-16 text-right">
+      <span className="font-mono text-xs text-terminal-muted w-16 text-right">
         {data.total} scans
       </span>
     </div>
@@ -43,8 +43,8 @@ export default function OperationsPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-terminal-text text-lg font-semibold">Operations</h1>
-        <p className="text-terminal-muted text-xs mt-0.5">Scanner throughput · Queue health · Infrastructure metrics</p>
+        <h1 className="text-terminal-text text-xl font-semibold">Operations</h1>
+        <p className="text-terminal-muted text-sm mt-1">Scanner throughput · Queue health · Infrastructure metrics</p>
       </div>
 
       {/* Key scan metrics */}
@@ -90,7 +90,7 @@ export default function OperationsPage() {
       {/* Per-mode breakdown */}
       {scans?.by_mode && Object.keys(scans.by_mode).length > 0 && (
         <div>
-          <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Scan Mode Breakdown</p>
+          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Scan Mode Breakdown</p>
           <div className="glass-card rounded-lg px-5 py-3">
             {Object.entries(scans.by_mode).map(([mode, data]) => (
               <ModeRow key={mode} mode={mode} data={data} />
@@ -101,7 +101,7 @@ export default function OperationsPage() {
 
       {/* Infrastructure health */}
       <div>
-        <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Infrastructure Health</p>
+        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Infrastructure Health</p>
         <div className="glass-card rounded-lg divide-y divide-terminal-border/50">
           {hl ? (
             Array.from({ length: 3 }).map((_, i) => (
@@ -144,14 +144,14 @@ export default function OperationsPage() {
 
       {/* Celery task schedule reference */}
       <div>
-        <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Beat Schedule</p>
+        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Beat Schedule</p>
         <div className="glass-card rounded-lg overflow-hidden">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-terminal-border">
-                <th className="text-terminal-muted text-[9px] uppercase tracking-wider text-left py-2 px-4">Task</th>
-                <th className="text-terminal-muted text-[9px] uppercase tracking-wider text-left py-2 px-4">Schedule</th>
-                <th className="text-terminal-muted text-[9px] uppercase tracking-wider text-left py-2 px-4">Queue</th>
+                <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-4">Task</th>
+                <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-4">Schedule</th>
+                <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-4">Queue</th>
               </tr>
             </thead>
             <tbody>
@@ -169,7 +169,7 @@ export default function OperationsPage() {
                   <td className="py-2.5 px-4 text-terminal-text font-mono">{task}</td>
                   <td className="py-2.5 px-4 text-terminal-muted font-mono">{sched}</td>
                   <td className="py-2.5 px-4">
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded border font-mono ${
+                    <span className={`text-xs px-1.5 py-0.5 rounded border font-mono ${
                       queue === 'scanner' ? 'text-signal-medium border-signal-medium/30 bg-signal-medium/5'
                       : queue === 'paper_trading' ? 'text-signal-purple border-signal-purple/30 bg-signal-purple/5'
                       : 'text-terminal-muted border-terminal-border'

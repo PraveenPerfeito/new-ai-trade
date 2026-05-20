@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useCallback } from 'react'
 import {
@@ -100,7 +100,7 @@ function ProviderCard({
                 {PROVIDER_LABELS[provider.name] ?? provider.name}
               </span>
               {PROVIDER_FREE[provider.name] && (
-                <span className="text-[10px] px-1.5 py-0.5 bg-slate-700 text-slate-400 rounded">free</span>
+                <span className="text-xs px-1.5 py-0.5 bg-slate-700 text-slate-400 rounded">free</span>
               )}
               <span className={`text-xs font-medium capitalize ${statusColor(provider.status)}`}>
                 {provider.status.replace('_', ' ')}
@@ -122,7 +122,7 @@ function ProviderCard({
             }`}>
               {provider.healthScore}
             </div>
-            <div className="text-[10px] text-slate-500 -mt-0.5">health</div>
+            <div className="text-xs text-slate-500 -mt-0.5">health</div>
           </div>
 
           {/* Toggle */}
@@ -189,7 +189,7 @@ function ProviderCard({
       {/* Quota bar (only for providers with quotas) */}
       {provider.quota.dailyLimit > 0 && (
         <div className="px-4 pb-3">
-          <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+          <div className="flex justify-between text-xs text-slate-500 mb-1">
             <span>Quota {provider.quota.used.toLocaleString()} / {provider.quota.dailyLimit.toLocaleString()}</span>
             <span>{quotaPct.toFixed(0)}%</span>
           </div>
@@ -260,7 +260,7 @@ function FailoverHistory({ events }: { events: FailoverEvent[] }) {
                 {e.toProvider === 'auto' ? 'auto' : (PROVIDER_LABELS[e.toProvider] ?? e.toProvider)}
               </span>
             </div>
-            <div className="text-[10px] text-slate-500 mt-0.5 truncate">
+            <div className="text-xs text-slate-500 mt-0.5 truncate">
               {e.reason.replace('_', ' ')} · {formatRelative(e.occurredAt)}
             </div>
           </div>

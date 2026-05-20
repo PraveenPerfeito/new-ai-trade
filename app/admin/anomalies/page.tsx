@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useCallback } from 'react'
 import { RefreshCw } from 'lucide-react'
@@ -14,15 +14,15 @@ function AnomalyRow({ a }: { a: AnomalyRecord }) {
         <div className="flex-1 min-w-0">
           <p className="text-terminal-text text-xs leading-relaxed">{a.description}</p>
           <div className="flex items-center gap-4 mt-1.5 flex-wrap">
-            <span className="text-terminal-muted/60 text-[10px] font-mono uppercase tracking-wide">
+            <span className="text-terminal-muted/60 text-xs font-mono uppercase tracking-wide">
               {a.anomaly_type.replace(/_/g, ' ')}
             </span>
             {a.metric_value != null && (
-              <span className="text-terminal-muted/60 text-[10px] font-mono">
+              <span className="text-terminal-muted/60 text-xs font-mono">
                 value: {a.metric_value} · threshold: {a.threshold ?? '—'}
               </span>
             )}
-            <span className="text-terminal-muted/40 text-[10px] font-mono ml-auto">
+            <span className="text-terminal-muted/40 text-xs font-mono ml-auto">
               {new Date(a.detected_at).toLocaleString()}
             </span>
           </div>
@@ -49,14 +49,14 @@ export default function AnomaliesPage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-terminal-text text-lg font-semibold">Anomaly Detection</h1>
-          <p className="text-terminal-muted text-xs mt-0.5">
+          <h1 className="text-terminal-text text-xl font-semibold">Anomaly Detection</h1>
+          <p className="text-terminal-muted text-sm mt-1">
             {lastCheck ? `Last check: ${new Date(lastCheck).toLocaleString()}` : 'Threshold-based anomaly monitoring'}
           </p>
         </div>
         <button
           onClick={refresh}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] text-terminal-muted hover:text-terminal-text border border-terminal-border hover:border-terminal-bright rounded transition-all"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-terminal-muted hover:text-terminal-text border border-terminal-border hover:border-terminal-bright rounded transition-all"
         >
           <RefreshCw size={11} className={al ? 'animate-spin' : ''} />
           Refresh
@@ -71,7 +71,7 @@ export default function AnomaliesPage() {
           { label: 'Info',     count: info.length,     color: 'text-signal-medium',border: 'border-signal-medium/20',bg: 'bg-signal-medium/5' },
         ].map(({ label, count, color, border, bg }) => (
           <div key={label} className={`glass-card rounded-lg px-5 py-4 border ${border} ${bg}`}>
-            <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-1">{label}</p>
+            <p className="text-terminal-muted text-xs uppercase tracking-wider mb-1">{label}</p>
             <p className={`font-mono font-bold text-3xl ${color}`}>{al ? '—' : count}</p>
           </div>
         ))}
@@ -79,7 +79,7 @@ export default function AnomaliesPage() {
 
       {/* Anomaly feed */}
       <div>
-        <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Recent Anomalies (last 96h)</p>
+        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Recent Anomalies (last 96h)</p>
         <div className="glass-card rounded-lg overflow-hidden">
           {al ? (
             Array.from({ length: 4 }).map((_, i) => (
@@ -106,7 +106,7 @@ export default function AnomaliesPage() {
 
       {/* Anomaly type glossary */}
       <div>
-        <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Monitored Checks</p>
+        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Monitored Checks</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {[
             ['win_rate_degradation',  'Win rate drops ≥12 pp vs 30d baseline'],
@@ -119,10 +119,10 @@ export default function AnomaliesPage() {
             ['queue_backlog',         'Celery queue depth exceeds 10 / 30 tasks'],
           ].map(([name, desc]) => (
             <div key={name} className="glass-card rounded-md px-3 py-2 flex gap-2">
-              <span className="text-terminal-muted/60 font-mono text-[10px] shrink-0 mt-0.5">→</span>
+              <span className="text-terminal-muted/60 font-mono text-xs shrink-0 mt-0.5">→</span>
               <div>
-                <p className="text-terminal-text text-[11px] font-mono">{name}</p>
-                <p className="text-terminal-muted text-[10px] mt-0.5">{desc}</p>
+                <p className="text-terminal-text text-xs font-mono">{name}</p>
+                <p className="text-terminal-muted text-sm mt-1">{desc}</p>
               </div>
             </div>
           ))}

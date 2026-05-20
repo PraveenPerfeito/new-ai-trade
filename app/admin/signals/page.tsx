@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useCallback } from 'react'
 import { adminApi, EdgeReport } from '@/lib/admin-api'
@@ -28,20 +28,20 @@ function GradeBadge({ grade }: { grade: string }) {
     F: 'text-bear-default border-bear-default/30 bg-bear-default/5',
   }
   return (
-    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${colors[grade] ?? 'text-terminal-muted border-terminal-border'}`}>
+    <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${colors[grade] ?? 'text-terminal-muted border-terminal-border'}`}>
       {grade}
     </span>
   )
 }
 
 function OutcomePill({ outcome }: { outcome?: string }) {
-  if (!outcome || outcome === 'PENDING') return <span className="text-terminal-muted/40 text-[10px]">PENDING</span>
+  if (!outcome || outcome === 'PENDING') return <span className="text-terminal-muted/40 text-xs">PENDING</span>
   const cfg: Record<string, string> = {
     TP_HIT:  'text-bull-default',
     SL_HIT:  'text-bear-default',
     TIMEOUT: 'text-signal-high',
   }
-  return <span className={`text-[10px] font-mono font-bold ${cfg[outcome] ?? 'text-terminal-muted'}`}>{outcome}</span>
+  return <span className={`text-xs font-mono font-bold ${cfg[outcome] ?? 'text-terminal-muted'}`}>{outcome}</span>
 }
 
 export default function SignalsPage() {
@@ -67,8 +67,8 @@ export default function SignalsPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-terminal-text text-lg font-semibold">Signal Intelligence</h1>
-        <p className="text-terminal-muted text-xs mt-0.5">Live feed · Outcomes · Edge analysis</p>
+        <h1 className="text-terminal-text text-xl font-semibold">Signal Intelligence</h1>
+        <p className="text-terminal-muted text-sm mt-1">Live feed · Outcomes · Edge analysis</p>
       </div>
 
       {/* Edge summary from validation */}
@@ -101,7 +101,7 @@ export default function SignalsPage() {
 
       {/* Signal feed */}
       <div>
-        <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Recent Signals</p>
+        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Recent Signals</p>
         <div className="glass-card rounded-lg overflow-hidden">
           {sl ? (
             Array.from({ length: 5 }).map((_, i) => (
@@ -122,7 +122,7 @@ export default function SignalsPage() {
                 <thead>
                   <tr className="border-b border-terminal-border">
                     {['Symbol', 'Type', 'Conf', 'Entry', 'RR', 'Grade', 'Mode', 'Outcome', 'Created'].map(h => (
-                      <th key={h} className="text-terminal-muted text-[9px] uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
+                      <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -131,7 +131,7 @@ export default function SignalsPage() {
                     <tr key={sig.id} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
                       <td className="py-2.5 px-3 font-mono text-terminal-text font-bold">{sig.symbol}</td>
                       <td className="py-2.5 px-3">
-                        <span className={`font-mono text-[10px] font-bold ${sig.signal_type === 'BUY' ? 'text-bull-default' : 'text-bear-default'}`}>
+                        <span className={`font-mono text-xs font-bold ${sig.signal_type === 'BUY' ? 'text-bull-default' : 'text-bear-default'}`}>
                           {sig.signal_type}
                         </span>
                       </td>
@@ -143,9 +143,9 @@ export default function SignalsPage() {
                       <td className="py-2.5 px-3 font-mono text-terminal-text">{sig.entry_price?.toFixed(4)}</td>
                       <td className="py-2.5 px-3 font-mono text-terminal-muted">{rrRatio(sig.entry_price, sig.target_price, sig.stop_loss)}R</td>
                       <td className="py-2.5 px-3"><GradeBadge grade={sig.risk_grade} /></td>
-                      <td className="py-2.5 px-3 text-terminal-muted font-mono text-[10px] uppercase">{sig.scanner_mode}</td>
+                      <td className="py-2.5 px-3 text-terminal-muted font-mono text-xs uppercase">{sig.scanner_mode}</td>
                       <td className="py-2.5 px-3"><OutcomePill outcome={sig.outcome} /></td>
-                      <td className="py-2.5 px-3 text-terminal-muted/50 font-mono text-[10px]">
+                      <td className="py-2.5 px-3 text-terminal-muted/50 font-mono text-xs">
                         {new Date(sig.created_at).toLocaleString()}
                       </td>
                     </tr>

@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useCallback } from 'react'
 import { adminApi, BurninStatus, ReadinessResult } from '@/lib/admin-api'
@@ -17,7 +17,7 @@ function ScoreBar({ score, weight }: { score: number; weight: number }) {
   const color = score >= 80 ? '#00d084' : score >= 65 ? '#f59e0b' : score >= 50 ? '#f97316' : '#ff3b5c'
   return (
     <div className="flex items-center gap-3">
-      <span className="text-terminal-muted text-[10px] font-mono w-8 text-right">{(weight * 100).toFixed(0)}%</span>
+      <span className="text-terminal-muted text-xs font-mono w-8 text-right">{(weight * 100).toFixed(0)}%</span>
       <div className="flex-1 h-1.5 bg-terminal-bright rounded-full overflow-hidden">
         <div
           className="h-full rounded-full transition-all duration-700"
@@ -38,7 +38,7 @@ function SubScores({ comp, data }: { comp: typeof COMPONENTS[number]['key']; dat
     <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
       {entries.map(([k, v]) => (
         <div key={k} className="bg-terminal-bright/30 rounded px-2.5 py-1.5">
-          <p className="text-terminal-muted text-[9px] uppercase tracking-wider">{k.replace('_score', '')}</p>
+          <p className="text-terminal-muted text-xs uppercase tracking-wider">{k.replace('_score', '')}</p>
           <p className="font-mono font-bold text-sm text-terminal-text">{String(v)}</p>
         </div>
       ))}
@@ -73,8 +73,8 @@ export default function ReadinessPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-terminal-text text-lg font-semibold">Production Readiness</h1>
-        <p className="text-terminal-muted text-xs mt-0.5">Go / No-go assessment · 5-component weighted score</p>
+        <h1 className="text-terminal-text text-xl font-semibold">Production Readiness</h1>
+        <p className="text-terminal-muted text-sm mt-1">Go / No-go assessment · 5-component weighted score</p>
       </div>
 
       {/* Score + verdict hero */}
@@ -105,7 +105,7 @@ export default function ReadinessPage() {
               </div>
               <p className="text-terminal-muted text-sm leading-relaxed">{r?.verdict.rationale}</p>
               {r && (
-                <p className="text-terminal-muted/50 text-[10px] mt-3 font-mono">
+                <p className="text-terminal-muted/50 text-xs mt-3 font-mono">
                   Computed {new Date(r.computed_at).toLocaleString()} · {r.data_source}
                 </p>
               )}
@@ -116,7 +116,7 @@ export default function ReadinessPage() {
 
       {/* Component breakdown */}
       <div>
-        <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Component Breakdown</p>
+        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Component Breakdown</p>
         <div className="glass-card rounded-lg divide-y divide-terminal-border/50">
           {COMPONENTS.map(({ key, label, weight }) => {
             const comp = r?.components[key]
@@ -128,13 +128,13 @@ export default function ReadinessPage() {
                   <div className="flex-1 min-w-0">
                     {rl ? <div className="skeleton h-1.5 w-full rounded" /> : <ScoreBar score={score} weight={weight} />}
                   </div>
-                  <span className="text-terminal-muted/50 text-[10px] group-open:rotate-180 transition-transform">▼</span>
+                  <span className="text-terminal-muted/50 text-xs group-open:rotate-180 transition-transform">▼</span>
                 </summary>
                 {r && comp && (
                   <div className="px-5 pb-4 bg-terminal-surface/40">
                     <SubScores comp={key} data={r} />
                     <div className="mt-3">
-                      <p className="text-terminal-muted text-[9px] uppercase tracking-wider mb-1">Inputs</p>
+                      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-1">Inputs</p>
                       {Object.entries(comp.inputs).map(([k, v]) => (
                         <InputRow key={k} label={k} value={v} />
                       ))}
@@ -150,7 +150,7 @@ export default function ReadinessPage() {
       {/* Burn-in context */}
       {s && (
         <div>
-          <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Burn-In Context</p>
+          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Burn-In Context</p>
           <div className="glass-card rounded-lg p-5 grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
               { label: 'Resolved Signals', v: s.data_coverage.resolved },
@@ -159,7 +159,7 @@ export default function ReadinessPage() {
               { label: 'Progress',         v: `${s.progress_pct.toFixed(0)}%` },
             ].map(({ label, v }) => (
               <div key={label}>
-                <p className="text-terminal-muted text-[9px] uppercase tracking-wider mb-1">{label}</p>
+                <p className="text-terminal-muted text-xs uppercase tracking-wider mb-1">{label}</p>
                 <p className="font-mono font-bold text-lg text-terminal-text">{v}</p>
               </div>
             ))}

@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useCallback } from 'react'
 import { adminApi, AiSummaryResponse, EdgeReport } from '@/lib/admin-api'
@@ -15,7 +15,7 @@ function VerdictBar({ label, count, total }: { label: string; count: number; tot
   const isGood = label === 'claude_adds_value'
   return (
     <div className="flex items-center gap-3">
-      <span className="text-terminal-muted text-[10px] font-mono w-48 truncate capitalize">
+      <span className="text-terminal-muted text-xs font-mono w-48 truncate capitalize">
         {label.replace(/_/g, ' ')}
       </span>
       <div className="flex-1 h-1.5 bg-terminal-bright rounded-full overflow-hidden">
@@ -24,8 +24,8 @@ function VerdictBar({ label, count, total }: { label: string; count: number; tot
           style={{ width: `${w}%` }}
         />
       </div>
-      <span className="font-mono text-[11px] text-terminal-text w-12 text-right">{count}</span>
-      <span className="font-mono text-[11px] text-terminal-muted w-12 text-right">{w.toFixed(0)}%</span>
+      <span className="font-mono text-xs text-terminal-text w-12 text-right">{count}</span>
+      <span className="font-mono text-xs text-terminal-muted w-12 text-right">{w.toFixed(0)}%</span>
     </div>
   )
 }
@@ -52,8 +52,8 @@ export default function AiPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-terminal-text text-lg font-semibold">AI Intelligence</h1>
-        <p className="text-terminal-muted text-xs mt-0.5">Claude API health · Effectiveness measurement · Confidence analysis</p>
+        <h1 className="text-terminal-text text-xl font-semibold">AI Intelligence</h1>
+        <p className="text-terminal-muted text-sm mt-1">Claude API health · Effectiveness measurement · Confidence analysis</p>
       </div>
 
       {/* Key metrics */}
@@ -94,7 +94,7 @@ export default function AiPage() {
 
       {/* Claude effectiveness */}
       <div>
-        <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Claude Effectiveness (30d)</p>
+        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Claude Effectiveness (30d)</p>
         <div className="glass-card rounded-lg p-5">
           {el ? (
             <div className="space-y-2">
@@ -107,7 +107,7 @@ export default function AiPage() {
                 <span className={`font-mono font-bold text-xl uppercase ${claudeVerdictColors[claude.verdict] ?? 'text-terminal-text'}`}>
                   {claude.verdict.replace(/_/g, ' ')}
                 </span>
-                <span className="text-terminal-muted text-[11px]">
+                <span className="text-terminal-muted text-xs">
                   {claude.total_with_ai_log} signals with AI log
                 </span>
               </div>
@@ -128,7 +128,7 @@ export default function AiPage() {
       {/* Verdict distribution */}
       {Object.keys(verdicts).length > 0 && (
         <div>
-          <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Verdict Distribution (24h)</p>
+          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Verdict Distribution (24h)</p>
           <div className="glass-card rounded-lg p-5 space-y-2.5">
             {Object.entries(verdicts)
               .sort(([, a], [, b]) => b - a)
@@ -142,10 +142,10 @@ export default function AiPage() {
       {/* Latency */}
       {ai?.avg_latency_ms != null && (
         <div>
-          <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">API Performance</p>
+          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">API Performance</p>
           <div className="glass-card rounded-lg px-5 py-4 flex items-center gap-8">
             <div>
-              <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Avg Latency</p>
+              <p className="text-terminal-muted text-xs uppercase tracking-wider mb-1">Avg Latency</p>
               <p className={`font-mono font-bold text-2xl ${ai.avg_latency_ms > 5000 ? 'text-signal-high' : 'text-bull-default'}`}>
                 {ai.avg_latency_ms < 1000
                   ? `${ai.avg_latency_ms.toFixed(0)}ms`
@@ -153,7 +153,7 @@ export default function AiPage() {
               </p>
             </div>
             <div>
-              <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Window</p>
+              <p className="text-terminal-muted text-xs uppercase tracking-wider mb-1">Window</p>
               <p className="font-mono text-terminal-text text-lg">{ai.window_hours}h</p>
             </div>
           </div>

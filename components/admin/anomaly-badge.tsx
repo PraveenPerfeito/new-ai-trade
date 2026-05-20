@@ -16,8 +16,8 @@ interface AnomalyBadgeProps {
 export function AnomalyBadge({ severity, className = '' }: AnomalyBadgeProps) {
   const { Icon, bg, text, border } = CONFIG[severity]
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${bg} ${text} ${border} ${className}`}>
-      <Icon size={8} />
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-bold uppercase tracking-wider border ${bg} ${text} ${border} ${className}`}>
+      <Icon size={11} />
       {severity}
     </span>
   )

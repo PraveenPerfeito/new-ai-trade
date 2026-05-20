@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useCallback } from 'react'
 import { adminApi, EdgeReport } from '@/lib/admin-api'
@@ -7,7 +7,7 @@ import { useAutoRefresh } from '@/lib/use-auto-refresh'
 function StatPair({ label, value, accent = '' }: { label: string; value: string; accent?: string }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-terminal-muted text-[9px] uppercase tracking-wider">{label}</span>
+      <span className="text-terminal-muted text-xs uppercase tracking-wider">{label}</span>
       <span className={`font-mono font-bold text-lg ${accent || 'text-terminal-text'}`}>{value}</span>
     </div>
   )
@@ -19,7 +19,7 @@ function CalibrationTable({ bands }: { bands: EdgeReport['confidence_calibration
       <thead>
         <tr className="border-b border-terminal-border">
           {['Band', 'Signals', 'Win Rate', 'Expectancy', 'Status'].map(h => (
-            <th key={h} className="text-terminal-muted text-[9px] uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
+            <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
           ))}
         </tr>
       </thead>
@@ -46,8 +46,8 @@ function CalibrationTable({ bands }: { bands: EdgeReport['confidence_calibration
             </td>
             <td className="py-2.5 px-3">
               {b.insufficient_data
-                ? <span className="text-[9px] text-terminal-muted/40 border border-terminal-border rounded px-1.5 py-0.5">INSUFFICIENT</span>
-                : <span className="text-[9px] text-bull-default/70 border border-bull-default/20 rounded px-1.5 py-0.5">OK</span>
+                ? <span className="text-xs text-terminal-muted/40 border border-terminal-border rounded px-1.5 py-0.5">INSUFFICIENT</span>
+                : <span className="text-xs text-bull-default/70 border border-bull-default/20 rounded px-1.5 py-0.5">OK</span>
               }
             </td>
           </tr>
@@ -76,13 +76,13 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-terminal-text text-lg font-semibold">Quantitative Analytics</h1>
-        <p className="text-terminal-muted text-xs mt-0.5">30-day edge validation · Confidence calibration · Mode rankings</p>
+        <h1 className="text-terminal-text text-xl font-semibold">Quantitative Analytics</h1>
+        <p className="text-terminal-muted text-sm mt-1">30-day edge validation · Confidence calibration · Mode rankings</p>
       </div>
 
       {/* Edge verdict */}
       <div className="glass-card rounded-lg p-5">
-        <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-4">Edge Verdict</p>
+        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-4">Edge Verdict</p>
         {loading ? (
           <div className="space-y-2">
             <div className="skeleton h-6 w-48 rounded" />
@@ -95,7 +95,7 @@ export default function AnalyticsPage() {
                 {verdict?.confidence_level.replace(/_/g, ' ') ?? '—'}
               </span>
               {verdict?.has_edge != null && (
-                <span className={`text-[10px] px-2 py-0.5 rounded border font-bold uppercase ${
+                <span className={`text-xs px-2 py-0.5 rounded border font-bold uppercase ${
                   verdict.has_edge ? 'bg-bull-default/10 text-bull-default border-bull-default/20' : 'bg-bear-default/10 text-bear-default border-bear-default/20'
                 }`}>
                   {verdict.has_edge ? 'EDGE CONFIRMED' : 'NO EDGE'}
@@ -109,7 +109,7 @@ export default function AnalyticsPage() {
 
       {/* Overall stats */}
       <div>
-        <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Overall Statistics (30d)</p>
+        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Overall Statistics (30d)</p>
         <div className="glass-card rounded-lg p-5">
           {loading ? (
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-4">
@@ -131,7 +131,7 @@ export default function AnalyticsPage() {
             </div>
           )}
           {overall && (
-            <div className="mt-4 pt-4 border-t border-terminal-border/50 flex gap-6 text-[11px] font-mono text-terminal-muted">
+            <div className="mt-4 pt-4 border-t border-terminal-border/50 flex gap-6 text-xs font-mono text-terminal-muted">
               <span>TP: <span className="text-bull-default">{overall.tp_hits}</span></span>
               <span>SL: <span className="text-bear-default">{overall.sl_hits}</span></span>
               <span>TO: <span className="text-terminal-text">{overall.timeouts}</span></span>
@@ -146,23 +146,23 @@ export default function AnalyticsPage() {
       {/* Calibration */}
       {cal && (
         <div>
-          <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Confidence Calibration</p>
+          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Confidence Calibration</p>
           <div className="glass-card rounded-lg overflow-hidden">
             <div className="px-5 py-3 border-b border-terminal-border flex items-center gap-4 flex-wrap">
-              <span className="text-terminal-muted text-[10px]">ECE:</span>
+              <span className="text-terminal-muted text-xs">ECE:</span>
               <span className={`font-mono text-sm font-bold ${cal.calibration.ece < 0.05 ? 'text-bull-default' : cal.calibration.ece < 0.12 ? 'text-signal-high' : 'text-bear-default'}`}>
                 {cal.calibration.ece.toFixed(4)}
               </span>
-              <span className="text-terminal-muted text-[10px]">Label:</span>
-              <span className="text-terminal-text text-[11px] font-mono">{cal.calibration.label.replace(/_/g, ' ')}</span>
-              <span className="text-terminal-muted text-[10px]">Monotone:</span>
-              <span className={`text-[11px] font-mono ${cal.calibration.is_monotone ? 'text-bull-default' : 'text-bear-default'}`}>
+              <span className="text-terminal-muted text-xs">Label:</span>
+              <span className="text-terminal-text text-xs font-mono">{cal.calibration.label.replace(/_/g, ' ')}</span>
+              <span className="text-terminal-muted text-xs">Monotone:</span>
+              <span className={`text-xs font-mono ${cal.calibration.is_monotone ? 'text-bull-default' : 'text-bear-default'}`}>
                 {cal.calibration.is_monotone === null ? '—' : cal.calibration.is_monotone ? 'yes' : 'no'}
               </span>
               {cal.optimal_threshold != null && (
                 <>
-                  <span className="text-terminal-muted text-[10px]">Optimal threshold:</span>
-                  <span className="text-signal-high font-mono text-[11px]">{cal.optimal_threshold}</span>
+                  <span className="text-terminal-muted text-xs">Optimal threshold:</span>
+                  <span className="text-signal-high font-mono text-xs">{cal.optimal_threshold}</span>
                 </>
               )}
             </div>
@@ -172,7 +172,7 @@ export default function AnalyticsPage() {
       )}
 
       {edge && (
-        <p className="text-terminal-muted/40 text-[10px] font-mono">
+        <p className="text-terminal-muted/40 text-xs font-mono">
           Generated {new Date(edge.generated_at).toLocaleString()} · {edge.window_hours}h window
         </p>
       )}
