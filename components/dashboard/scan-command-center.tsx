@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { TradingSignal, CoinData, ScannerMode } from '@/types';
-import { SchedulerStatus } from '@/lib/scheduler';
+import { SchedulerStatus, ScanHistoryEntry } from '@/lib/scheduler';
 import { formatPrice, formatPct, formatVolume, cn } from '@/lib/utils';
+import { ScanHistoryPanel }  from './scan-history-panel';
+import { ProviderHealthBar } from './provider-health-bar';
 
 // ─── Internal types ───────────────────────────────────────────────────────────
 
@@ -78,6 +80,19 @@ const DEFAULT_WATCHLISTS: Watchlist[] = [
 const GRADE_COLOR: Record<string, string> = {
   A: '#00d084', B: '#3b82f6', C: '#f59e0b', D: '#f97316', F: '#ff3b5c',
 };
+
+type TFPreset = 'scalp' | 'day' | 'swing' | 'position';
+
+interface TimeframePresetConfig {
+  id: TFPreset; label: string; tf: string; apiMode: ScannerMode; conf: number; rr: number; color: string; desc: string;
+}
+
+const TIMEFRAME_PRESETS: TimeframePresetConfig[] = [
+  { id: 'scalp',    label: 'Scalp',     tf: '15m·1h', apiMode: 'trending',        conf: 75, rr: 1.8, color: '#ec4899', desc: 'Fast momentum' },
+  { id: 'day',      label: 'Day Trade', tf: '1h·4h',  apiMode: 'spot',            conf: 80, rr: 2.0, color: '#3b82f6', desc: 'Intraday setups' },
+  { id: 'swing',    label: 'Swing',     tf: '4h·1D',  apiMode: 'spot',            conf: 83, rr: 2.5, color: '#8b5cf6', desc: 'Multi-day swing' },
+  { id: 'position', label: 'Position',  tf: '1D',     apiMode: 'high_confidence', conf: 88, rr: 3.0, color: '#f59e0b', desc: 'Long-term setup' },
+];
 
 // Coin category groups for sector rotation display
 const SECTORS: Array<{ name: string; symbols: string[]; color: string }> = [
@@ -164,6 +179,8 @@ export function ScanCommandCenter({ coins, externalSignals, schedulerStatus, isS
   const [showWLCreate, setShowWLCreate] = useState(false);
   const [newWLName,    setNewWLName]    = useState('');
   const [newWLCoins,   setNewWLCoins]   = useState('');
+  const [showHistory,  setShowHistory]  = useState(false);
+  const [tfPreset,     setTfPreset]     = useState<TFPreset | null>(null);
 
   // Load watchlists from localStorage on mount (client-only)
   useEffect(() => {
@@ -178,6 +195,42 @@ export function ScanCommandCenter({ coins, externalSignals, schedulerStatus, isS
   const persistWL = useCallback((lists: Watchlist[]) => {
     setWatchlists(lists);
     try { localStorage.setItem('qcc_wl_v1', JSON.stringify(lists)); } catch {}
+  }, []);
+
+  const handleClearCache = useCallback(async () => {
+    try { await fetch('/api/cache/clear', { method: 'POST' }); } catch {}
+  }, []);
+
+  const handleReplay = useCallback(async (entry: ScanHistoryEntry) => {
+    if (scanning || isScanning) return;
+    setScanError(null);
+    setScanning(true);
+    setLocalSignals([]);
+    const t0 = Date.now();
+    try {
+      const res  = await fetch('/api/scanner/run', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: entry.mode }),
+      });
+      const json = await res.json();
+      if (res.status === 423) { setScanError('A scan is already running — please wait.'); return; }
+      if (res.status === 429) { setScanError(json.error ?? 'Rate limited'); return; }
+      if (!json.success) { setScanError(json.error ?? 'Scan failed'); return; }
+      setLocalSignals((json.signals ?? []) as TradingSignal[]);
+      setLastScan({ mode: cmdMode, count: json.signals?.length ?? 0, ms: Date.now() - t0 });
+    } catch (e) {
+      setScanError(e instanceof Error ? e.message : 'Network error');
+    } finally {
+      setScanning(false);
+    }
+  }, [scanning, isScanning, cmdMode]);
+
+  const applyTfPreset = useCallback((p: TimeframePresetConfig) => {
+    setTfPreset(p.id);
+    setMinConf(p.conf);
+    setMinRR(p.rr);
+    const mc = SCAN_MODES.find(m => m.apiMode === p.apiMode);
+    if (mc) setCmdMode(mc.id);
   }, []);
 
   // Pipeline animation while scanning
@@ -376,13 +429,52 @@ export function ScanCommandCenter({ coins, externalSignals, schedulerStatus, isS
           >
             ★ Watchlists ({watchlists.length})
           </button>
+          <button
+            onClick={() => setShowHistory(v => !v)}
+            className={cn('px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all border',
+              showHistory
+                ? 'bg-terminal-surface text-terminal-text border-terminal-border/60'
+                : 'text-terminal-muted border-terminal-border/30 hover:text-terminal-text hover:border-terminal-border/50'
+            )}
+          >
+            ◷ History
+          </button>
         </div>
       </div>
+
+      {/* ── Provider Health ────────────────────────────────────────────────────── */}
+      <ProviderHealthBar />
 
       {/* ── Scan Mode Grid ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-5 gap-1.5">
         {SCAN_MODES.map(mode => (
           <ScanModeCard key={mode.id} mode={mode} active={cmdMode === mode.id} onClick={() => setCmdMode(mode.id)} />
+        ))}
+      </div>
+
+      {/* ── Timeframe Presets ─────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[9px] text-terminal-dim uppercase tracking-wider shrink-0">TF Preset:</span>
+        {TIMEFRAME_PRESETS.map(p => (
+          <button
+            key={p.id}
+            onClick={() => applyTfPreset(p)}
+            className={cn(
+              'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-semibold border transition-all',
+              tfPreset === p.id
+                ? ''
+                : 'border-terminal-border/25 text-terminal-dim hover:text-terminal-muted hover:border-terminal-border/40',
+            )}
+            style={tfPreset === p.id ? {
+              borderColor:     p.color + '55',
+              backgroundColor: p.color + '12',
+              color:           p.color,
+            } : {}}
+            title={p.desc}
+          >
+            <span className="font-mono opacity-70">{p.tf}</span>
+            <span className="font-bold">{p.label}</span>
+          </button>
         ))}
       </div>
 
@@ -405,8 +497,14 @@ export function ScanCommandCenter({ coins, externalSignals, schedulerStatus, isS
         activeMode={activeMC}
         isBusy={isBusy}
         onScan={handleScan}
-        onClear={() => { setLocalSignals([]); setScanError(null); setLastScan(null); }}
+        onClear={() => { setLocalSignals([]); setScanError(null); setLastScan(null); setTfPreset(null); }}
         onPause={() => fetch('/api/scheduler/stop', { method: 'POST' })}
+        onClearCache={handleClearCache}
+        canReplay={!isBusy && (schedulerStatus?.history?.filter(h => h.status === 'completed').length ?? 0) > 0}
+        onReplay={() => {
+          const last = schedulerStatus?.history?.find(h => h.status === 'completed');
+          if (last) void handleReplay(last);
+        }}
       />
 
       {/* ── Error banner ───────────────────────────────────────────────────── */}
@@ -466,6 +564,14 @@ export function ScanCommandCenter({ coins, externalSignals, schedulerStatus, isS
 
       {/* ── Market Cap Intelligence ─────────────────────────────────────────── */}
       <MarketCapIntelligence tiers={tierStats} />
+
+      {/* ── Scan History ────────────────────────────────────────────────────── */}
+      {showHistory && (
+        <ScanHistoryPanel
+          history={schedulerStatus?.history ?? []}
+          onReplay={handleReplay}
+        />
+      )}
 
     </div>
   );
@@ -664,8 +770,12 @@ function ControlsPanel({
 // ─── ActionBar ────────────────────────────────────────────────────────────────
 
 function ActionBar({
-  activeMode, isBusy, onScan, onClear, onPause,
-}: { activeMode: ScanModeConfig; isBusy: boolean; onScan: () => void; onClear: () => void; onPause: () => void }) {
+  activeMode, isBusy, onScan, onClear, onPause, onClearCache, onReplay, canReplay,
+}: {
+  activeMode: ScanModeConfig; isBusy: boolean;
+  onScan: () => void; onClear: () => void; onPause: () => void;
+  onClearCache: () => void; onReplay: () => void; canReplay: boolean;
+}) {
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <button
@@ -691,9 +801,26 @@ function ActionBar({
         ⟳ Clear
       </button>
 
+      <button
+        onClick={onReplay} disabled={!canReplay}
+        className={cn(
+          'px-3 py-2 rounded-lg text-[10px] font-semibold border transition-all',
+          canReplay
+            ? 'border-terminal-border/30 text-terminal-muted hover:text-terminal-text hover:border-terminal-border/50'
+            : 'border-terminal-border/15 text-terminal-dim opacity-40 cursor-not-allowed',
+        )}
+      >
+        ▶ Replay
+      </button>
+
+      <button onClick={onClearCache}
+        className="px-3 py-2 rounded-lg text-[10px] font-semibold border border-terminal-border/25 text-terminal-dim hover:text-terminal-muted hover:border-terminal-border/45 transition-all">
+        ⊘ Cache
+      </button>
+
       <button onClick={onPause}
         className="px-3 py-2 rounded-lg text-[10px] font-semibold border border-bear-DEFAULT/20 text-bear-text/50 hover:text-bear-text hover:border-bear-DEFAULT/45 transition-all">
-        ⬛ Pause Auto-Scan
+        ⬛ Pause
       </button>
 
       <div className="flex-1" />

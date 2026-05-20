@@ -54,10 +54,27 @@ All Next.js routes are proxied from the browser. Protected routes require a vali
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/health` | Public | System health check — returns status of Supabase, Anthropic, Telegram, CoinGecko |
+| GET | `/api/health` | Public | System liveness — Supabase, Anthropic, Telegram, CoinGecko |
+| GET | `/api/health/providers` | Public | Live latency check for all external data providers |
 
 ```bash
 curl http://localhost:3000/api/health
+curl http://localhost:3000/api/health/providers
+```
+
+**`GET /api/health/providers` response:**
+```json
+{
+  "success": true,
+  "healthy": true,
+  "providers": [
+    { "name": "Binance",   "healthy": true,  "latencyMs": 42 },
+    { "name": "CoinGecko", "healthy": true,  "latencyMs": 210 },
+    { "name": "Redis",     "healthy": true,  "latencyMs": 5 },
+    { "name": "Supabase",  "healthy": false, "latencyMs": 0, "error": "Not configured" }
+  ],
+  "checkedAt": "2026-05-20T12:00:00.000Z"
+}
 ```
 
 ---
@@ -77,15 +94,44 @@ curl http://localhost:3000/api/health
 | POST | `/api/scanner/run` | Session | Trigger a manual scan |
 
 ```bash
-# Trigger scan (requires active session cookie)
+# Full top-100 spot scan
 curl -X POST http://localhost:3000/api/scanner/run \
   -H "Content-Type: application/json" \
   -d '{"mode":"spot"}'
+
+# Deep-scan specific coins only
+curl -X POST http://localhost:3000/api/scanner/run \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"spot","coins":["BTC","ETH","SOL"]}'
 ```
 
 **Body:**
 ```json
-{ "mode": "spot" }          // spot | futures | high_confidence
+{
+  "mode":  "spot",                  // spot | futures | high_confidence | trending
+  "coins": ["BTC","ETH","SOL"]      // optional — restrict to these symbols (max 100)
+}
+```
+
+When `coins` is provided the scanner filters to those symbols after the priority gates; if none match, it falls back to the full list.
+
+### Cache
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/api/cache/clear` | Session | Flush all in-process + Redis caches |
+
+```bash
+curl -X POST http://localhost:3000/api/cache/clear
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "cleared": ["coins","signals","open-interest","funding-rate","long-short"],
+  "clearedAt": "2026-05-20T12:00:00.000Z"
+}
 ```
 
 ---
