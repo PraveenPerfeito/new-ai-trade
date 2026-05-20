@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env.local",
+        env_file=(".env", ".env.local"),   # .env.local overrides .env if both exist
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
