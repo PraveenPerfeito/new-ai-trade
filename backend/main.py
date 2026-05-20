@@ -14,6 +14,7 @@ from backend.cache.redis_cache import close_redis
 from backend.config import get_settings
 from backend.database.session import close_pool
 from backend.logging.setup import configure_logging, get_logger
+from backend.middleware.admin_auth import AdminAuthMiddleware
 from backend.middleware.rate_limit import limiter
 from backend.middleware.request_id import RequestIdMiddleware
 
@@ -65,6 +66,9 @@ def create_app() -> FastAPI:
     )
 
     # ── Middleware ────────────────────────────────────────────────────────────
+    # Note: Starlette middleware is applied in reverse order (last added = outermost).
+    # AdminAuthMiddleware must be innermost so it runs after RequestIdMiddleware.
+    app.add_middleware(AdminAuthMiddleware)
     app.add_middleware(RequestIdMiddleware)
     app.add_middleware(
         CORSMiddleware,

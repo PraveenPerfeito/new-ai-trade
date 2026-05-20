@@ -1,21 +1,29 @@
 'use client'
 
 import { useCallback } from 'react'
-import { RefreshCw, AlertTriangle, CheckCircle, AlertOctagon } from 'lucide-react'
-import { useAutoRefresh } from '@/lib/use-auto-refresh'
+import { AlertOctagon, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react'
 import { adminApi, BurninStatus } from '@/lib/admin-api'
+import { useAutoRefresh } from '@/lib/use-auto-refresh'
+import { SessionBadge } from './session-badge'
 
-export function AdminTopbar() {
+interface Props {
+  email:      string
+  lastSignIn: string | null
+}
+
+export function AdminTopbar({ email, lastSignIn }: Props) {
   const fetcher = useCallback(() => adminApi.burnin.status(), [])
-  const { data, loading, error, lastUpdated, refresh } = useAutoRefresh<BurninStatus>(fetcher, 30_000)
+  const { data, loading, error, lastUpdated, refresh } =
+    useAutoRefresh<BurninStatus>(fetcher, 30_000)
 
   const critical = data?.anomaly_summary?.critical ?? 0
-  const warnings = data?.anomaly_summary?.warning ?? 0
+  const warnings = data?.anomaly_summary?.warning  ?? 0
   const winRate  = data?.live_metrics.win_rate_7d
   const progress = data?.progress_pct ?? 0
 
   return (
     <header className="h-9 shrink-0 bg-terminal-surface border-b border-terminal-border flex items-center px-4 gap-3 text-[11px] font-mono select-none">
+
       {/* Live indicator */}
       <div className="flex items-center gap-1.5">
         <span className={[
@@ -66,9 +74,9 @@ export function AdminTopbar() {
 
       <div className="flex-1" />
 
-      {/* Timestamp */}
+      {/* Last refresh timestamp */}
       {lastUpdated && (
-        <span className="text-terminal-muted/40 hidden sm:block">
+        <span className="text-terminal-muted/35 hidden sm:block">
           {lastUpdated.toLocaleTimeString()}
         </span>
       )}
@@ -81,6 +89,11 @@ export function AdminTopbar() {
       >
         <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
       </button>
+
+      <div className="h-3 w-px bg-terminal-border shrink-0" />
+
+      {/* Session info + logout */}
+      <SessionBadge email={email} lastSignIn={lastSignIn} />
     </header>
   )
 }

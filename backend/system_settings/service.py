@@ -31,6 +31,7 @@ from backend.system_settings.groups import (
     BaseSettingsGroup,
     FieldMeta,
 )
+from backend.system_settings.safety import SafetyError, check_safety
 
 log = get_logger(__name__)
 
@@ -276,10 +277,18 @@ class SettingsService:
             raise ValueError(f"Unknown settings group: {group_name!r}")
 
         current_data, current_version = await self._get_group_raw(group_name)
+        merged = {**current_data, **fields}
 
-        # Validate merged result
+        # Tier 1+2 safety checks — errors block, warnings are collected
+        violations = check_safety(group_name, merged)
+        errors = [v for v in violations if v.severity == "error"]
+        if errors:
+            raise SafetyError(errors)
+        warning_messages = [v.message for v in violations if v.severity == "warning"]
+
+        # Pydantic cross-field validation
         try:
-            validated = model_class.model_validate({**current_data, **fields})
+            validated = model_class.model_validate(merged)
         except Exception as exc:
             raise ValueError(str(exc)) from exc
 
@@ -290,45 +299,47 @@ class SettingsService:
             if current_data.get(k) != v
         }
         if not changed_fields:
-            return {"data_version": current_version, "changed": []}
+            return {"data_version": current_version, "changed": [], "warnings": warning_messages}
 
         pool = await self._pool()
         if pool is None:
             raise RuntimeError("Database unavailable — cannot persist settings")
 
-        row = await pool.fetchrow(
-            """
-            INSERT INTO settings_groups
-              (group_name, schema_version, data_version, data, updated_by)
-            VALUES ($1, $2, 1, $3::jsonb, $4)
-            ON CONFLICT (group_name) DO UPDATE SET
-              schema_version = EXCLUDED.schema_version,
-              data_version   = settings_groups.data_version + 1,
-              data           = EXCLUDED.data,
-              updated_at     = NOW(),
-              updated_by     = EXCLUDED.updated_by
-            RETURNING data_version
-            """,
-            group_name,
-            model_class.SCHEMA_VERSION,
-            json.dumps(new_data, default=str),
-            updated_by,
-        )
-        new_version: int = row["data_version"]
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                row = await conn.fetchrow(
+                    """
+                    INSERT INTO settings_groups
+                      (group_name, schema_version, data_version, data, updated_by)
+                    VALUES ($1, $2, 1, $3::jsonb, $4)
+                    ON CONFLICT (group_name) DO UPDATE SET
+                      schema_version = EXCLUDED.schema_version,
+                      data_version   = settings_groups.data_version + 1,
+                      data           = EXCLUDED.data,
+                      updated_at     = NOW(),
+                      updated_by     = EXCLUDED.updated_by
+                    RETURNING data_version
+                    """,
+                    group_name,
+                    model_class.SCHEMA_VERSION,
+                    json.dumps(new_data, default=str),
+                    updated_by,
+                )
+                new_version: int = row["data_version"]
 
-        await pool.execute(
-            """
-            INSERT INTO settings_group_audit
-              (group_name, old_version, new_version, changed_fields, schema_version, updated_by)
-            VALUES ($1, $2, $3, $4::jsonb, $5, $6)
-            """,
-            group_name,
-            current_version,
-            new_version,
-            json.dumps(changed_fields, default=str),
-            model_class.SCHEMA_VERSION,
-            updated_by,
-        )
+                await conn.execute(
+                    """
+                    INSERT INTO settings_group_audit
+                      (group_name, old_version, new_version, changed_fields, schema_version, updated_by)
+                    VALUES ($1, $2, $3, $4::jsonb, $5, $6)
+                    """,
+                    group_name,
+                    current_version,
+                    new_version,
+                    json.dumps(changed_fields, default=str),
+                    model_class.SCHEMA_VERSION,
+                    updated_by,
+                )
 
         await self._invalidate(group_name)
         log.info(
@@ -338,7 +349,11 @@ class SettingsService:
             changed=list(changed_fields.keys()),
             by=updated_by,
         )
-        return {"data_version": new_version, "changed": list(changed_fields.keys())}
+        return {
+            "data_version": new_version,
+            "changed":      list(changed_fields.keys()),
+            "warnings":     warning_messages,
+        }
 
     async def update_group(
         self, model: BaseSettingsGroup, updated_by: str = "admin"

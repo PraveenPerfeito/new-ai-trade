@@ -125,7 +125,7 @@ class ScannerSettings(BaseSettingsGroup):
         description='Minimum confidence to trigger Telegram alerts and paper trades',
     )
     max_coins_per_run: int = Field(
-        100, ge=10, le=500,
+        100, ge=10, le=200,
         title='Max Coins Per Run',
         description='Cap on coins scanned per scheduler cycle',
     )
@@ -176,7 +176,7 @@ class SignalThresholdSettings(BaseSettingsGroup):
         description='Signals with RR below this are rejected by the quality gate',
     )
     max_sl_pct: float = Field(
-        0.08, ge=0.01, le=0.30,
+        0.08, ge=0.01, le=0.20,
         title='Max Stop-Loss %',
         description='Maximum stop-loss distance as a fraction of entry price',
     )
@@ -315,17 +315,17 @@ class RiskSettings(BaseSettingsGroup):
         description='Signals below this composite quality score are rejected',
     )
     max_leverage_conservative: int = Field(
-        3, ge=1, le=20,
+        3, ge=1, le=10,
         title='Max Leverage — Conservative',
         description='Maximum recommended leverage for conservative setups',
     )
     max_leverage_standard: int = Field(
-        5, ge=1, le=50,
+        5, ge=1, le=25,
         title='Max Leverage — Standard',
         description='Maximum recommended leverage for standard setups',
     )
     max_leverage_aggressive: int = Field(
-        10, ge=1, le=125,
+        10, ge=1, le=50,
         title='Max Leverage — Aggressive',
         description='Maximum recommended leverage for aggressive futures setups',
     )
@@ -472,7 +472,7 @@ class InfrastructureSettings(BaseSettingsGroup):
         json_schema_extra={'restart': True},
     )
     db_pool_max_size: int = Field(
-        10, ge=2, le=100,
+        10, ge=2, le=50,
         title='DB Pool Max Size',
         description='Maximum asyncpg connection pool size',
         json_schema_extra={'restart': True},
@@ -497,12 +497,12 @@ class InfrastructureSettings(BaseSettingsGroup):
         description='Per-IP API rate limit (requires restart if rate_limiting feature is toggled)',
     )
     max_scan_concurrency: int = Field(
-        5, ge=1, le=50,
+        5, ge=1, le=20,
         title='Max Scan Concurrency',
         description='Maximum number of coins scanned concurrently per run',
     )
     scanner_timeout_secs: int = Field(
-        60, ge=10, le=600,
+        60, ge=10, le=300,
         title='Scanner Timeout (s)',
         description='Hard timeout per Celery scan task',
     )

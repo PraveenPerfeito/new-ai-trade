@@ -274,6 +274,7 @@ export interface PatchResult {
   success:      boolean
   data_version: number
   changed:      string[]
+  warnings?:    string[]
 }
 
 export type ExperimentStatus = 'draft' | 'active' | 'paused' | 'concluded'

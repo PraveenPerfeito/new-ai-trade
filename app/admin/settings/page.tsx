@@ -243,6 +243,7 @@ export default function SettingsPage() {
   const [auditGroup,   setAuditGroup]   = useState('all')
   const [auditLoading, setAuditLoading] = useState(false)
   const [resetConfirm, setResetConfirm] = useState<string | null>(null)
+  const [saveWarnings, setSaveWarnings] = useState<Record<string, string[]>>({})
 
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
@@ -314,7 +315,12 @@ export default function SettingsPage() {
     setSaving(s => new Set(s).add(k))
     setErrors(e => { const n = { ...e }; delete n[k]; return n })
     try {
-      await adminApi.settings.patch(entry.category, { [entry.key]: value })
+      const result = await adminApi.settings.patch(entry.category, { [entry.key]: value })
+      if (result.warnings?.length) {
+        setSaveWarnings(prev => ({ ...prev, [entry.category]: result.warnings! }))
+      } else {
+        setSaveWarnings(prev => { const n = { ...prev }; delete n[entry.category]; return n })
+      }
       setSettings(prev => {
         const updated = { ...prev }
         const grp     = updated[entry.category]
@@ -525,6 +531,25 @@ export default function SettingsPage() {
               </button>
             </div>
           </div>
+
+          {/* Safety warnings from last save */}
+          {(saveWarnings[activeTab]?.length ?? 0) > 0 && (
+            <div className="flex items-start gap-2.5 px-4 py-3 rounded-lg bg-signal-high/5 border border-signal-high/20 text-signal-high text-xs">
+              <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold">Safety warnings — saved, but review recommended:</p>
+                {saveWarnings[activeTab].map((w, i) => (
+                  <p key={i} className="text-signal-high/80 leading-relaxed">{w}</p>
+                ))}
+              </div>
+              <button
+                onClick={() => setSaveWarnings(p => { const n = { ...p }; delete n[activeTab]; return n })}
+                className="ml-auto text-signal-high/50 hover:text-signal-high shrink-0 font-mono text-[10px]"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {/* Feature Flags — card grid */}
           {activeTab === 'features' && (

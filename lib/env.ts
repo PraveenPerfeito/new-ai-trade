@@ -39,6 +39,19 @@ const schema = z.object({
 
   // CORS
   ALLOWED_ORIGINS: z.string().optional(), // comma-separated list e.g. "https://app.example.com"
+
+  // Admin auth
+  // Comma-separated admin email addresses. MUST be set in production.
+  // If unset, all admin routes are blocked (safe default).
+  ADMIN_EMAILS: z.string().optional(),
+
+  // Shared secret between the Next.js proxy and the Python FastAPI backend.
+  // Generate with: openssl rand -hex 32
+  // If unset, the Python backend accepts all proxied requests (fine for local dev).
+  ADMIN_SECRET: z.string().optional(),
+
+  // Python backend base URL (used by the /api/admin/* proxy)
+  BACKEND_URL: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof schema>;

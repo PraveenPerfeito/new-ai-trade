@@ -1,4 +1,5 @@
 from backend.system_settings.experiments import Experiment, ExperimentService, get_experiment_service
+from backend.system_settings.safety import SafetyError, Violation, check_safety
 from backend.system_settings.groups import (
     ScannerSettings,
     SignalThresholdSettings,
@@ -30,4 +31,7 @@ __all__ = [
     "Experiment",
     "ExperimentService",
     "get_experiment_service",
+    "Violation",
+    "SafetyError",
+    "check_safety",
 ]

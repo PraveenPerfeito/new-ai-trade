@@ -1,8 +1,8 @@
 # Product Requirements Document — Crypto Market Scanner
 
-**Version:** 1.0  
+**Version:** 1.2  
 **Status:** Live  
-**Last updated:** 2026-05-18
+**Last updated:** 2026-05-20
 
 ---
 
@@ -165,6 +165,10 @@ Retail traders cannot watch 100 markets simultaneously. Manual scanning is slow,
 - `SUPABASE_SERVICE_ROLE_KEY` never exposed to the browser
 - No hardcoded credentials anywhere in the codebase
 - `ALLOWED_ORIGINS` CORS allow-list for production
+- **Admin routes** (`/admin/*`, `/api/admin/*`) protected by Supabase Auth + email allowlist
+- **Python backend** protected by `X-Admin-Secret` shared header — rejects direct callers
+- **Settings writes** guarded by two-tier safety layer (hard caps + semantic rules) + atomic DB transaction
+- **Auth events** (login, logout, failures, unauthorized access) logged to `admin_auth_log` table
 
 ### 4.4 Observability
 
@@ -224,7 +228,55 @@ Two paginated requests (50 coins × 2 pages) with 400ms stagger. Wrapped with `w
 
 ---
 
-## 6. Data Model Summary
+## 6. Admin Configuration System (Phase 5)
+
+### 6.1 Settings Groups
+
+Nine strongly-typed Pydantic v2 group models stored in `settings_groups` (PostgreSQL):
+
+| Group | Key controls |
+|-------|-------------|
+| `scanner` | Scan interval, max coins, confidence threshold, mode |
+| `signals` | Min RR ratio, max SL %, min quality score |
+| `ai` | Model, temperature, max tokens, timeout |
+| `telegram` | Bot enabled, alert threshold, daily summary time |
+| `risk` | Leverage caps (conservative/standard/aggressive), portfolio risk %, quality filters |
+| `paper_trading` | Position size, max open trades, virtual balance |
+| `anomaly` | Win-rate drop / drawdown / queue-depth critical thresholds |
+| `features` | Feature flag toggles (paper trading, AI validation, futures, Telegram) |
+| `infra` | Scan concurrency, DB pool size, cache TTLs, scanner timeout |
+
+### 6.2 Safety Layer (`backend/system_settings/safety.py`)
+
+Two tiers run before every `patch_group()` write:
+
+- **Tier 1 — SAFETY_CAPS**: absolute per-field min/max. Changing Pydantic Field bounds cannot loosen these. All violations are errors (block save).
+- **Tier 2 — Semantic rules**: cross-field combination checks (e.g. catastrophic leverage + large position size). Errors block save; warnings are returned to the UI for display.
+
+### 6.3 Config Propagation
+
+Changes reach all processes within ≤ 5 seconds:
+
+1. `patch_group()` INCrements `settings:generation` in Redis and publishes to `settings_changed` channel.
+2. `PropagationListener` (async, FastAPI) receives pub/sub messages and calls `apply_group_to_modules()`.
+3. `CeleryConfigWatcher` (sync daemon thread) polls the generation counter every 5 s.
+4. All readers check the generation counter on every cache miss.
+
+### 6.4 Experiments
+
+Layered on top of base settings — active experiments are resolved per-request:
+- Context filter (subset match against caller context)
+- Rollout % probabilistic gate
+- Expiry check
+- Dry-run mode: logs would-apply overrides without applying
+
+### 6.5 Audit
+
+Every settings change is recorded in `settings_group_audit` with field-level diffs, old/new version, and `updated_by`.
+
+---
+
+## 7. Data Model Summary
 
 ### `signals`
 
@@ -248,7 +300,25 @@ Key fields: `id`, `backtest_run_id` (FK), `symbol`, `type`, `entry_price`, `exit
 
 ---
 
-## 7. Out of Scope (v1)
+### `settings_groups`
+
+Key fields: `group_name` (PK), `schema_version`, `data_version`, `data` (JSONB), `updated_by`, `updated_at`
+
+### `settings_group_audit`
+
+Key fields: `id`, `group_name`, `old_version`, `new_version`, `changed_fields` (JSONB), `schema_version`, `updated_by`, `updated_at`
+
+### `settings_experiments`
+
+Key fields: `id`, `name`, `group_name`, `overrides` (JSONB), `status` (draft/active/paused/concluded), `rollout_pct`, `context_filter` (JSONB), `dry_run`, `expires_at`, `created_by`
+
+### `admin_auth_log`
+
+Key fields: `id`, `event` (login/logout/login_failed/unauthorized), `email`, `ip`, `user_agent`, `detail`, `created_at`
+
+---
+
+## 8. Out of Scope (v1)
 
 - Order execution / live trading (read-only signal scanner)
 - WebSocket streaming (polling-based, 30s signals / 5s scheduler)
@@ -261,13 +331,16 @@ Key fields: `id`, `backtest_run_id` (FK), `symbol`, `type`, `entry_price`, `exit
 
 ---
 
-## 8. Roadmap
+## 9. Roadmap
 
-| Phase | Items |
-|-------|-------|
-| v1.1 | Redis-backed rate limiting + distributed scheduler lock |
-| v1.2 | WebSocket / Server-Sent Events for real-time signal push |
-| v1.3 | User authentication (Supabase Auth) + per-user watchlists |
-| v1.4 | Prometheus metrics endpoint + Grafana dashboard |
-| v1.5 | Full test suite (Vitest unit + Playwright E2E) |
-| v2.0 | Paper-trading execution layer with P&L tracking |
+| Phase | Status | Items |
+|-------|--------|-------|
+| v1.0 | ✅ Done | Scanner, risk engine, AI validation, Telegram, dashboard, backtest |
+| v1.1 | ✅ Done | Redis-backed settings propagation, config system, anomaly detection burn-in |
+| v1.2 | ✅ Done | Admin settings UI — grouped, inline validation, auto-save, audit log, feature flags |
+| v1.2.1 | ✅ Done | Settings safety layer — hard caps, semantic rules, atomic transactions |
+| v1.2.2 | ✅ Done | Experimental configuration — staged rollouts, dry-run, context filtering |
+| Phase 5.1 | ✅ Done | Admin auth + deployment hardening — Supabase Auth, email allowlist, backend secret, audit log |
+| v1.4 | Planned | Prometheus metrics endpoint + Grafana dashboard |
+| v1.5 | Planned | Full test suite (Vitest unit + Playwright E2E) |
+| v2.0 | Planned | Multi-user authentication + per-user watchlists and signal feeds |

@@ -2,13 +2,14 @@
 
 ## Project Summary
 
-**Type:** Next.js 14 App Router monorepo  
-**Purpose:** AI-powered crypto trading signal scanner  
-**Language:** TypeScript (strict)  
-**Database:** Supabase (PostgreSQL)  
+**Type:** Next.js 14 App Router + Python FastAPI monorepo  
+**Purpose:** AI-powered crypto trading signal scanner with admin dashboard  
+**Language:** TypeScript (strict) + Python 3.11  
+**Database:** Supabase (PostgreSQL + Auth)  
 **AI:** Anthropic Claude Haiku 4.5 (signal validation)  
 **Data sources:** Binance REST API, CoinGecko API  
 **Notifications:** Telegram Bot API  
+**Cache/Queue:** Redis (settings propagation, Celery broker)
 
 ---
 
@@ -19,7 +20,8 @@
 3. For each coin: fetch 1h + 4h Binance klines → run 10-step quality pipeline.
 4. Survivors go to **Claude Haiku** for final confidence scoring (0–100).
 5. Signals above threshold are saved to **Supabase** and sent via **Telegram**.
-6. The **dashboard** polls for signals every 30s and displays them in real time.
+6. The **admin dashboard** (`/admin/*`) is protected by Supabase Auth + email allowlist.
+7. All Python backend routes are protected by a shared `X-Admin-Secret` header.
 
 ---
 
@@ -53,19 +55,74 @@
 | Change AI prompt | `lib/ai-validator.ts` (validateSignal) |
 | Change Telegram format | `lib/telegram.ts` |
 | Change indicator calc | `lib/indicators.ts` |
+| Change admin settings | `backend/system_settings/groups.py` + `service.py` |
+| Add safety validation | `backend/system_settings/safety.py` |
+| Change auth rules | `middleware.ts` + `lib/env.ts` (ADMIN_EMAILS) |
+| Change topbar/session UI | `components/admin/session-badge.tsx` + `topbar.tsx` |
+| Modify Python backend auth | `backend/middleware/admin_auth.py` |
+| Add audit log event | `lib/auth-audit.ts` (logAuthEvent) |
+
+---
+
+## Auth Architecture — Two Protection Layers
+
+**Layer 1 — Next.js middleware (Edge, `middleware.ts`)**
+- Protects `/admin/*` and `/api/admin/*`
+- Validates Supabase session via `supabase.auth.getUser()` (real JWT check, not just cookie)
+- Checks `ADMIN_EMAILS` allowlist — if unset, all admin access is blocked (safe default)
+- Unauthenticated API requests → 401; unauthenticated pages → redirect `/login?next=<path>`
+
+**Layer 2 — Python FastAPI middleware (`backend/middleware/admin_auth.py`)**
+- Validates `X-Admin-Secret` header on every non-public route
+- The Next.js proxy (`app/api/admin/[...path]/route.ts`) injects this header automatically
+- If `ADMIN_SECRET` env var is unset (local dev), checks are skipped
+
+**Login flow:**
+1. Founder visits `/admin` → middleware redirects to `/login`
+2. Founder signs in with email + password (Supabase Auth)
+3. On success: auth event logged to `admin_auth_log` Supabase table
+4. Session cookies set; middleware grants access on subsequent requests
+
+---
+
+## Settings System Architecture
+
+```
+write path:
+  UI → PATCH /api/admin/settings/{group}
+     → Next.js proxy (injects X-Admin-Secret)
+     → Python: check_safety() [Tier 1 caps + Tier 2 semantic]
+     → Pydantic model_validate()
+     → asyncpg transaction (upsert + audit)
+     → Redis invalidate + generation INCR + pub/sub publish
+
+read path:
+  service.get_group(ModelClass)
+     → check generation counter (5s interval)
+     → in-process dict (30s TTL)
+     → Redis (1h TTL)
+     → PostgreSQL
+     → apply_experiments() (active experiments layered on top)
+```
 
 ---
 
 ## Conventions All Agents Must Follow
 
-- **Logger:** `createLogger('lib/name')` from `lib/logger.ts`. No `console.log`.
+- **Logger:** `createLogger('lib/name')` from `lib/logger.ts`. No `console.log`. In Edge-only files (`middleware.ts`), use `console.warn`.
 - **Env:** `getEnv()` or `env` proxy from `lib/env.ts`. Never raw `process.env`.
 - **API validation:** `parseBody(schema)` / `parseQuery(schema)` from `lib/validate.ts`.
 - **External APIs:** wrap in `withApiRetry()` from `lib/retry.ts`.
 - **Cache:** use `getOrSet()` on instances from `lib/cache.ts`.
 - **Error envelope:** all API routes return `{ success: true/false, error?: string }`.
 - **Types:** all shared types live in `types/index.ts` — add there, not inline.
-- **Client components:** `'use client'` directive required. No pino, no env proxy.
+- **Client components:** `'use client'` directive required. No pino, no env proxy, no server-only Supabase clients (`lib/supabase/server.ts`, `lib/supabase/admin.ts`).
+- **Supabase clients:**
+  - Server Components / Route Handlers → `createSupabaseServerClient()` from `lib/supabase/server.ts`
+  - Client Components → `createSupabaseBrowserClient()` from `lib/supabase/client.ts`
+  - Service-role operations (audit writes, etc.) → `createSupabaseAdminClient()` from `lib/supabase/admin.ts`
+- **Settings writes:** always go through `SettingsService.patch_group()` — never direct DB writes.
+- **Safety:** `check_safety()` in `backend/system_settings/safety.py` is called automatically by `patch_group()`. Do not bypass it.
 - **Type check:** run `npx tsc --noEmit` after any change. Zero errors required.
 
 ---
