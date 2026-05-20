@@ -191,30 +191,34 @@ export function MarketScanner() {
 
       {/* ── Sticky header ─────────────────────────────────────────────────── */}
       <header className="glass-surface border-b border-terminal-border sticky top-0 z-50 flex-shrink-0">
-        <div className="px-4 sm:px-6 py-2.5 flex items-center justify-between max-w-[1600px] mx-auto">
+        <div className="px-4 sm:px-6 py-3 flex items-center justify-between max-w-[1600px] mx-auto">
+          {/* Brand + live status */}
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded bg-bull-DEFAULT/15 border border-bull-DEFAULT/35 flex items-center justify-center">
-                <span className="text-bull-DEFAULT text-[11px] font-bold select-none">◈</span>
+              <div className="w-7 h-7 rounded-md bg-bull-DEFAULT/15 border border-bull-DEFAULT/35 flex items-center justify-center">
+                <span className="text-bull-DEFAULT text-sm font-bold select-none">◈</span>
               </div>
-              <span className="text-bull-DEFAULT font-bold text-sm tracking-tight hidden sm:inline">
-                MARKET SCANNER
-              </span>
-              <span className="text-bull-DEFAULT font-bold text-sm tracking-tight sm:hidden">
-                SCANNER
-              </span>
+              <div className="hidden sm:block">
+                <p className="text-bull-DEFAULT font-bold text-sm tracking-tight leading-none">MARKET SCANNER</p>
+                <p className="text-terminal-muted/50 text-[10px] mt-0.5">AI-powered crypto signals</p>
+              </div>
+              <span className="text-bull-DEFAULT font-bold text-sm tracking-tight sm:hidden">SCANNER</span>
             </div>
             <LiveDot isScanning={isScanning} autoOn={schedulerStatus?.started ?? false} />
           </div>
+
+          {/* Right: clock + admin button */}
           <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2.5 text-[10px] text-terminal-muted">
-              <span>Top 100 · CoinGecko + Binance</span>
-              <span className="text-terminal-border">|</span>
-              <span>claude-haiku-4-5</span>
-            </div>
-            <span className="font-mono text-[11px] text-terminal-muted tabular-nums">
+            <span className="font-mono text-xs text-terminal-muted/60 tabular-nums hidden sm:block">
               {clockTime} UTC
             </span>
+            <a
+              href="/admin"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-terminal-border text-terminal-muted text-xs font-mono hover:border-bull-DEFAULT/40 hover:text-bull-DEFAULT transition-all duration-200"
+            >
+              <span className="text-[11px]">⌘</span>
+              <span className="hidden sm:inline">Admin</span>
+            </a>
           </div>
         </div>
         {coins.length > 0 && <PriceTicker coins={coins} />}

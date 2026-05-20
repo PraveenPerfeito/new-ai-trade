@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { AlertCircle, Loader2, Lock, Terminal } from 'lucide-react'
+import { AlertCircle, Loader2, Lock, Terminal, ArrowLeft } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import { recordLoginEvent } from '@/app/actions/auth'
 
@@ -17,7 +17,6 @@ export default function LoginPage() {
   const [loading,  setLoading]  = useState(false)
   const [checking, setChecking] = useState(true)
 
-  // Skip login if a valid session already exists
   useEffect(() => {
     createSupabaseBrowserClient()
       .auth.getSession()
@@ -55,7 +54,7 @@ export default function LoginPage() {
   if (checking) {
     return (
       <div className="min-h-screen bg-terminal-bg flex items-center justify-center">
-        <Loader2 size={18} className="text-terminal-muted animate-spin" />
+        <Loader2 size={20} className="text-terminal-muted animate-spin" />
       </div>
     )
   }
@@ -64,38 +63,49 @@ export default function LoginPage() {
     <div className="min-h-screen bg-terminal-bg flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
 
+        {/* Back link */}
+        <a
+          href="/dashboard"
+          className="flex items-center gap-2 text-terminal-muted/50 hover:text-terminal-muted text-sm font-mono mb-6 w-fit transition-colors"
+        >
+          <ArrowLeft size={14} />
+          Back to Dashboard
+        </a>
+
         {/* Branding */}
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <Terminal size={18} className="text-bull-default" />
-            <span className="font-mono text-terminal-text text-sm font-semibold tracking-tight">
-              Scanner Command Center
-            </span>
+          <div className="flex items-center justify-center gap-2.5 mb-3">
+            <div className="w-9 h-9 rounded-lg bg-bull-default/15 border border-bull-default/30 flex items-center justify-center">
+              <Terminal size={18} className="text-bull-default" />
+            </div>
           </div>
-          <p className="text-terminal-muted/50 text-[11px] font-mono">
-            Restricted access · Authorised personnel only
+          <h1 className="font-mono text-terminal-text text-lg font-semibold tracking-tight mb-1">
+            Admin Login
+          </h1>
+          <p className="text-terminal-muted/50 text-sm font-mono">
+            Scanner Command Center
           </p>
         </div>
 
         {/* Card */}
-        <div className="glass-card rounded-lg p-6 space-y-4 border border-terminal-border">
+        <div className="glass-card rounded-xl p-6 space-y-5 border border-terminal-border">
 
-          <div className="flex items-center gap-1.5 text-terminal-muted/50 text-[10px] font-mono">
-            <Lock size={9} />
-            <span>Admin authentication required</span>
+          <div className="flex items-center gap-2 text-terminal-muted/50 text-xs font-mono">
+            <Lock size={11} />
+            <span>Restricted access · Authorised personnel only</span>
           </div>
 
           {error && (
-            <div className="flex items-start gap-2 px-3 py-2.5 rounded bg-bear-default/8 border border-bear-default/20 text-bear-default text-xs">
-              <AlertCircle size={12} className="shrink-0 mt-0.5" />
+            <div className="flex items-start gap-2.5 px-3 py-3 rounded-lg bg-bear-default/8 border border-bear-default/20 text-bear-default text-sm">
+              <AlertCircle size={14} className="shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-3">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-[10px] text-terminal-muted/60 font-mono mb-1.5">
-                Email
+              <label className="block text-xs text-terminal-muted/70 font-mono mb-2">
+                Email address
               </label>
               <input
                 type="email"
@@ -105,13 +115,13 @@ export default function LoginPage() {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 disabled={loading}
-                className="w-full bg-terminal-bg border border-terminal-border rounded px-3 py-2 font-mono text-xs text-terminal-text focus:outline-none focus:border-bull-default/40 placeholder:text-terminal-muted/25 disabled:opacity-50"
-                placeholder="admin@example.com"
+                className="w-full bg-terminal-bg border border-terminal-border rounded-lg px-3 py-2.5 font-mono text-sm text-terminal-text focus:outline-none focus:border-bull-default/50 placeholder:text-terminal-muted/25 disabled:opacity-50 transition-colors"
+                placeholder="you@example.com"
               />
             </div>
 
             <div>
-              <label className="block text-[10px] text-terminal-muted/60 font-mono mb-1.5">
+              <label className="block text-xs text-terminal-muted/70 font-mono mb-2">
                 Password
               </label>
               <input
@@ -121,7 +131,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 disabled={loading}
-                className="w-full bg-terminal-bg border border-terminal-border rounded px-3 py-2 font-mono text-xs text-terminal-text focus:outline-none focus:border-bull-default/40 placeholder:text-terminal-muted/25 disabled:opacity-50"
+                className="w-full bg-terminal-bg border border-terminal-border rounded-lg px-3 py-2.5 font-mono text-sm text-terminal-text focus:outline-none focus:border-bull-default/50 placeholder:text-terminal-muted/25 disabled:opacity-50 transition-colors"
                 placeholder="••••••••"
               />
             </div>
@@ -129,19 +139,19 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 mt-2 py-2 rounded bg-bull-default/10 border border-bull-default/25 text-bull-default font-mono text-xs hover:bg-bull-default/18 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-2 mt-1 py-2.5 rounded-lg bg-bull-default/10 border border-bull-default/30 text-bull-default font-mono text-sm font-semibold hover:bg-bull-default/20 hover:border-bull-default/50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
-                <><Loader2 size={11} className="animate-spin" /> Authenticating…</>
+                <><Loader2 size={14} className="animate-spin" /> Authenticating…</>
               ) : (
-                'Sign in'
+                'Sign in →'
               )}
             </button>
           </form>
         </div>
 
-        <p className="text-center text-[10px] text-terminal-muted/25 font-mono mt-5">
-          Set your password via the Supabase Auth dashboard
+        <p className="text-center text-xs text-terminal-muted/30 font-mono mt-5">
+          Manage credentials via Supabase Auth dashboard
         </p>
       </div>
     </div>
