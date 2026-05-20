@@ -16,7 +16,7 @@ import { PaperTrading }          from './paper-trading';
 
 const POLL_SIGNALS_MS   = 30_000;
 const POLL_COINS_MS     = 5 * 60_000;
-const POLL_SCHEDULER_MS = 5_000;
+const POLL_SCHEDULER_MS = 10_000;
 
 export function MarketScanner() {
   const [activeTab, setActiveTab]                 = useState<'scanner' | 'backtest' | 'analytics' | 'trade'>('scanner');
@@ -45,7 +45,10 @@ export function MarketScanner() {
   // ── Data fetching ──────────────────────────────────────────────────────────
   const fetchCoins = useCallback(async () => {
     try {
-      const json = await fetch('/api/coins/top100').then(r => r.json());
+      const ac = new AbortController();
+      const tid = setTimeout(() => ac.abort(), 10_000);
+      const json = await fetch('/api/coins/top100', { signal: ac.signal }).then(r => r.json());
+      clearTimeout(tid);
       if (json.success) setCoins(json.coins);
     } catch { /* non-fatal */ }
     finally { setCoinsLoading(false); }
@@ -53,7 +56,10 @@ export function MarketScanner() {
 
   const fetchSignals = useCallback(async () => {
     try {
-      const json = await fetch('/api/signals?minConfidence=75&limit=100').then(r => r.json());
+      const ac = new AbortController();
+      const tid = setTimeout(() => ac.abort(), 10_000);
+      const json = await fetch('/api/signals?minConfidence=75&limit=50', { signal: ac.signal }).then(r => r.json());
+      clearTimeout(tid);
       if (json.success) setSignals(json.signals);
     } catch { /* non-fatal */ }
     finally { setSigsLoading(false); }
