@@ -98,7 +98,9 @@ class SettingsService:
                 group_name,
             )
             if row:
-                return row["data"], row["data_version"]
+                # asyncpg returns JSONB columns as raw strings — parse them
+                raw = row["data"]
+                return (json.loads(raw) if isinstance(raw, str) else raw), row["data_version"]
             return None
         except Exception as exc:
             log.warning("settings_load_failed", group=group_name, error=str(exc))

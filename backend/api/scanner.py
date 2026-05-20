@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from typing import Annotated, Any
+
+from fastapi import APIRouter, Body, HTTPException, Request
 from pydantic import BaseModel
 
 from backend.core.scanner.models import ScannerMode, ScanProgress
@@ -21,7 +22,6 @@ from backend.core.scanner.orchestrator import (
     get_latest_progress,
 )
 from backend.logging.setup import get_logger
-from backend.middleware.rate_limit import limiter, SCAN_LIMIT
 
 log = get_logger(__name__)
 
@@ -47,8 +47,7 @@ class TriggerResponse(BaseModel):
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("/trigger", response_model=TriggerResponse)
-@limiter.limit(SCAN_LIMIT)
-async def trigger_scan(request: Request, body: TriggerRequest, background_tasks: BackgroundTasks):
+async def trigger_scan(request: Request, body: Annotated[TriggerRequest, Body()]):
     """
     Trigger an on-demand scan. Returns immediately with a scan_id.
     Poll GET /api/scanner/progress/{scan_id} for live updates.

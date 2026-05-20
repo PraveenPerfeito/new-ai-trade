@@ -61,10 +61,18 @@ async def validate_signal(
     t0 = time.perf_counter()
 
     try:
-        msg = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=768,
-            messages=[{"role": "user", "content": prompt}],
+        # Run the synchronous Anthropic SDK call in a thread so the event loop
+        # stays free during the network round-trip. asyncio.wait_for enforces
+        # a hard ceiling so a slow/hung API call cannot stall the whole scanner.
+        msg = await asyncio.wait_for(
+            asyncio.to_thread(
+                client.messages.create,
+                model="claude-haiku-4-5-20251001",
+                max_tokens=768,
+                messages=[{"role": "user", "content": prompt}],
+                timeout=15.0,
+            ),
+            timeout=20.0,
         )
         elapsed    = time.perf_counter() - t0
         latency_ms = int(elapsed * 1000)
