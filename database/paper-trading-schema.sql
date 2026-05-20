@@ -75,5 +75,8 @@ CREATE INDEX IF NOT EXISTS idx_paper_portfolios_created  ON paper_portfolios(cre
 ALTER TABLE paper_portfolios ENABLE ROW LEVEL SECURITY;
 ALTER TABLE paper_trades     ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "allow_all_paper_portfolios" ON paper_portfolios;
+DROP POLICY IF EXISTS "allow_all_paper_trades"     ON paper_trades;
+
 CREATE POLICY "allow_all_paper_portfolios" ON paper_portfolios FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "allow_all_paper_trades"     ON paper_trades     FOR ALL USING (true) WITH CHECK (true);

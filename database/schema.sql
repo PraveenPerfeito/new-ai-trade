@@ -76,6 +76,16 @@ ALTER TABLE coins     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE signals   ENABLE ROW LEVEL SECURITY;
 
 -- Allow all reads with the anon key (dashboard reads)
+DROP POLICY IF EXISTS "allow_read_scan_runs"    ON scan_runs;
+DROP POLICY IF EXISTS "allow_read_coins"        ON coins;
+DROP POLICY IF EXISTS "allow_read_signals"      ON signals;
+DROP POLICY IF EXISTS "allow_insert_scan_runs"  ON scan_runs;
+DROP POLICY IF EXISTS "allow_update_scan_runs"  ON scan_runs;
+DROP POLICY IF EXISTS "allow_insert_coins"      ON coins;
+DROP POLICY IF EXISTS "allow_update_coins"      ON coins;
+DROP POLICY IF EXISTS "allow_insert_signals"    ON signals;
+DROP POLICY IF EXISTS "allow_update_signals"    ON signals;
+
 CREATE POLICY "allow_read_scan_runs" ON scan_runs FOR SELECT USING (true);
 CREATE POLICY "allow_read_coins"     ON coins     FOR SELECT USING (true);
 CREATE POLICY "allow_read_signals"   ON signals   FOR SELECT USING (true);

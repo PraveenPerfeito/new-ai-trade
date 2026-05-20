@@ -63,7 +63,12 @@ CREATE INDEX IF NOT EXISTS idx_backtest_trades_outcome  ON backtest_trades(outco
 ALTER TABLE backtest_runs   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE backtest_trades ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Public read"  ON backtest_runs   FOR SELECT USING (true);
-CREATE POLICY "Service write" ON backtest_runs  FOR ALL    USING (auth.role() = 'service_role');
-CREATE POLICY "Public read"  ON backtest_trades FOR SELECT USING (true);
-CREATE POLICY "Service write" ON backtest_trades FOR ALL   USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Public read"   ON backtest_runs;
+DROP POLICY IF EXISTS "Service write" ON backtest_runs;
+DROP POLICY IF EXISTS "Public read"   ON backtest_trades;
+DROP POLICY IF EXISTS "Service write" ON backtest_trades;
+
+CREATE POLICY "Public read"   ON backtest_runs   FOR SELECT USING (true);
+CREATE POLICY "Service write" ON backtest_runs   FOR ALL    USING (auth.role() = 'service_role');
+CREATE POLICY "Public read"   ON backtest_trades FOR SELECT USING (true);
+CREATE POLICY "Service write" ON backtest_trades FOR ALL    USING (auth.role() = 'service_role');

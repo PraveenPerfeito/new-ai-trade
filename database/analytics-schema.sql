@@ -68,6 +68,10 @@ CREATE INDEX IF NOT EXISTS idx_signal_outcomes_volatility
 -- Row-level security (mirrors existing tables)
 ALTER TABLE signal_outcomes ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "allow_read_signal_outcomes"   ON signal_outcomes;
+DROP POLICY IF EXISTS "allow_insert_signal_outcomes" ON signal_outcomes;
+DROP POLICY IF EXISTS "allow_update_signal_outcomes" ON signal_outcomes;
+
 CREATE POLICY "allow_read_signal_outcomes"
   ON signal_outcomes FOR SELECT USING (true);
 
