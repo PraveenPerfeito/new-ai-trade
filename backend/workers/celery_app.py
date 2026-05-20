@@ -11,7 +11,7 @@ def create_celery() -> Celery:
 
     app = Celery("scanner")
 
-    app.conf.update(
+    conf: dict = dict(
         broker_url=settings.broker_url,
         result_backend=settings.result_backend,
 
@@ -35,6 +35,15 @@ def create_celery() -> Celery:
         # Beat schedule is defined in beat_schedule.py
         beat_schedule_filename="/tmp/celerybeat-schedule",
     )
+
+    # Upstash (and any other rediss:// provider) requires explicit SSL options.
+    # CERT_NONE skips certificate verification — correct for managed cloud Redis.
+    if settings.broker_url.startswith("rediss://"):
+        _ssl = {"ssl_cert_reqs": "CERT_NONE"}
+        conf["broker_use_ssl"]       = _ssl
+        conf["redis_backend_use_ssl"] = _ssl
+
+    app.conf.update(conf)
 
     # Auto-discover tasks in workers package
     app.autodiscover_tasks(["backend.workers"])
