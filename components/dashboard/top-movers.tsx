@@ -31,7 +31,7 @@ export function TopMovers({ coins, loading }: Props) {
     <div className="mb-4 animate-fade-in">
       <SectionLabel />
       <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-        {movers.map(coin => <MoverCard key={coin.id} coin={coin} />)}
+        {movers.map((coin, i) => <MoverCard key={coin.id} coin={coin} rank={i + 1} />)}
       </div>
     </div>
   );
@@ -46,7 +46,7 @@ function SectionLabel() {
   );
 }
 
-function MoverCard({ coin }: { coin: CoinData }) {
+function MoverCard({ coin, rank }: { coin: CoinData; rank: number }) {
   const up      = coin.priceChange24h >= 0;
   const absPct  = Math.abs(coin.priceChange24h);
   const barPct  = Math.min(absPct * 6, 100);
@@ -54,14 +54,24 @@ function MoverCard({ coin }: { coin: CoinData }) {
   return (
     <div
       className={cn(
-        'glass-card rounded-xl flex-shrink-0 px-3 py-2.5 w-[132px]',
+        'glass-card rounded-xl flex-shrink-0 px-3 py-2.5 w-[136px] relative overflow-hidden',
         'hover:scale-[1.03] transition-transform duration-150 cursor-default',
         'hover:border-white/10',
       )}
+      style={{ borderTop: `2px solid ${up ? '#00d08428' : '#ff3b5c28'}` }}
     >
-      {/* Symbol + icon */}
-      <div className="flex items-center justify-between mb-0.5">
-        <span className="font-mono font-bold text-terminal-text text-xs">{coin.symbol}</span>
+      {/* Top glow line */}
+      <div
+        className="absolute top-0 left-0 right-0 h-px"
+        style={{ background: `linear-gradient(90deg, transparent, ${up ? '#00d084' : '#ff3b5c'}60, transparent)` }}
+      />
+
+      {/* Rank + symbol + icon */}
+      <div className="flex items-center justify-between mb-0.5 gap-1">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[9px] font-mono text-terminal-dim/60 flex-shrink-0 w-4">{rank}</span>
+          <span className="font-mono font-bold text-terminal-text text-xs truncate">{coin.symbol}</span>
+        </div>
         {up
           ? <TrendingUp  size={11} className="text-bull-text flex-shrink-0" />
           : <TrendingDown size={11} className="text-bear-text flex-shrink-0" />
@@ -80,10 +90,7 @@ function MoverCard({ coin }: { coin: CoinData }) {
       <div className="w-full h-0.5 bg-terminal-surface rounded-full mt-1.5 overflow-hidden">
         <div
           className="h-full rounded-full transition-all duration-700"
-          style={{
-            width: `${barPct}%`,
-            backgroundColor: up ? '#00d084' : '#ff3b5c',
-          }}
+          style={{ width: `${barPct}%`, backgroundColor: up ? '#00d084' : '#ff3b5c' }}
         />
       </div>
     </div>

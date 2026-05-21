@@ -326,6 +326,20 @@ function SignalCard({
           <span className="text-[9px] text-terminal-dim flex-shrink-0">{timeAgo(signal.createdAt)}</span>
         </div>
 
+        {/* Strengths */}
+        {signal.strengths && signal.strengths.length > 0 && (
+          <div className="flex gap-1 flex-wrap mt-1.5">
+            {signal.strengths.slice(0, 2).map((s, i) => (
+              <span
+                key={i}
+                className="text-[8px] font-mono px-1.5 py-0.5 rounded border bg-bull-muted/30 text-bull-text/75 border-bull-DEFAULT/15 truncate max-w-[160px]"
+              >
+                ✓ {s}
+              </span>
+            ))}
+          </div>
+        )}
+
         {/* Risk warnings */}
         {signal.riskWarnings && signal.riskWarnings.length > 0 && (
           <div className="mt-1.5 flex items-start gap-1.5">

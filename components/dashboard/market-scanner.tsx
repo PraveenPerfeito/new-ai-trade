@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { TradingSignal, CoinData, ScannerMode, DashboardStats } from '@/types';
 import { SchedulerStatus } from '@/lib/scheduler';
 import { formatPrice, formatPct, cn } from '@/lib/utils';
+import { TrendingUp, TrendingDown } from 'lucide-react';
 import { StatsBar }        from './stats-bar';
 import { ScannerControls } from './scanner-controls';
 import { SignalsFeed }     from './signals-feed';
@@ -242,6 +243,7 @@ export function MarketScanner() {
 
         <div className="flex-shrink-0"><StatsBar stats={stats} /></div>
         {coins.length > 0 && <div className="flex-shrink-0"><MarketRegimeBanner coins={coins} signals={signals} /></div>}
+        <ActiveOpportunitySummary signals={signals} />
         <div className="flex-shrink-0"><MarketWidgets coins={coins} loading={coinsLoading} /></div>
         <div className="flex-shrink-0"><TopMovers coins={coins} loading={coinsLoading} /></div>
 
@@ -339,6 +341,58 @@ function LiveDot({ isScanning, autoOn }: { isScanning: boolean; autoOn: boolean 
       <span className={`text-[10px] font-mono ${isScanning ? 'text-signal-high' : autoOn ? 'text-bull-text' : 'text-terminal-muted'}`}>
         {isScanning ? 'SCANNING' : autoOn ? 'AUTO' : 'IDLE'}
       </span>
+    </div>
+  );
+}
+
+// ─── Active Opportunity Summary ──────────────────────────────────────────────
+
+function ActiveOpportunitySummary({ signals }: { signals: TradingSignal[] }) {
+  const qual = signals.filter(s => s.confidence >= 80);
+  if (qual.length === 0) return null;
+
+  const top      = [...qual].sort((a, b) => b.confidence - a.confidence)[0];
+  const gradeA   = qual.filter(s => s.riskGrade === 'A').length;
+  const aiCount  = qual.filter(s => s.aiValidated).length;
+  const futCount = qual.filter(s => s.futuresData != null).length;
+  const isBuy    = top.type === 'BUY';
+
+  return (
+    <div className="flex items-center gap-2 px-4 py-2 mb-3 glass-surface rounded-xl border border-terminal-border/30 flex-shrink-0 overflow-x-auto no-scrollbar">
+      <span className="text-[10px] font-mono text-terminal-dim shrink-0">Active ·</span>
+
+      {/* Top signal chip */}
+      <span className={cn(
+        'inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border shrink-0',
+        isBuy
+          ? 'bg-bull-muted/50 text-bull-text border-bull-DEFAULT/25'
+          : 'bg-bear-muted/50 text-bear-text border-bear-DEFAULT/25',
+      )}>
+        {isBuy ? <TrendingUp size={8} /> : <TrendingDown size={8} />}
+        {top.symbol} {top.confidence}%
+      </span>
+
+      {gradeA > 0 && (
+        <span className="inline-flex items-center gap-1 text-[10px] font-mono text-terminal-text glass-surface border border-terminal-border/50 px-2 py-0.5 rounded-md shrink-0">
+          ■ {gradeA} Grade-A
+        </span>
+      )}
+
+      {aiCount > 0 && (
+        <span className="inline-flex items-center gap-1 text-[10px] font-mono text-purple-400 border border-purple-500/20 glass-surface px-2 py-0.5 rounded-md shrink-0">
+          ◎ {aiCount} AI ✓
+        </span>
+      )}
+
+      {futCount > 0 && (
+        <span className="inline-flex items-center gap-1 text-[10px] font-mono text-signal-medium border border-terminal-border/40 glass-surface px-2 py-0.5 rounded-md shrink-0">
+          ⚡ {futCount} Futures
+        </span>
+      )}
+
+      <div className="flex-1 min-w-[8px]" />
+
+      <span className="text-[10px] font-mono text-terminal-dim shrink-0">{qual.length} signals ≥80%</span>
     </div>
   );
 }
