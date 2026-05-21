@@ -54,12 +54,12 @@ export function AdminSidebar() {
       {/* Brand */}
       <div className="px-5 pt-5 pb-4 border-b border-terminal-border">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-bull-default/30 to-emerald-900/20 border border-bull-default/30 flex items-center justify-center shrink-0">
-            <span className="text-bull-default text-[11px] font-bold font-mono">SC</span>
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-bull-default/20 to-emerald-900/20 border border-bull-default/25 flex items-center justify-center shrink-0">
+            <span className="text-bull-default text-[16px] font-bold font-mono leading-none">◈</span>
           </div>
           <div className="min-w-0">
-            <p className="text-terminal-text text-sm font-semibold leading-tight">Admin</p>
-            <p className="text-terminal-muted/60 text-[10px] uppercase tracking-[0.15em] mt-0.5">Command Center</p>
+            <p className="text-terminal-text text-sm font-semibold leading-tight tracking-wide">Admin</p>
+            <p className="text-terminal-muted/50 text-[10px] uppercase tracking-[0.18em] mt-0.5">Command Center</p>
           </div>
         </div>
       </div>
@@ -80,16 +80,20 @@ export function AdminSidebar() {
                   key={href}
                   href={href}
                   className={[
-                    'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all duration-150 mb-0.5',
+                    'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-all duration-150 mb-0.5 relative overflow-hidden',
                     active
-                      ? 'bg-bull-default/10 text-bull-default border border-bull-default/20'
+                      ? 'bg-bull-default/10 text-bull-default border border-bull-default/15'
                       : 'text-terminal-muted hover:text-terminal-text hover:bg-terminal-bright/40 border border-transparent',
                   ].join(' ')}
                 >
+                  {/* Left glow stripe on active */}
+                  {active && (
+                    <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-bull-default/90" />
+                  )}
                   <Icon size={14} strokeWidth={active ? 2.5 : 2} />
                   <span className="truncate">{label}</span>
                   {active && (
-                    <span className="ml-auto w-1.5 h-1.5 rounded-full bg-bull-default/80 animate-pulse-slow shrink-0" />
+                    <span className="ml-auto w-1.5 h-1.5 rounded-full bg-bull-default/70 animate-pulse-slow shrink-0" />
                   )}
                 </Link>
               )
@@ -99,7 +103,11 @@ export function AdminSidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-5 py-3 border-t border-terminal-border">
+      <div className="px-5 py-3 border-t border-terminal-border flex items-center gap-2">
+        <span className="relative flex h-1.5 w-1.5 shrink-0">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-bull-default opacity-40" />
+          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-bull-default/70" />
+        </span>
         <p className="text-terminal-muted/40 text-xs font-mono">Phase 5 · v1.0</p>
       </div>
     </aside>

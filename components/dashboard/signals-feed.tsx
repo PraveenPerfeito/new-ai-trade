@@ -12,6 +12,7 @@ interface Props {
 }
 
 export function SignalsFeed({ signals, loading, onEnterTrade }: Props) {
+  const [compact, setCompact] = useState(false);
   const filtered = signals.filter(s => s.confidence >= 80);
 
   return (
@@ -27,12 +28,33 @@ export function SignalsFeed({ signals, loading, onEnterTrade }: Props) {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-bull-DEFAULT opacity-50" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-bull-DEFAULT" />
-          </span>
-          <span className="text-[10px] text-terminal-dim">conf ≥ 80%</span>
+        <div className="flex items-center gap-2.5">
+          {/* Compact / Detailed toggle */}
+          <div className="flex items-center gap-0.5 glass-surface rounded-lg p-0.5 border border-terminal-border/40">
+            <button
+              onClick={() => setCompact(false)}
+              className={`px-2 py-0.5 rounded text-[9px] font-semibold transition-all ${
+                !compact ? 'bg-terminal-surface text-terminal-text' : 'text-terminal-muted hover:text-terminal-text'
+              }`}
+            >
+              Detail
+            </button>
+            <button
+              onClick={() => setCompact(true)}
+              className={`px-2 py-0.5 rounded text-[9px] font-semibold transition-all ${
+                compact ? 'bg-terminal-surface text-terminal-text' : 'text-terminal-muted hover:text-terminal-text'
+              }`}
+            >
+              Compact
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-bull-DEFAULT opacity-50" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-bull-DEFAULT" />
+            </span>
+            <span className="text-[10px] text-terminal-dim">conf ≥ 80%</span>
+          </div>
         </div>
       </div>
 
@@ -59,14 +81,24 @@ export function SignalsFeed({ signals, loading, onEnterTrade }: Props) {
           </div>
         )}
 
-        {filtered.map((signal, idx) => (
-          <SignalCard
-            key={signal.id ?? `${signal.symbol}-${signal.timeframe}-${String(signal.createdAt)}`}
-            signal={signal}
-            index={idx}
-            onEnterTrade={onEnterTrade}
-          />
-        ))}
+        {compact
+          ? filtered.map((signal, idx) => (
+              <CompactSignalRow
+                key={signal.id ?? `${signal.symbol}-${signal.timeframe}-${String(signal.createdAt)}`}
+                signal={signal}
+                index={idx}
+                onEnterTrade={onEnterTrade}
+              />
+            ))
+          : filtered.map((signal, idx) => (
+              <SignalCard
+                key={signal.id ?? `${signal.symbol}-${signal.timeframe}-${String(signal.createdAt)}`}
+                signal={signal}
+                index={idx}
+                onEnterTrade={onEnterTrade}
+              />
+            ))
+        }
       </div>
     </div>
   );
@@ -356,6 +388,137 @@ function SignalCard({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Compact row ─────────────────────────────────────────────────────────────
+
+function CompactSignalRow({
+  signal, index, onEnterTrade,
+}: {
+  signal: TradingSignal;
+  index: number;
+  onEnterTrade?: (signal: TradingSignal) => Promise<{ success: boolean; error?: string }>;
+}) {
+  const [trading, setTrading]       = useState(false);
+  const [tradeState, setTradeState] = useState<'idle' | 'ok' | 'dup' | 'err'>('idle');
+
+  const handleTrade = async () => {
+    if (!onEnterTrade || trading) return;
+    setTrading(true);
+    setTradeState('idle');
+    try {
+      const result = await onEnterTrade(signal);
+      if (result.success) {
+        setTradeState('ok');
+        setTimeout(() => setTradeState('idle'), 3000);
+      } else {
+        const isDup = result.error?.toLowerCase().includes('already have') || result.error?.toLowerCase().includes('duplicate');
+        setTradeState(isDup ? 'dup' : 'err');
+        setTimeout(() => setTradeState('idle'), 4000);
+      }
+    } finally {
+      setTrading(false);
+    }
+  };
+
+  const isBuy = signal.type === 'BUY';
+  const confColor = signal.confidence >= 90 ? '#00d084'
+                  : signal.confidence >= 85 ? '#f59e0b'
+                  : '#3b82f6';
+  const confGradient = signal.confidence >= 90
+    ? 'linear-gradient(90deg,#00d084,#4ade80)'
+    : signal.confidence >= 85
+    ? 'linear-gradient(90deg,#f59e0b,#fbbf24)'
+    : 'linear-gradient(90deg,#3b82f6,#60a5fa)';
+
+  return (
+    <div
+      className="px-3 py-2 flex items-center gap-2.5 hover:bg-terminal-surface/30 transition-colors relative overflow-hidden group signal-card-enter"
+      style={{ animationDelay: `${Math.min(index * 20, 200)}ms` }}
+    >
+      {/* Left accent */}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-0.5 opacity-60 group-hover:opacity-100 transition-opacity"
+        style={{ backgroundColor: isBuy ? '#00d084' : '#ff3b5c' }}
+      />
+
+      {/* Direction badge */}
+      <span className={cn(
+        'inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0',
+        isBuy
+          ? 'bg-bull-muted text-bull-text border border-bull-DEFAULT/30'
+          : 'bg-bear-muted text-bear-text border border-bear-DEFAULT/30',
+      )}>
+        {isBuy ? <TrendingUp size={8} /> : <TrendingDown size={8} />}
+        {isBuy ? 'L' : 'S'}
+      </span>
+
+      {/* Symbol */}
+      <span className="font-mono font-bold text-[11px] text-terminal-text w-[72px] flex-shrink-0 truncate pl-1">
+        {signal.symbol}
+      </span>
+
+      {/* Timeframe */}
+      <span className="text-[9px] text-terminal-dim glass-surface border border-terminal-border/40 rounded px-1 py-0.5 flex-shrink-0 hidden sm:inline">
+        {signal.timeframe.toUpperCase()}
+      </span>
+
+      {/* Confidence bar + value */}
+      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+        <div className="flex-1 h-1 bg-terminal-surface rounded-full overflow-hidden min-w-0 max-w-[80px]">
+          <div
+            className="h-full rounded-full"
+            style={{ width: `${signal.confidence}%`, background: confGradient }}
+          />
+        </div>
+        <span className="font-mono text-[10px] font-bold flex-shrink-0" style={{ color: confColor }}>
+          {signal.confidence}%
+        </span>
+      </div>
+
+      {/* R:R */}
+      <span className="text-[9px] font-mono text-signal-medium flex-shrink-0 hidden sm:inline">
+        1:{signal.rrRatio.toFixed(1)}
+      </span>
+
+      {/* Grade */}
+      {signal.riskGrade != null && (
+        <RiskGradeBadge grade={signal.riskGrade} />
+      )}
+
+      {/* AI validated dot */}
+      {signal.aiValidated && (
+        <Brain size={9} className="text-purple-400 flex-shrink-0 hidden md:block" />
+      )}
+
+      {/* Time */}
+      <span className="text-[9px] text-terminal-dim flex-shrink-0 w-14 text-right hidden lg:block">
+        {timeAgo(signal.createdAt)}
+      </span>
+
+      {/* Trade button — visible on hover */}
+      {onEnterTrade && (
+        <button
+          onClick={handleTrade}
+          disabled={trading || tradeState === 'ok' || tradeState === 'dup'}
+          className={cn(
+            'hidden group-hover:inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-semibold border transition-all flex-shrink-0',
+            tradeState === 'ok'  && 'bg-bull-muted text-bull-text border-bull-DEFAULT/30',
+            tradeState === 'dup' && 'bg-yellow-900/20 text-yellow-400 border-yellow-500/30',
+            tradeState === 'err' && 'bg-bear-muted text-bear-text border-bear-DEFAULT/30',
+            tradeState === 'idle' && 'glass-surface text-terminal-muted border-terminal-border/40 hover:text-terminal-text hover:border-bull-DEFAULT/40',
+          )}
+        >
+          {trading
+            ? <Loader2 size={7} className="animate-spin" />
+            : tradeState === 'ok'  ? '✓'
+            : tradeState === 'dup' ? '⚠'
+            : tradeState === 'err' ? '✕'
+            : '◈'}
+        </button>
+      )}
     </div>
   );
 }

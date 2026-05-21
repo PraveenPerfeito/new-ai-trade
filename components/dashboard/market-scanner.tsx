@@ -241,6 +241,7 @@ export function MarketScanner() {
         )}
 
         <div className="flex-shrink-0"><StatsBar stats={stats} /></div>
+        {coins.length > 0 && <div className="flex-shrink-0"><MarketRegimeBanner coins={coins} signals={signals} /></div>}
         <div className="flex-shrink-0"><MarketWidgets coins={coins} loading={coinsLoading} /></div>
         <div className="flex-shrink-0"><TopMovers coins={coins} loading={coinsLoading} /></div>
 
@@ -338,6 +339,74 @@ function LiveDot({ isScanning, autoOn }: { isScanning: boolean; autoOn: boolean 
       <span className={`text-[10px] font-mono ${isScanning ? 'text-signal-high' : autoOn ? 'text-bull-text' : 'text-terminal-muted'}`}>
         {isScanning ? 'SCANNING' : autoOn ? 'AUTO' : 'IDLE'}
       </span>
+    </div>
+  );
+}
+
+// ─── Market Regime Banner ─────────────────────────────────────────────────────
+
+function MarketRegimeBanner({ coins, signals }: { coins: CoinData[]; signals: TradingSignal[] }) {
+  const upCount  = coins.filter(c => c.priceChange24h > 0).length;
+  const breadth  = upCount / coins.length;
+  const buySigs  = signals.filter(s => s.type === 'BUY'  && s.confidence >= 75).length;
+  const sellSigs = signals.filter(s => s.type === 'SELL' && s.confidence >= 75).length;
+  const btc      = coins.find(c => c.symbol === 'BTC');
+  const btcChg   = btc?.priceChange24h ?? 0;
+
+  let label: string, color: string, desc: string;
+  if      (breadth >= 0.72) { label = 'BULL MARKET';   color = '#00d084'; desc = `${Math.round(breadth * 100)}% advancing`; }
+  else if (breadth >= 0.58) { label = 'BULLISH BIAS';  color = '#4ade80'; desc = `${Math.round(breadth * 100)}% advancing`; }
+  else if (breadth >= 0.42) { label = 'NEUTRAL';       color = '#f59e0b'; desc = 'No clear directional bias'; }
+  else if (breadth >= 0.28) { label = 'BEARISH BIAS';  color = '#f97316'; desc = `${Math.round((1 - breadth) * 100)}% declining`; }
+  else                       { label = 'BEAR MARKET';   color = '#ff3b5c'; desc = `${Math.round((1 - breadth) * 100)}% declining`; }
+
+  return (
+    <div
+      className="flex items-center gap-3 px-4 py-2 mb-3 rounded-xl border text-[10px] font-mono flex-wrap"
+      style={{ borderColor: color + '22', backgroundColor: color + '07' }}
+    >
+      {/* Regime */}
+      <div className="flex items-center gap-1.5 shrink-0">
+        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+        <span className="font-bold uppercase tracking-wider" style={{ color }}>
+          {label}
+        </span>
+        <span className="text-terminal-dim ml-1">{desc}</span>
+      </div>
+
+      <div className="h-3 w-px bg-terminal-border/35" />
+
+      {/* BTC */}
+      <div className="flex items-center gap-1 shrink-0">
+        <span className="text-terminal-dim">BTC</span>
+        <span className={`font-bold ${btcChg >= 0 ? 'text-bull-text' : 'text-bear-text'}`}>
+          {btcChg >= 0 ? '▲' : '▼'} {Math.abs(btcChg).toFixed(2)}%
+        </span>
+      </div>
+
+      <div className="h-3 w-px bg-terminal-border/35" />
+
+      {/* Signal direction */}
+      <div className="flex items-center gap-2.5 shrink-0">
+        <span className="text-bull-text">▲ {buySigs} BUY</span>
+        <span className="text-bear-text">▼ {sellSigs} SELL</span>
+      </div>
+
+      <div className="flex-1" />
+
+      {/* Mini breadth bars (desktop) */}
+      <div className="hidden sm:flex items-end gap-0.5 h-4">
+        {Array.from({ length: 12 }, (_, i) => {
+          const idx = Math.floor((i / 12) * coins.length);
+          const c   = coins[idx];
+          const up  = (c?.priceChange24h ?? 0) >= 0;
+          const h   = Math.min(Math.max(Math.abs(c?.priceChange24h ?? 0) * 1.5 + 2, 2), 14);
+          return (
+            <div key={i} className="w-1 rounded-sm flex-shrink-0"
+              style={{ height: h, backgroundColor: (up ? '#00d084' : '#ff3b5c') + '70' }} />
+          );
+        })}
+      </div>
     </div>
   );
 }

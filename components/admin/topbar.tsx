@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback } from 'react'
-import { AlertOctagon, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { AlertOctagon, AlertTriangle, CheckCircle, RefreshCw, Clock } from 'lucide-react'
 import { adminApi, BurninStatus } from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
 import { SessionBadge } from './session-badge'
@@ -15,6 +15,14 @@ export function AdminTopbar({ email, lastSignIn }: Props) {
   const fetcher = useCallback(() => adminApi.burnin.status(), [])
   const { data, loading, error, lastUpdated, refresh } =
     useAutoRefresh<BurninStatus>(fetcher, 30_000)
+
+  const [utcTime, setUtcTime] = useState('')
+  useEffect(() => {
+    const fmt = () => new Date().toLocaleTimeString('en-US', { timeZone: 'UTC', hour12: false })
+    setUtcTime(fmt())
+    const id = setInterval(() => setUtcTime(fmt()), 1000)
+    return () => clearInterval(id)
+  }, [])
 
   const critical = data?.anomaly_summary?.critical ?? 0
   const warnings = data?.anomaly_summary?.warning  ?? 0
@@ -76,9 +84,17 @@ export function AdminTopbar({ email, lastSignIn }: Props) {
 
       {/* Last refresh timestamp */}
       {lastUpdated && (
-        <span className="text-terminal-muted/40 hidden sm:block">
-          {lastUpdated.toLocaleTimeString()}
+        <span className="text-terminal-muted/30 hidden md:block text-[10px]">
+          updated {lastUpdated.toLocaleTimeString()}
         </span>
+      )}
+
+      {/* UTC clock */}
+      {utcTime && (
+        <div className="hidden sm:flex items-center gap-1.5 text-terminal-muted/50">
+          <Clock size={11} />
+          <span className="tabular-nums">{utcTime} UTC</span>
+        </div>
       )}
 
       {/* Refresh */}
