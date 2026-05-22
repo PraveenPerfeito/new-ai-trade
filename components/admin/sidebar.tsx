@@ -3,46 +3,46 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  LayoutDashboard, Activity, Zap, BarChart3, Brain,
-  TrendingUp, AlertTriangle, Server, Target, Settings2, ScanLine, Database,
+  LayoutDashboard, Activity, ScanLine, Zap, Brain, TrendingUp,
+  Database, Server, AlertTriangle, BarChart3, Target, Settings2,
 } from 'lucide-react'
 
 const SECTIONS = [
   {
-    label: null,
+    label: 'OVERVIEW',
     items: [
-      { href: '/admin/overview',      icon: LayoutDashboard, label: 'Overview' },
+      { href: '/admin/overview',      icon: LayoutDashboard, label: 'Command Overview' },
+      { href: '/admin/operations',    icon: Activity,        label: 'Live Market'       },
+    ],
+  },
+  {
+    label: 'OPERATIONS',
+    items: [
+      { href: '/admin/scanner',       icon: ScanLine,        label: 'Scanner'           },
+      { href: '/admin/signals',       icon: Zap,             label: 'Signals'           },
+      { href: '/admin/ai',            icon: Brain,           label: 'Intelligence'      },
+      { href: '/admin/paper-trading', icon: TrendingUp,      label: 'Paper Trading'     },
     ],
   },
   {
     label: 'INFRASTRUCTURE',
     items: [
-      { href: '/admin/operations',    icon: Activity,        label: 'Operations' },
-      { href: '/admin/system',        icon: Server,          label: 'System Health' },
-      { href: '/admin/providers',     icon: Database,        label: 'Data Providers' },
+      { href: '/admin/providers',     icon: Database,        label: 'Providers'         },
+      { href: '/admin/system',        icon: Server,          label: 'System Health'     },
+      { href: '/admin/anomalies',     icon: AlertTriangle,   label: 'Diagnostics'       },
     ],
   },
   {
-    label: 'TRADING',
+    label: 'ANALYTICS',
     items: [
-      { href: '/admin/scanner',       icon: ScanLine,        label: 'Scanner' },
-      { href: '/admin/signals',       icon: Zap,             label: 'Signals' },
-      { href: '/admin/analytics',     icon: BarChart3,       label: 'Analytics' },
-      { href: '/admin/ai',            icon: Brain,           label: 'AI Intelligence' },
-      { href: '/admin/paper-trading', icon: TrendingUp,      label: 'Paper Trading' },
-    ],
-  },
-  {
-    label: 'MONITORING',
-    items: [
-      { href: '/admin/anomalies',     icon: AlertTriangle,   label: 'Anomalies' },
-      { href: '/admin/readiness',     icon: Target,          label: 'Readiness' },
+      { href: '/admin/analytics',     icon: BarChart3,       label: 'Edge Analytics'    },
+      { href: '/admin/readiness',     icon: Target,          label: 'Regime Analytics'  },
     ],
   },
   {
     label: 'SYSTEM',
     items: [
-      { href: '/admin/settings',      icon: Settings2,       label: 'Settings' },
+      { href: '/admin/settings',      icon: Settings2,       label: 'Settings'          },
     ],
   },
 ]
@@ -69,11 +69,9 @@ export function AdminSidebar() {
       <nav className="flex-1 overflow-y-auto py-3 px-2.5">
         {SECTIONS.map((section, si) => (
           <div key={si} className={si > 0 ? 'mt-1' : ''}>
-            {section.label && (
-              <p className="px-3 pt-3 pb-1.5 text-[10px] uppercase tracking-widest text-terminal-muted/50 font-semibold select-none">
-                {section.label}
-              </p>
-            )}
+            <p className="px-3 pt-3 pb-1.5 text-[10px] uppercase tracking-widest text-terminal-muted/50 font-semibold select-none">
+              {section.label}
+            </p>
             {section.items.map(({ href, icon: Icon, label }) => {
               const active = path === href || path.startsWith(href + '/')
               return (
@@ -87,7 +85,6 @@ export function AdminSidebar() {
                       : 'text-terminal-muted hover:text-terminal-text hover:bg-terminal-bright/40 border border-transparent',
                   ].join(' ')}
                 >
-                  {/* Left glow stripe on active */}
                   {active && (
                     <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-bull-default/90" />
                   )}
@@ -109,7 +106,7 @@ export function AdminSidebar() {
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-bull-default opacity-40" />
           <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-bull-default/70" />
         </span>
-        <p className="text-terminal-muted/40 text-xs font-mono">Phase 6 · v1.0</p>
+        <p className="text-terminal-muted/40 text-xs font-mono">Phase 6.8 · v1.0</p>
       </div>
     </aside>
   )

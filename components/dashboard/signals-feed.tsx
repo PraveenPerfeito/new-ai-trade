@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { TradingSignal, RiskGrade, SignalState, McapTier } from '@/types';
+import { useState, useEffect } from 'react';
+import { TradingSignal, RiskGrade, SignalState, McapTier, RejectionStats } from '@/types';
 import { formatPrice, timeAgo, cn } from '@/lib/utils';
 import { computeSignalFreshness, formatAge } from '@/lib/signal-aging';
 import { TIER_COLORS } from '@/lib/mcap-tiers';
@@ -15,7 +15,18 @@ interface Props {
 
 export function SignalsFeed({ signals, loading, onEnterTrade }: Props) {
   const [compact, setCompact] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<RejectionStats | null>(null);
   const filtered = signals.filter(s => s.confidence >= 80);
+
+  // Self-fetch rejection diagnostics when feed is empty
+  useEffect(() => {
+    if (loading || filtered.length > 0) return;
+    fetch('/api/scanner/diagnostics', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => { if (d.success) setDiagnostics(d.stats as RejectionStats); })
+      .catch(() => null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, filtered.length]);
 
   return (
     <div className="glass-card rounded-xl flex flex-col h-full min-h-0">
@@ -72,14 +83,82 @@ export function SignalsFeed({ signals, loading, onEnterTrade }: Props) {
           </div>
         )}
 
-        {/* Empty state */}
+        {/* Live telemetry empty state */}
         {!loading && filtered.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 gap-3">
-            <div className="w-12 h-12 rounded-full glass-surface border border-terminal-border/50 flex items-center justify-center">
-              <TrendingUp size={20} className="text-terminal-muted" />
-            </div>
-            <p className="text-terminal-muted text-sm">No signals yet</p>
-            <p className="text-terminal-dim text-xs">Run a scan to detect setups</p>
+          <div className="p-4 space-y-4">
+            {/* No scan data yet */}
+            {(!diagnostics || diagnostics.totalScanned === 0) && (
+              <div className="flex flex-col items-center justify-center py-10 gap-2">
+                <Activity size={18} className="text-terminal-muted" />
+                <p className="text-terminal-muted text-xs">No scan data — run a scan to start</p>
+              </div>
+            )}
+
+            {/* Scan ran but confidence filter hid results */}
+            {diagnostics && diagnostics.totalScanned > 0 && (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono text-terminal-dim uppercase tracking-wider">Last Scan Telemetry</span>
+                  <span className="text-[10px] font-mono text-terminal-muted/50">conf ≥ 80% filter active</span>
+                </div>
+
+                {/* Flow stats */}
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: 'Scanned',  v: diagnostics.totalScanned,  color: 'text-terminal-text' },
+                    { label: 'Accepted', v: diagnostics.totalAccepted,  color: 'text-bull-default' },
+                    { label: 'Rejected', v: diagnostics.totalRejected,  color: 'text-terminal-muted' },
+                  ].map(({ label, v, color }) => (
+                    <div key={label} className="glass-surface rounded-lg px-3 py-2 border border-terminal-border/30">
+                      <p className="text-[9px] text-terminal-dim uppercase tracking-wider mb-0.5">{label}</p>
+                      <p className={`font-mono font-bold text-sm ${color}`}>{v}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Top rejection reasons */}
+                {diagnostics.topReasons.length > 0 && (
+                  <div>
+                    <p className="text-[9px] font-mono text-terminal-dim uppercase tracking-wider mb-2">Rejection Breakdown</p>
+                    <div className="space-y-1.5">
+                      {diagnostics.topReasons.slice(0, 5).map(r => (
+                        <div key={r.stage} className="flex items-center gap-2">
+                          <span className="text-[9px] font-mono text-terminal-muted/60 w-28 truncate shrink-0">{r.stage.replace(/_/g, ' ')}</span>
+                          <div className="flex-1 h-1 bg-terminal-bright rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-terminal-muted/40 rounded-full"
+                              style={{ width: `${r.pct}%` }}
+                            />
+                          </div>
+                          <span className="text-[9px] font-mono text-terminal-muted w-6 text-right shrink-0">{r.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Near misses */}
+                {diagnostics.nearMisses.length > 0 && (
+                  <div className="glass-surface rounded-lg px-3 py-2 border border-signal-medium/15">
+                    <p className="text-[9px] font-mono text-signal-medium uppercase tracking-wider mb-1">
+                      {diagnostics.nearMisses.length} Near Miss{diagnostics.nearMisses.length !== 1 ? 'es' : ''} ·
+                      <span className="text-terminal-muted ml-1 normal-case font-normal">almost passed all gates</span>
+                    </p>
+                    <div className="space-y-0.5">
+                      {diagnostics.nearMisses.slice(0, 3).map((m, i) => (
+                        <p key={i} className="text-[9px] font-mono text-terminal-muted/70">
+                          <span className="text-terminal-text">{m.symbol}</span>
+                          {' · '}{m.stage.replace(/_/g, ' ')}
+                          {m.actual != null && m.threshold != null && (
+                            <span className="text-terminal-muted/50"> ({m.actual.toFixed(1)} vs {m.threshold})</span>
+                          )}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 

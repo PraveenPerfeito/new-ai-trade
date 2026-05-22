@@ -671,6 +671,23 @@ export interface QuotaStatus {
   };
 }
 
+// ─── Phase 6.8 — Unified Signal Lifecycle ────────────────────────────────────
+
+/**
+ * Canonical lifecycle stages every signal moves through.
+ * All pages derive signal state from this single model.
+ */
+export type SignalLifecycleStage =
+  | 'VALIDATED'      // passed all pipeline gates, saved to DB
+  | 'AI_APPROVED'    // Claude AI validated (aiValidated = true)
+  | 'TELEGRAM_SENT'  // delivered to Telegram channel
+  | 'ACTIVE'         // sent + still within timeframe's useful window
+  | 'STALE'          // sent but aged past the useful window
+  | 'TP_HIT'         // target price reached
+  | 'SL_HIT'         // stop-loss triggered
+  | 'CLOSED'         // timed out without hitting TP or SL
+  | 'ANALYZED';      // attribution data recorded
+
 // ─── Phase 6.7 — Quant Outcome Attribution ───────────────────────────────────
 
 /** Flattened JOIN of signal_outcomes + signals tactical fields */
