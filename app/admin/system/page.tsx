@@ -92,6 +92,7 @@ export default function SystemPage() {
             sub="scanner runs"
             accent="neutral"
             icon={<Activity size={13} />}
+            loading={!scans && !hl}
           />
           <MetricCard
             label="Scan Failures"
@@ -99,6 +100,7 @@ export default function SystemPage() {
             sub={scans ? `${Math.round(scans.total_scans * scans.failure_rate)} failed` : ''}
             accent={scans && scans.failure_rate >= 0.15 ? 'warning' : 'bull'}
             icon={<Server size={13} />}
+            loading={!scans}
           />
           <MetricCard
             label="AI Calls"
@@ -106,6 +108,7 @@ export default function SystemPage() {
             sub="Claude API"
             accent="info"
             icon={<Cpu size={13} />}
+            loading={!ai}
           />
           <MetricCard
             label="AI Failures"
@@ -113,6 +116,7 @@ export default function SystemPage() {
             sub="API errors"
             accent={ai && ai.error_rate >= 0.08 ? 'warning' : 'bull'}
             icon={<Database size={13} />}
+            loading={!ai}
           />
         </div>
       </div>

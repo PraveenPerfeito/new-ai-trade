@@ -3,6 +3,7 @@
 import { useCallback } from 'react'
 import { adminApi, EdgeReport } from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
+import { formatTs } from '@/lib/utils'
 
 function StatPair({ label, value, accent = '' }: { label: string; value: string; accent?: string }) {
   return (
@@ -173,7 +174,7 @@ export default function AnalyticsPage() {
 
       {edge && (
         <p className="text-terminal-muted/40 text-xs font-mono">
-          Generated {new Date(edge.generated_at).toLocaleString()} · {edge.window_hours}h window
+          Generated {formatTs(edge.generated_at)} · {edge.window_hours}h window
         </p>
       )}
     </div>

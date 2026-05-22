@@ -5,6 +5,7 @@ import { RefreshCw } from 'lucide-react'
 import { adminApi, AnomalyRecord, BurninStatus } from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
 import { AnomalyBadge } from '@/components/admin/anomaly-badge'
+import { formatTs } from '@/lib/utils'
 
 function AnomalyRow({ a }: { a: AnomalyRecord }) {
   return (
@@ -23,7 +24,7 @@ function AnomalyRow({ a }: { a: AnomalyRecord }) {
               </span>
             )}
             <span className="text-terminal-muted/40 text-xs font-mono ml-auto">
-              {new Date(a.detected_at).toLocaleString()}
+              {formatTs(a.detected_at)}
             </span>
           </div>
         </div>
@@ -51,7 +52,7 @@ export default function AnomaliesPage() {
         <div>
           <h1 className="text-terminal-text text-xl font-semibold">Anomaly Detection</h1>
           <p className="text-terminal-muted text-sm mt-1">
-            {lastCheck ? `Last check: ${new Date(lastCheck).toLocaleString()}` : 'Threshold-based anomaly monitoring'}
+            {lastCheck ? `Last check: ${formatTs(lastCheck)}` : 'Threshold-based anomaly monitoring'}
           </p>
         </div>
         <button

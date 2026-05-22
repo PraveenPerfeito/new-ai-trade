@@ -88,16 +88,26 @@ export default function OperationsPage() {
       </div>
 
       {/* Per-mode breakdown */}
-      {scans?.by_mode && Object.keys(scans.by_mode).length > 0 && (
-        <div>
-          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Scan Mode Breakdown</p>
-          <div className="glass-card rounded-lg px-5 py-3">
-            {Object.entries(scans.by_mode).map(([mode, data]) => (
+      <div>
+        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Scan Mode Breakdown</p>
+        <div className="glass-card rounded-lg px-5 py-3">
+          {sl ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4 py-2.5 border-b border-terminal-border/40 last:border-0">
+                <div className="skeleton h-2.5 w-24 rounded" />
+                <div className="skeleton flex-1 h-1.5 rounded-full" />
+                <div className="skeleton h-2.5 w-10 rounded" />
+              </div>
+            ))
+          ) : scans?.by_mode && Object.keys(scans.by_mode).length > 0 ? (
+            Object.entries(scans.by_mode).map(([mode, data]) => (
               <ModeRow key={mode} mode={mode} data={data} />
-            ))}
-          </div>
+            ))
+          ) : (
+            <p className="text-terminal-muted text-sm py-3 text-center">No scan mode data yet</p>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Infrastructure health */}
       <div>

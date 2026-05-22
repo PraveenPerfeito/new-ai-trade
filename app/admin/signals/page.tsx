@@ -3,6 +3,7 @@
 import { useCallback } from 'react'
 import { adminApi, EdgeReport } from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
+import { formatTs } from '@/lib/utils'
 
 type Signal = {
   id: string
@@ -121,7 +122,7 @@ export default function SignalsPage() {
               <table className="w-full text-xs min-w-[700px]">
                 <thead>
                   <tr className="border-b border-terminal-border">
-                    {['Symbol', 'Type', 'Conf', 'Entry', 'RR', 'Grade', 'Mode', 'Outcome', 'Created'].map(h => (
+                    {['Symbol', 'Type', 'Conf', 'Entry', 'RR', 'Grade', 'Mode', 'AI', 'Outcome', 'Created'].map(h => (
                       <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
                     ))}
                   </tr>
@@ -144,9 +145,17 @@ export default function SignalsPage() {
                       <td className="py-2.5 px-3 font-mono text-terminal-muted">{rrRatio(sig.entry_price, sig.target_price, sig.stop_loss)}R</td>
                       <td className="py-2.5 px-3"><GradeBadge grade={sig.risk_grade} /></td>
                       <td className="py-2.5 px-3 text-terminal-muted font-mono text-xs uppercase">{sig.scanner_mode}</td>
+                      <td className="py-2.5 px-3">
+                        {sig.ai_validated == null
+                          ? <span className="text-terminal-muted/40 text-xs">—</span>
+                          : sig.ai_validated
+                            ? <span className="text-bull-default text-xs font-mono">✓</span>
+                            : <span className="text-bear-default text-xs font-mono">✗</span>
+                        }
+                      </td>
                       <td className="py-2.5 px-3"><OutcomePill outcome={sig.outcome} /></td>
                       <td className="py-2.5 px-3 text-terminal-muted/50 font-mono text-xs">
-                        {new Date(sig.created_at).toLocaleString()}
+                        {formatTs(sig.created_at)}
                       </td>
                     </tr>
                   ))}

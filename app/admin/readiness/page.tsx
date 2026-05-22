@@ -4,6 +4,7 @@ import { useCallback } from 'react'
 import { adminApi, BurninStatus, ReadinessResult } from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
 import { ScoreRing } from '@/components/admin/score-ring'
+import { formatTs } from '@/lib/utils'
 
 const COMPONENTS = [
   { key: 'operational_stability', label: 'Operational Stability', weight: 0.25 },
@@ -106,7 +107,7 @@ export default function ReadinessPage() {
               <p className="text-terminal-muted text-sm leading-relaxed">{r?.verdict.rationale}</p>
               {r && (
                 <p className="text-terminal-muted/50 text-xs mt-3 font-mono">
-                  Computed {new Date(r.computed_at).toLocaleString()} · {r.data_source}
+                  Computed {formatTs(r.computed_at)} · {r.data_source}
                 </p>
               )}
             </>
