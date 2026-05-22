@@ -85,7 +85,8 @@ You need **3 terminals** running simultaneously. All from the project root.
 npm run dev
 ```
 
-Opens at: http://localhost:3000
+Opens at: http://localhost:3000 (public landing page)
+Pricing / Investors / About: http://localhost:3000/pricing · /investors · /about
 Admin dashboard: http://localhost:3000/admin
 
 ### Terminal 2 — Python FastAPI backend

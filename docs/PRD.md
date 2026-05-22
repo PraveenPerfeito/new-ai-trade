@@ -1,4 +1,4 @@
-# Product Requirements Document — Crypto Market Scanner
+# Product Requirements Document — SignalEdge AI
 
 **Version:** 1.2  
 **Status:** Live  
@@ -17,10 +17,12 @@ A fully automated, AI-validated crypto trading signal scanner that monitors the 
 Retail traders cannot watch 100 markets simultaneously. Manual scanning is slow, biased, and inconsistent. Existing scanners produce noisy signals with no quality ranking or risk context. This system solves that by:
 
 1. Running continuous multi-timeframe technical analysis across the top 100 coins
-2. Applying a 10-step quality pipeline that rejects weak setups before any expensive AI call
-3. Enriching futures signals with market-structure data (funding rates, OI, liquidation zones)
-4. Scoring every surviving signal with a risk grade and quality score
-5. Validating the final signal with Claude Haiku and delivering it via Telegram
+2. Applying an 11-gate quality pipeline that rejects weak setups before any expensive AI call
+3. Classifying global market regime from BTC 4h candles to align signals with macro context
+4. Computing continuation probability and signal lifecycle state for every setup
+5. Enriching futures signals with market-structure data (funding rates, OI, liquidation zones)
+6. Scoring every surviving signal with a risk grade, quality score, and institutional composite score
+7. Validating the final signal with Claude Haiku (8-field explainability) and delivering it via Telegram
 
 ---
 
@@ -341,6 +343,9 @@ Key fields: `id`, `event` (login/logout/login_failed/unauthorized), `email`, `ip
 | v1.2.1 | ✅ Done | Settings safety layer — hard caps, semantic rules, atomic transactions |
 | v1.2.2 | ✅ Done | Experimental configuration — staged rollouts, dry-run, context filtering |
 | Phase 5.1 | ✅ Done | Admin auth + deployment hardening — Supabase Auth, email allowlist, backend secret, audit log |
+| Phase 5.5 | ✅ Done | Dashboard polish — opportunity summary, signal strengths, mover ranks, institutional UX |
+| Phase A | ✅ Done | Public SaaS website — landing page, /pricing, /investors, /about (SignalEdge AI brand) |
+| Phase 6.1 | ✅ Done | Tactical Intelligence Engine — market regime, signal lifecycle states, institutional score, continuation probability, 10 false-positive filters, 8-field AI explainability |
 | v1.4 | Planned | Prometheus metrics endpoint + Grafana dashboard |
 | v1.5 | Planned | Full test suite (Vitest unit + Playwright E2E) |
 | v2.0 | Planned | Multi-user authentication + per-user watchlists and signal feeds |

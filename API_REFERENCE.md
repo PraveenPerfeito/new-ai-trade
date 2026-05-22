@@ -8,7 +8,10 @@ Complete reference for all endpoints, local URLs, and usage instructions.
 
 | Service | URL | Purpose |
 |---------|-----|---------|
-| **Next.js Frontend** | http://localhost:3000 | Main web app |
+| **Public landing page** | http://localhost:3000 | SignalEdge AI homepage |
+| **Pricing page** | http://localhost:3000/pricing | Free / Pro / Institutional tiers |
+| **Investors page** | http://localhost:3000/investors | Investor overview |
+| **About page** | http://localhost:3000/about | Mission and pipeline |
 | **Login page** | http://localhost:3000/login | Sign in with Supabase account |
 | **Admin dashboard** | http://localhost:3000/admin | Admin overview |
 | **Admin scanner** | http://localhost:3000/admin/scanner | Scanner control panel |
@@ -167,6 +170,19 @@ curl "http://localhost:3000/api/signals?limit=20&minConfidence=85"
 ```
 
 **Query params:** `limit` (default 20), `minConfidence` (0–100)
+
+**Phase 6.1 signal response fields** (added to every signal object):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `signalState` | `DEVELOPING\|CONFIRMED\|EXTENDED\|COOLING\|CORRECTING\|INVALIDATED\|EXPIRED` | Lifecycle state from indicator snapshot |
+| `institutionalScore` | `number` (0–100) | Multi-dimensional quality composite (AI 25% + grade 20% + trend 20% + quality 15% + vol 10% + RR 5% + futures 5%) ± regime flat |
+| `regimeAlignmentScore` | `number` | Flat ± adjustment for regime fit (e.g. BUY in BULL_TREND = +15, BUY in BEAR_TREND = −25) |
+| `marketRegime` | `BULL_TREND\|BEAR_TREND\|SIDEWAYS\|HIGH_VOLATILITY\|EUPHORIA\|CAPITULATION` | BTC 4h regime at scan time |
+| `continuation` | `ContinuationAnalysis` | `{ continuationProbability, exhaustionRisk, momentumHealth, reasons }` |
+| `explainability.continuationCase` | `string` | AI's best-case continuation scenario |
+| `explainability.cautionCase` | `string` | AI's primary risk / failure mode |
+| `explainability.regimeNote` | `string` | AI's comment on how the current regime affects this setup |
 
 ---
 

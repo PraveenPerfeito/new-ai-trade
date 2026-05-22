@@ -1,8 +1,8 @@
-# Crypto Market Scanner — Claude Code Guide
+# SignalEdge AI — Claude Code Guide
 
 ## Project Overview
 
-AI-powered crypto trading signal scanner built with **Next.js 14 App Router** + **TypeScript** + **Python FastAPI** backend. Scans top-100 coins, applies a 10-step quality pipeline, and surfaces high-probability trade setups via a glassmorphism admin dashboard and Telegram alerts.
+AI-powered crypto trading signal scanner (public brand: **SignalEdge AI**) built with **Next.js 14 App Router** + **TypeScript** + **Python FastAPI** backend. Scans top-100 coins, applies an 11-gate quality pipeline, and surfaces high-probability trade setups via a glassmorphism admin dashboard and Telegram alerts. Includes a public SaaS website at `/`, `/pricing`, `/investors`, `/about`.
 
 **Stack:** Next.js 14 · React 18 · TypeScript · Tailwind CSS · Supabase (PostgreSQL + Auth) · @supabase/ssr · Anthropic Claude Haiku · Binance API · CoinGecko API · FastAPI · Celery · Redis · pino · zod
 
@@ -10,7 +10,7 @@ AI-powered crypto trading signal scanner built with **Next.js 14 App Router** + 
 
 ## Key Architecture Decisions
 
-1. **10-step pipeline before AI**: MTF confirmation → volatility gate → trend strength → setup scoring → RR check → risk engine → futures intelligence → Claude Haiku. Each gate reduces expensive API calls.
+1. **11-gate waterfall before AI**: MTF confirmation → volatility gate → trend strength → setup scoring → RR check → risk engine → futures intelligence → continuation gate → Claude Haiku. Each gate reduces expensive API calls.
 2. **`runtime = 'nodejs'`** on all API routes — Edge runtime not used (need pino + Binance TCP connections). Exception: `middleware.ts` uses Edge.
 3. **`globalThis` scheduler singleton** — survives Next.js hot-module replacement without duplicate timers.
 4. **Risk engine before AI** — rejects grade-F signals without spending Anthropic tokens.
@@ -21,6 +21,10 @@ AI-powered crypto trading signal scanner built with **Next.js 14 App Router** + 
 7. **Settings system — 3-layer cache**: 30s in-process dict → 1h Redis → PostgreSQL (source of truth). Generation counter + Redis pub/sub propagates changes to all workers within ≤ 5 s.
 8. **Safety layer** — `backend/system_settings/safety.py` runs before every `patch_group()` write: Tier 1 hard caps block saves, Tier 2 semantic rules return warnings.
 9. **Experiments** — layered on top of base settings; active experiments are resolved per-request in `SettingsService.get_group()` using context matching and rollout %.
+10. **BTC regime cache** — `lib/market-regime.ts` fetches BTC 4h candles once per `runScan()` call, classifies BULL_TREND/BEAR_TREND/SIDEWAYS/HIGH_VOLATILITY/EUPHORIA/CAPITULATION, caches 5 min module-level, falls back to SIDEWAYS neutral on error.
+11. **Continuation gate before AI** — `analyzeContinuation()` runs after risk engine; setups with continuationProbability < 25 are rejected without spending AI tokens.
+12. **Institutional score replaces confidence-only ranking** — `calcInstitutionalScore()` weighted composite: AI 25% + grade 20% + trend 20% + quality 15% + vol 10% + RR 5% + futures 5%, then ±regimeAlignmentScore flat adjustment, clamped [0, 100].
+13. **Signal lifecycle states** — `computeSignalState()` produces DEVELOPING/CONFIRMED/EXTENDED/COOLING/CORRECTING/INVALIDATED/EXPIRED from a deterministic indicator snapshot decision tree.
 
 ---
 
@@ -28,12 +32,17 @@ AI-powered crypto trading signal scanner built with **Next.js 14 App Router** + 
 
 ```
 lib/
-  scanner.ts            ← main pipeline; exports detectSetup(), tradeLevels(), scanCoin()
+  scanner.ts            ← main pipeline; exports detectSetup(), tradeLevels(), scanCoin(), runScan()
   scheduler.ts          ← auto-scan scheduler with distributed lock (in-memory)
   indicators.ts         ← RSI, MACD, EMA, ATR, volume spike, trend strength
   risk.ts               ← risk score, quality score, grade A-F, leverage tiers
   futures-intelligence.ts ← funding rate, OI, L/S ratio, liq zones, breakout, momentum
-  ai-validator.ts       ← Claude Haiku validation + heuristic fallback
+  ai-validator.ts       ← Claude Haiku validation + heuristic fallback; accepts continuation + regime context
+  market-regime.ts      ← getMarketRegime() — BTC 4h regime (BULL_TREND/BEAR_TREND/SIDEWAYS/HIGH_VOLATILITY/EUPHORIA/CAPITULATION); 5-min module cache; scoreRegimeAlignment()
+  continuation.ts       ← analyzeContinuation() — probability 10–95, exhaustionRisk, momentumHealth
+  signal-state.ts       ← computeSignalState() — 7-state lifecycle (DEVELOPING→CONFIRMED→EXTENDED→COOLING→CORRECTING→INVALIDATED→EXPIRED)
+  institutional-score.ts ← calcInstitutionalScore() — weighted 7-component composite (0–100) + regime flat adjustment
+  market-structure.ts   ← 10 false-positive filters incl. fake breakout, euphoric spike, momentum decline (Phase 6.1)
   binance.ts            ← spot + futures klines, funding, OI, L/S; withApiRetry wrapped
   coingecko.ts          ← top-100 market data; withApiRetry wrapped
   supabase.ts           ← all DB operations (signals, scan runs, coins, backtest)
@@ -62,10 +71,18 @@ app/api/
   backtest/             ← run · results · [id] · compare (protected)
 
 app/
+  page.tsx              ← public landing page (SignalEdge AI homepage)
+  pricing/page.tsx      ← public pricing page — Free / Pro / Institutional tiers
+  investors/page.tsx    ← public investor overview page
+  about/page.tsx        ← public about / mission page
   login/page.tsx        ← email + password login; terminal glassmorphism theme
   auth/callback/        ← PKCE code exchange (magic-link / OAuth flows)
   actions/auth.ts       ← Server Actions: recordLoginEvent() for client-side login form
   admin/layout.tsx      ← async Server Component; secondary auth check; passes user to topbar
+
+components/public/
+  nav.tsx               ← public site top navigation
+  footer.tsx            ← public site footer
 
 components/admin/
   topbar.tsx            ← receives email + lastSignIn props; renders SessionBadge
@@ -74,7 +91,7 @@ components/admin/
 
 components/dashboard/
   market-scanner.tsx    ← root orchestrator; polling + state
-  signals-feed.tsx      ← signal cards with risk grade + futures badges
+  signals-feed.tsx      ← signal cards with risk grade, futures badges, signal state badge, institutional score bar, continuation probability, regime badge
 
 middleware.ts           ← Edge: Supabase auth gate, email allowlist, security headers, CORS
 
