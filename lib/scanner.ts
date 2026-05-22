@@ -1,6 +1,6 @@
 import {
   CoinData, TradingSignal, ScannerMode,
-  ScannerConfig, ScanResult, TechnicalIndicators,
+  ScannerConfig, ScanResult, TechnicalIndicators, MarketRegimeSnapshot,
 } from '@/types';
 import { getTop100ByMarketCap, filterHighVolume, filterByLiquidity, prioritizeCoins } from './coingecko';
 import { getSpotKlines, getFuturesKlines, getFuturesSymbols } from './binance';
@@ -15,6 +15,10 @@ import { validateSignal } from './ai-validator';
 import { validateRisk } from './risk';
 import { analyzeFuturesIntelligence } from './futures-intelligence';
 import { runMarketStructureChecks } from './market-structure';
+import { getMarketRegime, scoreRegimeAlignment } from './market-regime';
+import { analyzeContinuation } from './continuation';
+import { computeSignalState } from './signal-state';
+import { calcInstitutionalScore } from './institutional-score';
 import { saveSignal, createScanRun, updateScanRun, upsertCoins } from './supabase';
 import { sendSignalAlert, sendScanSummary } from './telegram';
 import { sleep } from './utils';
@@ -243,6 +247,7 @@ export async function scanCoin(
   coin: CoinData,
   mode: ScannerMode,
   config: ScannerConfig,
+  regime?: MarketRegimeSnapshot,
 ): Promise<TradingSignal | null> {
   try {
     // Step 1: Fetch both timeframes in parallel
@@ -289,15 +294,14 @@ export async function scanCoin(
     // Minimum combined strength of 30 — below this the trend is too weak/choppy
     if (combinedStrength < 30) return null;
 
-    // Step 5b: Market structure gate — 7 structural filters run before setup scoring
-    // This rejects sideways markets, overextended moves, bad candle structure,
-    // exhausted trends, fake volume, S/R rejection zones, and weak breakouts.
+    // Step 5b: Market structure gate — 10 structural filters (Phase 6.1: +3 new filters)
     const structure = runMarketStructureChecks(
       candles1h,
       ind1h.atr,
       ind1h.currentPrice,
       ind1h.volumeSpike,
       signalType,
+      ind1h,  // enables euphoric-spike, fake-breakout, momentum-decline checks
     );
     if (!structure.pass) {
       log.info({ symbol: coin.symbol, reason: structure.rejectionReason }, 'structure gate rejected');
@@ -361,6 +365,16 @@ export async function scanCoin(
       }
     }
 
+    // Phase 6.1: Compute continuation + regime alignment before AI call
+    const continuation    = analyzeContinuation(candles1h, ind1h, signalType);
+    const regimeAlignment = regime ? scoreRegimeAlignment(signalType, regime.regime) : 0;
+
+    // Reject low-continuation setups early (saves AI tokens)
+    if (continuation.continuationProbability < 25) {
+      log.info({ symbol: coin.symbol, contProb: continuation.continuationProbability }, 'rejected — insufficient continuation probability');
+      return null;
+    }
+
     // Step 11: AI validation (most expensive step — gated by all checks above)
     const draft = {
       symbol: coin.symbol,
@@ -381,19 +395,38 @@ export async function scanCoin(
       futuresData,
     };
 
-    const ai = await validateSignal(draft, coin, ind4h, combinedStrength, volatility);
+    const ai = await validateSignal(draft, coin, ind4h, combinedStrength, volatility, continuation, regime);
     if (!ai.validated || ai.confidence < config.minConfidence) return null;
+
+    // Phase 6.1: Compute post-AI intelligence fields
+    const signalState      = computeSignalState(ind1h, ind4h, continuation, signalType);
+    const institutionalScore = calcInstitutionalScore({
+      aiConfidence:         ai.confidence,
+      riskGrade:            risk.riskGrade,
+      trendStrength:        combinedStrength,
+      qualityScore:         risk.qualityScore,
+      volatility,
+      rrRatio:              levels.rrRatio,
+      futuresMomentumScore: futuresData?.momentumScore,
+      regimeAlignmentScore: regimeAlignment,
+    });
 
     return {
       ...draft,
-      confidence:  ai.confidence,
-      aiValidated:      ai.validated,
-      aiReasoning:      ai.reasoning,
-      aiExplainability: ai.explainability,
-      risks:            ai.risks,
-      strengths:        ai.strengths,
-      telegramSent: false,
-      createdAt:   new Date(),
+      confidence:           ai.confidence,
+      aiValidated:          ai.validated,
+      aiReasoning:          ai.reasoning,
+      aiExplainability:     ai.explainability,
+      risks:                ai.risks,
+      strengths:            ai.strengths,
+      telegramSent:         false,
+      createdAt:            new Date(),
+      // Phase 6.1 tactical intelligence
+      signalState,
+      institutionalScore,
+      regimeAlignmentScore: regimeAlignment,
+      marketRegime:         regime?.regime,
+      continuation,
     };
   } catch (err) {
     log.error({ symbol: coin.symbol, err }, 'scanCoin error');
@@ -413,6 +446,15 @@ export async function runScan(
 
   log.info({ mode }, 'scan starting');
   const scanRunId = await createScanRun(mode);
+
+  // Phase 6.1: Prefetch BTC market regime once per scan (cached 5 min)
+  let regime: MarketRegimeSnapshot | undefined;
+  try {
+    regime = await getMarketRegime();
+    log.info({ regime: regime.regime, btcRsi: regime.btcRsi4h.toFixed(1) }, 'regime loaded');
+  } catch {
+    log.warn('regime fetch failed — continuing without regime context');
+  }
 
   try {
     // 1. Fetch top 100 from CoinGecko
@@ -467,7 +509,7 @@ export async function runScan(
       // Each scanCoin makes 2 Binance API calls (1h + 4h) plus 1 Claude call
       await sleep(delayMs);
 
-      const signal = await scanCoin(coin, mode, config);
+      const signal = await scanCoin(coin, mode, config, regime);
       coinsScanned++;
 
       if (!signal) continue;

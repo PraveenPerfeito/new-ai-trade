@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { TradingSignal, AIValidationResult, AIExplainability, CoinData, TechnicalIndicators } from '@/types';
+import { TradingSignal, AIValidationResult, AIExplainability, CoinData, TechnicalIndicators, ContinuationAnalysis, MarketRegimeSnapshot } from '@/types';
 import { VolatilityRating } from './indicators';
 import { clamp } from './utils';
 import { createLogger } from './logger';
@@ -43,13 +43,31 @@ export async function validateSignal(
   ind4h: TechnicalIndicators,
   trendStrength: number,
   volatilityRating: VolatilityRating,
+  continuation?: ContinuationAnalysis,
+  regime?: MarketRegimeSnapshot,
 ): Promise<AIValidationResult> {
   const client = getClient();
-  if (!client) return heuristic(signal, ind4h, trendStrength, volatilityRating);
+  if (!client) return heuristic(signal, ind4h, trendStrength, volatilityRating, continuation, regime);
 
   const i1h = signal.indicators;
 
   const fd = signal.futuresData;
+  const regimeSection = regime ? `
+═══ MARKET REGIME ═══════════════════
+BTC regime:     ${regime.regime}
+BTC RSI (4h):   ${regime.btcRsi4h.toFixed(1)}
+BTC trend (4h): ${regime.btcTrend4h}
+BTC 24h change: ${regime.btc24hChange > 0 ? '+' : ''}${regime.btc24hChange.toFixed(2)}%
+` : '';
+
+  const continuationSection = continuation ? `
+═══ CONTINUATION ANALYSIS ═══════════
+Cont. probability: ${continuation.continuationProbability}%
+Exhaustion risk:   ${continuation.exhaustionRisk.toUpperCase()}
+Momentum health:   ${continuation.momentumHealth.toUpperCase()}
+Factors:           ${continuation.reasons.slice(0, 3).join(' | ')}
+` : '';
+
   const futuresSection = fd ? `
 ═══ FUTURES INTELLIGENCE ════════════
 Funding rate:   ${(fd.fundingRate * 100).toFixed(4)}%  (${fd.fundingRateAnnualized.toFixed(1)}% ann.)  |  Bias: ${fd.fundingBias}
@@ -61,8 +79,8 @@ Pullback:       ${fd.trendContinuation.isPullback ? `Yes — depth ${fd.trendCon
 Liq. zones:     ${fd.liquidationZones.length > 0 ? fd.liquidationZones.slice(0, 3).map(z => `$${z.price.toFixed(2)} (${z.side}, ${z.strength}, ${z.distancePct.toFixed(1)}%)`).join(' | ') : 'none within 10%'}
 ` : '';
 
-  const prompt = `You are a professional crypto trader and technical analyst. Evaluate this trade setup.
-
+  const prompt = `You are a professional crypto trader and quantitative analyst. Evaluate this trade setup with institutional rigor.
+${regimeSection}${continuationSection}
 ═══ ASSET ═══════════════════════════
 Symbol: ${signal.symbol} (${signal.name})
 Direction: ${signal.type}  |  Mode: ${signal.scannerMode}
@@ -108,7 +126,7 @@ Reject (confidence < 80) if ANY of these apply:
 • Futures only: momentum score < 35 (poor futures market structure)
 
 Respond ONLY with valid JSON (no markdown, no text outside the JSON object):
-{"confidence":<integer 0-100>,"validated":<boolean>,"reasoning":"<1-sentence overall verdict>","risks":["<risk>","<risk>"],"strengths":["<strength>","<strength>"],"trend":"<1-2 sentences on multi-TF trend structure and EMA alignment>","momentum":"<1-2 sentences on RSI zone, MACD histogram direction, and volume confirmation>","volatility":"<1 sentence on ATR-based volatility regime and stop reliability>","rationale":"<1 sentence explaining why confidence is at this specific level>","summary":"<one concise line: trade thesis + key edge>"}`;
+{"confidence":<integer 0-100>,"validated":<boolean>,"reasoning":"<1-sentence overall verdict>","risks":["<risk>","<risk>"],"strengths":["<strength>","<strength>"],"trend":"<1-2 sentences on multi-TF trend structure and EMA alignment>","momentum":"<1-2 sentences on RSI zone, MACD histogram direction, and volume confirmation>","volatility":"<1 sentence on ATR-based volatility regime and stop reliability>","rationale":"<1 sentence explaining why confidence is at this specific level>","summary":"<one concise line: trade thesis + key edge>","continuationCase":"<1 sentence: why trend continuation is likely from this entry>","cautionCase":"<1 sentence: the main scenario that would invalidate this trade>","regimeNote":"<1 sentence: how the current market regime affects this setup>"}`;
 
   const AI_TIMEOUT_MS = 15_000; // 15 s hard ceiling — prevents scan pipeline stall
 
@@ -129,11 +147,14 @@ Respond ONLY with valid JSON (no markdown, no text outside the JSON object):
     const explainability: AIExplainability | undefined =
       parsed.trend && parsed.momentum && parsed.volatility && parsed.rationale && parsed.summary
         ? {
-            trend:      String(parsed.trend),
-            momentum:   String(parsed.momentum),
-            volatility: String(parsed.volatility),
-            rationale:  String(parsed.rationale),
-            summary:    String(parsed.summary),
+            trend:            String(parsed.trend),
+            momentum:         String(parsed.momentum),
+            volatility:       String(parsed.volatility),
+            rationale:        String(parsed.rationale),
+            summary:          String(parsed.summary),
+            continuationCase: parsed.continuationCase ? String(parsed.continuationCase) : undefined,
+            cautionCase:      parsed.cautionCase      ? String(parsed.cautionCase)      : undefined,
+            regimeNote:       parsed.regimeNote       ? String(parsed.regimeNote)       : undefined,
           }
         : undefined;
 
@@ -185,6 +206,8 @@ function heuristic(
   ind4h: TechnicalIndicators,
   trendStrength: number,
   volatilityRating: VolatilityRating,
+  continuation?: ContinuationAnalysis,
+  regime?: MarketRegimeSnapshot,
 ): AIValidationResult {
   const { indicators: i1h, type, rrRatio } = signal;
   let score = 45;
@@ -312,6 +335,26 @@ function heuristic(
 
   const summaryDesc = `${tfAlignedForDesc ? 'Multi-TF aligned' : 'Single-TF'} ${type === 'BUY' ? 'long' : 'short'} — R:R 1:${rrRatio.toFixed(1)}, trend strength ${trendStrength.toFixed(0)}/100, ${volatilityRating.toLowerCase()} volatility.`;
 
+  const continuationCase = continuation
+    ? continuation.momentumHealth === 'healthy'
+      ? `Momentum is healthy (${continuation.continuationProbability}% continuation probability) with ${continuation.reasons[0] ?? 'supporting factors present'}.`
+      : `Continuation probability is ${continuation.continuationProbability}% — momentum is ${continuation.momentumHealth}; ${continuation.reasons[0] ?? 'watch closely'}.`
+    : undefined;
+
+  const cautionCase = risks.length > 0
+    ? `Primary risk: ${risks[0]}.`
+    : `Monitor for reversal candles and loss of ${type === 'BUY' ? 'EMA20 support' : 'EMA20 resistance'}.`;
+
+  const regimeNote = regime
+    ? `Market regime is ${regime.regime} (BTC RSI ${regime.btcRsi4h.toFixed(0)}) — ${
+        type === 'BUY' && (regime.regime === 'BULL_TREND' || regime.regime === 'EUPHORIA')
+          ? 'macro tailwind supports long bias'
+          : type === 'SELL' && (regime.regime === 'BEAR_TREND' || regime.regime === 'CAPITULATION')
+          ? 'macro headwind supports short bias'
+          : 'regime is neutral to mixed for this direction'
+      }.`
+    : undefined;
+
   return {
     confidence: score,
     validated:  score >= 80,
@@ -324,6 +367,9 @@ function heuristic(
       volatility: volatilityDesc,
       rationale:  rationaleDesc,
       summary:    summaryDesc,
+      continuationCase,
+      cautionCase,
+      regimeNote,
     },
   };
 }

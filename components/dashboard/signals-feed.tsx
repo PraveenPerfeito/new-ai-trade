@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { TradingSignal, RiskGrade } from '@/types';
+import { TradingSignal, RiskGrade, SignalState } from '@/types';
 import { formatPrice, timeAgo, cn } from '@/lib/utils';
 import { TrendingUp, TrendingDown, Brain, Send, Zap, ShieldCheck, AlertTriangle, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -255,6 +255,51 @@ function SignalCard({
           </div>
         )}
 
+        {/* Phase 6.1 — Tactical intelligence row */}
+        {(signal.signalState || signal.institutionalScore != null || signal.continuation) && (
+          <div className="flex items-center gap-1.5 flex-wrap mb-2">
+            {signal.signalState && <SignalStateBadge state={signal.signalState} />}
+            {signal.institutionalScore != null && (
+              <span className="text-[9px] font-mono glass-surface border border-terminal-border/50 rounded px-1.5 py-0.5 text-terminal-muted">
+                Inst {signal.institutionalScore}
+              </span>
+            )}
+            {signal.continuation && (
+              <div className="flex items-center gap-1 flex-1 min-w-[80px]">
+                <span className="text-[9px] text-terminal-dim flex-shrink-0">Cont</span>
+                <div className="flex-1 h-1 bg-terminal-surface rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-700"
+                    style={{
+                      width: `${signal.continuation.continuationProbability}%`,
+                      background:
+                        signal.continuation.exhaustionRisk === 'low'    ? '#00d084' :
+                        signal.continuation.exhaustionRisk === 'medium' ? '#f59e0b' : '#ff3b5c',
+                    }}
+                  />
+                </div>
+                <span className="text-[9px] font-mono text-terminal-muted w-7 text-right flex-shrink-0">
+                  {signal.continuation.continuationProbability}%
+                </span>
+                <ExhaustionDot risk={signal.continuation.exhaustionRisk} />
+              </div>
+            )}
+            {signal.marketRegime && (
+              <span className={cn(
+                'text-[8px] font-mono px-1.5 py-0.5 rounded border flex-shrink-0',
+                signal.marketRegime === 'BULL_TREND'     ? 'bg-bull-muted text-bull-text border-bull-DEFAULT/20' :
+                signal.marketRegime === 'BEAR_TREND'     ? 'bg-bear-muted text-bear-text border-bear-DEFAULT/20' :
+                signal.marketRegime === 'EUPHORIA'       ? 'bg-yellow-900/20 text-yellow-400 border-yellow-500/20' :
+                signal.marketRegime === 'CAPITULATION'   ? 'bg-orange-900/20 text-orange-400 border-orange-500/20' :
+                signal.marketRegime === 'HIGH_VOLATILITY'? 'bg-purple-900/20 text-purple-400 border-purple-500/20' :
+                'glass-surface text-terminal-muted border-terminal-border/50',
+              )}>
+                {signal.marketRegime.replace('_', ' ')}
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Futures intelligence row */}
         {signal.futuresData && (
           <div className="mb-2 space-y-1">
@@ -369,10 +414,19 @@ function SignalCard({
 
             {aiExpanded && signal.aiExplainability && (
               <div className="mt-1.5 glass-surface rounded-lg border border-terminal-border/40 p-2 space-y-1.5">
-                <AIExplainRow icon="📈" label="Trend"      text={signal.aiExplainability.trend} />
-                <AIExplainRow icon="⚡" label="Momentum"   text={signal.aiExplainability.momentum} />
-                <AIExplainRow icon="🌡" label="Volatility" text={signal.aiExplainability.volatility} />
-                <AIExplainRow icon="💡" label="Why"        text={signal.aiExplainability.rationale} />
+                <AIExplainRow icon="📈" label="Trend"        text={signal.aiExplainability.trend} />
+                <AIExplainRow icon="⚡" label="Momentum"     text={signal.aiExplainability.momentum} />
+                <AIExplainRow icon="🌡" label="Volatility"   text={signal.aiExplainability.volatility} />
+                <AIExplainRow icon="💡" label="Why"          text={signal.aiExplainability.rationale} />
+                {signal.aiExplainability.continuationCase && (
+                  <AIExplainRow icon="→" label="Cont."       text={signal.aiExplainability.continuationCase} />
+                )}
+                {signal.aiExplainability.cautionCase && (
+                  <AIExplainRow icon="⚠" label="Caution"    text={signal.aiExplainability.cautionCase} />
+                )}
+                {signal.aiExplainability.regimeNote && (
+                  <AIExplainRow icon="🌐" label="Regime"     text={signal.aiExplainability.regimeNote} />
+                )}
               </div>
             )}
           </div>
@@ -621,6 +675,35 @@ function AIExplainRow({ icon, label, text }: { icon: string; label: string; text
       <span className="text-[9px] flex-shrink-0 w-[60px] text-terminal-dim">{icon} {label}</span>
       <span className="text-[9px] text-terminal-muted leading-relaxed">{text}</span>
     </div>
+  );
+}
+
+function SignalStateBadge({ state }: { state: SignalState }) {
+  const styles: Record<SignalState, { label: string; cls: string }> = {
+    CONFIRMED:   { label: 'CONFIRMED',   cls: 'bg-bull-muted text-bull-text border-bull-DEFAULT/30' },
+    DEVELOPING:  { label: 'DEVELOPING',  cls: 'bg-blue-900/20 text-blue-400 border-blue-500/30' },
+    EXTENDED:    { label: 'EXTENDED',    cls: 'bg-yellow-900/20 text-yellow-400 border-yellow-500/30' },
+    COOLING:     { label: 'COOLING',     cls: 'bg-cyan-900/20 text-cyan-400 border-cyan-500/30' },
+    CORRECTING:  { label: 'CORRECTING',  cls: 'bg-orange-900/20 text-orange-400 border-orange-500/30' },
+    INVALIDATED: { label: 'INVALIDATED', cls: 'bg-bear-muted text-bear-text border-bear-DEFAULT/30' },
+    EXPIRED:     { label: 'EXPIRED',     cls: 'glass-surface text-terminal-muted border-terminal-border/50' },
+  };
+  const s = styles[state];
+  return (
+    <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded border flex-shrink-0', s.cls)}>
+      {s.label}
+    </span>
+  );
+}
+
+function ExhaustionDot({ risk }: { risk: 'low' | 'medium' | 'high' }) {
+  const color = risk === 'low' ? '#00d084' : risk === 'medium' ? '#f59e0b' : '#ff3b5c';
+  return (
+    <span
+      className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+      style={{ backgroundColor: color }}
+      title={`Exhaustion: ${risk}`}
+    />
   );
 }
 

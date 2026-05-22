@@ -43,6 +43,44 @@ export type ScannerMode = 'spot' | 'futures' | 'high_confidence' | 'trending';
 export type Timeframe = '15m' | '1h' | '4h' | '1d';
 export type RiskGrade = 'A' | 'B' | 'C' | 'D' | 'F';
 
+// ─── Phase 6.1 — Tactical Intelligence types ─────────────────────────────────
+
+export type SignalState =
+  | 'DEVELOPING'    // aligned but borderline — building momentum
+  | 'CONFIRMED'     // MTF aligned, healthy volume, healthy momentum
+  | 'EXTENDED'      // momentum exhausted — entry late / risky
+  | 'COOLING'       // momentum fading but trend intact
+  | 'CORRECTING'    // MACD turned + RSI pulling back against direction
+  | 'INVALIDATED'   // 1h trend has reversed against signal direction
+  | 'EXPIRED';      // reserved for stored-signal re-evaluation (not produced at scan time)
+
+export type MarketRegime =
+  | 'BULL_TREND'      // BTC 4h bullish + trend strength ≥ 50
+  | 'BEAR_TREND'      // BTC 4h bearish + trend strength ≥ 50
+  | 'SIDEWAYS'        // no clear direction
+  | 'HIGH_VOLATILITY' // ATR% > 5 + |24h change| > 5%
+  | 'EUPHORIA'        // RSI > 78 + 24h > 8%
+  | 'CAPITULATION';   // RSI < 22 + 24h < -8%
+
+export type ExhaustionRisk = 'low' | 'medium' | 'high';
+export type MomentumHealth = 'healthy' | 'fading' | 'exhausted';
+
+export interface ContinuationAnalysis {
+  continuationProbability: number;  // 0–100
+  exhaustionRisk:          ExhaustionRisk;
+  momentumHealth:          MomentumHealth;
+  reasons:                 string[];
+}
+
+export interface MarketRegimeSnapshot {
+  regime:      MarketRegime;
+  btcRsi4h:    number;
+  btcTrend4h:  'BULLISH' | 'BEARISH' | 'RANGING';
+  btcAtrPct:   number;
+  btc24hChange: number;
+  computedAt:  Date;
+}
+
 export interface RiskViolation {
   code:     string;
   message:  string;
@@ -85,6 +123,12 @@ export interface TradingSignal {
   positionSizeMultiplier?: number;
   // Futures intelligence
   futuresData?:            FuturesData;
+  // Phase 6.1 — tactical intelligence
+  signalState?:            SignalState;
+  institutionalScore?:     number;
+  regimeAlignmentScore?:   number;
+  marketRegime?:           MarketRegime;
+  continuation?:           ContinuationAnalysis;
 }
 
 export interface ScanRun {
@@ -104,6 +148,10 @@ export interface AIExplainability {
   volatility: string;  // ATR-based volatility and stop reliability (1 sentence)
   rationale:  string;  // why the confidence score is at this level (1 sentence)
   summary:    string;  // one-line human-readable trade thesis
+  // Phase 6.1 additions
+  continuationCase?: string;  // why continuation is likely
+  cautionCase?:      string;  // main failure scenario
+  regimeNote?:       string;  // how market regime affects this setup
 }
 
 export interface AIValidationResult {

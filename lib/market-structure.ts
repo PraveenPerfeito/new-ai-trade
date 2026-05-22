@@ -1,4 +1,4 @@
-import { Candle } from '@/types';
+import { Candle, TechnicalIndicators } from '@/types';
 import { calcEMA } from './indicators';
 
 // ─── Internal helpers ────────────────────────────────────────────────────────
@@ -501,6 +501,117 @@ export function analyzeBreakoutStrength(
   return { isWeak: false, reason: '' };
 }
 
+// ─── 8. Fake breakout / breakdown detection ───────────────────────────────────
+
+/**
+ * Rejects breakouts that cleared a reference level but did so with insufficient
+ * volume — a common sign of a stop hunt or low-conviction push.
+ *
+ * Note: analyzeBreakoutStrength (check 7) catches failed wicks and marginal
+ * closes; this check catches confirmed closes with weak volume follow-through
+ * (different scenario — the price is genuinely above resistance but nobody
+ * is participating in the continuation).
+ */
+export function detectFakeBreakout(
+  candles: Candle[],
+  volumeSpike: number,
+  signalType: 'BUY' | 'SELL',
+): { isFake: boolean; reason: string } {
+  if (candles.length < 26 || volumeSpike >= 1.5) return { isFake: false, reason: '' };
+
+  const last = candles[candles.length - 1];
+  const ref  = candles.slice(-26, -1);
+
+  if (signalType === 'BUY') {
+    const prevHighClose = Math.max(...ref.map(c => c.close));
+    if (last.close > prevHighClose) {
+      return {
+        isFake: true,
+        reason: `Breakout close above ${prevHighClose.toFixed(4)} on only ${volumeSpike.toFixed(1)}× volume — unconfirmed breakout`,
+      };
+    }
+  } else {
+    const prevLowClose = Math.min(...ref.map(c => c.close));
+    if (last.close < prevLowClose) {
+      return {
+        isFake: true,
+        reason: `Breakdown close below ${prevLowClose.toFixed(4)} on only ${volumeSpike.toFixed(1)}× volume — unconfirmed breakdown`,
+      };
+    }
+  }
+
+  return { isFake: false, reason: '' };
+}
+
+// ─── 9. Euphoric spike / capitulation spike detection ─────────────────────────
+
+/**
+ * Rejects entries after abnormally fast directional moves combined with extreme
+ * RSI — hallmark of euphoric tops and capitulation bottoms, both of which are
+ * poor entry points because mean reversion is imminent.
+ */
+export function detectEuphoricSpike(
+  candles: Candle[],
+  ind1h: TechnicalIndicators,
+  signalType: 'BUY' | 'SELL',
+): { isEuphoric: boolean; reason: string } {
+  if (candles.length < 5) return { isEuphoric: false, reason: '' };
+
+  const last4     = candles.slice(-5, -1);
+  const change4h  = ((last4[last4.length - 1].close - last4[0].open) / last4[0].open) * 100;
+
+  if (signalType === 'BUY' && change4h > 12 && ind1h.rsi > 78) {
+    return {
+      isEuphoric: true,
+      reason: `+${change4h.toFixed(1)}% in last 4 candles + RSI ${ind1h.rsi.toFixed(0)} — euphoric spike, not a clean long entry`,
+    };
+  }
+
+  if (signalType === 'SELL' && change4h < -12 && ind1h.rsi < 22) {
+    return {
+      isEuphoric: true,
+      reason: `${change4h.toFixed(1)}% crash in last 4 candles + RSI ${ind1h.rsi.toFixed(0)} — capitulation spike, not a clean short entry`,
+    };
+  }
+
+  return { isEuphoric: false, reason: '' };
+}
+
+// ─── 10. Momentum decline at RSI extreme ─────────────────────────────────────
+
+/**
+ * Rejects entries where the last 3 candle bodies in the trade direction are
+ * consecutively shrinking AND the RSI is in extreme territory — classic momentum
+ * exhaustion pattern before a reversal candle prints.
+ */
+export function detectMomentumDecline(
+  candles: Candle[],
+  ind1h: TechnicalIndicators,
+  signalType: 'BUY' | 'SELL',
+): { isDeclining: boolean; reason: string } {
+  if (candles.length < 5) return { isDeclining: false, reason: '' };
+
+  const extremeRsi = signalType === 'BUY' ? ind1h.rsi > 75 : ind1h.rsi < 25;
+  if (!extremeRsi) return { isDeclining: false, reason: '' };
+
+  const last3  = candles.slice(-4, -1);
+  const bodies = last3.map(c =>
+    signalType === 'BUY' ? c.close - c.open : c.open - c.close,
+  );
+
+  const allPositive = bodies.every(b => b > 0);
+  const declining   = allPositive && bodies[2] < bodies[1] && bodies[1] < bodies[0];
+
+  if (declining) {
+    return {
+      isDeclining: true,
+      reason: `3 consecutive shrinking ${signalType === 'BUY' ? 'bullish' : 'bearish'} bodies at RSI ${ind1h.rsi.toFixed(0)} — momentum fading at extreme`,
+    };
+  }
+
+  return { isDeclining: false, reason: '' };
+}
+
 // ─── Aggregate gate ───────────────────────────────────────────────────────────
 
 export interface MarketStructureResult {
@@ -510,12 +621,11 @@ export interface MarketStructureResult {
 }
 
 /**
- * Runs all 7 market-structure filters in order from cheapest to most expensive.
+ * Runs all 10 market-structure filters in order from cheapest to most expensive.
  * Returns on the first hard reject — the remaining checks are skipped.
  *
- * Call order (all O(n) but pivot scan is largest):
- *   sideways → overextension → candle structure → exhaustion →
- *   fake volume → S/R rejection → weak breakout
+ * Phase 6.1 additions (checks 8-10, only run when ind1h is supplied):
+ *   fake breakout → euphoric spike → momentum decline at extreme
  */
 export function runMarketStructureChecks(
   candles: Candle[],
@@ -523,6 +633,7 @@ export function runMarketStructureChecks(
   currentPrice: number,
   volumeSpike: number,
   signalType: 'BUY' | 'SELL',
+  ind1h?: TechnicalIndicators,
 ): MarketStructureResult {
   const sideways = detectSidewaysMarket(candles, atr);
   if (sideways.isSideways) {
@@ -557,6 +668,24 @@ export function runMarketStructureChecks(
   const breakout = analyzeBreakoutStrength(candles, atr, volumeSpike, signalType);
   if (breakout.isWeak) {
     return { pass: false, rejectionReason: breakout.reason, adx: sideways.adx };
+  }
+
+  // Phase 6.1 checks — only run when ind1h is provided (scanner always passes it)
+  if (ind1h) {
+    const fakeBO = detectFakeBreakout(candles, volumeSpike, signalType);
+    if (fakeBO.isFake) {
+      return { pass: false, rejectionReason: fakeBO.reason, adx: sideways.adx };
+    }
+
+    const euphoric = detectEuphoricSpike(candles, ind1h, signalType);
+    if (euphoric.isEuphoric) {
+      return { pass: false, rejectionReason: euphoric.reason, adx: sideways.adx };
+    }
+
+    const declining = detectMomentumDecline(candles, ind1h, signalType);
+    if (declining.isDeclining) {
+      return { pass: false, rejectionReason: declining.reason, adx: sideways.adx };
+    }
   }
 
   return { pass: true, rejectionReason: null, adx: sideways.adx };
