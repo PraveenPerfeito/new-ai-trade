@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { TradingSignal, CoinData, ScannerMode, DashboardStats } from '@/types';
+import { TradingSignal, CoinData, ScannerMode, DashboardStats, SectorStats } from '@/types';
 import { SchedulerStatus } from '@/lib/scheduler';
 import { formatPrice, formatPct, cn } from '@/lib/utils';
+import { detectClustering } from '@/lib/sectors';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { StatsBar }        from './stats-bar';
 import { ScannerControls } from './scanner-controls';
@@ -243,6 +244,7 @@ export function MarketScanner() {
 
         <div className="flex-shrink-0"><StatsBar stats={stats} /></div>
         {coins.length > 0 && <div className="flex-shrink-0"><MarketRegimeBanner coins={coins} signals={signals} /></div>}
+        <SectorRotationStrip coins={coins} />
         <ActiveOpportunitySummary signals={signals} />
         <div className="flex-shrink-0"><MarketWidgets coins={coins} loading={coinsLoading} /></div>
         <div className="flex-shrink-0"><TopMovers coins={coins} loading={coinsLoading} /></div>
@@ -345,17 +347,80 @@ function LiveDot({ isScanning, autoOn }: { isScanning: boolean; autoOn: boolean 
   );
 }
 
+// ─── Sector Rotation Strip ────────────────────────────────────────────────────
+
+function SectorRotationStrip({ coins }: { coins: CoinData[] }) {
+  const [sectors, setSectors] = useState<SectorStats[]>([]);
+
+  useEffect(() => {
+    if (coins.length === 0) return;
+    fetch('/api/market/sectors')
+      .then(r => r.json())
+      .then(d => { if (d.success) setSectors(d.sectors); })
+      .catch(() => null);
+  }, [coins.length]);
+
+  if (sectors.length === 0) return null;
+
+  const top    = sectors.slice(0, 6);
+  const maxAbs = Math.max(...top.map(s => Math.abs(s.avgChange24h)), 1);
+
+  const momentumColor: Record<string, string> = {
+    ACCELERATING:  '#00d084',
+    STABLE:        '#3b82f6',
+    DECELERATING:  '#f59e0b',
+    REVERSING:     '#ff3b5c',
+  };
+
+  return (
+    <div className="flex items-center gap-2 px-4 py-2 mb-3 glass-surface rounded-xl border border-terminal-border/30 flex-shrink-0 overflow-x-auto no-scrollbar">
+      <span className="text-[10px] font-mono text-terminal-dim flex-shrink-0">Sectors ·</span>
+      {top.map(s => {
+        const color  = momentumColor[s.momentum] ?? '#6b7280';
+        const barPct = Math.round((Math.abs(s.avgChange24h) / maxAbs) * 100);
+        const up     = s.avgChange24h >= 0;
+        return (
+          <div key={s.name} className="flex flex-col gap-0.5 flex-shrink-0 min-w-[52px]">
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-[9px] font-mono text-terminal-muted truncate">{s.name}</span>
+              <span
+                className="text-[9px] font-mono font-bold"
+                style={{ color }}
+              >
+                {up ? '+' : ''}{s.avgChange24h.toFixed(1)}%
+              </span>
+            </div>
+            <div className="w-full h-0.5 bg-terminal-surface rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-700"
+                style={{ width: `${barPct}%`, backgroundColor: color + 'cc' }}
+              />
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[8px] text-terminal-dim">{Math.round(s.breadth * 100)}%▲</span>
+              <span className="text-[8px]" style={{ color: color + '90' }}>
+                {s.momentum === 'ACCELERATING' ? '⚡' : s.momentum === 'REVERSING' ? '↩' : s.momentum === 'STABLE' ? '→' : '↘'}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Active Opportunity Summary ──────────────────────────────────────────────
 
 function ActiveOpportunitySummary({ signals }: { signals: TradingSignal[] }) {
   const qual = signals.filter(s => s.confidence >= 80);
   if (qual.length === 0) return null;
 
-  const top      = [...qual].sort((a, b) => b.confidence - a.confidence)[0];
-  const gradeA   = qual.filter(s => s.riskGrade === 'A').length;
-  const aiCount  = qual.filter(s => s.aiValidated).length;
-  const futCount = qual.filter(s => s.futuresData != null).length;
-  const isBuy    = top.type === 'BUY';
+  const top        = [...qual].sort((a, b) => b.confidence - a.confidence)[0];
+  const gradeA     = qual.filter(s => s.riskGrade === 'A').length;
+  const aiCount    = qual.filter(s => s.aiValidated).length;
+  const futCount   = qual.filter(s => s.futuresData != null).length;
+  const isBuy      = top.type === 'BUY';
+  const clustering = detectClustering(qual);
 
   return (
     <div className="flex items-center gap-2 px-4 py-2 mb-3 glass-surface rounded-xl border border-terminal-border/30 flex-shrink-0 overflow-x-auto no-scrollbar">
@@ -391,6 +456,12 @@ function ActiveOpportunitySummary({ signals }: { signals: TradingSignal[] }) {
       )}
 
       <div className="flex-1 min-w-[8px]" />
+
+      {clustering.detected && clustering.warning && (
+        <span className="inline-flex items-center gap-1 text-[10px] font-mono text-signal-high border border-signal-high/20 bg-signal-high/5 px-2 py-0.5 rounded-md shrink-0">
+          ⚠ {clustering.warning}
+        </span>
+      )}
 
       <span className="text-[10px] font-mono text-terminal-dim shrink-0">{qual.length} signals ≥80%</span>
     </div>

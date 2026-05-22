@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { TradingSignal, RiskGrade, SignalState } from '@/types';
+import { TradingSignal, RiskGrade, SignalState, McapTier } from '@/types';
 import { formatPrice, timeAgo, cn } from '@/lib/utils';
-import { TrendingUp, TrendingDown, Brain, Send, Zap, ShieldCheck, AlertTriangle, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { computeSignalFreshness, formatAge } from '@/lib/signal-aging';
+import { TIER_COLORS } from '@/lib/mcap-tiers';
+import { TrendingUp, TrendingDown, Brain, Send, Zap, ShieldCheck, AlertTriangle, Loader2, ChevronDown, ChevronUp, Clock, Activity } from 'lucide-react';
 
 interface Props {
   signals: TradingSignal[];
@@ -136,9 +138,10 @@ function SignalCard({
     }
   };
 
-  const isBuy = signal.type === 'BUY';
-  const dir   = isBuy ? 1 : -1;
-  const atr   = signal.indicators.atr;
+  const isBuy    = signal.type === 'BUY';
+  const dir      = isBuy ? 1 : -1;
+  const atr      = signal.indicators.atr;
+  const freshness = computeSignalFreshness(signal);
 
   // TP levels from ATR
   const tp1 = signal.entryPrice + dir * atr * 1;
@@ -193,6 +196,8 @@ function SignalCard({
             <span className="text-[9px] text-terminal-dim hidden sm:inline">
               {signal.scannerMode.replace('_', ' ')}
             </span>
+            {/* Signal freshness */}
+            <FreshnessBadge freshness={freshness.status} ageMin={freshness.ageMinutes} />
           </div>
           {/* Confidence value */}
           <span
@@ -366,10 +371,51 @@ function SignalCard({
               color="green"
             />
             {signal.aiValidated && <MicroBadge label="AI ✓" color="purple" />}
+            {/* Phase 6.2 intelligence badges */}
+            {signal.mcapTier && <McapTierBadge tier={signal.mcapTier} />}
+            {signal.sectorName && signal.sectorName !== 'Other' && (
+              <MicroBadge label={signal.sectorName} />
+            )}
             {signal.telegramSent && <Send size={9} className="text-signal-medium opacity-70" />}
           </div>
           <span className="text-[9px] text-terminal-dim flex-shrink-0">{timeAgo(signal.createdAt)}</span>
         </div>
+
+        {/* Entry quality + extension risk */}
+        {(signal.entryQualityScore != null || signal.extensionRisk) && (
+          <div className="flex items-center gap-2 mt-1.5">
+            {signal.entryQualityScore != null && (
+              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                <Activity size={8} className="text-terminal-dim flex-shrink-0" />
+                <span className="text-[9px] text-terminal-dim flex-shrink-0">Entry</span>
+                <div className="flex-1 h-1 bg-terminal-surface rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-700"
+                    style={{
+                      width:      `${signal.entryQualityScore}%`,
+                      background: signal.entryQualityScore >= 70 ? '#00d084'
+                                : signal.entryQualityScore >= 50 ? '#f59e0b'
+                                : '#ff3b5c',
+                    }}
+                  />
+                </div>
+                <span className="text-[9px] font-mono text-terminal-muted w-6 text-right flex-shrink-0">
+                  {signal.entryQualityScore}
+                </span>
+              </div>
+            )}
+            {signal.extensionRisk && signal.extensionRisk !== 'LOW' && (
+              <span className={cn(
+                'text-[9px] font-mono px-1.5 py-0.5 rounded border flex-shrink-0',
+                signal.extensionRisk === 'HIGH'
+                  ? 'bg-bear-muted text-bear-text border-bear-DEFAULT/30'
+                  : 'bg-yellow-900/20 text-yellow-400 border-yellow-500/30',
+              )}>
+                {signal.extensionRisk === 'HIGH' ? '⚠ EXTENDED' : '~ Extended'}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Strengths */}
         {signal.strengths && signal.strengths.length > 0 && (
@@ -704,6 +750,41 @@ function ExhaustionDot({ risk }: { risk: 'low' | 'medium' | 'high' }) {
       style={{ backgroundColor: color }}
       title={`Exhaustion: ${risk}`}
     />
+  );
+}
+
+function FreshnessBadge({ freshness, ageMin }: { freshness: 'FRESH' | 'AGING' | 'STALE'; ageMin: number }) {
+  const styles = {
+    FRESH: 'text-bull-text border-bull-DEFAULT/20 bg-bull-muted/30',
+    AGING: 'text-yellow-400 border-yellow-500/20 bg-yellow-900/10',
+    STALE: 'text-terminal-dim border-terminal-border/40 bg-transparent',
+  };
+  return (
+    <span className={cn(
+      'inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded border flex-shrink-0',
+      styles[freshness],
+    )}>
+      <Clock size={7} />
+      {freshness === 'FRESH' ? 'FRESH' : freshness === 'AGING' ? `${formatAge(ageMin)}` : `STALE ${formatAge(ageMin)}`}
+    </span>
+  );
+}
+
+function McapTierBadge({ tier }: { tier: McapTier }) {
+  const labels: Record<McapTier, string> = {
+    mega: 'T10', large: 'T25', mid: 'T50', small: 'T100',
+  };
+  return (
+    <span
+      className="text-[9px] font-mono px-1.5 py-0.5 rounded border flex-shrink-0"
+      style={{
+        color:           TIER_COLORS[tier],
+        borderColor:     TIER_COLORS[tier] + '30',
+        backgroundColor: TIER_COLORS[tier] + '10',
+      }}
+    >
+      {labels[tier]}
+    </span>
   );
 }
 

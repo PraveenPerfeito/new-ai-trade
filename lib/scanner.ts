@@ -21,6 +21,9 @@ import { computeSignalState } from './signal-state';
 import { calcInstitutionalScore } from './institutional-score';
 import { saveSignal, createScanRun, updateScanRun, upsertCoins } from './supabase';
 import { sendSignalAlert, sendScanSummary } from './telegram';
+import { assessEntryQuality } from './entry-quality';
+import { getTierProfile } from './mcap-tiers';
+import { classifySector } from './sectors';
 import { sleep } from './utils';
 import { createLogger } from './logger'
 import { getEnv } from './env';
@@ -320,6 +323,14 @@ export async function scanCoin(
     // Enforce RR ≥ 2.0 — reject poor risk/reward before expensive AI call
     if (levels.rrRatio < config.minRRRatio) return null;
 
+    // Step 8.5: Market-cap tier profile + adaptive continuation gate
+    const tierProfile = getTierProfile(coin.rank);
+    // Small-cap noise gate: require stronger volume than usual
+    if (ind1h.volumeSpike < tierProfile.volumeRequirement && tierProfile.tier === 'small') {
+      log.info({ symbol: coin.symbol, tier: tierProfile.tier, volumeSpike: ind1h.volumeSpike }, 'rejected — insufficient volume for small-cap tier');
+      return null;
+    }
+
     // Step 9: Risk engine validation — reject unsafe setups before AI call
     const risk = validateRisk({
       entry:            levels.entryPrice,
@@ -369,9 +380,17 @@ export async function scanCoin(
     const continuation    = analyzeContinuation(candles1h, ind1h, signalType);
     const regimeAlignment = regime ? scoreRegimeAlignment(signalType, regime.regime) : 0;
 
+    // Phase 6.2: Entry quality assessment (pre-AI diagnostic)
+    const entryQuality = assessEntryQuality(ind1h, ind4h, signalType, levels.rrRatio);
+    // Reject high-extension-risk signals for small/mid caps — they amplify whipsaw
+    if (entryQuality.extensionRisk === 'HIGH' && (tierProfile.tier === 'small' || tierProfile.tier === 'mid')) {
+      log.info({ symbol: coin.symbol, tier: tierProfile.tier, extensionRisk: 'HIGH' }, 'rejected — high extension risk for small/mid-cap');
+      return null;
+    }
+
     // Reject low-continuation setups early (saves AI tokens)
-    if (continuation.continuationProbability < 25) {
-      log.info({ symbol: coin.symbol, contProb: continuation.continuationProbability }, 'rejected — insufficient continuation probability');
+    if (continuation.continuationProbability < tierProfile.continuationMinimum) {
+      log.info({ symbol: coin.symbol, contProb: continuation.continuationProbability, minRequired: tierProfile.continuationMinimum }, 'rejected — insufficient continuation probability');
       return null;
     }
 
@@ -427,6 +446,12 @@ export async function scanCoin(
       regimeAlignmentScore: regimeAlignment,
       marketRegime:         regime?.regime,
       continuation,
+      // Phase 6.2 adaptive quant intelligence
+      mcapTier:            tierProfile.tier,
+      sectorName:          classifySector(coin.symbol),
+      entryQualityScore:   entryQuality.score,
+      extensionRisk:       entryQuality.extensionRisk,
+      pullbackQuality:     entryQuality.pullbackQuality,
     };
   } catch (err) {
     log.error({ symbol: coin.symbol, err }, 'scanCoin error');

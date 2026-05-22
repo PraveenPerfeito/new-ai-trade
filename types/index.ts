@@ -43,6 +43,52 @@ export type ScannerMode = 'spot' | 'futures' | 'high_confidence' | 'trending';
 export type Timeframe = '15m' | '1h' | '4h' | '1d';
 export type RiskGrade = 'A' | 'B' | 'C' | 'D' | 'F';
 
+// ─── Phase 6.2 — Adaptive Quant Intelligence ─────────────────────────────────
+
+export type McapTier      = 'mega' | 'large' | 'mid' | 'small';
+export type SignalFreshness = 'FRESH' | 'AGING' | 'STALE';
+export type ExtensionRisk   = 'LOW' | 'MODERATE' | 'HIGH';
+export type PullbackQuality = 'STRONG' | 'MODERATE' | 'WEAK' | 'NONE';
+export type SectorMomentum  = 'ACCELERATING' | 'STABLE' | 'DECELERATING' | 'REVERSING';
+export type SectorName =
+  | 'BTC' | 'L1/L2' | 'DeFi' | 'AI' | 'Meme'
+  | 'Gaming' | 'Infrastructure' | 'RWA' | 'Exchange'
+  | 'Privacy' | 'Payments' | 'Other';
+
+export interface SignalFreshnessData {
+  status:           SignalFreshness;
+  score:            number;   // 0-100
+  ageMinutes:       number;
+  lifecycleMinutes: number;
+  decayPct:         number;   // 0-1, fraction of lifecycle elapsed
+}
+
+export interface EntryQualityResult {
+  score:           number;         // 0-100, higher = better entry
+  extensionRisk:   ExtensionRisk;
+  pullbackQuality: PullbackQuality;
+  lateEntry:       boolean;
+  factors:         string[];
+}
+
+export interface SectorStats {
+  name:            SectorName;
+  coinCount:       number;
+  gainers:         number;
+  losers:          number;
+  breadth:         number;   // 0-1, gainers/total
+  avgChange24h:    number;
+  momentum:        SectorMomentum;
+  rank:            number;   // 1 = strongest
+}
+
+export interface ClusteringState {
+  detected:         boolean;
+  dominantSector?:  SectorName;
+  concentration:    number;   // 0-1, fraction of signals from dominant sector
+  warning?:         string;
+}
+
 // ─── Phase 6.1 — Tactical Intelligence types ─────────────────────────────────
 
 export type SignalState =
@@ -129,6 +175,12 @@ export interface TradingSignal {
   regimeAlignmentScore?:   number;
   marketRegime?:           MarketRegime;
   continuation?:           ContinuationAnalysis;
+  // Phase 6.2 — adaptive quant intelligence
+  mcapTier?:               McapTier;
+  sectorName?:             SectorName;
+  entryQualityScore?:      number;
+  extensionRisk?:          ExtensionRisk;
+  pullbackQuality?:        PullbackQuality;
 }
 
 export interface ScanRun {
