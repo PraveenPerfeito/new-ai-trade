@@ -1,4 +1,4 @@
-import { TradingSignal, TPHitEvent, SLHitEvent, DailySummaryData } from '@/types';
+import { TradingSignal, TPHitEvent, SLHitEvent, DailySummaryData, RejectionStats } from '@/types';
 import { createLogger } from './logger';
 
 const log = createLogger('lib/telegram');
@@ -273,22 +273,52 @@ ${d.highConfSignals >= 3
 <i>Not financial advice. All signals are informational only.</i>`;
 }
 
+const REJECTION_STAGE_SHORT: Partial<Record<string, string>> = {
+  ai_validation:    'AI Confidence',
+  trend_strength:   'Weak Trend',
+  market_structure: 'Market Structure',
+  continuation:     'Low Continuation',
+  setup_score:      'Setup Score',
+  mtf:              'TF Conflict',
+  direction:        'No Direction',
+  rr_ratio:         'Poor R:R',
+  volatility:       'Volatility',
+  volume_tier:      'Low Volume',
+  risk_engine:      'Risk Engine',
+  extension_risk:   'Extension Risk',
+  funding_rate:     'Funding Rate',
+  candles:          'Data Error',
+};
+
 function formatScanSummaryText(
   coinsScanned: number,
   signalsFound: number,
   highConf: number,
   durationMs: number,
   mode: string,
+  stats?: RejectionStats,
 ): string {
   const modeLabel = mode.replace('_', ' ').toUpperCase();
   const icon = signalsFound > 0 ? '📡' : '📭';
+
+  let rejectionBlock = '';
+  if (stats && stats.totalRejected > 0) {
+    const lines = stats.topReasons.slice(0, 4)
+      .map(r => `  · ${REJECTION_STAGE_SHORT[r.stage] ?? r.stage}: ${r.count} (${r.pct}%)`)
+      .join('\n');
+    const nearMissLine = stats.nearMisses.length > 0
+      ? `\n⚡ Near misses: ${stats.nearMisses.length} almost-valid setups`
+      : '';
+    rejectionBlock = `\n🔎 <b>Filter Summary</b>\n${lines}${nearMissLine}\n`;
+  }
+
   return `${icon} <b>Scan Complete</b>  [${modeLabel}]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⏱ Duration:   ${(durationMs / 1000).toFixed(1)}s
 🔍 Scanned:   ${coinsScanned} coins
 📊 Signals:   ${signalsFound} found
 ⭐ High conf: ${highConf} (≥85%)
-━━━━━━━━━━━━━━━━━━━━━━━━━━
+${rejectionBlock}━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${signalsFound === 0 ? '<i>No signals met quality filters this scan.</i>' : `<i>${signalsFound} signal${signalsFound > 1 ? 's' : ''} sent above.</i>`}`;
 }
 
@@ -318,6 +348,7 @@ export async function sendScanSummary(
   highConf: number,
   durationMs: number,
   mode = 'spot',
+  stats?: RejectionStats,
 ): Promise<boolean> {
-  return sendMessage(formatScanSummaryText(coinsScanned, signalsFound, highConf, durationMs, mode));
+  return sendMessage(formatScanSummaryText(coinsScanned, signalsFound, highConf, durationMs, mode, stats));
 }

@@ -25,8 +25,11 @@ import { assessEntryQuality } from './entry-quality';
 import { getTierProfile } from './mcap-tiers';
 import { classifySector } from './sectors';
 import { sleep } from './utils';
-import { createLogger } from './logger'
+import { createLogger } from './logger';
 import { getEnv } from './env';
+import {
+  startTracking, trackRejection, trackCoinStart, trackAccepted, getRejectionStats,
+} from './rejection-tracker';
 
 const log = createLogger('lib/scanner');
 
@@ -73,6 +76,23 @@ const CONFIGS: Record<ScannerMode, ScannerConfig> = {
     scannerMode:       'trending',
   },
 };
+
+// ─── Adaptive threshold engine ──────────────────────────────────────────────
+// Thresholds adapt to market regime to prevent over-filtering in sideways markets
+// while tightening in high-volatility to reflect unreliable price action.
+//
+//   SIDEWAYS:        soften trend/setup/continuation — momentum naturally weaker
+//   HIGH_VOLATILITY: tighten trend strength — price action driven by noise
+//   Other regimes:   use default values
+
+function getAdaptiveMin(regime?: MarketRegimeSnapshot) {
+  const r = regime?.regime;
+  return {
+    strengthMin:   r === 'SIDEWAYS' ? 25 : r === 'HIGH_VOLATILITY' ? 32 : 30,
+    setupScoreMin: r === 'SIDEWAYS' ? 60 : 65,
+    contMinBuffer: r === 'SIDEWAYS' ? 5  : 0,   // subtracted from tier continuationMinimum
+  };
+}
 
 // ─── Setup quality detection ────────────────────────────────────────────────
 
@@ -193,11 +213,6 @@ export function detectSetup(
  *   spot/trending:      target = 2× ATR, stop = 1× ATR → RR 1:2.0
  *   futures:            target = 2.5× ATR, stop = 1× ATR → RR 1:2.5
  *   high_confidence:    target = 3× ATR, stop = 1× ATR → RR 1:3.0
- *
- * Using ATR for levels is important because:
- *   1. It adapts to each coin's inherent volatility (BTC vs. altcoin)
- *   2. Stops are placed outside normal noise (1 ATR from entry)
- *   3. Target is a realistic multiple of the expected daily range
  */
 export function tradeLevels(price: number, atr: number, type: 'BUY' | 'SELL', mode: ScannerMode) {
   const targetMult = mode === 'high_confidence' ? 3.0
@@ -230,21 +245,19 @@ async function fetchKlines(coin: CoinData, interval: string, limit: number, mode
 // ─── Single coin scan ───────────────────────────────────────────────────────
 
 /**
- * Full pipeline for a single coin:
- *   1. Fetch 1h + 4h candles (100 each)
- *   2. Calculate indicators for both timeframes
- *   3. Multi-timeframe confirmation — reject if 1h/4h trends conflict
- *   4. Volatility gate — reject EXTREME (ATR > 8% of price on 1h)
- *   5. Trend strength gate — reject weak/choppy trends (combined < 30)
- *   5b. Market structure gate — sideways, overextension, candle structure,
- *       trend exhaustion, fake volume, S/R rejection, weak breakout
- *   6. Setup scoring (pre-AI) — must score ≥ 65/100
- *   7. Trade level calculation (ATR-based) — must achieve RR ≥ 2.0
- *   8. Risk engine — grade A-F gating
- *   9. Futures intelligence — funding rate, OI, momentum
- *  10. AI validation — final confidence scoring and reasoning
+ * Full pipeline for a single coin. Every rejection calls trackRejection()
+ * with the reason, metrics, and whether it was a near-miss (within ~15% of
+ * passing threshold) to power the diagnostics dashboard.
  *
- * Returns null at any rejection step to avoid noisy signals.
+ * Adaptive thresholds: getAdaptiveMin() softens or tightens gates based on the
+ * current market regime. SIDEWAYS → softer (continuation harder to find);
+ * HIGH_VOLATILITY → tighter trend gate (price action noise-dominated).
+ *
+ * Calibration vs. earlier phases:
+ *   - mid-cap HIGH extension risk: caution flag only, no longer hard-rejected
+ *   - continuation minimum: regime-adaptive buffer applied
+ *   - combined trend minimum: regime-adaptive
+ *   - setup score minimum: regime-adaptive
  */
 export async function scanCoin(
   coin: CoinData,
@@ -252,6 +265,9 @@ export async function scanCoin(
   config: ScannerConfig,
   regime?: MarketRegimeSnapshot,
 ): Promise<TradingSignal | null> {
+  const sym = coin.symbol;
+  const adaptedMin = getAdaptiveMin(regime);
+
   try {
     // Step 1: Fetch both timeframes in parallel
     const [candles1h, candles4h] = await Promise.all([
@@ -260,32 +276,58 @@ export async function scanCoin(
     ]);
 
     // Need at least 60 candles for indicators to be reliable (EMA-50 + buffer)
-    if (candles1h.length < 60 || candles4h.length < 60) return null;
+    if (candles1h.length < 60 || candles4h.length < 60) {
+      trackRejection({
+        symbol: sym, stage: 'candles',
+        reason: `Insufficient candle history (1h: ${candles1h.length}, 4h: ${candles4h.length} — need 60+)`,
+        metrics: { candles1h: candles1h.length, candles4h: candles4h.length },
+        isNearMiss: false,
+      });
+      return null;
+    }
 
     // Step 2: Calculate indicators
     const ind1h = calculateAllIndicators(candles1h);
     const ind4h = calculateAllIndicators(candles4h);
 
     // Step 3: Determine direction from 4h (higher TF leads)
-    // 4h chart is the trend filter — we only take signals in its direction
     let signalType: 'BUY' | 'SELL';
     if      (ind4h.trend === 'BULLISH') signalType = 'BUY';
     else if (ind4h.trend === 'BEARISH') signalType = 'SELL';
-    else return null; // 4h ranging → no clear direction, skip
+    else {
+      trackRejection({
+        symbol: sym, stage: 'direction',
+        reason: `4h trend RANGING — no directional bias (RSI: ${ind4h.rsi.toFixed(1)})`,
+        metrics: { trend4h: ind4h.trend, rsi4h: +ind4h.rsi.toFixed(1) },
+        isNearMiss: false,
+      });
+      return null;
+    }
 
     // Step 4: Multi-timeframe confirmation (1h must align with 4h)
     const mtf = confirmMultiTimeframe(ind1h, ind4h, signalType);
     if (!mtf.confirmed) {
-      // Uncomment for verbose debugging:
-      // console.log(`[Scanner] ${coin.symbol} MTF rejected: ${mtf.reason}`);
+      trackRejection({
+        symbol: sym, stage: 'mtf',
+        reason: mtf.reason ?? `MTF conflict: 1h ${ind1h.trend} ≠ 4h ${ind4h.trend}`,
+        metrics: { trend1h: ind1h.trend, trend4h: ind4h.trend, rsi1h: +ind1h.rsi.toFixed(1) },
+        isNearMiss: false,
+      });
       return null;
     }
 
     // Step 5: Volatility gate — reject during extreme moves
-    // Uses 1h ATR as it reflects current short-term volatility
     const volatility: VolatilityRating = calcVolatilityRating(ind1h.atr, ind1h.currentPrice);
     if (volatility === 'EXTREME') {
-      log.info({ symbol: coin.symbol }, 'rejected — EXTREME volatility');
+      const atrPct = ind1h.currentPrice > 0 ? (ind1h.atr / ind1h.currentPrice) * 100 : 0;
+      trackRejection({
+        symbol: sym, stage: 'volatility',
+        reason: `EXTREME volatility — ATR ${atrPct.toFixed(2)}% of price (threshold >8%)`,
+        metrics: { atrPct: +atrPct.toFixed(2) },
+        threshold: 8, actual: +atrPct.toFixed(2),
+        isNearMiss: atrPct <= 10,
+      });
+      log.info({ symbol: sym }, 'rejected — EXTREME volatility');
       return null;
     }
 
@@ -294,40 +336,97 @@ export async function scanCoin(
     const strength4h = calcTrendStrength(ind4h);
     const combinedStrength = strength1h * 0.4 + strength4h * 0.6;
 
-    // Minimum combined strength of 30 — below this the trend is too weak/choppy
-    if (combinedStrength < 30) return null;
+    if (combinedStrength < adaptedMin.strengthMin) {
+      trackRejection({
+        symbol: sym, stage: 'trend_strength',
+        reason: `Combined trend ${combinedStrength.toFixed(0)} < ${adaptedMin.strengthMin}${adaptedMin.strengthMin !== 30 ? ` (adaptive — regime: ${regime?.regime})` : ''}`,
+        metrics: {
+          combinedStrength: +combinedStrength.toFixed(1),
+          strength1h:       +strength1h.toFixed(1),
+          strength4h:       +strength4h.toFixed(1),
+          threshold:        adaptedMin.strengthMin,
+        },
+        threshold: adaptedMin.strengthMin,
+        actual:    +combinedStrength.toFixed(1),
+        isNearMiss: combinedStrength >= adaptedMin.strengthMin - 5,
+      });
+      return null;
+    }
 
-    // Step 5b: Market structure gate — 10 structural filters (Phase 6.1: +3 new filters)
+    // Step 5b: Market structure gate
     const structure = runMarketStructureChecks(
       candles1h,
       ind1h.atr,
       ind1h.currentPrice,
       ind1h.volumeSpike,
       signalType,
-      ind1h,  // enables euphoric-spike, fake-breakout, momentum-decline checks
+      ind1h,
     );
     if (!structure.pass) {
-      log.info({ symbol: coin.symbol, reason: structure.rejectionReason }, 'structure gate rejected');
+      trackRejection({
+        symbol: sym, stage: 'market_structure',
+        reason: structure.rejectionReason ?? 'Market structure gate failed',
+        metrics: { adx: +structure.adx.toFixed(1), volumeSpike: +ind1h.volumeSpike.toFixed(2) },
+        isNearMiss: false,
+      });
+      log.info({ symbol: sym, reason: structure.rejectionReason }, 'structure gate rejected');
       return null;
     }
-    // ADX available for context in subsequent steps (included in setupDescription)
 
     // Step 7: Setup quality scoring (pre-AI, fast)
-    const { hasSetup, description } = detectSetup(ind1h, ind4h, signalType, strength1h, strength4h);
-    if (!hasSetup) return null;
+    const { description, preScore } = detectSetup(ind1h, ind4h, signalType, strength1h, strength4h);
+    if (preScore < adaptedMin.setupScoreMin) {
+      trackRejection({
+        symbol: sym, stage: 'setup_score',
+        reason: `Pre-AI score ${preScore} < ${adaptedMin.setupScoreMin}${adaptedMin.setupScoreMin !== 65 ? ` (adaptive — regime: ${regime?.regime})` : ''}`,
+        metrics: { preScore, threshold: adaptedMin.setupScoreMin },
+        threshold: adaptedMin.setupScoreMin,
+        actual:    preScore,
+        isNearMiss: preScore >= adaptedMin.setupScoreMin - 8,
+      });
+      return null;
+    }
 
     // Step 8: Trade level calculation
-    if (ind1h.atr === 0) return null; // not enough data
+    if (ind1h.atr === 0) {
+      trackRejection({
+        symbol: sym, stage: 'rr_ratio',
+        reason: 'ATR is zero — insufficient price history for level calculation',
+        metrics: { atr: 0 },
+        isNearMiss: false,
+      });
+      return null;
+    }
     const levels = tradeLevels(ind1h.currentPrice, ind1h.atr, signalType, mode);
 
     // Enforce RR ≥ 2.0 — reject poor risk/reward before expensive AI call
-    if (levels.rrRatio < config.minRRRatio) return null;
+    if (levels.rrRatio < config.minRRRatio) {
+      trackRejection({
+        symbol: sym, stage: 'rr_ratio',
+        reason: `R:R ${levels.rrRatio.toFixed(2)} < ${config.minRRRatio} minimum`,
+        metrics: { rrRatio: +levels.rrRatio.toFixed(2) },
+        threshold: config.minRRRatio,
+        actual:    +levels.rrRatio.toFixed(2),
+        isNearMiss: levels.rrRatio >= config.minRRRatio * 0.87,
+      });
+      return null;
+    }
 
-    // Step 8.5: Market-cap tier profile + adaptive continuation gate
+    // Step 8.5: Market-cap tier profile + adaptive volume gate
     const tierProfile = getTierProfile(coin.rank);
-    // Small-cap noise gate: require stronger volume than usual
-    if (ind1h.volumeSpike < tierProfile.volumeRequirement && tierProfile.tier === 'small') {
-      log.info({ symbol: coin.symbol, tier: tierProfile.tier, volumeSpike: ind1h.volumeSpike }, 'rejected — insufficient volume for small-cap tier');
+    // In SIDEWAYS regime, reduce volume requirement by 0.2 — harder to find volume expansion
+    const inSideways = regime?.regime === 'SIDEWAYS';
+    const adaptedVolumeReq = Math.max(1.0, tierProfile.volumeRequirement - (inSideways ? 0.2 : 0));
+    if (ind1h.volumeSpike < adaptedVolumeReq && tierProfile.tier === 'small') {
+      trackRejection({
+        symbol: sym, stage: 'volume_tier',
+        reason: `Volume ${ind1h.volumeSpike.toFixed(2)}× < ${adaptedVolumeReq.toFixed(1)}× required for ${tierProfile.tier}-cap${inSideways ? ' (sideways-adjusted)' : ''}`,
+        metrics: { volumeSpike: +ind1h.volumeSpike.toFixed(2), required: adaptedVolumeReq, tier: tierProfile.tier },
+        threshold: adaptedVolumeReq,
+        actual:    +ind1h.volumeSpike.toFixed(2),
+        isNearMiss: ind1h.volumeSpike >= adaptedVolumeReq * 0.85,
+      });
+      log.info({ symbol: sym, tier: tierProfile.tier, volumeSpike: ind1h.volumeSpike }, 'rejected — insufficient volume for small-cap tier');
       return null;
     }
 
@@ -346,7 +445,13 @@ export async function scanCoin(
     });
 
     if (!risk.pass) {
-      log.info({ symbol: coin.symbol, summary: risk.summary }, 'risk engine rejected');
+      trackRejection({
+        symbol: sym, stage: 'risk_engine',
+        reason: risk.summary,
+        metrics: { riskScore: risk.riskScore, qualityScore: risk.qualityScore, grade: risk.riskGrade },
+        isNearMiss: risk.riskGrade === 'F' && risk.qualityScore >= 30,
+      });
+      log.info({ symbol: sym, summary: risk.summary }, 'risk engine rejected');
       return null;
     }
 
@@ -366,9 +471,17 @@ export async function scanCoin(
         });
 
         // Gate: reject when funding rate is extreme (>0.2% per 8h = 0.002)
-        // — extreme funding means overcrowded trade and imminent flush risk
         if (Math.abs(futuresData.fundingRate) > 0.002) {
-          log.info({ symbol: coin.symbol, fundingRate: futuresData.fundingRate }, 'rejected — extreme funding rate');
+          const frPct = Math.abs(futuresData.fundingRate) * 100;
+          trackRejection({
+            symbol: sym, stage: 'funding_rate',
+            reason: `Extreme funding rate ${frPct.toFixed(3)}% (>0.2% threshold — overcrowded trade)`,
+            metrics: { fundingRate: +frPct.toFixed(4), bias: futuresData.fundingBias },
+            threshold: 0.2,
+            actual:    +frPct.toFixed(4),
+            isNearMiss: frPct <= 0.25,
+          });
+          log.info({ symbol: sym, fundingRate: futuresData.fundingRate }, 'rejected — extreme funding rate');
           return null;
         }
       } catch {
@@ -382,15 +495,43 @@ export async function scanCoin(
 
     // Phase 6.2: Entry quality assessment (pre-AI diagnostic)
     const entryQuality = assessEntryQuality(ind1h, ind4h, signalType, levels.rrRatio);
-    // Reject high-extension-risk signals for small/mid caps — they amplify whipsaw
-    if (entryQuality.extensionRisk === 'HIGH' && (tierProfile.tier === 'small' || tierProfile.tier === 'mid')) {
-      log.info({ symbol: coin.symbol, tier: tierProfile.tier, extensionRisk: 'HIGH' }, 'rejected — high extension risk for small/mid-cap');
-      return null;
+
+    // Extension risk gating:
+    //   small-cap: hard reject — small caps amplify whipsaw from extended entries
+    //   mid-cap:   caution flag only (signal carries extensionRisk:'HIGH' for UI)
+    //   mega/large: no gate — institutional coins have deep liquidity buffers
+    if (entryQuality.extensionRisk === 'HIGH') {
+      if (tierProfile.tier === 'small') {
+        trackRejection({
+          symbol: sym, stage: 'extension_risk',
+          reason: 'High extension risk — small-cap hard reject (whipsaw amplification)',
+          metrics: { tier: tierProfile.tier, entryQualityScore: entryQuality.score },
+          isNearMiss: false,
+        });
+        log.info({ symbol: sym, tier: tierProfile.tier }, 'rejected — high extension risk (small-cap)');
+        return null;
+      }
+      // Mid-cap: log caution and continue — signal carries extensionRisk: 'HIGH'
+      log.info({ symbol: sym }, 'high extension risk for mid-cap — caution flag set, continuing');
     }
 
-    // Reject low-continuation setups early (saves AI tokens)
-    if (continuation.continuationProbability < tierProfile.continuationMinimum) {
-      log.info({ symbol: coin.symbol, contProb: continuation.continuationProbability, minRequired: tierProfile.continuationMinimum }, 'rejected — insufficient continuation probability');
+    // Continuation gate with adaptive threshold
+    const contMin = Math.max(15, tierProfile.continuationMinimum - adaptedMin.contMinBuffer);
+    if (continuation.continuationProbability < contMin) {
+      trackRejection({
+        symbol: sym, stage: 'continuation',
+        reason: `Continuation ${continuation.continuationProbability}% < ${contMin}%${adaptedMin.contMinBuffer > 0 ? ` (softened from ${tierProfile.continuationMinimum} — regime: ${regime?.regime})` : ''}`,
+        metrics: {
+          contProb:          continuation.continuationProbability,
+          threshold:         contMin,
+          originalThreshold: tierProfile.continuationMinimum,
+          momentumHealth:    continuation.momentumHealth,
+        },
+        threshold: contMin,
+        actual:    continuation.continuationProbability,
+        isNearMiss: continuation.continuationProbability >= contMin - 5,
+      });
+      log.info({ symbol: sym, contProb: continuation.continuationProbability, minRequired: contMin }, 'rejected — insufficient continuation probability');
       return null;
     }
 
@@ -415,7 +556,22 @@ export async function scanCoin(
     };
 
     const ai = await validateSignal(draft, coin, ind4h, combinedStrength, volatility, continuation, regime);
-    if (!ai.validated || ai.confidence < config.minConfidence) return null;
+    if (!ai.validated || ai.confidence < config.minConfidence) {
+      trackRejection({
+        symbol: sym, stage: 'ai_validation',
+        reason: `AI confidence ${ai.confidence} < ${config.minConfidence} (validated: ${ai.validated})`,
+        metrics: {
+          confidence: ai.confidence,
+          threshold:  config.minConfidence,
+          validated:  ai.validated ? 1 : 0,
+          reasoning:  ai.reasoning.slice(0, 80),
+        },
+        threshold: config.minConfidence,
+        actual:    ai.confidence,
+        isNearMiss: ai.confidence >= config.minConfidence - 7,
+      });
+      return null;
+    }
 
     // Phase 6.1: Compute post-AI intelligence fields
     const signalState      = computeSignalState(ind1h, ind4h, continuation, signalType);
@@ -454,6 +610,12 @@ export async function scanCoin(
       pullbackQuality:     entryQuality.pullbackQuality,
     };
   } catch (err) {
+    trackRejection({
+      symbol: sym, stage: 'candles',
+      reason: `Pipeline error: ${err instanceof Error ? err.message.slice(0, 80) : 'unknown error'}`,
+      metrics: {},
+      isNearMiss: false,
+    });
     log.error({ symbol: coin.symbol, err }, 'scanCoin error');
     return null;
   }
@@ -471,6 +633,9 @@ export async function runScan(
 
   log.info({ mode }, 'scan starting');
   const scanRunId = await createScanRun(mode);
+
+  // Phase 6.6: Initialise rejection tracker for this scan run
+  startTracking(scanRunId);
 
   // Phase 6.1: Prefetch BTC market regime once per scan (cached 5 min)
   let regime: MarketRegimeSnapshot | undefined;
@@ -512,8 +677,6 @@ export async function runScan(
     if (options?.filterCoins?.length) {
       const targetSet = new Set(options.filterCoins.map(s => s.toUpperCase()));
       filtered = filtered.filter(c => targetSet.has(c.symbol.toUpperCase()));
-      // If none of the requested coins made it through the market-cap/volume gates,
-      // fall back to the unfiltered prioritised list so the scan always returns data.
       if (filtered.length === 0) {
         log.warn({ requested: options.filterCoins }, 'coin filter matched 0 after gates — falling back to full list');
         filtered = prioritizeCoins(await getTop100ByMarketCap()).slice(0, config.maxCoinsToScan);
@@ -531,8 +694,8 @@ export async function runScan(
     // 7. Main scan loop — one scanCoin call per coin (MTF handled inside)
     for (const coin of filtered) {
       // Rate limiting: 300ms between coins → ~50 coins ≈ 15s scan time
-      // Each scanCoin makes 2 Binance API calls (1h + 4h) plus 1 Claude call
       await sleep(delayMs);
+      trackCoinStart(); // Phase 6.6: count each coin attempt
 
       const signal = await scanCoin(coin, mode, config, regime);
       coinsScanned++;
@@ -541,13 +704,12 @@ export async function runScan(
 
       signal.scanRunId = scanRunId ?? undefined;
 
-      // Save to Supabase
       const id = await saveSignal(signal);
       if (id) signal.id = id;
 
       signals.push(signal);
+      trackAccepted(); // Phase 6.6: count accepted signals
 
-      // Telegram alert only for high-confidence signals (default ≥ 85%)
       if (signal.confidence >= alertThreshold) {
         const sent = await sendSignalAlert(signal);
         if (sent) signal.telegramSent = true;
@@ -558,6 +720,7 @@ export async function runScan(
 
     const duration = Date.now() - t0;
     const highConf = signals.filter(s => s.confidence >= alertThreshold).length;
+    const rejectionStats = getRejectionStats(); // Phase 6.6: snapshot
 
     if (scanRunId) {
       await updateScanRun(scanRunId, {
@@ -568,10 +731,10 @@ export async function runScan(
       });
     }
 
-    await sendScanSummary(coinsScanned, signals.length, highConf, duration, mode);
-    log.info({ mode, coinsScanned, signals: signals.length, duration }, 'scan complete');
+    await sendScanSummary(coinsScanned, signals.length, highConf, duration, mode, rejectionStats);
+    log.info({ mode, coinsScanned, signals: signals.length, rejections: rejectionStats.totalRejected, duration }, 'scan complete');
 
-    return { scanRunId, signals, coinsScanned, duration, mode };
+    return { scanRunId, signals, coinsScanned, duration, mode, rejectionStats };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
 

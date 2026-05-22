@@ -231,6 +231,48 @@ export interface ScanResult {
   coinsScanned: number;
   duration: number;
   mode: ScannerMode;
+  rejectionStats?: RejectionStats; // Phase 6.6
+}
+
+// ─── Phase 6.6 — Scanner Diagnostics & Rejection Intelligence ────────────────
+
+export type RejectionStage =
+  | 'candles'          // insufficient candle history
+  | 'direction'        // 4h trend ranging — no direction
+  | 'mtf'              // multi-timeframe conflict
+  | 'volatility'       // extreme volatility gate
+  | 'trend_strength'   // combined trend too weak
+  | 'market_structure' // structural failure (overextension, S/R rejection, etc.)
+  | 'setup_score'      // pre-AI scoring below threshold
+  | 'rr_ratio'         // risk/reward below minimum
+  | 'volume_tier'      // insufficient volume for market-cap tier
+  | 'risk_engine'      // risk engine F grade
+  | 'funding_rate'     // extreme futures funding rate
+  | 'extension_risk'   // high extension risk for small-cap
+  | 'continuation'     // continuation probability too low
+  | 'ai_validation'    // Claude AI confidence below threshold
+
+export interface RejectionEntry {
+  symbol:     string
+  stage:      RejectionStage
+  reason:     string
+  metrics:    Record<string, number | string>
+  threshold?: number
+  actual?:    number
+  isNearMiss: boolean
+  scanRunId?: string
+  ts:         number
+}
+
+export interface RejectionStats {
+  totalScanned:  number
+  totalAccepted: number
+  totalRejected: number
+  byStage:       Partial<Record<RejectionStage, number>>
+  nearMisses:    RejectionEntry[]
+  topReasons:    Array<{ stage: RejectionStage; count: number; pct: number }>
+  scanRunId?:    string
+  scannedAt:     number
 }
 
 export interface DashboardStats {
