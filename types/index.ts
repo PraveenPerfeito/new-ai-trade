@@ -670,3 +670,94 @@ export interface QuotaStatus {
     scansPerDay:    number;  // -1 = unlimited
   };
 }
+
+// ─── Phase 6.7 — Quant Outcome Attribution ───────────────────────────────────
+
+/** Flattened JOIN of signal_outcomes + signals tactical fields */
+export interface AttributionRow {
+  signalId:                string
+  symbol:                  string
+  signalType:              SignalType
+  timeframe:               Timeframe
+  scannerMode:             ScannerMode
+  confidence:              number
+  aiValidated:             boolean
+  riskGrade?:              RiskGrade
+  rrRatio:                 number
+  outcome:                 'TP_HIT' | 'SL_HIT' | 'TIMEOUT'
+  rrAchieved?:             number
+  pnlPct?:                 number
+  durationHours?:          number
+  createdAt:               Date
+  resolvedAt?:             Date
+  // Phase 6.7 tactical fields — null for pre-6.7 signals
+  marketRegime?:           MarketRegime
+  institutionalScore?:     number
+  signalState?:            SignalState
+  extensionRisk?:          ExtensionRisk
+  mcapTier?:               McapTier
+  sectorName?:             SectorName
+  continuationProbability?: number
+  regimeAlignmentScore?:   number
+}
+
+/** Per-dimension win/loss statistics */
+export interface AttributionDimension {
+  key:           string
+  label:         string
+  total:         number
+  winRate:       number | null
+  avgRRAchieved: number | null
+  expectancy:    number | null
+  tpHitRate:     number | null
+  avgConfidence: number
+}
+
+/** High-expectancy (regime, signalState) combination */
+export interface EdgePattern {
+  dimensions:    Record<string, string>
+  label:         string
+  total:         number
+  winRate:       number
+  avgRRAchieved: number | null
+  expectancy:    number
+  rank:          number
+}
+
+/** Data-driven calibration recommendation */
+export interface ThresholdRecommendation {
+  parameter:  string
+  insight:    string
+  direction:  'RAISE' | 'LOWER' | 'MONITOR'
+  impact:     'HIGH' | 'MEDIUM' | 'LOW'
+  basis:      string
+}
+
+/** Full attribution report returned by /api/analytics/attribution */
+export interface AttributionReport {
+  generatedAt:  Date
+  windowHours:  number
+  totalRows:    number
+  resolvedRows: number
+  /** True if most rows lack tactical fields (pre-Phase 6.7 data) */
+  dataGap:      boolean
+  /** True if fewer than 20 resolved rows — not enough for meaningful stats */
+  insufficient: boolean
+  dimensions: {
+    byRegime:        AttributionDimension[]
+    byMcapTier:      AttributionDimension[]
+    bySignalState:   AttributionDimension[]
+    byExtensionRisk: AttributionDimension[]
+    bySector:        AttributionDimension[]
+    byAiValidated:   AttributionDimension[]
+    byTimeframe:     AttributionDimension[]
+    byScannerMode:   AttributionDimension[]
+  }
+  edgePatterns:    EdgePattern[]
+  recommendations: ThresholdRecommendation[]
+  aiEffectiveness: {
+    aiApproved:  { total: number; winRate: number | null; expectancy: number | null }
+    heuristic:   { total: number; winRate: number | null; expectancy: number | null }
+    aiEdgeDelta: number | null
+  }
+}

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { TradingSignal, AIExplainability, CoinData, BacktestTrade, BacktestMetrics, BacktestConfig, BacktestRun } from '@/types';
+import { TradingSignal, AIExplainability, CoinData, BacktestTrade, BacktestMetrics, BacktestConfig, BacktestRun, AttributionRow, SignalType, Timeframe, ScannerMode, RiskGrade, MarketRegime, SignalState, ExtensionRisk, McapTier, SectorName } from '@/types';
+import { createSupabaseAdminClient } from './supabase/admin';
 
 let _client: ReturnType<typeof createClient> | null = null;
 
@@ -73,6 +74,15 @@ export async function saveSignal(signal: TradingSignal): Promise<string | null> 
       risks:             signal.risks             ?? [],
       strengths:         signal.strengths         ?? [],
       telegram_sent: signal.telegramSent,
+      // Phase 6.7 — tactical intelligence fields for outcome attribution
+      market_regime:            signal.marketRegime            ?? null,
+      institutional_score:      signal.institutionalScore      ?? null,
+      signal_state:             signal.signalState             ?? null,
+      extension_risk:           signal.extensionRisk           ?? null,
+      mcap_tier:                signal.mcapTier                ?? null,
+      sector_name:              signal.sectorName              ?? null,
+      continuation_probability: signal.continuation?.continuationProbability ?? null,
+      regime_alignment_score:   signal.regimeAlignmentScore    ?? null,
     })
     .select('id')
     .single();
@@ -242,6 +252,75 @@ export async function getBacktestRun(id: string): Promise<{
   };
 }
 
+// --- Attribution ---
+
+/**
+ * Returns resolved signal outcomes joined with tactical intelligence fields.
+ * Uses the service-role client to bypass RLS on signal_outcomes.
+ * Only rows with outcome != PENDING are returned.
+ */
+export async function getAttributionRows(hours = 720): Promise<AttributionRow[]> {
+  const admin = createSupabaseAdminClient();
+  const cutoff = new Date(Date.now() - hours * 3_600_000).toISOString();
+
+  const { data: outcomes, error: outErr } = await admin
+    .from('signal_outcomes')
+    .select('id, signal_id, outcome, rr_achieved, pnl_pct, duration_hours, ai_validated, risk_grade, confidence, timeframe, scanner_mode, symbol, signal_type, rr_ratio, created_at, resolved_at')
+    .neq('outcome', 'PENDING')
+    .gte('created_at', cutoff)
+    .order('created_at', { ascending: false })
+    .limit(2000);
+
+  if (outErr || !outcomes?.length) {
+    if (outErr) console.error('[DB] getAttributionRows outcomes:', outErr.message);
+    return [];
+  }
+
+  const signalIds = Array.from(new Set(outcomes.map((o: Record<string, unknown>) => o.signal_id).filter(Boolean))) as string[];
+  if (!signalIds.length) return [];
+
+  const { data: signals, error: sigErr } = await admin
+    .from('signals')
+    .select('id, market_regime, institutional_score, signal_state, extension_risk, mcap_tier, sector_name, continuation_probability, regime_alignment_score')
+    .in('id', signalIds);
+
+  if (sigErr) console.error('[DB] getAttributionRows signals:', sigErr.message);
+
+  const sigMap = new Map<string, Record<string, unknown>>();
+  for (const s of (signals ?? []) as Record<string, unknown>[]) {
+    sigMap.set(s.id as string, s);
+  }
+
+  return (outcomes as Record<string, unknown>[]).map(o => {
+    const sig = sigMap.get(o.signal_id as string);
+    return {
+      signalId:                o.signal_id as string,
+      symbol:                  o.symbol    as string,
+      signalType:              o.signal_type as SignalType,
+      timeframe:               o.timeframe   as Timeframe,
+      scannerMode:             o.scanner_mode as ScannerMode,
+      confidence:              Number(o.confidence),
+      aiValidated:             Boolean(o.ai_validated),
+      riskGrade:               o.risk_grade as RiskGrade | undefined,
+      rrRatio:                 Number(o.rr_ratio),
+      outcome:                 o.outcome as 'TP_HIT' | 'SL_HIT' | 'TIMEOUT',
+      rrAchieved:              o.rr_achieved    != null ? Number(o.rr_achieved)    : undefined,
+      pnlPct:                  o.pnl_pct        != null ? Number(o.pnl_pct)        : undefined,
+      durationHours:           o.duration_hours != null ? Number(o.duration_hours) : undefined,
+      createdAt:               new Date(o.created_at as string),
+      resolvedAt:              o.resolved_at ? new Date(o.resolved_at as string) : undefined,
+      marketRegime:            sig?.market_regime            as MarketRegime  | undefined,
+      institutionalScore:      sig?.institutional_score  != null ? Number(sig.institutional_score)  : undefined,
+      signalState:             sig?.signal_state              as SignalState   | undefined,
+      extensionRisk:           sig?.extension_risk            as ExtensionRisk | undefined,
+      mcapTier:                sig?.mcap_tier                 as McapTier      | undefined,
+      sectorName:              sig?.sector_name               as SectorName    | undefined,
+      continuationProbability: sig?.continuation_probability != null ? Number(sig.continuation_probability) : undefined,
+      regimeAlignmentScore:    sig?.regime_alignment_score   != null ? Number(sig.regime_alignment_score)   : undefined,
+    } satisfies AttributionRow;
+  });
+}
+
 // --- Private helpers ---
 
 function rowToCoin(row: Record<string, unknown>): CoinData {
@@ -320,6 +399,7 @@ function rowToBacktestTrade(row: Record<string, unknown>): BacktestTrade {
 type TechnicalTrend = 'BULLISH' | 'BEARISH' | 'RANGING';
 
 function rowToSignal(row: Record<string, unknown>): TradingSignal {
+  const contProb = row.continuation_probability != null ? Number(row.continuation_probability) : undefined;
   return {
     id: row.id as string,
     scanRunId: row.scan_run_id as string | undefined,
@@ -351,5 +431,16 @@ function rowToSignal(row: Record<string, unknown>): TradingSignal {
     strengths:        (row.strengths as string[]) || [],
     telegramSent: Boolean(row.telegram_sent),
     createdAt: new Date(row.created_at as string),
+    // Phase 6.7 tactical intelligence
+    marketRegime:          row.market_regime      as TradingSignal['marketRegime']    ?? undefined,
+    institutionalScore:    row.institutional_score != null ? Number(row.institutional_score) : undefined,
+    signalState:           row.signal_state        as TradingSignal['signalState']     ?? undefined,
+    extensionRisk:         row.extension_risk      as TradingSignal['extensionRisk']   ?? undefined,
+    mcapTier:              row.mcap_tier           as TradingSignal['mcapTier']        ?? undefined,
+    sectorName:            row.sector_name         as TradingSignal['sectorName']      ?? undefined,
+    regimeAlignmentScore:  row.regime_alignment_score != null ? Number(row.regime_alignment_score) : undefined,
+    continuation:          contProb != null
+      ? { continuationProbability: contProb, exhaustionRisk: 'low', momentumHealth: 'healthy', reasons: [] }
+      : undefined,
   };
 }

@@ -1,9 +1,12 @@
-﻿'use client'
+'use client'
 
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { adminApi, EdgeReport } from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
 import { formatTs } from '@/lib/utils'
+import type { AttributionReport, AttributionDimension, EdgePattern, ThresholdRecommendation } from '@/types'
+
+// ─── Shared primitives ────────────────────────────────────────────────────────
 
 function StatPair({ label, value, accent = '' }: { label: string; value: string; accent?: string }) {
   return (
@@ -13,6 +16,19 @@ function StatPair({ label, value, accent = '' }: { label: string; value: string;
     </div>
   )
 }
+
+function pct(n: number | null): string {
+  return n != null ? `${(n * 100).toFixed(1)}%` : '—'
+}
+function exp(n: number | null): string {
+  if (n == null) return '—'
+  return n > 0 ? `+${n.toFixed(2)}R` : `${n.toFixed(2)}R`
+}
+function rr(n: number | null): string {
+  return n != null ? `${n.toFixed(2)}R` : '—'
+}
+
+// ─── Edge Validation tab ──────────────────────────────────────────────────────
 
 function CalibrationTable({ bands }: { bands: EdgeReport['confidence_calibration']['bands'] }) {
   return (
@@ -58,29 +74,18 @@ function CalibrationTable({ bands }: { bands: EdgeReport['confidence_calibration
   )
 }
 
-export default function AnalyticsPage() {
-  const edgeFetcher = useCallback(() => adminApi.analytics.edgeReport(), [])
-  const { data: edge, loading } = useAutoRefresh<EdgeReport>(edgeFetcher, 120_000)
-
+function EdgeValidationTab({ edge, loading }: { edge: EdgeReport | null; loading: boolean }) {
   const overall = edge?.overall
   const verdict = edge?.edge_verdict
   const cal     = edge?.confidence_calibration
 
   const confidenceLevelColor: Record<string, string> = {
-    strong:            'text-bull-default',
-    moderate:          'text-signal-high',
-    weak:              'text-signal-medium',
-    none:              'text-bear-default',
-    insufficient_data: 'text-terminal-muted',
+    strong: 'text-bull-default', moderate: 'text-signal-high', weak: 'text-signal-medium',
+    none: 'text-bear-default', insufficient_data: 'text-terminal-muted',
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-terminal-text text-xl font-semibold">Quantitative Analytics</h1>
-        <p className="text-terminal-muted text-sm mt-1">30-day edge validation · Confidence calibration · Mode rankings</p>
-      </div>
-
+    <div className="space-y-6">
       {/* Edge verdict */}
       <div className="glass-card rounded-lg p-5">
         <p className="text-terminal-muted text-xs uppercase tracking-wider mb-4">Edge Verdict</p>
@@ -93,7 +98,7 @@ export default function AnalyticsPage() {
           <div className="flex flex-col gap-2">
             <p className="text-signal-medium text-sm font-semibold">◌ Edge analytics warming up</p>
             <p className="text-terminal-muted text-xs leading-relaxed">
-              Statistical edge verdicts require a minimum of 30 resolved signals (TP hit, SL hit, or timeout). Keep running scans — outcomes are resolved automatically as price reaches target or stop levels. This section will populate within a few days of active scanning.
+              Statistical edge verdicts require a minimum of 30 resolved signals (TP hit, SL hit, or timeout). Keep running scans — outcomes are resolved automatically as price reaches target or stop levels.
             </p>
             {edge && (
               <p className="text-terminal-muted/50 text-xs font-mono mt-1">
@@ -135,12 +140,12 @@ export default function AnalyticsPage() {
             </div>
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-4">
-              <StatPair label="Signals"    value={String(overall?.total ?? 0)} />
-              <StatPair label="Win Rate"   value={overall?.win_rate != null ? `${(overall.win_rate * 100).toFixed(1)}%` : '—'} accent={overall?.win_rate && overall.win_rate >= 0.55 ? 'text-bull-default' : 'text-bear-default'} />
-              <StatPair label="Expectancy" value={overall?.expectancy != null ? `${overall.expectancy > 0 ? '+' : ''}${overall.expectancy.toFixed(2)}R` : '—'} accent={overall?.expectancy && overall.expectancy > 0 ? 'text-bull-default' : 'text-bear-default'} />
+              <StatPair label="Signals"      value={String(overall?.total ?? 0)} />
+              <StatPair label="Win Rate"     value={overall?.win_rate != null ? `${(overall.win_rate * 100).toFixed(1)}%` : '—'} accent={overall?.win_rate && overall.win_rate >= 0.55 ? 'text-bull-default' : 'text-bear-default'} />
+              <StatPair label="Expectancy"   value={overall?.expectancy != null ? `${overall.expectancy > 0 ? '+' : ''}${overall.expectancy.toFixed(2)}R` : '—'} accent={overall?.expectancy && overall.expectancy > 0 ? 'text-bull-default' : 'text-bear-default'} />
               <StatPair label="Profit Factor" value={overall?.profit_factor?.toFixed(2) ?? '—'} accent={overall?.profit_factor && overall.profit_factor >= 1.5 ? 'text-bull-default' : 'text-terminal-text'} />
-              <StatPair label="Max DD"     value={overall?.max_drawdown_r != null ? `${overall.max_drawdown_r.toFixed(1)}R` : '—'} accent="text-bear-default" />
-              <StatPair label="Sharpe"     value={overall?.sharpe?.toFixed(2) ?? '—'} accent={overall?.sharpe && overall.sharpe > 1 ? 'text-bull-default' : 'text-terminal-text'} />
+              <StatPair label="Max DD"       value={overall?.max_drawdown_r != null ? `${overall.max_drawdown_r.toFixed(1)}R` : '—'} accent="text-bear-default" />
+              <StatPair label="Sharpe"       value={overall?.sharpe?.toFixed(2) ?? '—'} accent={overall?.sharpe && overall.sharpe > 1 ? 'text-bull-default' : 'text-terminal-text'} />
             </div>
           )}
           {!loading && (!overall || overall.total === 0) && (
@@ -161,12 +166,12 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* Calibration — warmup or data */}
+      {/* Calibration */}
       {!loading && !cal && (
         <div className="glass-card rounded-lg p-5">
           <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Confidence Calibration</p>
           <p className="text-terminal-muted/60 text-xs leading-relaxed">
-            Calibration bands require resolved signals across multiple confidence tiers (70–100). Run scans in different modes to build a diverse signal pool. Calibration data will appear automatically as signals resolve.
+            Calibration bands require resolved signals across multiple confidence tiers (70–100). Run scans in different modes to build a diverse signal pool.
           </p>
         </div>
       )}
@@ -202,6 +207,334 @@ export default function AnalyticsPage() {
           Generated {formatTs(edge.generated_at)} · {edge.window_hours}h window
         </p>
       )}
+    </div>
+  )
+}
+
+// ─── Attribution tab ──────────────────────────────────────────────────────────
+
+function DimTable({ title, rows }: { title: string; rows: AttributionDimension[] }) {
+  if (!rows.length) return null
+  return (
+    <div>
+      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-2">{title}</p>
+      <div className="glass-card rounded-lg overflow-hidden">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-terminal-border">
+              {['Dimension', 'Signals', 'Win Rate', 'Avg RR', 'Expectancy'].map(h => (
+                <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(d => (
+              <tr key={d.key} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
+                <td className="py-2 px-3 text-terminal-text font-medium">{d.label}</td>
+                <td className="py-2 px-3 font-mono text-terminal-muted">{d.total}</td>
+                <td className="py-2 px-3 font-mono">
+                  {d.winRate != null
+                    ? <span className={d.winRate >= 0.55 ? 'text-bull-default' : d.winRate >= 0.45 ? 'text-signal-high' : 'text-bear-default'}>{pct(d.winRate)}</span>
+                    : <span className="text-terminal-muted/40">—</span>
+                  }
+                </td>
+                <td className="py-2 px-3 font-mono text-terminal-muted">{rr(d.avgRRAchieved)}</td>
+                <td className="py-2 px-3 font-mono">
+                  {d.expectancy != null
+                    ? <span className={d.expectancy > 0 ? 'text-bull-default' : 'text-bear-default'}>{exp(d.expectancy)}</span>
+                    : <span className="text-terminal-muted/40">—</span>
+                  }
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function EdgePatternsSection({ patterns }: { patterns: EdgePattern[] }) {
+  if (!patterns.length) return null
+  return (
+    <div>
+      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-2">Top Edge Patterns</p>
+      <div className="glass-card rounded-lg overflow-hidden">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-terminal-border">
+              {['Rank', 'Pattern', 'Signals', 'Win Rate', 'Avg RR', 'Expectancy'].map(h => (
+                <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {patterns.map(p => (
+              <tr key={p.rank} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
+                <td className="py-2 px-3 font-mono text-terminal-muted">#{p.rank}</td>
+                <td className="py-2 px-3 text-terminal-text font-medium">{p.label}</td>
+                <td className="py-2 px-3 font-mono text-terminal-muted">{p.total}</td>
+                <td className="py-2 px-3 font-mono">
+                  <span className={p.winRate >= 0.55 ? 'text-bull-default' : p.winRate >= 0.45 ? 'text-signal-high' : 'text-bear-default'}>
+                    {pct(p.winRate)}
+                  </span>
+                </td>
+                <td className="py-2 px-3 font-mono text-terminal-muted">{rr(p.avgRRAchieved)}</td>
+                <td className="py-2 px-3 font-mono">
+                  <span className={p.expectancy > 0 ? 'text-bull-default' : 'text-bear-default'}>{exp(p.expectancy)}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+const impactColor: Record<string, string> = {
+  HIGH: 'text-bear-default border-bear-default/30',
+  MEDIUM: 'text-signal-high border-signal-high/30',
+  LOW: 'text-terminal-muted border-terminal-border',
+}
+const dirIcon: Record<string, string> = { RAISE: '↑', LOWER: '↓', MONITOR: '◎' }
+
+function RecommendationsSection({ recs }: { recs: ThresholdRecommendation[] }) {
+  return (
+    <div>
+      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-2">Calibration Intelligence</p>
+      <div className="space-y-2">
+        {recs.map((r, i) => (
+          <div key={i} className="glass-card rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <span className={`text-xs font-mono font-bold px-1.5 py-0.5 rounded border mt-0.5 shrink-0 ${impactColor[r.impact]}`}>
+                {dirIcon[r.direction]} {r.impact}
+              </span>
+              <div className="min-w-0">
+                <p className="text-terminal-text text-xs font-semibold mb-0.5">{r.parameter}</p>
+                <p className="text-terminal-muted text-xs leading-relaxed">{r.insight}</p>
+                <p className="text-terminal-muted/50 text-xs mt-1 font-mono">{r.basis}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function AIEffectivenessSection({ ai }: { ai: AttributionReport['aiEffectiveness'] }) {
+  const { aiApproved, heuristic, aiEdgeDelta } = ai
+  return (
+    <div>
+      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-2">AI vs Heuristic Effectiveness</p>
+      <div className="glass-card rounded-lg p-5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
+          <div className="space-y-1">
+            <p className="text-terminal-muted text-xs">AI Signals</p>
+            <p className="font-mono font-bold text-terminal-text">{aiApproved.total}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-terminal-muted text-xs">AI Win Rate</p>
+            <p className={`font-mono font-bold ${aiApproved.winRate != null && aiApproved.winRate >= 0.55 ? 'text-bull-default' : 'text-terminal-text'}`}>
+              {pct(aiApproved.winRate)}
+            </p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-terminal-muted text-xs">Heuristic Signals</p>
+            <p className="font-mono font-bold text-terminal-text">{heuristic.total}</p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-terminal-muted text-xs">Heuristic Win Rate</p>
+            <p className={`font-mono font-bold ${heuristic.winRate != null && heuristic.winRate >= 0.55 ? 'text-bull-default' : 'text-terminal-text'}`}>
+              {pct(heuristic.winRate)}
+            </p>
+          </div>
+        </div>
+        {aiEdgeDelta != null && aiApproved.total >= 5 && heuristic.total >= 5 && (
+          <div className="mt-4 pt-4 border-t border-terminal-border/50">
+            <span className={`text-xs font-mono font-bold ${aiEdgeDelta > 0 ? 'text-bull-default' : 'text-bear-default'}`}>
+              {aiEdgeDelta > 0 ? '▲' : '▼'} AI {aiEdgeDelta > 0 ? '+' : ''}{(aiEdgeDelta * 100).toFixed(1)}% vs heuristic
+            </span>
+            <span className="text-terminal-muted/50 text-xs ml-3">
+              {aiEdgeDelta > 0.05 ? 'AI validation adding measurable edge' : aiEdgeDelta < -0.05 ? 'Heuristic outperforming — review AI prompt' : 'No significant difference'}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function DailyReportTrigger() {
+  const [sending, setSending] = useState(false)
+  const [result, setResult] = useState<string | null>(null)
+
+  async function trigger() {
+    setSending(true)
+    setResult(null)
+    try {
+      const res = await fetch('/api/analytics/daily-report', { method: 'POST', cache: 'no-store' })
+      const json = await res.json()
+      setResult(json.success ? `Sent (${json.dataRows ?? 0} resolved signals)` : `Failed: ${json.error ?? 'unknown error'}`)
+    } catch {
+      setResult('Network error — could not trigger report')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div className="glass-card rounded-lg p-5">
+      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Founder Daily Report</p>
+      <p className="text-terminal-muted text-xs mb-4 leading-relaxed">
+        Sends a Telegram message with 24h regime performance, top edge pattern, AI vs heuristic breakdown, and calibration alerts.
+      </p>
+      <div className="flex items-center gap-4 flex-wrap">
+        <button
+          onClick={trigger}
+          disabled={sending}
+          className="text-xs font-mono px-3 py-1.5 rounded border border-terminal-border text-terminal-text hover:bg-terminal-bright/10 disabled:opacity-40 transition-colors"
+        >
+          {sending ? '◌ Sending…' : '▶ Send Daily Report'}
+        </button>
+        {result && (
+          <span className={`text-xs font-mono ${result.startsWith('Sent') ? 'text-bull-default' : 'text-bear-default'}`}>
+            {result}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function AttributionTab({ data, loading }: { data: AttributionReport | null; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="glass-card rounded-lg p-5 space-y-3">
+            <div className="skeleton h-3 w-40 rounded" />
+            <div className="skeleton h-24 w-full rounded" />
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  if (!data) {
+    return (
+      <div className="glass-card rounded-lg p-5">
+        <p className="text-terminal-muted text-xs">Attribution data unavailable — ensure the attribution API route is deployed and the database migration has been run.</p>
+      </div>
+    )
+  }
+
+  const { dimensions, edgePatterns, recommendations, aiEffectiveness, dataGap, insufficient, resolvedRows, windowHours } = data
+
+  return (
+    <div className="space-y-6">
+      {/* Data status banner */}
+      {dataGap && (
+        <div className="glass-card rounded-lg p-4 border border-signal-medium/20">
+          <p className="text-signal-medium text-xs font-semibold mb-1">Limited Tactical Data</p>
+          <p className="text-terminal-muted text-xs leading-relaxed">
+            Most signals were generated before Phase 6.7. Regime, signal_state, and mcap_tier breakdowns reflect only the {dimensions.byRegime.reduce((s, d) => s + d.total, 0)} signals with full tactical data. Run new scans to build the attribution dataset.
+          </p>
+        </div>
+      )}
+
+      {insufficient ? (
+        <div className="glass-card rounded-lg p-5 space-y-2">
+          <p className="text-signal-medium text-sm font-semibold">◌ Attribution warming up</p>
+          <p className="text-terminal-muted text-xs leading-relaxed">
+            Outcome attribution requires at least 20 resolved signals (TP hit, SL hit, or timeout) in the {windowHours}h window. Currently: {resolvedRows} resolved. Keep running scans — attribution populates automatically as signals resolve.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Tactical dimensions */}
+          <DimTable title="Performance by Market Regime" rows={dimensions.byRegime} />
+          <DimTable title="Performance by Signal State"  rows={dimensions.bySignalState} />
+          <DimTable title="Performance by Market Cap Tier" rows={dimensions.byMcapTier} />
+          <DimTable title="Performance by Extension Risk"  rows={dimensions.byExtensionRisk} />
+
+          {/* Edge patterns */}
+          <EdgePatternsSection patterns={edgePatterns} />
+
+          {/* Timeframe + Mode (always available) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <DimTable title="By Timeframe"    rows={dimensions.byTimeframe} />
+            <DimTable title="By Scanner Mode" rows={dimensions.byScannerMode} />
+          </div>
+
+          {/* AI effectiveness */}
+          <AIEffectivenessSection ai={aiEffectiveness} />
+
+          {/* Recommendations */}
+          <RecommendationsSection recs={recommendations} />
+        </>
+      )}
+
+      {/* Daily report trigger */}
+      <DailyReportTrigger />
+
+      <p className="text-terminal-muted/40 text-xs font-mono">
+        Attribution · {resolvedRows} resolved signals · {windowHours}h window
+      </p>
+    </div>
+  )
+}
+
+// ─── Page root ────────────────────────────────────────────────────────────────
+
+type Tab = 'edge' | 'attribution'
+
+export default function AnalyticsPage() {
+  const [tab, setTab] = useState<Tab>('edge')
+
+  const edgeFetcher = useCallback(() => adminApi.analytics.edgeReport(), [])
+  const { data: edge, loading: edgeLoading } = useAutoRefresh<EdgeReport>(edgeFetcher, 120_000)
+
+  const attrFetcher = useCallback(() =>
+    fetch('/api/analytics/attribution?hours=720', { cache: 'no-store' })
+      .then(r => r.json())
+      .then((j: { success: boolean; report: AttributionReport }) => j.success ? j.report : null),
+    []
+  )
+  const { data: attribution, loading: attrLoading } = useAutoRefresh<AttributionReport | null>(attrFetcher, 300_000)
+
+  const tabs: { id: Tab; label: string }[] = [
+    { id: 'edge',        label: 'Edge Validation' },
+    { id: 'attribution', label: 'Attribution' },
+  ]
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div>
+        <h1 className="text-terminal-text text-xl font-semibold">Quantitative Analytics</h1>
+        <p className="text-terminal-muted text-sm mt-1">Edge validation · Attribution intelligence · Adaptive calibration</p>
+      </div>
+
+      {/* Tab nav */}
+      <div className="flex gap-1 border-b border-terminal-border pb-0">
+        {tabs.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`px-4 py-2 text-xs font-mono uppercase tracking-wider border-b-2 transition-colors ${
+              tab === t.id
+                ? 'border-terminal-text text-terminal-text'
+                : 'border-transparent text-terminal-muted hover:text-terminal-text/70'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'edge'        && <EdgeValidationTab edge={edge ?? null} loading={edgeLoading} />}
+      {tab === 'attribution' && <AttributionTab data={attribution ?? null} loading={attrLoading} />}
     </div>
   )
 }
