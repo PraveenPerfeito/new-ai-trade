@@ -73,7 +73,13 @@ export default function SignalsPage() {
       </div>
 
       {/* Edge summary from validation */}
-      {edge && (
+      {!el && edge && edge.edge_verdict?.confidence_level === 'insufficient_data' && (
+        <div className="rounded-lg px-4 py-3 bg-signal-medium/5 border border-signal-medium/20 text-xs text-terminal-muted">
+          <span className="text-signal-medium font-semibold">◌ Edge warming up · </span>
+          {edge.overall.total} signal{edge.overall.total !== 1 ? 's' : ''} tracked — 30+ resolved outcomes needed for win rate and expectancy. Results appear automatically as signals hit TP / SL.
+        </div>
+      )}
+      {edge && edge.edge_verdict?.confidence_level !== 'insufficient_data' && (
         <div className="glass-card rounded-lg px-5 py-4 flex items-center gap-6 flex-wrap text-xs font-mono">
           <div>
             <span className="text-terminal-muted">WIN RATE</span>{' '}
@@ -114,8 +120,11 @@ export default function SignalsPage() {
               </div>
             ))
           ) : !signals.length ? (
-            <div className="px-5 py-10 text-center">
-              <p className="text-terminal-muted text-sm">No signals found</p>
+            <div className="px-5 py-10 text-center space-y-2">
+              <p className="text-terminal-text text-sm font-medium">No signals generated yet</p>
+              <p className="text-terminal-muted text-xs leading-relaxed max-w-sm mx-auto">
+                Run a scan from the Scanner page to generate signals. High-confidence and futures modes tend to produce the most actionable setups.
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">

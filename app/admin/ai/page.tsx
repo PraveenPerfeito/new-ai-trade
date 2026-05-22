@@ -40,6 +40,7 @@ export default function AiPage() {
   const claude    = edge?.claude_effectiveness
   const verdicts  = ai?.verdicts ?? ai?.verdict_distribution ?? {}
   const totalVerd = Object.values(verdicts).reduce((a, b) => a + b, 0)
+  const hasAiData = (ai?.total_calls ?? 0) > 0
 
   const claudeVerdictColors: Record<string, string> = {
     claude_adds_value:        'text-bull-default',
@@ -56,6 +57,19 @@ export default function AiPage() {
         <p className="text-terminal-muted text-sm mt-1">Claude API health · Effectiveness measurement · Confidence analysis</p>
       </div>
 
+      {/* Warmup banner — shown until AI calls are logged */}
+      {!ail && !hasAiData && (
+        <div className="rounded-lg px-5 py-4 bg-signal-medium/5 border border-signal-medium/20 flex items-start gap-3">
+          <Brain size={14} className="text-signal-medium mt-0.5 shrink-0" />
+          <div>
+            <p className="text-signal-medium text-sm font-semibold">AI telemetry warming up</p>
+            <p className="text-terminal-muted text-xs mt-1 leading-relaxed">
+              No Claude API calls logged yet. Run a scan — every signal validation attempt (both Claude and heuristic fallback) is persisted to the AI call log. Metrics will populate after the first scan run.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Key metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <MetricCard
@@ -68,25 +82,25 @@ export default function AiPage() {
         />
         <MetricCard
           label="Success Rate"
-          value={pct(ai?.success_rate)}
-          sub="API calls OK"
-          accent={!ai ? 'neutral' : ai.success_rate >= 0.95 ? 'bull' : 'warning'}
+          value={hasAiData ? pct(ai?.success_rate) : '—'}
+          sub={hasAiData ? 'API calls OK' : 'no calls yet'}
+          accent={!hasAiData ? 'neutral' : (ai?.success_rate ?? 0) >= 0.95 ? 'bull' : 'warning'}
           icon={<CheckCircle size={13} />}
           loading={ail}
         />
         <MetricCard
           label="Error Rate"
-          value={pct(ai?.error_rate)}
-          sub="API failures"
-          accent={!ai ? 'neutral' : ai.error_rate >= 0.15 ? 'bear' : ai.error_rate >= 0.08 ? 'warning' : 'bull'}
+          value={hasAiData ? pct(ai?.error_rate) : '—'}
+          sub={hasAiData ? 'API failures' : 'no calls yet'}
+          accent={!hasAiData ? 'neutral' : (ai?.error_rate ?? 0) >= 0.15 ? 'bear' : (ai?.error_rate ?? 0) >= 0.08 ? 'warning' : 'bull'}
           icon={<AlertTriangle size={13} />}
           loading={ail}
         />
         <MetricCard
           label="Fallback Rate"
-          value={pct(ai?.fallback_rate)}
-          sub="heuristic used"
-          accent={!ai ? 'neutral' : ai.fallback_rate >= 0.40 ? 'warning' : 'bull'}
+          value={hasAiData ? pct(ai?.fallback_rate) : '—'}
+          sub={hasAiData ? 'heuristic used' : 'no calls yet'}
+          accent={!hasAiData ? 'neutral' : (ai?.fallback_rate ?? 0) >= 0.40 ? 'warning' : 'bull'}
           icon={<Zap size={13} />}
           loading={ail}
         />
@@ -101,7 +115,7 @@ export default function AiPage() {
               <div className="skeleton h-6 w-48 rounded" />
               <div className="skeleton h-3 w-full rounded" />
             </div>
-          ) : claude ? (
+          ) : claude && claude.verdict !== 'insufficient_data' ? (
             <>
               <div className="flex items-center gap-3 mb-4 flex-wrap">
                 <span className={`font-mono font-bold text-xl uppercase ${claudeVerdictColors[claude.verdict] ?? 'text-terminal-text'}`}>
@@ -120,7 +134,12 @@ export default function AiPage() {
               )}
             </>
           ) : (
-            <p className="text-terminal-muted text-sm">No effectiveness data available</p>
+            <div className="flex flex-col gap-1">
+              <p className="text-terminal-muted text-sm font-medium">AI effectiveness analytics warming up</p>
+              <p className="text-terminal-muted/60 text-xs leading-relaxed">
+                Requires 30+ resolved signals to compare Claude vs. heuristic performance. Both validation paths are already being logged — this section will populate automatically as signals resolve.
+              </p>
+            </div>
           )}
         </div>
       </div>

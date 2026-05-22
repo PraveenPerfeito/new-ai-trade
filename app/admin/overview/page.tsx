@@ -6,6 +6,7 @@ import { adminApi, AiSummaryResponse, BurninStatus, ReadinessResult, ScanSummary
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
 import { MetricCard } from '@/components/admin/metric-card'
 import { ScoreRing } from '@/components/admin/score-ring'
+import { formatTs } from '@/lib/utils'
 
 function pct(v: number | null | undefined, decimals = 1) {
   return v != null ? `${(v * 100).toFixed(decimals)}%` : '—'
@@ -44,6 +45,19 @@ export default function OverviewPage() {
         <h1 className="text-terminal-text text-xl font-semibold">Command Overview</h1>
         <p className="text-terminal-muted text-sm mt-1">System status · Signal edge · Operational health</p>
       </div>
+
+      {/* Warmup banner — shown until system has enough resolved signals */}
+      {!sl && (coverage?.resolved ?? 0) < 30 && (
+        <div className="rounded-lg px-5 py-4 bg-signal-medium/5 border border-signal-medium/20 flex items-start gap-3">
+          <span className="text-signal-medium text-base leading-none mt-0.5">◌</span>
+          <div>
+            <p className="text-signal-medium text-sm font-semibold">System warming up — {coverage?.resolved ?? 0} / 30 resolved signals</p>
+            <p className="text-terminal-muted text-xs mt-1 leading-relaxed">
+              Statistical verdicts, win rate, and edge metrics require at least 30 resolved signals. Run scans and allow signals to reach their TP / SL targets over the next few days. Edge metrics will populate automatically.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Readiness hero */}
       <div className="grid grid-cols-12 gap-4">
@@ -206,7 +220,7 @@ export default function OverviewPage() {
               </span>
             </div>
             <div className="ml-auto text-terminal-muted/50 text-xs font-mono">
-              {new Date(s.anomaly_summary.checked_at).toLocaleTimeString()}
+              {formatTs(s.anomaly_summary.checked_at)}
             </div>
           </div>
         </div>

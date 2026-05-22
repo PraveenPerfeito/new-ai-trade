@@ -89,13 +89,25 @@ export default function AnalyticsPage() {
             <div className="skeleton h-6 w-48 rounded" />
             <div className="skeleton h-3 w-full rounded" />
           </div>
+        ) : verdict?.confidence_level === 'insufficient_data' || !verdict ? (
+          <div className="flex flex-col gap-2">
+            <p className="text-signal-medium text-sm font-semibold">◌ Edge analytics warming up</p>
+            <p className="text-terminal-muted text-xs leading-relaxed">
+              Statistical edge verdicts require a minimum of 30 resolved signals (TP hit, SL hit, or timeout). Keep running scans — outcomes are resolved automatically as price reaches target or stop levels. This section will populate within a few days of active scanning.
+            </p>
+            {edge && (
+              <p className="text-terminal-muted/50 text-xs font-mono mt-1">
+                Window: {edge.window_hours}h · Total signals tracked: {edge.overall?.total ?? 0}
+              </p>
+            )}
+          </div>
         ) : (
           <>
             <div className="flex items-center gap-3 mb-3 flex-wrap">
-              <span className={`font-mono font-bold text-xl uppercase ${confidenceLevelColor[verdict?.confidence_level ?? '']}`}>
-                {verdict?.confidence_level.replace(/_/g, ' ') ?? '—'}
+              <span className={`font-mono font-bold text-xl uppercase ${confidenceLevelColor[verdict.confidence_level]}`}>
+                {verdict.confidence_level.replace(/_/g, ' ')}
               </span>
-              {verdict?.has_edge != null && (
+              {verdict.has_edge != null && (
                 <span className={`text-xs px-2 py-0.5 rounded border font-bold uppercase ${
                   verdict.has_edge ? 'bg-bull-default/10 text-bull-default border-bull-default/20' : 'bg-bear-default/10 text-bear-default border-bear-default/20'
                 }`}>
@@ -103,7 +115,7 @@ export default function AnalyticsPage() {
                 </span>
               )}
             </div>
-            <p className="text-terminal-muted text-xs">{verdict?.summary}</p>
+            <p className="text-terminal-muted text-xs">{verdict.summary}</p>
           </>
         )}
       </div>
@@ -131,7 +143,12 @@ export default function AnalyticsPage() {
               <StatPair label="Sharpe"     value={overall?.sharpe?.toFixed(2) ?? '—'} accent={overall?.sharpe && overall.sharpe > 1 ? 'text-bull-default' : 'text-terminal-text'} />
             </div>
           )}
-          {overall && (
+          {!loading && (!overall || overall.total === 0) && (
+            <p className="text-terminal-muted/50 text-xs mt-4 pt-4 border-t border-terminal-border/50">
+              No resolved signals yet — statistics will appear after signals reach their TP / SL targets.
+            </p>
+          )}
+          {overall && overall.total > 0 && (
             <div className="mt-4 pt-4 border-t border-terminal-border/50 flex gap-6 text-xs font-mono text-terminal-muted">
               <span>TP: <span className="text-bull-default">{overall.tp_hits}</span></span>
               <span>SL: <span className="text-bear-default">{overall.sl_hits}</span></span>
@@ -144,7 +161,15 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* Calibration */}
+      {/* Calibration — warmup or data */}
+      {!loading && !cal && (
+        <div className="glass-card rounded-lg p-5">
+          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Confidence Calibration</p>
+          <p className="text-terminal-muted/60 text-xs leading-relaxed">
+            Calibration bands require resolved signals across multiple confidence tiers (70–100). Run scans in different modes to build a diverse signal pool. Calibration data will appear automatically as signals resolve.
+          </p>
+        </div>
+      )}
       {cal && (
         <div>
           <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Confidence Calibration</p>

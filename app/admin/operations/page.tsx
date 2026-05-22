@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import { useCallback } from 'react'
-import { Activity, Clock, Layers, TrendingDown } from 'lucide-react'
+import { Activity, Clock, TrendingDown } from 'lucide-react'
 import { adminApi, ScanSummaryResponse, HealthReady } from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
 import { MetricCard } from '@/components/admin/metric-card'
@@ -46,6 +46,19 @@ export default function OperationsPage() {
         <h1 className="text-terminal-text text-xl font-semibold">Operations</h1>
         <p className="text-terminal-muted text-sm mt-1">Scanner throughput · Queue health · Infrastructure metrics</p>
       </div>
+
+      {/* Warmup state — no scans run yet */}
+      {!sl && scans && scans.total_scans === 0 && (
+        <div className="rounded-lg px-5 py-4 bg-signal-medium/5 border border-signal-medium/20 flex items-start gap-3">
+          <Activity size={14} className="text-signal-medium mt-0.5 shrink-0" />
+          <div>
+            <p className="text-signal-medium text-sm font-semibold">No scan activity yet</p>
+            <p className="text-terminal-muted text-xs mt-1 leading-relaxed">
+              Scan metrics populate after the first scan run. Use the Scanner page to trigger a manual scan or enable auto-scan for continuous background scanning.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Key scan metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

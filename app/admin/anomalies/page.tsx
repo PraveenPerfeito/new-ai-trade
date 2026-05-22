@@ -91,9 +91,13 @@ export default function AnomaliesPage() {
               </div>
             ))
           ) : !anomalies?.length ? (
-            <div className="px-5 py-10 text-center">
+            <div className="px-5 py-10 text-center space-y-1">
               <p className="text-bull-default text-sm font-semibold">✓ No anomalies detected</p>
-              <p className="text-terminal-muted text-xs mt-1">System operating within normal parameters</p>
+              <p className="text-terminal-muted text-xs">
+                {lastCheck
+                  ? 'System operating within normal parameters'
+                  : 'Health checks run hourly — anomaly monitoring starts after the first scan cycle'}
+              </p>
             </div>
           ) : (
             <>

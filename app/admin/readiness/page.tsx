@@ -78,6 +78,36 @@ export default function ReadinessPage() {
         <p className="text-terminal-muted text-sm mt-1">Go / No-go assessment · 5-component weighted score</p>
       </div>
 
+      {/* Startup guidance — shown when not enough data for a real verdict */}
+      {!rl && r && r.overall_score < 40 && (
+        <div className="rounded-lg px-5 py-4 bg-signal-medium/5 border border-signal-medium/20 flex items-start gap-3">
+          <span className="text-signal-medium text-base leading-none mt-0.5">◌</span>
+          <div className="space-y-1.5">
+            <p className="text-signal-medium text-sm font-semibold">System is in burn-in — statistical scoring needs more data</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-terminal-muted mt-2">
+              <div className="flex items-center gap-1.5">
+                <span className={r?.components?.signal_edge?.score >= 20 ? 'text-bull-default' : 'text-terminal-muted/40'}>
+                  {r?.components?.signal_edge?.score >= 20 ? '✓' : '○'}
+                </span>
+                30+ resolved signals for edge score
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className={r?.components?.calibration?.score >= 20 ? 'text-bull-default' : 'text-terminal-muted/40'}>
+                  {r?.components?.calibration?.score >= 20 ? '✓' : '○'}
+                </span>
+                Calibration data across confidence tiers
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className={r?.components?.data_coverage?.score >= 50 ? 'text-bull-default' : 'text-terminal-muted/40'}>
+                  {r?.components?.data_coverage?.score >= 50 ? '✓' : '○'}
+                </span>
+                100+ resolved signals for full report
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Score + verdict hero */}
       <div className="grid grid-cols-12 gap-4">
         <div className="col-span-12 sm:col-span-3 glass-card rounded-lg p-6 flex flex-col items-center justify-center">
