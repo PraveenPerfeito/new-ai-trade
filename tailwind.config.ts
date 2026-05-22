@@ -44,6 +44,9 @@ const config: Config = {
         mono: ['ui-monospace', 'SFMono-Regular', 'Cascadia Code', 'monospace'],
       },
       animation: {
+        'ticker':       'ticker 40s linear infinite',
+        'float':        'float 6s ease-in-out infinite',
+        'glow-pulse':   'glowPulse 3s ease-in-out infinite',
         'pulse-slow':   'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'fade-in':      'fadeIn 0.3s ease-out',
         'slide-up':     'slideUp 0.3s ease-out',
@@ -73,6 +76,18 @@ const config: Config = {
         barPulse: {
           '0%, 100%': { opacity: '1' },
           '50%':      { opacity: '0.65' },
+        },
+        ticker: {
+          '0%':   { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-50%)' },
+        },
+        float: {
+          '0%, 100%': { transform: 'translateY(0px)' },
+          '50%':      { transform: 'translateY(-8px)' },
+        },
+        glowPulse: {
+          '0%, 100%': { opacity: '0.6', transform: 'scale(1)' },
+          '50%':      { opacity: '1',   transform: 'scale(1.05)' },
         },
       },
       boxShadow: {
