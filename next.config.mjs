@@ -23,6 +23,15 @@ const nextConfig = {
     serverComponentsExternalPackages: ['pino', 'pino-pretty'],
   },
 
+  // Phase 7 — redirect renamed admin pages
+  async redirects() {
+    return [
+      { source: '/admin/operations', destination: '/admin/market',      permanent: true },
+      { source: '/admin/readiness',  destination: '/admin/regime',       permanent: true },
+      { source: '/admin/ai',         destination: '/admin/calibration',  permanent: true },
+    ];
+  },
+
   // Security + performance headers applied at the CDN/edge layer
   // (middleware.ts applies the same headers at runtime as a fallback)
   async headers() {

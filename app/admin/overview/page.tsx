@@ -1,227 +1,326 @@
-﻿'use client'
+'use client'
 
-import { useCallback } from 'react'
-import { Activity, Brain, Clock, Database, Target, TrendingUp, Zap } from 'lucide-react'
-import { adminApi, AiSummaryResponse, BurninStatus, ReadinessResult, ScanSummaryResponse } from '@/lib/admin-api'
-import { useAutoRefresh } from '@/lib/use-auto-refresh'
-import { MetricCard } from '@/components/admin/metric-card'
-import { ScoreRing } from '@/components/admin/score-ring'
-import { formatTs } from '@/lib/utils'
+import { useState, useCallback, useEffect } from 'react'
+import {
+  LayoutDashboard, Activity, ScanLine, Zap, Database,
+  RefreshCw, ArrowUpRight, ArrowDownRight, AlertOctagon, Pause,
+  TrendingUp, TrendingDown, Minus,
+} from 'lucide-react'
+import Link from 'next/link'
+import type { TacticalSignalRow, MarketRegime } from '@/types'
 
-function pct(v: number | null | undefined, decimals = 1) {
-  return v != null ? `${(v * 100).toFixed(decimals)}%` : '—'
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface SchedulerStatus {
+  started: boolean; scanning: boolean; paused: boolean; emergencyStop: boolean
+  mode: string; scanCount: number; errorCount: number
+  lastScanAt: number | null; nextScanAt: number | null; intervalMs: number
 }
 
-function fmt(v: number | null | undefined, suffix = '', decimals = 2) {
-  return v != null ? `${v > 0 ? '+' : ''}${v.toFixed(decimals)}${suffix}` : '—'
+interface RegimeData {
+  regime: MarketRegime; btcRsi4h: number; btcTrend4h: string
+  btcAtrPct: number; btc24hChange: number; computedAt: string
 }
 
-const VERDICT_BADGE: Record<string, string> = {
-  production_ready:      'bg-bull-default/10 text-bull-default border-bull-default/20',
-  ready_with_monitoring: 'bg-signal-high/10 text-signal-high border-signal-high/20',
-  needs_more_data:       'bg-signal-medium/10 text-signal-medium border-signal-medium/20',
-  not_ready:             'bg-bear-default/10 text-bear-default border-bear-default/20',
+interface CacheGroup { name: string; fresh: boolean; ageMinutes: number; hits: number; misses: number }
+interface CacheTelemetry { quotaGuard: { monthlyUsed: number; monthlyLimit: number }; groups: CacheGroup[] }
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const REGIME_COLOR: Record<MarketRegime, string> = {
+  BULL_TREND:      'text-green-400',
+  BEAR_TREND:      'text-red-400',
+  SIDEWAYS:        'text-zinc-400',
+  HIGH_VOLATILITY: 'text-amber-400',
+  EUPHORIA:        'text-purple-400',
+  CAPITULATION:    'text-rose-400',
 }
 
-export default function OverviewPage() {
-  const burninFetcher    = useCallback(() => adminApi.burnin.status(), [])
-  const readinessFetcher = useCallback(() => adminApi.burnin.readiness(), [])
-  const aiFetcher        = useCallback(() => adminApi.analytics.ai(), [])
-  const scanFetcher      = useCallback(() => adminApi.analytics.scans(), [])
+const REGIME_LABEL: Record<MarketRegime, string> = {
+  BULL_TREND: 'Bull Trend', BEAR_TREND: 'Bear Trend', SIDEWAYS: 'Sideways',
+  HIGH_VOLATILITY: 'High Volatility', EUPHORIA: 'Euphoria', CAPITULATION: 'Capitulation',
+}
 
-  const { data: s, loading: sl } = useAutoRefresh<BurninStatus>(burninFetcher, 30_000)
-  const { data: r, loading: rl } = useAutoRefresh<ReadinessResult>(readinessFetcher, 60_000)
-  const { data: a, loading: al } = useAutoRefresh<AiSummaryResponse>(aiFetcher, 30_000)
-  const { data: sc, loading: scl } = useAutoRefresh<ScanSummaryResponse>(scanFetcher, 30_000)
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-  const verdictLabel = r?.verdict?.label ?? 'unknown'
-  const verdictBadge = VERDICT_BADGE[verdictLabel] ?? 'bg-terminal-card text-terminal-muted border-terminal-border'
-  const coverage     = s?.data_coverage
+function fmt(n: number, d = 2) {
+  return n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })
+}
+
+function timeAgo(ts: number | null) {
+  if (!ts) return '—'
+  const s = Math.floor((Date.now() - ts) / 1000)
+  if (s < 60)  return `${s}s ago`
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`
+  return `${Math.floor(s / 3600)}h ago`
+}
+
+function ScannerStatusBadge({ s }: { s: SchedulerStatus }) {
+  if (s.emergencyStop) return <span className="text-xs font-semibold text-red-400 flex items-center gap-1"><AlertOctagon className="w-3 h-3" /> E-Stop</span>
+  if (s.paused)        return <span className="text-xs font-semibold text-amber-400 flex items-center gap-1"><Pause className="w-3 h-3" /> Paused</span>
+  if (s.scanning)      return <span className="text-xs font-semibold text-blue-400 flex items-center gap-1"><RefreshCw className="w-3 h-3 animate-spin" /> Scanning</span>
+  if (s.started)       return <span className="text-xs font-semibold text-green-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" /> Active</span>
+  return <span className="text-xs font-semibold text-zinc-500">Stopped</span>
+}
+
+function StatTile({ label, value, sub, href, accent = 'default' }: {
+  label: string; value: React.ReactNode; sub?: string; href?: string
+  accent?: 'green' | 'red' | 'amber' | 'blue' | 'default'
+}) {
+  const colors = { green: 'text-green-400', red: 'text-red-400', amber: 'text-amber-400', blue: 'text-blue-400', default: 'text-white' }
+  const el = (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 hover:border-zinc-700 transition-colors">
+      <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">{label}</div>
+      <div className={`text-xl font-bold font-mono ${colors[accent]}`}>{value}</div>
+      {sub && <div className="text-[11px] text-zinc-600 mt-0.5">{sub}</div>}
+    </div>
+  )
+  return href ? <Link href={href}>{el}</Link> : el
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function CommandOverviewPage() {
+  const [scheduler,  setScheduler]  = useState<SchedulerStatus | null>(null)
+  const [regime,     setRegime]     = useState<RegimeData | null>(null)
+  const [signals,    setSignals]    = useState<TacticalSignalRow[]>([])
+  const [cache,      setCache]      = useState<CacheTelemetry | null>(null)
+  const [updatedAt,  setUpdatedAt]  = useState<string | null>(null)
+
+  const fetchAll = useCallback(async () => {
+    await Promise.allSettled([
+      fetch('/api/scanner/control').then(r => r.json()).then((j) => {
+        if (j.success) setScheduler(j.scheduler)
+      }),
+      fetch('/api/market/intelligence').then(r => r.json()).then((j) => {
+        if (j.success) setRegime(j.regime)
+      }),
+      fetch('/api/signals/tactical?limit=10&lifecycleStage=all').then(r => r.json()).then((j) => {
+        if (j.success) setSignals(j.signals)
+      }),
+      fetch('/api/cache/intelligence').then(r => r.json()).then((j) => {
+        if (j.success) setCache(j)
+      }),
+    ])
+    setUpdatedAt(new Date().toLocaleTimeString())
+  }, [])
+
+  useEffect(() => {
+    fetchAll()
+    const t = setInterval(fetchAll, 15_000)
+    return () => clearInterval(t)
+  }, [fetchAll])
+
+  // Compute quick signal stats
+  const activeSignals  = signals.filter(s => s.lifecycleStage === 'ACTIVE').length
+  const approvedSignals = signals.filter(s => ['AI_APPROVED', 'TELEGRAM_SENT', 'ACTIVE'].includes(s.lifecycleStage)).length
+  const freshGroups    = cache ? cache.groups.filter(g => g.fresh).length : null
+  const quotaPct       = cache ? Math.round((cache.quotaGuard.monthlyUsed / cache.quotaGuard.monthlyLimit) * 100) : null
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="p-6 space-y-6 max-w-6xl mx-auto">
+
       {/* Header */}
-      <div>
-        <h1 className="text-terminal-text text-xl font-semibold">Command Overview</h1>
-        <p className="text-terminal-muted text-sm mt-1">System status · Signal edge · Operational health</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <LayoutDashboard className="w-6 h-6 text-blue-400" />
+          <div>
+            <h1 className="text-xl font-semibold text-white">Command Overview</h1>
+            <p className="text-sm text-zinc-400">System status · scanner · regime · signals · cache</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {updatedAt && <span className="text-xs text-zinc-600">Updated {updatedAt}</span>}
+          <button
+            onClick={fetchAll}
+            className="text-zinc-500 hover:text-zinc-300 p-1.5 rounded-lg border border-zinc-800 hover:border-zinc-600 transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
-      {/* Warmup banner — shown until system has enough resolved signals */}
-      {!sl && (coverage?.resolved ?? 0) < 30 && (
-        <div className="rounded-lg px-5 py-4 bg-signal-medium/5 border border-signal-medium/20 flex items-start gap-3">
-          <span className="text-signal-medium text-base leading-none mt-0.5">◌</span>
-          <div>
-            <p className="text-signal-medium text-sm font-semibold">System warming up — {coverage?.resolved ?? 0} / 30 resolved signals</p>
-            <p className="text-terminal-muted text-xs mt-1 leading-relaxed">
-              Statistical verdicts, win rate, and edge metrics require at least 30 resolved signals. Run scans and allow signals to reach their TP / SL targets over the next few days. Edge metrics will populate automatically.
-            </p>
+      {/* Scanner + Regime hero strip */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        {/* Scanner status */}
+        <Link href="/admin/scanner" className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-700 transition-colors block">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <ScanLine className="w-4 h-4 text-zinc-500" />
+              <span className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Scanner</span>
+            </div>
+            {scheduler && <ScannerStatusBadge s={scheduler} />}
+          </div>
+          {scheduler ? (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="text-xs text-zinc-500">Mode</div>
+                <div className="text-sm font-semibold text-white mt-0.5">{scheduler.mode}</div>
+              </div>
+              <div>
+                <div className="text-xs text-zinc-500">Last Scan</div>
+                <div className="text-sm font-semibold text-white mt-0.5">{timeAgo(scheduler.lastScanAt)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-zinc-500">Scans</div>
+                <div className="text-sm font-semibold text-white mt-0.5">{scheduler.scanCount}</div>
+              </div>
+              <div>
+                <div className="text-xs text-zinc-500">Errors</div>
+                <div className={`text-sm font-semibold mt-0.5 ${scheduler.errorCount > 0 ? 'text-red-400' : 'text-white'}`}>{scheduler.errorCount}</div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-zinc-600 text-sm">Loading…</div>
+          )}
+        </Link>
+
+        {/* Regime */}
+        <Link href="/admin/regime" className="block">
+          {regime ? (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-700 transition-colors h-full">
+              <div className="flex items-center gap-2 mb-3">
+                <Activity className="w-4 h-4 text-zinc-500" />
+                <span className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Market Regime</span>
+              </div>
+              <div className={`text-2xl font-bold mb-3 ${REGIME_COLOR[regime.regime]}`}>
+                {REGIME_LABEL[regime.regime]}
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <div className="text-xs text-zinc-500">RSI 4h</div>
+                  <div className={`text-sm font-bold font-mono ${regime.btcRsi4h > 70 ? 'text-red-400' : regime.btcRsi4h < 30 ? 'text-green-400' : 'text-white'}`}>
+                    {fmt(regime.btcRsi4h, 1)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-zinc-500">BTC 24h</div>
+                  <div className={`text-sm font-bold font-mono ${regime.btc24hChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {regime.btc24hChange >= 0 ? '+' : ''}{fmt(regime.btc24hChange, 1)}%
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-zinc-500">Trend</div>
+                  <div className={`text-sm font-bold flex items-center gap-0.5 ${regime.btcTrend4h === 'BULLISH' ? 'text-green-400' : regime.btcTrend4h === 'BEARISH' ? 'text-red-400' : 'text-zinc-400'}`}>
+                    {regime.btcTrend4h === 'BULLISH' && <TrendingUp className="w-3.5 h-3.5" />}
+                    {regime.btcTrend4h === 'BEARISH' && <TrendingDown className="w-3.5 h-3.5" />}
+                    {regime.btcTrend4h === 'RANGING' && <Minus className="w-3.5 h-3.5" />}
+                    {regime.btcTrend4h}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 h-full flex items-center justify-center text-zinc-600 text-sm">
+              Loading regime…
+            </div>
+          )}
+        </Link>
+      </div>
+
+      {/* Quick stat tiles */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatTile
+          label="Active Signals"
+          value={activeSignals}
+          sub="ACTIVE lifecycle"
+          href="/admin/tactical"
+          accent={activeSignals > 0 ? 'green' : 'default'}
+        />
+        <StatTile
+          label="Approved Signals"
+          value={approvedSignals}
+          sub="AI approved + sent"
+          href="/admin/signals"
+        />
+        <StatTile
+          label="Cache Groups"
+          value={freshGroups !== null ? `${freshGroups} / ${cache?.groups.length ?? 5}` : '—'}
+          sub="fresh groups"
+          href="/admin/cache"
+          accent={freshGroups !== null && freshGroups >= 4 ? 'green' : freshGroups !== null && freshGroups >= 2 ? 'amber' : 'red'}
+        />
+        <StatTile
+          label="CMC Quota"
+          value={quotaPct !== null ? `${quotaPct}%` : '—'}
+          sub="monthly used"
+          href="/admin/cache"
+          accent={quotaPct !== null ? (quotaPct < 60 ? 'green' : quotaPct < 80 ? 'amber' : 'red') : 'default'}
+        />
+      </div>
+
+      {/* Recent signals table */}
+      {signals.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Recent Signals</h2>
+            <Link href="/admin/tactical" className="text-xs text-blue-400 hover:text-blue-300">View all →</Link>
+          </div>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-800 text-[10px] text-zinc-600 uppercase tracking-wider">
+                  <th className="text-left px-4 py-2.5">Symbol</th>
+                  <th className="text-left px-4 py-2.5">Stage</th>
+                  <th className="text-right px-4 py-2.5">Type</th>
+                  <th className="text-right px-4 py-2.5">Conf</th>
+                  <th className="text-right px-4 py-2.5">R:R</th>
+                  <th className="text-right px-4 py-2.5">Age</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/50">
+                {signals.slice(0, 8).map((sig, i) => (
+                  <tr key={sig.id ?? i} className="hover:bg-zinc-800/40">
+                    <td className="px-4 py-2 font-semibold text-white text-sm">{sig.symbol}</td>
+                    <td className="px-4 py-2">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                        sig.lifecycleStage === 'ACTIVE'      ? 'text-green-400 border-green-500/20 bg-green-500/10' :
+                        sig.lifecycleStage === 'AI_APPROVED' ? 'text-blue-400 border-blue-500/20 bg-blue-500/10'   :
+                        sig.lifecycleStage === 'TELEGRAM_SENT' ? 'text-purple-400 border-purple-500/20 bg-purple-500/10' :
+                        sig.lifecycleStage === 'TP_HIT'      ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' :
+                        sig.lifecycleStage === 'SL_HIT'      ? 'text-red-400 border-red-500/20 bg-red-500/10' :
+                        'text-zinc-500 border-zinc-700 bg-zinc-800'
+                      }`}>
+                        {sig.lifecycleStage}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <span className={`text-xs font-semibold ${sig.type === 'BUY' ? 'text-green-400' : 'text-red-400'}`}>{sig.type}</span>
+                    </td>
+                    <td className="px-4 py-2 text-right text-xs font-mono text-zinc-300">{sig.confidence}%</td>
+                    <td className="px-4 py-2 text-right text-xs font-mono text-zinc-300">{sig.rrRatio.toFixed(1)}</td>
+                    <td className="px-4 py-2 text-right text-xs text-zinc-600 tabular-nums">
+                      {timeAgo(new Date(sig.createdAt).getTime())}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {/* Readiness hero */}
-      <div className="grid grid-cols-12 gap-4">
-        {/* Score ring */}
-        <div className="col-span-12 sm:col-span-3 glass-card rounded-lg p-5 flex flex-col items-center justify-center gap-3">
-          {rl
-            ? <div className="skeleton w-28 h-28 rounded-full" />
-            : <ScoreRing score={r?.overall_score ?? 0} size={112} />
-          }
-          <p className="text-terminal-muted text-xs uppercase tracking-wider">Readiness Score</p>
-        </div>
-
-        {/* Verdict */}
-        <div className="col-span-12 sm:col-span-5 glass-card rounded-lg p-5">
-          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">System Verdict</p>
-          {rl ? (
-            <div className="space-y-2">
-              <div className="skeleton h-6 w-32 rounded" />
-              <div className="skeleton h-3 w-full rounded" />
-              <div className="skeleton h-3 w-2/3 rounded" />
-            </div>
-          ) : (
-            <>
-              <div className="flex items-center gap-2 mb-3 flex-wrap">
-                <span className={`font-mono font-bold text-lg ${r?.verdict?.go ? 'text-bull-default' : 'text-bear-default'}`}>
-                  {r?.verdict?.go ? '✓ GO' : '✗ NOT GO'}
-                </span>
-                <span className={`text-xs px-2 py-0.5 rounded border font-bold uppercase tracking-wider ${verdictBadge}`}>
-                  {verdictLabel.replace(/_/g, ' ')}
-                </span>
-              </div>
-              <p className="text-terminal-muted text-xs leading-relaxed">
-                {r?.verdict?.rationale ?? 'No readiness data available.'}
-              </p>
-            </>
-          )}
-        </div>
-
-        {/* Burn-in progress */}
-        <div className="col-span-12 sm:col-span-4 glass-card rounded-lg p-5">
-          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Burn-In Progress</p>
-          {sl ? (
-            <div className="skeleton h-16 rounded" />
-          ) : (
-            <div>
-              <div className="flex items-baseline justify-between mb-2">
-                <span className="font-mono font-bold text-2xl text-terminal-text">{coverage?.resolved ?? 0}</span>
-                <span className="text-terminal-muted text-xs">/ {s?.min_for_report} signals</span>
-              </div>
-              <div className="w-full h-1.5 bg-terminal-bright rounded-full overflow-hidden mb-2">
-                <div
-                  className="h-full bg-bull-default rounded-full transition-all duration-700"
-                  style={{ width: `${Math.min(100, s?.progress_pct ?? 0)}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-xs text-terminal-muted">
-                <span>{(s?.progress_pct ?? 0).toFixed(0)}% complete</span>
-                <span>{coverage?.days?.toFixed(1) ?? '0'} days · {coverage?.pending ?? 0} pending</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Metrics grid */}
-      <div>
-        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Live Metrics</p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <MetricCard
-            label="Win Rate (7d)"
-            value={pct(s?.live_metrics?.win_rate_7d)}
-            sub="7-day rolling"
-            accent={s?.live_metrics?.win_rate_7d != null
-              ? (s.live_metrics!.win_rate_7d >= 0.55 ? 'bull' : 'bear')
-              : 'neutral'}
-            icon={<TrendingUp size={13} />}
-            loading={sl}
-          />
-          <MetricCard
-            label="Expectancy (7d)"
-            value={fmt(s?.live_metrics?.expectancy_7d, 'R')}
-            sub="avg per trade"
-            accent={s?.live_metrics?.expectancy_7d != null
-              ? (s.live_metrics!.expectancy_7d > 0 ? 'bull' : 'bear')
-              : 'neutral'}
-            icon={<Target size={13} />}
-            loading={sl}
-          />
-          <MetricCard
-            label="Resolved Signals"
-            value={coverage?.resolved ?? 0}
-            sub={`${coverage?.pending ?? 0} still pending`}
-            accent="info"
-            icon={<Zap size={13} />}
-            loading={sl}
-          />
-          <MetricCard
-            label="Data Window"
-            value={`${coverage?.days?.toFixed(0) ?? 0}d`}
-            sub={coverage?.earliest ? `since ${coverage.earliest.slice(0, 10)}` : 'no data yet'}
-            accent="neutral"
-            icon={<Clock size={13} />}
-            loading={sl}
-          />
-          <MetricCard
-            label="AI Calls (24h)"
-            value={a?.total_calls ?? 0}
-            sub={`${pct(a?.success_rate, 0)} success`}
-            accent={!a || a.error_rate < 0.05 ? 'bull' : 'warning'}
-            icon={<Brain size={13} />}
-            loading={al}
-          />
-          <MetricCard
-            label="AI Error Rate"
-            value={pct(a?.error_rate)}
-            sub="last 24 hours"
-            accent={!a ? 'neutral' : a.error_rate >= 0.15 ? 'bear' : a.error_rate >= 0.08 ? 'warning' : 'bull'}
-            icon={<Brain size={13} />}
-            loading={al}
-          />
-          <MetricCard
-            label="Scan Success"
-            value={pct(sc?.success_rate, 0)}
-            sub={sc ? `${sc.total_scans} scans` : '—'}
-            accent={!sc ? 'neutral' : sc.failure_rate >= 0.30 ? 'bear' : sc.failure_rate >= 0.15 ? 'warning' : 'bull'}
-            icon={<Activity size={13} />}
-            loading={scl}
-          />
-          <MetricCard
-            label="Fallback Rate"
-            value={pct(a?.fallback_rate)}
-            sub="heuristic fallback"
-            accent={!a ? 'neutral' : a.fallback_rate >= 0.40 ? 'warning' : 'bull'}
-            icon={<Database size={13} />}
-            loading={al}
-          />
-        </div>
-      </div>
-
-      {/* Anomaly summary strip */}
-      {s?.anomaly_summary && (
+      {/* Cache group freshness strip */}
+      {cache && cache.groups.length > 0 && (
         <div>
-          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Last Anomaly Check</p>
-          <div className="glass-card rounded-lg px-5 py-4 flex items-center gap-6 flex-wrap">
-            {[
-              { label: 'Critical', v: s.anomaly_summary.critical, color: s.anomaly_summary.critical > 0 ? 'text-bear-default' : 'text-bull-default' },
-              { label: 'Warnings', v: s.anomaly_summary.warning,  color: s.anomaly_summary.warning  > 0 ? 'text-signal-high'  : 'text-terminal-muted' },
-              { label: 'Total',    v: s.anomaly_summary.total,    color: 'text-terminal-text' },
-            ].map(({ label, v, color }) => (
-              <div key={label} className="flex flex-col gap-1">
-                <span className="text-terminal-muted text-xs uppercase tracking-wider">{label}</span>
-                <span className={`font-mono font-bold text-xl ${color}`}>{v}</span>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Intelligence Cache</h2>
+            <Link href="/admin/cache" className="text-xs text-blue-400 hover:text-blue-300">Manage →</Link>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {cache.groups.map((g) => (
+              <div
+                key={g.name}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs ${
+                  g.fresh ? 'border-green-500/20 bg-green-500/5' : 'border-amber-500/20 bg-amber-500/5'
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${g.fresh ? 'bg-green-400' : 'bg-amber-400'}`} />
+                <span className={g.fresh ? 'text-green-300' : 'text-amber-300'}>{g.name}</span>
+                <span className="text-zinc-600">{g.ageMinutes < 1 ? '<1m' : `${g.ageMinutes}m`}</span>
               </div>
             ))}
-            <div className="h-8 w-px bg-terminal-border mx-2 hidden sm:block" />
-            <div className="flex flex-col gap-1">
-              <span className="text-terminal-muted text-xs uppercase tracking-wider">Status</span>
-              <span className={`font-mono font-bold text-sm ${s.anomaly_summary.ok ? 'text-bull-default' : 'text-bear-default'}`}>
-                {s.anomaly_summary.ok ? '✓ CLEAN' : '⚠ ISSUES'}
-              </span>
-            </div>
-            <div className="ml-auto text-terminal-muted/50 text-xs font-mono">
-              {formatTs(s.anomaly_summary.checked_at)}
-            </div>
           </div>
         </div>
       )}

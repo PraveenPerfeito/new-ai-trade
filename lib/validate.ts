@@ -80,3 +80,30 @@ export const schedulerStartSchema = z.object({
   intervalMinutes: z.coerce.number().int().min(1).max(60).optional(),
   intervalMs:      z.coerce.number().int().min(60_000).max(3_600_000).optional(),
 });
+
+// ─── Phase 7 schemas ──────────────────────────────────────────────────────────
+
+export const scannerControlSchema = z.object({
+  action: z.enum(['start', 'stop', 'pause', 'resume', 'emergency_stop', 'reset', 'configure']),
+  config: z.object({
+    mode:          scannerModeSchema.optional(),
+    intervalMs:    z.coerce.number().int().min(60_000).max(3_600_000).optional(),
+    minConfidence: z.coerce.number().int().min(50).max(100).optional(),
+    minVolume:     z.coerce.number().min(0).optional(),
+    minMarketCap:  z.coerce.number().min(0).optional(),
+    rrMinimum:     z.coerce.number().min(0.5).max(10).optional(),
+    maxCoins:      z.coerce.number().int().min(1).max(200).optional(),
+    coins:         z.array(z.string().min(1).max(20).toUpperCase()).max(200).optional(),
+  }).optional(),
+});
+
+export const tacticalQuerySchema = z.object({
+  limit:          z.coerce.number().int().min(1).max(200).default(100),
+  minConfidence:  z.coerce.number().int().min(0).max(100).default(70),
+  lifecycleStage: z.enum([
+    'VALIDATED', 'AI_APPROVED', 'TELEGRAM_SENT', 'ACTIVE',
+    'STALE', 'TP_HIT', 'SL_HIT', 'CLOSED', 'ANALYZED', 'all',
+  ]).default('all'),
+  type:  z.enum(['BUY', 'SELL', 'all']).default('all'),
+  mode:  z.enum(['spot', 'futures', 'high_confidence', 'trending', 'all']).default('all'),
+});

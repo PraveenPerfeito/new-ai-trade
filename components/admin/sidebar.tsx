@@ -3,47 +3,50 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  LayoutDashboard, Activity, ScanLine, Zap, Brain, TrendingUp,
-  Database, Server, AlertTriangle, BarChart3, Target, Settings2, Layers,
+  LayoutDashboard, Activity, ScanLine, Zap, TrendingUp,
+  Database, Server, AlertTriangle, BarChart3, Target, Settings2,
+  Layers, Crosshair, Globe, Brain, Cpu,
 } from 'lucide-react'
 
 const SECTIONS = [
   {
     label: 'OVERVIEW',
     items: [
-      { href: '/admin/overview',      icon: LayoutDashboard, label: 'Command Overview' },
-      { href: '/admin/operations',    icon: Activity,        label: 'Live Market'       },
+      { href: '/admin/overview', icon: LayoutDashboard, label: 'Command Overview'   },
+      { href: '/admin/market',   icon: Activity,        label: 'Market Intelligence'},
     ],
   },
   {
     label: 'OPERATIONS',
     items: [
-      { href: '/admin/scanner',       icon: ScanLine,        label: 'Scanner'           },
-      { href: '/admin/signals',       icon: Zap,             label: 'Signals'           },
-      { href: '/admin/ai',            icon: Brain,           label: 'Intelligence'      },
-      { href: '/admin/paper-trading', icon: TrendingUp,      label: 'Paper Trading'     },
+      { href: '/admin/scanner',       icon: ScanLine,   label: 'Scanner'       },
+      { href: '/admin/signals',       icon: Zap,        label: 'Signals'       },
+      { href: '/admin/tactical',      icon: Crosshair,  label: 'Tactical Feed' },
+      { href: '/admin/paper-trading', icon: TrendingUp, label: 'Paper Trading' },
+    ],
+  },
+  {
+    label: 'INTELLIGENCE',
+    items: [
+      { href: '/admin/analytics',   icon: BarChart3, label: 'Edge Analytics'      },
+      { href: '/admin/regime',      icon: Target,    label: 'Regime Intelligence' },
+      { href: '/admin/sectors',     icon: Globe,     label: 'Sector Rotation'     },
+      { href: '/admin/calibration', icon: Brain,     label: 'Calibration'         },
     ],
   },
   {
     label: 'INFRASTRUCTURE',
     items: [
-      { href: '/admin/providers',     icon: Database,        label: 'Providers'         },
-      { href: '/admin/cache',         icon: Layers,          label: 'Cache Intelligence'},
-      { href: '/admin/system',        icon: Server,          label: 'System Health'     },
-      { href: '/admin/anomalies',     icon: AlertTriangle,   label: 'Diagnostics'       },
-    ],
-  },
-  {
-    label: 'ANALYTICS',
-    items: [
-      { href: '/admin/analytics',     icon: BarChart3,       label: 'Edge Analytics'    },
-      { href: '/admin/readiness',     icon: Target,          label: 'Regime Analytics'  },
+      { href: '/admin/providers', icon: Database,      label: 'Providers'        },
+      { href: '/admin/cache',     icon: Layers,        label: 'Cache Operations' },
+      { href: '/admin/system',    icon: Server,        label: 'System Health'    },
+      { href: '/admin/anomalies', icon: AlertTriangle, label: 'Diagnostics'      },
     ],
   },
   {
     label: 'SYSTEM',
     items: [
-      { href: '/admin/settings',      icon: Settings2,       label: 'Settings'          },
+      { href: '/admin/settings', icon: Settings2, label: 'Settings' },
     ],
   },
 ]
@@ -107,7 +110,7 @@ export function AdminSidebar() {
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-bull-default opacity-40" />
           <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-bull-default/70" />
         </span>
-        <p className="text-terminal-muted/40 text-xs font-mono">Phase 6.9 · v1.0</p>
+        <p className="text-terminal-muted/40 text-xs font-mono">Phase 7 · v1.0</p>
       </div>
     </aside>
   )

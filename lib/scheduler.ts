@@ -57,11 +57,13 @@ export interface SchedulerConfig {
 export interface SchedulerStatus {
   started:             boolean;
   scanning:            boolean;
+  paused:              boolean;       // user-initiated pause
+  emergencyStop:       boolean;       // emergency stop active
   lockOwner:           string | null;
   nextScanAt:          string | null;
   lastScanAt:          string | null;
   consecutiveFailures: number;
-  pausedUntil:         string | null;
+  pausedUntil:         string | null; // error-recovery pause
   queuedMode:          ScannerMode | null;
   scansThisHour:       number;
   history:             ScanHistoryEntry[];
@@ -93,6 +95,10 @@ class ScanScheduler {
   private _pausedUntil:          Date | null = null;
   private _recentScanTimes:      number[] = [];
   private _history:              ScanHistoryEntry[] = [];
+
+  // Phase 7 — manual pause + emergency stop
+  private _manualPaused  = false;
+  private _emergencyStop = false;
 
   // Config
   private _config: SchedulerConfig = {
@@ -211,7 +217,16 @@ class ScanScheduler {
   // ── Core scan execution ────────────────────────────────────────────────
 
   private async _doScan(mode: ScannerMode, triggeredBy: ScanTrigger, retryCount = 0): Promise<void> {
-    // Check pause
+    // User-initiated pause or emergency stop
+    if (this._manualPaused) {
+      console.log('[Scheduler] Manually paused — skipping tick');
+      return;
+    }
+    if (this._emergencyStop) {
+      console.log('[Scheduler] Emergency stop active — skipping tick');
+      return;
+    }
+    // Error-recovery pause
     if (this._pausedUntil && Date.now() < this._pausedUntil.getTime()) {
       console.log(`[Scheduler] Paused until ${this._pausedUntil.toISOString()}`);
       return;
@@ -328,6 +343,32 @@ class ScanScheduler {
     return { ok: true, scanId: id };
   }
 
+  // ── Pause / Resume / Emergency Stop / Reset ────────────────────────────
+
+  pause(): void {
+    this._manualPaused = true;
+    console.log('[Scheduler] Manually paused');
+  }
+
+  resume(): void {
+    this._manualPaused = false;
+    console.log('[Scheduler] Resumed');
+  }
+
+  emergencyStop(): void {
+    this._emergencyStop = true;
+    this.stop();
+    console.warn('[Scheduler] Emergency stop activated');
+  }
+
+  reset(): void {
+    this._emergencyStop      = false;
+    this._manualPaused       = false;
+    this._consecutiveFailures = 0;
+    this._pausedUntil        = null;
+    console.log('[Scheduler] State reset');
+  }
+
   // ── Status ─────────────────────────────────────────────────────────────
 
   getStatus(): SchedulerStatus {
@@ -337,6 +378,8 @@ class ScanScheduler {
     return {
       started:             this._started,
       scanning:            this._locked,
+      paused:              this._manualPaused,
+      emergencyStop:       this._emergencyStop,
       lockOwner:           this._lockOwner,
       nextScanAt:          this._nextScanAt?.toISOString() ?? null,
       lastScanAt:          this._lastScanAt?.toISOString() ?? null,

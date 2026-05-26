@@ -688,6 +688,14 @@ export type SignalLifecycleStage =
   | 'CLOSED'         // timed out without hitting TP or SL
   | 'ANALYZED';      // attribution data recorded
 
+// ─── Phase 7 — Tactical Signal Row ───────────────────────────────────────────
+
+export interface TacticalSignalRow extends TradingSignal {
+  lifecycleStage:  SignalLifecycleStage;
+  outcomeStatus?:  SignalOutcome;
+  hasPaperTrade?:  boolean;
+}
+
 // ─── Phase 6.7 — Quant Outcome Attribution ───────────────────────────────────
 
 /** Flattened JOIN of signal_outcomes + signals tactical fields */
