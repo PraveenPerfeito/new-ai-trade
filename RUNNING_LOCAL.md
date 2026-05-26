@@ -31,12 +31,13 @@ cd simulation-engine/new-ai-trade
 ### 2. Copy environment file
 
 The `.env` file in the project root is your local config. It already has dev values
-filled in. The two fields you must fill yourself:
+filled in. The fields you must fill yourself:
 
 | Field | Where to get it |
 |-------|----------------|
 | `DATABASE_URL` | Supabase → Settings → Database → URI (Direct connection) |
 | `REDIS_URL` | Upstash dashboard → copy the `rediss://` URL |
+| `COINMARKETCAP_API_KEY` | coinmarketcap.com → API Keys → copy Pro API key (Startup Plan) |
 
 ```bash
 # .env is already the working config file for local dev — no need to copy it
@@ -169,6 +170,9 @@ TELEGRAM_CHAT_ID=<chat id>
 ADMIN_EMAILS=your@email.com
 ADMIN_SECRET=<32-byte hex>
 
+# CoinMarketCap (Startup Plan — intelligence cache)
+COINMARKETCAP_API_KEY=<your-cmc-pro-api-key>
+
 # Backend proxy
 BACKEND_URL=http://localhost:8000
 ```
@@ -235,3 +239,4 @@ curl -X POST http://localhost:3000/api/scanner/run \
   -H "Content-Type: application/json" \
   -d '{"mode":"spot"}'
 ```
+

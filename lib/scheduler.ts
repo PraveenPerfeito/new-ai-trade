@@ -19,6 +19,7 @@
 import { runScan } from './scanner';
 import { ScannerMode, ScanResult } from '@/types';
 import { runStartupCheck } from './startup-check';
+import { startIntelligenceWorkers, preloadIntelligence } from './intelligence';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -238,6 +239,11 @@ class ScanScheduler {
     console.log(`[Scheduler] Scan start — mode:${mode} trigger:${triggeredBy} retry:${retryCount}`);
 
     try {
+      // Warm intelligence cache before scan so scanner reads fresh data
+      await preloadIntelligence().catch((err) =>
+        console.warn('[Scheduler] Intelligence preload failed (non-fatal):', err),
+      );
+
       const result = await runScan(mode);
       this.completeScan(id, result);
       console.log(
@@ -352,6 +358,9 @@ if (!g.__market_scanner_sched) {
   // Throws in production if ADMIN_EMAILS, ADMIN_SECRET, etc. are missing.
   runStartupCheck();
   g.__market_scanner_sched = new ScanScheduler();
+
+  // Start background intelligence cache refresh workers (HMR-safe via globalThis registry)
+  startIntelligenceWorkers();
 }
 
 export const scheduler = g.__market_scanner_sched;

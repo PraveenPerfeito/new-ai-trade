@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Activity, ScanLine, Zap, Brain, TrendingUp,
-  Database, Server, AlertTriangle, BarChart3, Target, Settings2,
+  Database, Server, AlertTriangle, BarChart3, Target, Settings2, Layers,
 } from 'lucide-react'
 
 const SECTIONS = [
@@ -28,6 +28,7 @@ const SECTIONS = [
     label: 'INFRASTRUCTURE',
     items: [
       { href: '/admin/providers',     icon: Database,        label: 'Providers'         },
+      { href: '/admin/cache',         icon: Layers,          label: 'Cache Intelligence'},
       { href: '/admin/system',        icon: Server,          label: 'System Health'     },
       { href: '/admin/anomalies',     icon: AlertTriangle,   label: 'Diagnostics'       },
     ],
@@ -106,7 +107,7 @@ export function AdminSidebar() {
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-bull-default opacity-40" />
           <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-bull-default/70" />
         </span>
-        <p className="text-terminal-muted/40 text-xs font-mono">Phase 6.8 · v1.0</p>
+        <p className="text-terminal-muted/40 text-xs font-mono">Phase 6.9 · v1.0</p>
       </div>
     </aside>
   )

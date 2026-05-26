@@ -1,0 +1,157 @@
+import axios, { AxiosInstance } from 'axios';
+import { getEnv } from '@/lib/env';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('lib/intelligence/cmc-client');
+
+const CMC_BASE = 'https://pro-api.coinmarketcap.com/v1';
+const TIMEOUT  = 12_000;
+
+let _client: AxiosInstance | null = null;
+
+function getClient(): AxiosInstance {
+  if (_client) return _client;
+  const apiKey = getEnv().COINMARKETCAP_API_KEY;
+  _client = axios.create({
+    baseURL: CMC_BASE,
+    timeout: TIMEOUT,
+    headers: {
+      'X-CMC_PRO_API_KEY': apiKey,
+      'Accept':            'application/json',
+    },
+  });
+  return _client;
+}
+
+// ─── Raw response shapes (minimal — only fields we use) ───────────────────────
+
+export interface CmcListingCoin {
+  id: number;
+  name: string;
+  symbol: string;
+  cmc_rank: number;
+  quote: {
+    USD: {
+      price: number;
+      volume_24h: number;
+      percent_change_1h: number;
+      percent_change_24h: number;
+      percent_change_7d: number;
+      market_cap: number;
+      market_cap_dominance: number;
+      last_updated: string;
+    };
+  };
+}
+
+export interface CmcGlobalMetrics {
+  btc_dominance: number;
+  eth_dominance: number;
+  quote: {
+    USD: {
+      total_market_cap: number;
+      total_volume_24h: number;
+      total_market_cap_yesterday_percentage_change: number;
+      last_updated: string;
+    };
+  };
+  active_cryptocurrencies: number;
+  last_updated: string;
+}
+
+export interface CmcTrendingCoin {
+  id: number;
+  name: string;
+  symbol: string;
+  cmc_rank: number;
+  quote: {
+    USD: {
+      price: number;
+      volume_24h: number;
+      percent_change_1h: number;
+      percent_change_24h: number;
+      market_cap: number;
+      last_updated: string;
+    };
+  };
+}
+
+export interface CmcCategory {
+  id: string;
+  name: string;
+  title: string;
+  num_tokens: number;
+  avg_price_change: number;
+  volume: number;
+  market_cap: number;
+  market_cap_change: number;
+  coins: string[];
+}
+
+export interface CmcCoinInfo {
+  id: number;
+  name: string;
+  symbol: string;
+  category: string;
+  description: string;
+  logo: string;
+  tags: string[];
+  date_added: string;
+  urls: { website: string[]; technical_doc: string[] };
+}
+
+export interface CmcKeyInfo {
+  credit_count_used: number;
+  credit_count_left: number;
+}
+
+// ─── Fetch functions ──────────────────────────────────────────────────────────
+
+export async function fetchListings(limit = 100): Promise<CmcListingCoin[]> {
+  const res = await getClient().get('/cryptocurrency/listings/latest', {
+    params: { limit, convert: 'USD', sort: 'market_cap' },
+  });
+  log.debug({ count: res.data.data?.length }, 'cmc_listings_fetched');
+  return res.data.data as CmcListingCoin[];
+}
+
+export async function fetchGlobalMetrics(): Promise<CmcGlobalMetrics> {
+  const res = await getClient().get('/global-metrics/quotes/latest', {
+    params: { convert: 'USD' },
+  });
+  log.debug('cmc_global_fetched');
+  return res.data.data as CmcGlobalMetrics;
+}
+
+export async function fetchTrending(limit = 20): Promise<CmcTrendingCoin[]> {
+  const res = await getClient().get('/cryptocurrency/trending/latest', {
+    params: { limit, convert: 'USD' },
+  });
+  log.debug({ count: res.data.data?.length }, 'cmc_trending_fetched');
+  return res.data.data as CmcTrendingCoin[];
+}
+
+export async function fetchCategories(): Promise<CmcCategory[]> {
+  const res = await getClient().get('/cryptocurrency/categories', {
+    params: { limit: 100 },
+  });
+  log.debug({ count: res.data.data?.length }, 'cmc_categories_fetched');
+  return res.data.data as CmcCategory[];
+}
+
+export async function fetchMetadata(symbols: string[]): Promise<Record<string, CmcCoinInfo>> {
+  const res = await getClient().get('/cryptocurrency/info', {
+    params: { symbol: symbols.join(',') },
+  });
+  log.debug({ count: Object.keys(res.data.data ?? {}).length }, 'cmc_metadata_fetched');
+  return res.data.data as Record<string, CmcCoinInfo>;
+}
+
+export async function fetchKeyInfo(): Promise<CmcKeyInfo> {
+  const res = await getClient().get('/key/info');
+  const plan = res.data.data?.usage?.current_month;
+  return {
+    credit_count_used: plan?.credits_used ?? 0,
+    credit_count_left: plan?.credits_left ?? 0,
+  };
+}

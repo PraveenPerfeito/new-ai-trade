@@ -1,11 +1,18 @@
 import axios from 'axios';
 import { CoinData } from '@/types';
-import { withApiRetry } from '@/lib/retry';
 import { MarketDataProvider, ProviderName } from '../types';
-import { resolveBinanceSymbol } from '../binance-symbols';
+import { readListings } from '@/lib/intelligence/reader';
+import { getQuotaGuard } from '@/lib/intelligence/quota-guard';
 
 const BASE_URL = 'https://pro-api.coinmarketcap.com/v1';
 
+/**
+ * CMC provider that serves coins from the intelligence cache.
+ * Direct API calls are owned exclusively by lib/intelligence — this provider
+ * never calls CMC itself to avoid double credit spending.
+ * Kept enabled: false in ProviderManager so the intelligence layer is the
+ * sole CMC consumer; CoinGecko remains the MarketDataService fallback.
+ */
 export class CoinMarketCapProvider implements MarketDataProvider {
   readonly name: ProviderName = 'coinmarketcap';
   readonly priority = 2;
@@ -13,45 +20,11 @@ export class CoinMarketCapProvider implements MarketDataProvider {
   constructor(private readonly apiKey: string) {}
 
   async fetchTopCoins(limit: number): Promise<CoinData[]> {
-    const res = await withApiRetry(
-      () =>
-        axios.get(`${BASE_URL}/cryptocurrency/listings/latest`, {
-          headers: {
-            'X-CMC_PRO_API_KEY': this.apiKey,
-            Accept: 'application/json',
-          },
-          params: {
-            start: 1,
-            limit: Math.min(limit, 200),
-            sort: 'market_cap',
-            sort_dir: 'desc',
-            convert: 'USD',
-          },
-          timeout: 15000,
-        }),
-      'coinmarketcap-listings',
-    );
-
-    const coins: Record<string, unknown>[] = res.data?.data ?? [];
-
-    return coins.slice(0, limit).map((coin, i): CoinData => {
-      const cmcId = String(coin.slug ?? coin.id).toLowerCase();
-      const symbol = String(coin.symbol).toUpperCase();
-      const quote = (coin.quote as Record<string, Record<string, unknown>>)?.USD ?? {};
-
-      return {
-        id: cmcId,
-        symbol,
-        name: String(coin.name),
-        rank: (coin.cmc_rank as number) || i + 1,
-        price: (quote.price as number) || 0,
-        marketCap: (quote.market_cap as number) || 0,
-        volume24h: (quote.volume_24h as number) || 0,
-        priceChange24h: (quote.percent_change_24h as number) || 0,
-        binanceSymbol: resolveBinanceSymbol(cmcId, symbol),
-        hasFutures: false,
-      };
-    });
+    const snapshot = await readListings();
+    if (!snapshot || snapshot.coins.length === 0) {
+      throw new Error('CMC intelligence cache is cold — no coins available');
+    }
+    return snapshot.coins.slice(0, limit);
   }
 
   async healthCheck(): Promise<boolean> {
@@ -60,6 +33,11 @@ export class CoinMarketCapProvider implements MarketDataProvider {
         headers: { 'X-CMC_PRO_API_KEY': this.apiKey, Accept: 'application/json' },
         timeout: 5000,
       });
+      // Seed quota guard with authoritative credit usage from CMC
+      const plan = res.data?.data?.usage?.current_month;
+      if (plan?.credits_used != null) {
+        await getQuotaGuard().seedFromKeyInfo(plan.credits_used).catch(() => {});
+      }
       return res.status === 200;
     } catch {
       return false;

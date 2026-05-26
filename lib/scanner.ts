@@ -2,7 +2,8 @@ import {
   CoinData, TradingSignal, ScannerMode,
   ScannerConfig, ScanResult, TechnicalIndicators, MarketRegimeSnapshot,
 } from '@/types';
-import { getTop100ByMarketCap, filterHighVolume, filterByLiquidity, prioritizeCoins } from './coingecko';
+import { filterHighVolume, filterByLiquidity, prioritizeCoins } from './coingecko';
+import { getIntelligenceCoins } from './intelligence';
 import { getSpotKlines, getFuturesKlines, getFuturesSymbols } from './binance';
 import {
   calculateAllIndicators,
@@ -647,9 +648,9 @@ export async function runScan(
   }
 
   try {
-    // 1. Fetch top 100 from CoinGecko
-    const allCoins = await getTop100ByMarketCap();
-    log.info({ count: allCoins.length }, 'fetched coins from CoinGecko');
+    // 1. Fetch top 100 from intelligence cache (CMC primary, CoinGecko fallback)
+    const allCoins = await getIntelligenceCoins(100);
+    log.info({ count: allCoins.length }, 'fetched coins from intelligence cache');
 
     // 2. Apply market-cap and volume filters
     let filtered = filterHighVolume(allCoins, config.minVolume24h);
@@ -679,7 +680,7 @@ export async function runScan(
       filtered = filtered.filter(c => targetSet.has(c.symbol.toUpperCase()));
       if (filtered.length === 0) {
         log.warn({ requested: options.filterCoins }, 'coin filter matched 0 after gates — falling back to full list');
-        filtered = prioritizeCoins(await getTop100ByMarketCap()).slice(0, config.maxCoinsToScan);
+        filtered = prioritizeCoins(await getIntelligenceCoins(100)).slice(0, config.maxCoinsToScan);
       }
     }
 
