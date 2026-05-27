@@ -45,6 +45,12 @@ from backend.metrics.prometheus import (
 
 log = get_logger(__name__)
 
+
+def _on_task_done(task: asyncio.Task, label: str) -> None:
+    if not task.cancelled() and task.exception() is not None:
+        log.warning("background_task_failed", task=label, error=str(task.exception()))
+
+
 # Configurable concurrency (coins scanned in parallel)
 MAX_CONCURRENT = 5
 COIN_TIMEOUT   = 45.0  # seconds per coin (includes 2 kline fetches + 1 AI call)
@@ -174,12 +180,13 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
 
     try:
         # 1. Fetch top-100 + futures symbols
+        async def _no_futures() -> set[str]:
+            return set()
+
         all_coins, futures_syms = await asyncio.gather(
             fetch_top100(),
-            fetch_futures_symbols() if mode in (ScannerMode.FUTURES, ScannerMode.HIGH_CONFIDENCE) else asyncio.sleep(0),
+            fetch_futures_symbols() if mode in (ScannerMode.FUTURES, ScannerMode.HIGH_CONFIDENCE) else _no_futures(),
         )
-        if not isinstance(futures_syms, set):
-            futures_syms = set()
 
         log.info("coins_fetched", count=len(all_coins), mode=mode.value)
 
@@ -188,7 +195,8 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
         log.info("coins_filtered", count=len(filtered), mode=mode.value)
 
         # 3. Cache coin list in DB (non-blocking, best-effort)
-        asyncio.create_task(upsert_coins(all_coins))
+        t = asyncio.create_task(upsert_coins(all_coins))
+        t.add_done_callback(lambda t: _on_task_done(t, "upsert_coins"))
 
         progress.total = len(filtered)
         await _set_progress(progress)
@@ -226,7 +234,8 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
 
                 # Analytics: register outcome tracker + paper trade (best-effort)
                 if signal.id:
-                    asyncio.create_task(_register_analytics(signal))
+                    t = asyncio.create_task(_register_analytics(signal))
+                    t.add_done_callback(lambda t: _on_task_done(t, "register_analytics"))
 
                 signals.append(signal)
                 progress.signals_found += 1
@@ -259,9 +268,10 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                 completed_at=datetime.now(timezone.utc),
             )
 
-        asyncio.create_task(
+        t = asyncio.create_task(
             send_scan_summary(progress.scanned, len(signals), high_conf, duration_ms, mode.value)
         )
+        t.add_done_callback(lambda t: _on_task_done(t, "send_scan_summary"))
 
         scan_runs_total.labels(mode=mode.value, status="completed").inc()
         scan_duration_seconds.labels(mode=mode.value).observe(duration_ms / 1000)

@@ -65,8 +65,8 @@ def _send_failure_alert(mode: str, error: str, attempt: int) -> None:
             json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
             timeout=5,
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(f"telegram_failure_alert_failed error={exc}")
 
 
 @shared_task(

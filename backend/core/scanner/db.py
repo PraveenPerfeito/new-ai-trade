@@ -96,6 +96,7 @@ async def save_signal(signal: Signal) -> str | None:
         return None
     try:
         expl = signal.ai_explainability.model_dump() if signal.ai_explainability else None
+        ind  = signal.indicators
         row = await pool.fetchrow(
             """
             INSERT INTO signals (
@@ -124,11 +125,11 @@ async def save_signal(signal: Signal) -> str | None:
             signal.stop_loss,
             signal.rr_ratio,
             signal.confidence,
-            signal.indicators.rsi,
-            signal.indicators.macd.histogram,
-            signal.indicators.trend.value,
-            signal.indicators.atr,
-            signal.indicators.volume_spike,
+            ind.rsi if ind else None,
+            ind.macd.histogram if ind else None,
+            ind.trend.value if ind else None,
+            ind.atr if ind else None,
+            ind.volume_spike if ind else None,
             signal.setup_description,
             signal.ai_validated,
             signal.ai_reasoning or None,

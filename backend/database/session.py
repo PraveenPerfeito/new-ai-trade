@@ -30,8 +30,14 @@ async def get_pool() -> asyncpg.Pool:
     except RuntimeError:
         raise RuntimeError("get_pool() must be called from an async context")
 
-    # Recreate pool when event loop changed (common in Celery asyncio.run() context)
-    if _pool is not None and _pool_loop is not current_loop:
+    # Recreate pool when event loop changed (common in Celery asyncio.run() context).
+    # Also check is_closed() because CPython can reuse a GC'd loop's memory address,
+    # making identity comparison unreliable.
+    if _pool is not None and (
+        _pool_loop is not current_loop
+        or _pool_loop is None
+        or _pool_loop.is_closed()
+    ):
         log.debug("asyncpg_pool_loop_changed_recreating")
         try:
             await _pool.close()

@@ -17,10 +17,11 @@ from backend.logging.setup import get_logger
 
 log = get_logger(__name__)
 
-TIMEOUT_HOURS  = 72
-CANDLE_LIMIT   = 200
-CHECK_BATCH    = 50
-STALE_DAYS     = 7
+TIMEOUT_HOURS      = 72
+CANDLE_LIMIT       = 200
+CHECK_BATCH        = 50
+MAX_OUTCOME_CHECKS = 10  # abandon an outcome after this many unsuccessful check attempts
+STALE_DAYS         = 7
 
 CONFIDENCE_BANDS: list[tuple[int, int]] = [
     (70, 75), (75, 80), (80, 85), (85, 90), (90, 95), (95, 101),
@@ -105,7 +106,7 @@ async def check_pending_outcomes() -> dict:
     try:
         rows = await pool.fetch(
             """
-            SELECT id, signal_id, symbol, signal_type, entry_price,
+            SELECT id, signal_id, symbol, signal_type, scanner_mode, entry_price,
                    target_price, stop_loss, rr_ratio, created_at, check_count
             FROM signal_outcomes
             WHERE outcome = 'PENDING'
@@ -114,7 +115,7 @@ async def check_pending_outcomes() -> dict:
             ORDER BY created_at ASC
             LIMIT $3
             """,
-            cutoff, CANDLE_LIMIT, CHECK_BATCH,
+            cutoff, MAX_OUTCOME_CHECKS, CHECK_BATCH,
         )
     except Exception as exc:
         log.error("fetch_pending_outcomes_failed", error=str(exc))
@@ -136,7 +137,7 @@ async def check_pending_outcomes() -> dict:
             log.warning("resolve_outcome_error", outcome_id=str(row["id"]), error=str(exc))
             errors += 1
 
-    still_pending = len(rows) - resolved
+    still_pending = len(rows) - resolved - errors
     log.info("outcomes_checked", resolved=resolved, still_pending=still_pending, errors=errors)
     return {"resolved": resolved, "still_pending": still_pending, "errors": errors}
 
@@ -151,8 +152,9 @@ async def _try_resolve(row: dict) -> dict | None:
     if created.tzinfo is None:
         created = created.replace(tzinfo=timezone.utc)
 
+    is_futures = row.get("scanner_mode") in ("futures", "high_confidence")
     try:
-        candles = await fetch_klines(symbol, "1h", CANDLE_LIMIT, False)
+        candles = await fetch_klines(symbol, "1h", CANDLE_LIMIT, is_futures)
     except Exception:
         return None
 
