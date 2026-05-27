@@ -101,14 +101,14 @@ export default function SignalsPage() {
       </div>
 
       {/* Edge summary */}
-      {!el && edge && edge.edge_verdict?.confidence_level === 'insufficient_data' && (
+      {!el && edge && (!edge.overall || edge.edge_verdict?.confidence_level === 'insufficient_data') && (
         <div className="rounded-lg px-4 py-3 bg-signal-medium/5 border border-signal-medium/20 text-xs text-terminal-muted">
           <span className="text-signal-medium font-semibold">◌ Edge warming up · </span>
-          {edge.overall.total} signal{edge.overall.total !== 1 ? 's' : ''} tracked — 30+ resolved outcomes needed for win rate and expectancy.
+          {edge.overall?.total ?? 0} signal{(edge.overall?.total ?? 0) !== 1 ? 's' : ''} tracked — 30+ resolved outcomes needed for win rate and expectancy.
         </div>
       )}
 
-      {!el && edge && edge.edge_verdict?.confidence_level !== 'insufficient_data' && (
+      {!el && edge && edge.overall && edge.edge_verdict?.confidence_level !== 'insufficient_data' && (
         <div className="glass-card rounded-lg px-5 py-4 flex items-center gap-6 flex-wrap text-xs font-mono">
           <div>
             <span className="text-terminal-muted">WIN RATE</span>{' '}

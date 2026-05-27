@@ -295,7 +295,7 @@ async def run_hourly_anomaly_check() -> dict:
     try:
         from backend.cache.redis_cache import get_redis
         redis = await get_redis()
-        for q in ("scanner", "paper_trading", "celery"):
+        for q in ("scanner", "celery"):
             queue_depths[q] = await redis.llen(q)
     except Exception:
         pass

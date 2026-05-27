@@ -1,5 +1,5 @@
 """
-Celery tasks for scanner and paper trading.
+Celery tasks: run_scheduled_scan and check_signal_outcomes.
 run_scheduled_scan delegates to orchestrator.run_scan() via asyncio.run().
 """
 from __future__ import annotations
@@ -89,13 +89,13 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
     lock_acquired = coordinator.acquire_scan_lock(mode, ttl_seconds=11 * 60)
 
     if not lock_acquired:
-        logger.info("scan_lock_held_skipping", mode=mode)
+        logger.info(f"scan_lock_held_skipping mode={mode}")
         celery_tasks_total.labels(task_name=task_label, status="skipped").inc()
         return {"skipped": True, "reason": "lock_held", "mode": mode}
 
     scheduler_scanning.set(1)
     try:
-        logger.info("scan_started", mode=mode)
+        logger.info(f"scan_started mode={mode}")
 
         # Map Celery mode names → ScannerMode enum values
         from backend.core.scanner.models import ScannerMode
@@ -138,24 +138,21 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
         celery_task_duration_seconds.labels(task_name=task_label).observe(elapsed)
         celery_tasks_total.labels(task_name=task_label, status="success").inc()
 
-        logger.info("scan_completed", mode=mode, elapsed_s=round(elapsed, 2))
+        logger.info(f"scan_completed mode={mode} elapsed_s={round(elapsed, 2)}")
         return result
 
     except Exception as exc:
         elapsed = time.monotonic() - start
         celery_task_duration_seconds.labels(task_name=task_label).observe(elapsed)
         celery_tasks_total.labels(task_name=task_label, status="failure").inc()
-        logger.error("scan_failed", mode=mode, error=str(exc), elapsed_s=round(elapsed, 2))
+        logger.error(f"scan_failed mode={mode} error={str(exc)} elapsed_s={round(elapsed, 2)}")
 
         # Retry transient errors with exponential backoff (60s, 120s).
         # The distributed lock is released in `finally` before the retry fires.
         if _is_transient(exc) and self.request.retries < self.max_retries:
             countdown = 60 * (2 ** self.request.retries)
             logger.warning(
-                "scan_retry_scheduled",
-                mode=mode,
-                attempt=self.request.retries + 1,
-                countdown_s=countdown,
+                f"scan_retry_scheduled mode={mode} attempt={self.request.retries + 1} countdown_s={countdown}"
             )
             raise self.retry(exc=exc, countdown=countdown)
 
@@ -190,9 +187,9 @@ def check_signal_outcomes(self) -> dict:
         elapsed = time.monotonic() - start
         celery_task_duration_seconds.labels(task_name="outcome_tracker").observe(elapsed)
         celery_tasks_total.labels(task_name="outcome_tracker", status="success").inc()
-        logger.info("outcome_check_complete", **result)
+        logger.info(f"outcome_check_complete {result}")
         return result
     except Exception as exc:
         celery_tasks_total.labels(task_name="outcome_tracker", status="failure").inc()
-        logger.error("outcome_check_failed", error=str(exc))
+        logger.error(f"outcome_check_failed error={str(exc)}")
         raise

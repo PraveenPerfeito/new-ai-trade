@@ -26,7 +26,6 @@ AI-powered cryptocurrency trading signal scanner with multi-timeframe analysis, 
 | Regime Intelligence | `/admin/regime` | RSI gauge, trading implication, recommended scanner params, regime reference table |
 | Calibration | `/admin/calibration` | Claude API health, verdict distribution, effectiveness panel, confidence bands, pipeline threshold reference |
 | Edge Analytics | `/admin/analytics` | Win rate, expectancy, profit factor, Sharpe — per symbol / mode / grade |
-| Paper Trading | `/admin/paper-trading` | Virtual positions, PnL tracking, outcome history |
 | Providers | `/admin/providers` | Data source health (Binance, CoinGecko, CoinMarketCap) |
 | Cache Operations | `/admin/cache` | CMC quota guard, 5-group intelligence cache freshness, worker statuses |
 | System Health | `/admin/system` | Process health, uptime, memory |
@@ -41,7 +40,6 @@ AI-powered cryptocurrency trading signal scanner with multi-timeframe analysis, 
 
 ### Risk & Analytics
 - Signal risk grade A–F, quality score 0–100, safe leverage tiers 1×–20×
-- Paper trading with outcome resolution (TP/SL/timeout)
 - Edge report: win rate CI, profit factor, Sharpe, max drawdown
 - Signal outcome attribution with confidence-band calibration
 - Backtesting engine: historical candle replay, strategy comparison, equity curve
@@ -69,7 +67,7 @@ AI-powered cryptocurrency trading signal scanner with multi-timeframe analysis, 
 | AI validation | Anthropic Claude Haiku 4.5 |
 | Market data | Binance REST (spot + futures) · CoinGecko · CoinMarketCap Pro |
 | Notifications | Telegram Bot API |
-| Hosting | Vercel (Next.js) · Render (FastAPI + Celery) |
+| Hosting | Vercel (Next.js) · Railway (FastAPI + Celery worker) |
 
 ---
 
@@ -87,8 +85,8 @@ pip install -r backend/requirements.txt
 cp .env.example .env.local
 
 # 3. Apply Supabase migrations (SQL Editor in Supabase dashboard)
-#    database/schema.sql → backtest-schema.sql → paper-trading-schema.sql
-#    → analytics-schema.sql → admin-auth-migration.sql → experiments-migration.sql
+#    database/schema.sql → backtest-schema.sql → analytics-schema.sql
+#    → admin-auth-migration.sql → experiments-migration.sql
 
 # 4. Start the stack (3 terminals)
 npm run dev                                                    # Terminal 1: Next.js
@@ -112,7 +110,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full Vercel + Render + Upstash + Supa
 | 2 | Upstash | Create Redis database → copy `rediss://` URL |
 | 3 | Anthropic | Create API key → set spend limit |
 | 4 | CoinMarketCap | Get Startup Plan API key |
-| 5 | Render | Deploy FastAPI as Web Service + Celery as Background Worker |
+| 5 | Railway | Deploy FastAPI as Web Service + Celery as Background Worker (separate service, `-Q celery,scanner`) |
 | 6 | Vercel | Import repo → set env vars → deploy |
 
 ---
@@ -156,9 +154,6 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full Vercel + Render + Upstash + Supa
 | `POST` | `/api/scheduler/start` | Start auto-scheduler |
 | `POST` | `/api/scheduler/stop` | Stop auto-scheduler |
 | `GET` | `/api/health` | Liveness probe |
-| `POST` | `/api/paper-trading/enter` | Open paper position |
-| `POST` | `/api/paper-trading/exit` | Close paper position |
-| `GET` | `/api/paper-trading/positions` | List positions |
 | `POST` | `/api/backtest/run` | Run backtest |
 | `GET` | `/api/backtest/results` | List backtest runs |
 
@@ -183,8 +178,6 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the full Vercel + Render + Upstash + Supa
 | `scan_runs` | Audit log of every scan |
 | `coins` | Top-100 coin metadata |
 | `signal_outcomes` | TP/SL/timeout outcome tracking |
-| `paper_positions` | Open and closed paper positions |
-| `paper_trades` | Resolved paper trades with PnL |
 | `backtest_runs` | Backtest job metadata |
 | `backtest_trades` | Individual simulated trades |
 | `performance_stats` | Aggregated analytics |

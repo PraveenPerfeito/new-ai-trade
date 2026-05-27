@@ -204,18 +204,6 @@ export interface EdgeReport {
   generated_at: string
 }
 
-export interface PortfolioMetrics {
-  balance: number
-  initial_balance?: number
-  total_return_pct?: number
-  total_trades: number
-  open_trades: number
-  win_rate: number | null
-  total_pnl: number
-  unrealized_pnl?: number
-  max_drawdown_pct?: number | null
-  equity_curve?: number[]
-}
 
 export interface HealthReady {
   status: 'ready' | 'degraded'
@@ -386,11 +374,6 @@ export const adminApi = {
     modes:     (hours = 720)        => get<Record<string, unknown>>('/analytics/edge/modes', { window_hours: hours }),
     regime:    (hours = 720)        => get<Record<string, unknown>>('/analytics/edge/regime', { window_hours: hours }),
     coins:     (hours = 720)        => get<Record<string, unknown>>('/analytics/edge/coins', { window_hours: hours }),
-    portfolio: ()                   => get<PortfolioMetrics>('/analytics/paper-trading/portfolio'),
-    trades:    (limit = 50, status = 'all') =>
-      get<{ trades: Record<string, unknown>[]; total: number }>(
-        '/analytics/paper-trading/trades', { limit, status },
-      ),
   },
   health: {
     liveness: () => get<{ status: string }>('/health'),

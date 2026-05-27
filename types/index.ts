@@ -528,83 +528,6 @@ export interface DailySummaryData {
   bestSignal?: TradingSignal;
 }
 
-// ─── Paper Trading ───────────────────────────────────────────────────────────
-
-export type PaperTradeStatus     = 'OPEN' | 'CLOSED_TP' | 'CLOSED_SL' | 'CLOSED_MANUAL' | 'CLOSED_EXPIRED';
-export type PaperTradeExitReason = 'TP_HIT' | 'SL_HIT' | 'MANUAL' | 'EXPIRED';
-
-export interface PaperPortfolio {
-  id:               string;
-  name:             string;
-  initialCapital:   number;
-  availableCapital: number;   // cash not locked in positions
-  realizedPnl:      number;   // cumulative closed-trade PnL in USDT
-  totalTrades:      number;
-  wins:             number;
-  losses:           number;
-  createdAt:        Date;
-  updatedAt:        Date;
-}
-
-export interface PaperTrade {
-  id:             string;
-  portfolioId:    string;
-  signalId?:      string;
-  symbol:         string;
-  signalType:     'BUY' | 'SELL';
-  timeframe:      Timeframe;
-  scannerMode:    ScannerMode;
-  confidence:     number;
-  entryPrice:     number;
-  targetPrice:    number;
-  stopLoss:       number;
-  rrRatio:        number;
-  leverage:       number;
-  riskPct:        number;          // fraction of portfolio equity risked (0.01 = 1%)
-  notionalUsdt:   number;          // position face value
-  marginUsdt:     number;          // capital locked = notionalUsdt / leverage
-  riskAmountUsdt: number;          // max loss in USDT
-  quantity:       number;
-  status:         PaperTradeStatus;
-  exitPrice?:     number;
-  exitReason?:    PaperTradeExitReason;
-  realizedPnl?:   number;
-  realizedPnlPct?: number;
-  durationHours?: number;
-  createdAt:      Date;
-  closedAt?:      Date;
-  lastCheckedAt?: Date;
-}
-
-export interface OpenTradeView extends PaperTrade {
-  currentPrice:    number;
-  unrealizedPnl:   number;
-  unrealizedPnlPct: number;
-  progressPct:     number;   // 0–100: 0 = at SL, 100 = at TP
-  distanceToTpPct: number;   // % from current to target
-  distanceToSlPct: number;   // % from current to stop-loss
-}
-
-export interface PortfolioMetrics {
-  totalTrades:    number;
-  openTrades:     number;
-  winRate:        number;
-  avgRR:          number;
-  totalReturnPct: number;
-  profitFactor:   number;
-  bestTrade:      number;
-  worstTrade:     number;
-}
-
-export interface PortfolioSnapshot {
-  portfolio:     PaperPortfolio;
-  totalEquity:   number;           // availableCapital + marginLocked + unrealizedPnl
-  unrealizedPnl: number;
-  marginLocked:  number;
-  openTrades:    OpenTradeView[];
-  recentTrades:  PaperTrade[];
-  metrics:       PortfolioMetrics;
-}
 
 // ─── SaaS / Monetisation ─────────────────────────────────────────────────────
 
@@ -693,7 +616,6 @@ export type SignalLifecycleStage =
 export interface TacticalSignalRow extends TradingSignal {
   lifecycleStage:  SignalLifecycleStage;
   outcomeStatus?:  SignalOutcome;
-  hasPaperTrade?:  boolean;
 }
 
 // ─── Phase 6.7 — Quant Outcome Attribution ───────────────────────────────────
