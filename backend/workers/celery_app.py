@@ -38,6 +38,12 @@ def create_celery() -> Celery:
         # Result expiry — keep results for 1 hour
         result_expires=3600,
 
+        # Explicit task module imports (autodiscover only finds 'tasks.py' by default)
+        imports=[
+            "backend.workers.scan_task",
+            "backend.workers.analytics_tasks",
+        ],
+
         # Periodic task schedule
         beat_schedule=BEAT_SCHEDULE,
         beat_schedule_filename="/tmp/celerybeat-schedule",
@@ -52,9 +58,6 @@ def create_celery() -> Celery:
         conf["redis_backend_use_ssl"] = _ssl
 
     app.conf.update(conf)
-
-    # Auto-discover tasks in workers package
-    app.autodiscover_tasks(["backend.workers"])
 
     return app
 

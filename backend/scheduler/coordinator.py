@@ -30,12 +30,17 @@ class SchedulerCoordinator:
     """
 
     def __init__(self) -> None:
+        import ssl as _ssl
         settings = get_settings()
+        ssl_opts: dict = {}
+        if settings.redis_url.startswith("rediss://"):
+            ssl_opts["ssl_cert_reqs"] = _ssl.CERT_NONE
         self._redis = sync_redis.from_url(
             settings.redis_url,
             decode_responses=True,
             socket_connect_timeout=2,
             socket_timeout=2,
+            **ssl_opts,
         )
 
     # ── Scan lock ─────────────────────────────────────────────────────────────

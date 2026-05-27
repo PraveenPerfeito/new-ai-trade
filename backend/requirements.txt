@@ -21,6 +21,7 @@ prometheus-fastapi-instrumentator==7.0.0
 
 # HTTP client
 httpx==0.28.0
+requests>=2.31.0
 
 # Anthropic SDK
 anthropic==0.40.0
