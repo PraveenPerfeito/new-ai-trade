@@ -22,8 +22,11 @@ interface RegimeData {
   btcAtrPct: number; btc24hChange: number; computedAt: string
 }
 
-interface CacheGroup { name: string; fresh: boolean; ageMinutes: number; hits: number; misses: number }
-interface CacheTelemetry { quotaGuard: { monthlyUsed: number; monthlyLimit: number }; groups: CacheGroup[] }
+interface CacheGroup { name: string; isStale: boolean; ageSeconds: number | null; hitCount: number; missCount: number }
+interface CacheTelemetry {
+  quota: { creditsUsed: number; monthlyBudget: number; pctUsed: number }
+  groups: CacheGroup[]
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -114,8 +117,8 @@ export default function CommandOverviewPage() {
   // Compute quick signal stats
   const activeSignals  = signals.filter(s => s.lifecycleStage === 'ACTIVE').length
   const approvedSignals = signals.filter(s => ['AI_APPROVED', 'TELEGRAM_SENT', 'ACTIVE'].includes(s.lifecycleStage)).length
-  const freshGroups    = cache ? cache.groups.filter(g => g.fresh).length : null
-  const quotaPct       = cache ? Math.round((cache.quotaGuard.monthlyUsed / cache.quotaGuard.monthlyLimit) * 100) : null
+  const freshGroups    = cache ? cache.groups.filter(g => !g.isStale).length : null
+  const quotaPct       = cache ? Math.round(cache.quota.pctUsed) : null
 
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
@@ -313,12 +316,12 @@ export default function CommandOverviewPage() {
               <div
                 key={g.name}
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs ${
-                  g.fresh ? 'border-green-500/20 bg-green-500/5' : 'border-amber-500/20 bg-amber-500/5'
+                  !g.isStale ? 'border-green-500/20 bg-green-500/5' : 'border-amber-500/20 bg-amber-500/5'
                 }`}
               >
-                <span className={`w-1.5 h-1.5 rounded-full ${g.fresh ? 'bg-green-400' : 'bg-amber-400'}`} />
-                <span className={g.fresh ? 'text-green-300' : 'text-amber-300'}>{g.name}</span>
-                <span className="text-zinc-600">{g.ageMinutes < 1 ? '<1m' : `${g.ageMinutes}m`}</span>
+                <span className={`w-1.5 h-1.5 rounded-full ${!g.isStale ? 'bg-green-400' : 'bg-amber-400'}`} />
+                <span className={!g.isStale ? 'text-green-300' : 'text-amber-300'}>{g.name}</span>
+                <span className="text-zinc-600">{g.ageSeconds === null ? '—' : g.ageSeconds < 60 ? '<1m' : `${Math.floor(g.ageSeconds / 60)}m`}</span>
               </div>
             ))}
           </div>
