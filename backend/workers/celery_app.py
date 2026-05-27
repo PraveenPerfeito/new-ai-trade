@@ -6,6 +6,9 @@ import ssl
 
 from celery import Celery
 from backend.config import get_settings
+from backend.logging.setup import configure_logging
+
+configure_logging()
 
 
 def create_celery() -> Celery:
