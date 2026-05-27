@@ -9,6 +9,10 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 # Copy full source
 COPY . .
 
+# Run as non-root to suppress Celery superuser warning and follow least-privilege
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
 # Default: FastAPI web service.
 # /bin/sh -c ensures $PORT is shell-expanded regardless of line endings or
 # how Railway passes the command.
