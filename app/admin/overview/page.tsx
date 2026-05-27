@@ -99,7 +99,7 @@ export default function CommandOverviewPage() {
         if (j.success) setSignals(j.signals)
       }),
       fetch('/api/cache/intelligence').then(r => r.json()).then((j) => {
-        if (j.success) setCache(j)
+        if (j.success) setCache(j.telemetry)
       }),
     ])
     setUpdatedAt(new Date().toLocaleTimeString())
