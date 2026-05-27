@@ -33,12 +33,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import threading
 import time
 from typing import Optional
 
-log = logging.getLogger(__name__)
+from backend.logging.setup import get_logger
+
+log = get_logger(__name__)
 
 _listener_task:  Optional[asyncio.Task]     = None
 _watcher_thread: Optional[threading.Thread] = None
