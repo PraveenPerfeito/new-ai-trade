@@ -62,7 +62,7 @@ def apply_group_to_modules(group_name: str, data: dict) -> None:
             _cfg(data)
             log.debug("anomaly_detector_thresholds_applied")
         except Exception as exc:
-            log.warning("apply_group_anomaly_failed", error=str(exc))
+            log.warning(f"apply_group_anomaly_failed error={exc}")
 
 
 # ── PropagationListener (async, FastAPI) ─────────────────────────────────────
@@ -105,12 +105,12 @@ async def _async_listener_loop(service) -> None:
                 except Exception:
                     pass
 
-                log.debug("settings_propagated_async", group=group_name)
+                log.debug(f"settings_propagated_async group={group_name}")
 
         except asyncio.CancelledError:
             return
         except Exception as exc:
-            log.warning("settings_listener_reconnect", error=str(exc), backoff=backoff)
+            log.warning(f"settings_listener_reconnect error={exc} backoff={backoff}")
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 60.0)
 
@@ -185,14 +185,12 @@ def _sync_watcher_loop(service) -> None:
                         data = {**defaults, **from_redis}
                         apply_group_to_modules(group_name, data)
                 except Exception as exc:
-                    log.warning("celery_watcher_apply_failed",
-                                group=group_name, error=str(exc))
+                    log.warning(f"celery_watcher_apply_failed group={group_name} error={exc}")
 
-                log.debug("settings_propagated_sync", group=group_name)
+                log.debug(f"settings_propagated_sync group={group_name}")
 
         except Exception as exc:
-            log.warning("celery_settings_watcher_reconnect",
-                        error=str(exc), backoff=backoff)
+            log.warning(f"celery_settings_watcher_reconnect error={exc} backoff={backoff}")
             time.sleep(backoff)
             backoff = min(backoff * 2, 60.0)
 
