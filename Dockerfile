@@ -9,7 +9,9 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 # Copy full source
 COPY . .
 
+RUN chmod +x start.sh
+
 # Default: FastAPI web service.
 # Railway Celery worker service overrides this via its Start Command setting:
 #   celery -A backend.workers.celery_app worker --loglevel=info --concurrency=2
-CMD ["/bin/sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["./start.sh"]
