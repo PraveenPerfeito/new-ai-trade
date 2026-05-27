@@ -7,6 +7,7 @@ import ssl
 from celery import Celery
 from backend.config import get_settings
 from backend.logging.setup import configure_logging
+from backend.workers.beat_schedule import BEAT_SCHEDULE
 
 configure_logging()
 
@@ -37,7 +38,8 @@ def create_celery() -> Celery:
         # Result expiry — keep results for 1 hour
         result_expires=3600,
 
-        # Beat schedule is defined in beat_schedule.py
+        # Periodic task schedule
+        beat_schedule=BEAT_SCHEDULE,
         beat_schedule_filename="/tmp/celerybeat-schedule",
     )
 

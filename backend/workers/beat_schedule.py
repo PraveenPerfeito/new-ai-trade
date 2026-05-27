@@ -1,12 +1,11 @@
 """
 Celery Beat periodic task schedule.
 Replaces the globalThis scheduler singleton from lib/scheduler.ts.
+Imported by celery_app.py so the schedule is always registered.
 """
 from celery.schedules import crontab
 
-from backend.workers.celery_app import celery_app
-
-celery_app.conf.beat_schedule = {
+BEAT_SCHEDULE = {
     # Auto-scan: runs every 15 minutes (same cadence as the Next.js scheduler default)
     "auto-scan-standard": {
         "task": "backend.workers.scan_task.run_scheduled_scan",
