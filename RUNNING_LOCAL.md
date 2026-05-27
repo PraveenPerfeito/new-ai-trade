@@ -135,7 +135,14 @@ r.ping().then(x => { console.log('Redis:', x); r.disconnect(); });
 "
 ```
 
-Open http://localhost:3000/admin — you should see the scanner dashboard.
+Open http://localhost:3000/admin — you should be redirected to `/admin/overview` (Command Overview).
+
+Key admin pages:
+- http://localhost:3000/admin/overview — Command Overview
+- http://localhost:3000/admin/scanner — Scanner Control (start/stop/pause/emergency-stop)
+- http://localhost:3000/admin/tactical — Tactical Feed (live signal lifecycle)
+- http://localhost:3000/admin/market — Market Intelligence
+- http://localhost:3000/admin/cache — Cache Operations (CMC quota + group freshness)
 
 ---
 
