@@ -56,17 +56,19 @@ class Settings(BaseSettings):
     telegram_chat_id: str = ""
 
     # ── CORS ─────────────────────────────────────────────────────────────────
-    cors_origins: list[str] = ["http://localhost:3000"]
+    # Stored as str to avoid pydantic-settings v2 eagerly JSON-parsing list fields.
+    # Use .get_cors_origins() wherever a list is needed.
+    cors_origins: str = "http://localhost:3000"
 
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def _parse_cors_origins(cls, v: object) -> object:
-        if isinstance(v, str):
-            v = v.strip()
-            if v.startswith("["):
-                return v  # let pydantic parse the JSON array
-            return [o.strip() for o in v.split(",") if o.strip()]
-        return v
+    def get_cors_origins(self) -> list[str]:
+        v = self.cors_origins.strip()
+        if v.startswith("["):
+            import json
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                pass
+        return [o.strip() for o in v.split(",") if o.strip()]
 
     # ── Admin auth ────────────────────────────────────────────────────────────
     admin_secret: str = ""          # shared secret: Next.js proxy → FastAPI
