@@ -8,6 +8,8 @@ import json
 import time
 from typing import Any, Callable, Awaitable, Optional
 
+import ssl as _ssl
+
 import redis.asyncio as aioredis
 
 from backend.config import get_settings
@@ -29,10 +31,15 @@ async def get_redis() -> aioredis.Redis:
             "socket_connect_timeout": 2,
             "socket_timeout": 2,
         }
-        # Upstash (rediss://) requires explicit cert bypass — cert_reqs attr was
-        # removed in redis-py 5.x; pass ssl_cert_reqs=None instead.
+        # Upstash (rediss://) — bypass cert verification using a pre-built
+        # SSLContext. Passing ssl_cert_reqs=None is rejected by redis-py 5.x
+        # because RedisSSLContext only sets cert_reqs when the value is not None,
+        # leaving the attribute unset and raising AttributeError on connect.
         if settings.redis_url.startswith("rediss://"):
-            kw["ssl_cert_reqs"] = None
+            _ctx = _ssl.create_default_context()
+            _ctx.check_hostname = False
+            _ctx.verify_mode = _ssl.CERT_NONE
+            kw["ssl_context"] = _ctx
         _redis_client = aioredis.from_url(settings.redis_url, **kw)
     return _redis_client
 
