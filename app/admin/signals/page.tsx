@@ -108,7 +108,7 @@ export default function SignalsPage() {
         </div>
       )}
 
-      {!el && edge && edge.overall && edge.edge_verdict?.confidence_level !== 'insufficient_data' && (
+      {!el && edge && edge.overall && edge.edge_verdict && edge.edge_verdict.confidence_level !== 'insufficient_data' && (
         <div className="glass-card rounded-lg px-5 py-4 flex items-center gap-6 flex-wrap text-xs font-mono">
           <div>
             <span className="text-terminal-muted">WIN RATE</span>{' '}

@@ -167,7 +167,7 @@ function EdgeValidationTab({ edge, loading }: { edge: EdgeReport | null; loading
       </div>
 
       {/* Calibration */}
-      {!loading && !cal && (
+      {!loading && (!cal || !cal.calibration) && (
         <div className="glass-card rounded-lg p-5">
           <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Confidence Calibration</p>
           <p className="text-terminal-muted/60 text-xs leading-relaxed">
@@ -175,7 +175,7 @@ function EdgeValidationTab({ edge, loading }: { edge: EdgeReport | null; loading
           </p>
         </div>
       )}
-      {cal && (
+      {cal && cal.calibration && (
         <div>
           <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Confidence Calibration</p>
           <div className="glass-card rounded-lg overflow-hidden">
