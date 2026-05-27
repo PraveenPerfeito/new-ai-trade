@@ -6,6 +6,7 @@ All operations degrade gracefully when DATABASE_URL is not configured.
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Any
 
 from backend.core.scanner.models import CoinData, Signal
@@ -53,7 +54,7 @@ async def update_scan_run(
     coins_scanned: int | None = None,
     signals_found: int | None = None,
     status: str | None = None,
-    completed_at: str | None = None,
+    completed_at: datetime | None = None,
     error: str | None = None,
 ) -> None:
     pool = await _pool()

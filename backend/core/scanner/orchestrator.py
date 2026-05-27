@@ -256,7 +256,7 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                 coins_scanned=progress.scanned,
                 signals_found=len(signals),
                 status="completed",
-                completed_at=datetime.now(timezone.utc).isoformat(),
+                completed_at=datetime.now(timezone.utc),
             )
 
         asyncio.create_task(
@@ -298,7 +298,7 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                 scan_run_id,
                 status="failed",
                 error=str(exc),
-                completed_at=datetime.now(timezone.utc).isoformat(),
+                completed_at=datetime.now(timezone.utc),
             )
 
         scan_runs_total.labels(mode=mode.value, status="failed").inc()
