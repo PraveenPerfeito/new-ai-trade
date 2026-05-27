@@ -36,22 +36,13 @@ BEAT_SCHEDULE = {
             "queue": "scanner",
         },
     },
-    # Paper trading position checker: every minute
-    "paper-trading-monitor": {
-        "task": "backend.workers.scan_task.monitor_paper_positions",
-        "schedule": crontab(minute="*"),
-        "options": {
-            "expires": 50,  # discard if not started within 50 seconds
-            "queue": "paper_trading",
-        },
-    },
     # Signal outcome tracker: every 10 minutes
     "check-signal-outcomes": {
         "task": "backend.workers.scan_task.check_signal_outcomes",
         "schedule": crontab(minute="*/10"),
         "options": {
             "expires": 9 * 60,
-            "queue": "paper_trading",
+            "queue": "celery",
         },
     },
     # ── Analytics burn-in ─────────────────────────────────────────────────────

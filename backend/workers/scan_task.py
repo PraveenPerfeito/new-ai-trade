@@ -174,35 +174,9 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
 
 @shared_task(
     bind=True,
-    name="backend.workers.scan_task.monitor_paper_positions",
-    max_retries=0,
-    queue="paper_trading",
-    soft_time_limit=45,
-    time_limit=55,
-)
-def monitor_paper_positions(self) -> dict:
-    """Check open paper-trading positions against current prices."""
-    start = time.monotonic()
-    try:
-        from backend.analytics.paper_trading import monitor_open_positions
-        result = asyncio.run(monitor_open_positions())
-        closed = result.get("closed", 0)
-
-        elapsed = time.monotonic() - start
-        celery_task_duration_seconds.labels(task_name="paper_monitor").observe(elapsed)
-        celery_tasks_total.labels(task_name="paper_monitor", status="success").inc()
-        return {"closed_positions": closed, **result}
-    except Exception as exc:
-        celery_tasks_total.labels(task_name="paper_monitor", status="failure").inc()
-        logger.error("paper_monitor_failed", error=str(exc))
-        raise
-
-
-@shared_task(
-    bind=True,
     name="backend.workers.scan_task.check_signal_outcomes",
     max_retries=0,
-    queue="paper_trading",
+    queue="celery",
     soft_time_limit=5 * 60,
     time_limit=6 * 60,
 )

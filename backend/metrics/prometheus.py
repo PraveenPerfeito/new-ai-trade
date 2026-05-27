@@ -115,19 +115,6 @@ cache_misses_total = Counter(
     ["cache_name"],
 )
 
-# ── Paper trading metrics ─────────────────────────────────────────────────────
-
-paper_positions_open = Gauge(
-    "paper_positions_open",
-    "Number of currently open paper trading positions",
-)
-
-paper_trades_closed_total = Counter(
-    "paper_trades_closed_total",
-    "Total paper trades closed",
-    ["exit_reason"],             # TP_HIT | SL_HIT | MANUAL | EXPIRED
-)
-
 # ── Concurrency / per-coin metrics ───────────────────────────────────────────
 
 scanner_coin_duration_seconds = Histogram(

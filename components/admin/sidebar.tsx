@@ -3,9 +3,9 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  LayoutDashboard, Activity, ScanLine, Zap, TrendingUp,
+  LayoutDashboard, Activity, ScanLine, Zap,
   Database, Server, AlertTriangle, BarChart3, Target, Settings2,
-  Layers, Crosshair, Globe, Brain, Cpu,
+  Layers, Crosshair, Globe, Brain,
 } from 'lucide-react'
 
 const SECTIONS = [
@@ -19,10 +19,9 @@ const SECTIONS = [
   {
     label: 'OPERATIONS',
     items: [
-      { href: '/admin/scanner',       icon: ScanLine,   label: 'Scanner'       },
-      { href: '/admin/signals',       icon: Zap,        label: 'Signals'       },
-      { href: '/admin/tactical',      icon: Crosshair,  label: 'Tactical Feed' },
-      { href: '/admin/paper-trading', icon: TrendingUp, label: 'Paper Trading' },
+      { href: '/admin/scanner',  icon: ScanLine,  label: 'Scanner'       },
+      { href: '/admin/signals',  icon: Zap,       label: 'Signals'       },
+      { href: '/admin/tactical', icon: Crosshair, label: 'Tactical Feed' },
     ],
   },
   {

@@ -23,7 +23,7 @@ from backend.metrics.prometheus import (
 log = get_logger(__name__)
 
 _INTERVAL = 30       # seconds between scrapes
-_QUEUES   = ("scanner", "paper_trading", "celery")
+_QUEUES   = ("scanner", "celery")
 
 
 async def _collect_once() -> None:

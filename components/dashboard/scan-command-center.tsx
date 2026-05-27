@@ -147,12 +147,11 @@ interface Props {
   externalSignals: TradingSignal[];
   schedulerStatus: SchedulerStatus | null;
   isScanning:      boolean;
-  onEnterTrade:    (signal: TradingSignal) => Promise<{ success: boolean; error?: string }>;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function ScanCommandCenter({ coins, externalSignals, schedulerStatus, isScanning, onEnterTrade }: Props) {
+export function ScanCommandCenter({ coins, externalSignals, schedulerStatus, isScanning }: Props) {
   // Scan state
   const [cmdMode,      setCmdMode]      = useState<CmdMode>('global');
   const [localSignals, setLocalSignals] = useState<TradingSignal[]>([]);
@@ -538,7 +537,6 @@ export function ScanCommandCenter({ coins, externalSignals, schedulerStatus, isS
                     const k = sig.id ?? `${sig.symbol}-${sig.type}`;
                     return prev === k ? null : k;
                   })}
-                  onEnterTrade={onEnterTrade}
                 />
               ))}
             </div>
@@ -944,24 +942,14 @@ function RotationOverlay({ sectorStats }: {
 
 // ─── CommandSignalRow ─────────────────────────────────────────────────────────
 
-function CommandSignalRow({ signal, expanded, onToggle, onEnterTrade }: {
+function CommandSignalRow({ signal, expanded, onToggle }: {
   signal: TradingSignal; expanded: boolean;
   onToggle: () => void;
-  onEnterTrade: (s: TradingSignal) => Promise<{ success: boolean; error?: string }>;
 }) {
-  const [tradeState, setTradeState] = useState<'idle'|'entering'|'ok'|'err'>('idle');
   const quality = useMemo(() => computeQuality(signal), [signal]);
   const isBuy   = signal.type === 'BUY';
   const grade   = signal.riskGrade ?? 'C';
   const sigKey  = signal.id ?? `${signal.symbol}-${signal.type}`;
-
-  const handleTrade = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setTradeState('entering');
-    const r = await onEnterTrade(signal);
-    setTradeState(r.success ? 'ok' : 'err');
-    setTimeout(() => setTradeState('idle'), 2500);
-  };
 
   return (
     <div
@@ -1022,18 +1010,6 @@ function CommandSignalRow({ signal, expanded, onToggle, onEnterTrade }: {
               {quality.strength}
             </span>
           </div>
-
-          {/* Trade button */}
-          <button onClick={handleTrade} disabled={tradeState !== 'idle'}
-            className={cn('px-2 py-1 rounded text-[9px] font-bold border transition-all shrink-0',
-              tradeState === 'ok'       ? 'bg-bull-DEFAULT/12 border-bull-DEFAULT/35 text-bull-text' :
-              tradeState === 'err'      ? 'bg-bear-DEFAULT/12 border-bear-DEFAULT/35 text-bear-text' :
-              tradeState === 'entering' ? 'opacity-50' :
-              'border-terminal-border/25 text-terminal-dim hover:text-terminal-text hover:border-terminal-border/50'
-            )}
-          >
-            {tradeState === 'ok' ? '✓' : tradeState === 'err' ? '✗' : tradeState === 'entering' ? '…' : 'Trade'}
-          </button>
 
           <span className="text-terminal-dim text-[10px] ml-0.5 select-none">{expanded ? '▲' : '▼'}</span>
         </div>

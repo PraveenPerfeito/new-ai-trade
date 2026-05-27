@@ -308,14 +308,9 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
 # ── Analytics integration (fire-and-forget) ───────────────────────────────────
 
 async def _register_analytics(signal) -> None:
-    """Register a signal with the outcome tracker and open a paper trade."""
+    """Register a signal with the outcome tracker."""
     try:
         from backend.analytics.signal_metrics import register_signal_outcome
         await register_signal_outcome(signal)
     except Exception as exc:
         log.warning("register_outcome_failed", symbol=signal.symbol, error=str(exc))
-    try:
-        from backend.analytics.paper_trading import open_trade
-        await open_trade(signal)
-    except Exception as exc:
-        log.warning("open_paper_trade_failed", symbol=signal.symbol, error=str(exc))
