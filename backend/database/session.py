@@ -45,10 +45,14 @@ async def get_pool() -> asyncpg.Pool:
         if not settings.database_url:
             raise RuntimeError(
                 "DATABASE_URL is not set — cannot create asyncpg pool. "
-                "Set it in .env.local (postgres://user:pass@host:5432/db)."
+                "Use the Supabase Transaction Pooler URL (port 6543) to avoid IPv6 issues: "
+                "postgres://postgres.PROJECT:PASS@aws-0-REGION.pooler.supabase.com:6543/postgres"
             )
+        # asyncpg uses plain postgres:// or postgresql:// — strip SQLAlchemy
+        # dialect suffix (+asyncpg) if the URL was copied from SQLAlchemy docs.
+        dsn = settings.database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
         _pool = await asyncpg.create_pool(
-            dsn=settings.database_url,
+            dsn=dsn,
             min_size=2,
             max_size=10,
             command_timeout=30,
