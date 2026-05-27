@@ -25,6 +25,7 @@ log = get_logger(__name__)
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 SPOT_BASE    = "https://api.binance.com/api/v3"
+SPOT_BASE_US = "https://api.binance.us/api/v3"  # fallback for geo-restricted regions (HTTP 451)
 FUTURES_BASE = "https://fapi.binance.com/fapi/v1"
 FUTURES_DATA = "https://fapi.binance.com/futures/data"
 COINGECKO    = "https://api.coingecko.com/api/v3"
@@ -120,16 +121,24 @@ def _parse_klines(raw: list) -> list[Candle]:
 
 
 async def fetch_spot_klines(symbol: str, interval: str = "1h", limit: int = 100) -> list[Candle]:
-    try:
-        data = await _get(
-            f"{SPOT_BASE}/klines",
-            params={"symbol": symbol, "interval": interval, "limit": limit},
-            service="binance",
-        )
-        return _parse_klines(data) if data else []
-    except Exception as exc:
-        log.warning("spot_klines_failed", symbol=symbol, error=str(exc))
-        return []
+    for base in (SPOT_BASE, SPOT_BASE_US):
+        try:
+            data = await _get(
+                f"{base}/klines",
+                params={"symbol": symbol, "interval": interval, "limit": limit},
+                service="binance",
+            )
+            return _parse_klines(data) if data else []
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 451 and base == SPOT_BASE:
+                log.warning("binance_geo_blocked_trying_us", symbol=symbol)
+                continue
+            log.warning("spot_klines_failed", symbol=symbol, error=str(exc))
+            return []
+        except Exception as exc:
+            log.warning("spot_klines_failed", symbol=symbol, error=str(exc))
+            return []
+    return []
 
 
 async def fetch_futures_klines(symbol: str, interval: str = "1h", limit: int = 100) -> list[Candle]:

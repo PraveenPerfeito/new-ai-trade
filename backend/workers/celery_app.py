@@ -70,6 +70,8 @@ from celery.signals import worker_init
 
 @worker_init.connect
 def setup_settings_watcher(sender, **kwargs):
+    from backend.logging.setup import configure_logging
+    configure_logging()
     from backend.system_settings.propagation import start_celery_config_watcher
     from backend.system_settings.service import get_settings_service
     start_celery_config_watcher(get_settings_service())

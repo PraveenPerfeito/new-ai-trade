@@ -62,7 +62,7 @@ def apply_group_to_modules(group_name: str, data: dict) -> None:
             _cfg(data)
             log.debug("anomaly_detector_thresholds_applied")
         except Exception as exc:
-            log.warning(f"apply_group_anomaly_failed error={exc}")
+            log.warning("apply_group_anomaly_failed", error=str(exc))
 
 
 # ── PropagationListener (async, FastAPI) ─────────────────────────────────────
@@ -105,12 +105,12 @@ async def _async_listener_loop(service) -> None:
                 except Exception:
                     pass
 
-                log.debug(f"settings_propagated_async group={group_name}")
+                log.debug("settings_propagated_async", group=group_name)
 
         except asyncio.CancelledError:
             return
         except Exception as exc:
-            log.warning(f"settings_listener_reconnect error={exc} backoff={backoff}")
+            log.warning("settings_listener_reconnect", error=str(exc), backoff=backoff)
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 60.0)
 
@@ -146,10 +146,7 @@ def _sync_watcher_loop(service) -> None:
     """
     Daemon thread body.  Subscribes via sync redis and invalidates the
     per-process in-memory cache whenever settings change.
-    Uses get_message() polling (5 s intervals) instead of listen() so that
-    socket timeouts never crash the thread.
     """
-    import ssl as _ssl
     import redis as sync_redis
     from backend.config import get_settings
     from backend.system_settings.groups import GROUP_REGISTRY
@@ -159,28 +156,22 @@ def _sync_watcher_loop(service) -> None:
 
     while True:
         try:
-            ssl_opts: dict = {}
+            kw: dict = {
+                "decode_responses": True,
+                "socket_timeout": 60,
+                "socket_connect_timeout": 5,
+            }
+            # Upstash (rediss://) requires explicit cert bypass.
             if settings.redis_url.startswith("rediss://"):
-                ssl_opts["ssl_cert_reqs"] = _ssl.CERT_NONE
-
-            client = sync_redis.Redis.from_url(
-                settings.redis_url,
-                decode_responses=True,
-                socket_timeout=None,         # no hard timeout — health_check keeps it alive
-                socket_connect_timeout=10,
-                socket_keepalive=True,
-                health_check_interval=30,    # PING every 30 s; prevents idle disconnects
-                **ssl_opts,
-            )
-            pubsub = client.pubsub(ignore_subscribe_messages=True)
+                kw["ssl_cert_reqs"] = None
+            client = sync_redis.Redis.from_url(settings.redis_url, **kw)
+            pubsub = client.pubsub()
             pubsub.subscribe("settings_changed")
             backoff = 1.0
             log.info("celery_settings_watcher_subscribed")
 
-            while True:
-                # Non-blocking poll; returns None when no message within timeout.
-                message = pubsub.get_message(timeout=5.0)
-                if not message or message.get("type") != "message":
+            for message in pubsub.listen():
+                if message["type"] != "message":
                     continue
                 group_name: str = message["data"]
 
@@ -197,21 +188,14 @@ def _sync_watcher_loop(service) -> None:
                         data = {**defaults, **from_redis}
                         apply_group_to_modules(group_name, data)
                 except Exception as exc:
-                    try:
-                        log.warning(f"celery_watcher_apply_failed group={group_name} error={exc}")
-                    except Exception:
-                        pass
+                    log.warning("celery_watcher_apply_failed",
+                                group=group_name, error=str(exc))
 
-                try:
-                    log.debug(f"settings_propagated_sync group={group_name}")
-                except Exception:
-                    pass
+                log.debug("settings_propagated_sync", group=group_name)
 
         except Exception as exc:
-            try:
-                log.warning(f"celery_settings_watcher_reconnect error={exc} backoff={backoff}")
-            except Exception:
-                pass
+            log.warning("celery_settings_watcher_reconnect",
+                        error=str(exc), backoff=backoff)
             time.sleep(backoff)
             backoff = min(backoff * 2, 60.0)
 

@@ -11,11 +11,11 @@ import asyncio
 import time
 
 from celery import shared_task
-from celery.utils.log import get_task_logger
 
+from backend.logging.setup import get_logger
 from backend.metrics.prometheus import celery_tasks_total, celery_task_duration_seconds
 
-logger = get_task_logger(__name__)
+logger = get_logger(__name__)
 
 
 @shared_task(
