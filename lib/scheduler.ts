@@ -397,9 +397,11 @@ class ScanScheduler {
 
 const g = globalThis as typeof globalThis & { __market_scanner_sched?: ScanScheduler };
 if (!g.__market_scanner_sched) {
-  // Validate required environment before the scheduler starts accepting work.
-  // Throws in production if ADMIN_EMAILS, ADMIN_SECRET, etc. are missing.
-  runStartupCheck();
+  // Skip env validation during `next build` — env vars are not injected at build time.
+  // NEXT_PHASE is 'phase-production-build' only during the Docker/CI build step.
+  if (process.env.NEXT_PHASE !== 'phase-production-build') {
+    runStartupCheck();
+  }
   g.__market_scanner_sched = new ScanScheduler();
 
   // Start background intelligence cache refresh workers (HMR-safe via globalThis registry)
