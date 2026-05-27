@@ -56,6 +56,11 @@ const RECOMMENDED: Array<{ key: string; reason: string }> = [
 ];
 
 export function runStartupCheck(): CheckResult {
+  // During `next build` env vars are not injected — skip hard checks.
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
+    return { passed: true, errors: [], warnings: [] };
+  }
+
   const isProduction = process.env.NODE_ENV === 'production';
   const errors: string[] = [];
   const warnings: string[] = [];
