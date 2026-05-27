@@ -1,6 +1,6 @@
 'use client'
 
-import { FormEvent, useEffect, useState } from 'react'
+import { FormEvent, Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle, Loader2, Lock, Shield, Activity,
@@ -26,7 +26,7 @@ function getMarketSession() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter()
   const params = useSearchParams()
   const next   = params.get('next') ?? '/admin'
@@ -376,5 +376,17 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-terminal-bg flex items-center justify-center">
+        <Loader2 size={20} className="text-terminal-muted animate-spin" />
+      </div>
+    }>
+      <LoginPageContent />
+    </Suspense>
   )
 }
