@@ -161,9 +161,9 @@ def _sync_watcher_loop(service) -> None:
                 "socket_timeout": 60,
                 "socket_connect_timeout": 5,
             }
-            # Upstash (rediss://) requires explicit cert bypass.
+            # Upstash (rediss://) — use string "none" not Python None (see redis_cache.py).
             if settings.redis_url.startswith("rediss://"):
-                kw["ssl_cert_reqs"] = None
+                kw["ssl_cert_reqs"] = "none"
             client = sync_redis.Redis.from_url(settings.redis_url, **kw)
             pubsub = client.pubsub()
             pubsub.subscribe("settings_changed")
