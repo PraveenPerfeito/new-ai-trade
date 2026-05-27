@@ -58,6 +58,16 @@ class Settings(BaseSettings):
     # ── CORS ─────────────────────────────────────────────────────────────────
     cors_origins: list[str] = ["http://localhost:3000"]
 
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _parse_cors_origins(cls, v: object) -> object:
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("["):
+                return v  # let pydantic parse the JSON array
+            return [o.strip() for o in v.split(",") if o.strip()]
+        return v
+
     # ── Admin auth ────────────────────────────────────────────────────────────
     admin_secret: str = ""          # shared secret: Next.js proxy → FastAPI
 
