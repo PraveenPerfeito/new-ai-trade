@@ -7,7 +7,7 @@ import { getMarketDataService } from './market-data/service';
  * All callers (scanner, etc.) continue to use this stable export.
  */
 export async function getTop100ByMarketCap(): Promise<CoinData[]> {
-  return getMarketDataService().getTopCoins(100);
+  return getMarketDataService().getTopCoins(200);
 }
 
 export function filterHighVolume(coins: CoinData[], minVolume = 50_000_000): CoinData[] {

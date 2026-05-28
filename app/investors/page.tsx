@@ -50,10 +50,10 @@ const ROADMAP = [
 ]
 
 const METRICS = [
-  { label: 'Coins Monitored', value: '100+', sub: 'Top by market cap' },
+  { label: 'Coins Monitored', value: '200+', sub: 'Top by market cap' },
   { label: 'Signal Pipeline Steps', value: '9', sub: 'Quality gates' },
   { label: 'Target Win Rate', value: '>65%', sub: 'A-grade setups' },
-  { label: 'Data Sources', value: '3', sub: 'Binance · CoinGecko · Claude AI' },
+  { label: 'Data Sources', value: '3', sub: 'Binance · CoinMarketCap · Claude AI' },
 ]
 
 export default function InvestorsPage() {
@@ -126,7 +126,7 @@ export default function InvestorsPage() {
           <div className="space-y-3">
             {[
               'AI models are now cost-efficient enough for per-signal validation',
-              'Binance + CoinGecko APIs provide institutional-grade market data at zero marginal cost',
+              'Binance + CoinMarketCap APIs provide institutional-grade market data at zero marginal cost',
               'Telegram delivery reaches crypto-native audiences where they already live',
               'Supabase + Next.js stack enables rapid iteration without infrastructure overhead',
               'No data labeling required — market outcomes provide natural ground truth',

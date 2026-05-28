@@ -30,8 +30,8 @@ export interface ProviderConfig {
 export type ProviderConfigMap = Partial<Record<ProviderName, ProviderConfig>>;
 
 const DEFAULT_CONFIG: Record<ProviderName, ProviderConfig> = {
-  coingecko:     { enabled: true,  priority: 1, quotaLimit: 0,     quotaResetAt: null },
-  coinmarketcap: { enabled: false, priority: 2, quotaLimit: 10000, quotaResetAt: null },
+  coinmarketcap: { enabled: true,  priority: 1, quotaLimit: 10000, quotaResetAt: null },
+  coingecko:     { enabled: true,  priority: 2, quotaLimit: 0,     quotaResetAt: null },
   binance:       { enabled: true,  priority: 3, quotaLimit: 0,     quotaResetAt: null },
   dexscreener:   { enabled: true,  priority: 4, quotaLimit: 0,     quotaResetAt: null },
   coinpaprika:   { enabled: true,  priority: 5, quotaLimit: 0,     quotaResetAt: null },

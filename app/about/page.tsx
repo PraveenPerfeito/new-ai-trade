@@ -15,7 +15,7 @@ const STACK = [
   { name: 'Supabase', role: 'PostgreSQL + Auth + RLS', color: 'text-emerald-400' },
   { name: 'Claude AI', role: 'Signal validation (Haiku)', color: 'text-violet-400' },
   { name: 'Binance API', role: 'Spot + Futures market data', color: 'text-yellow-400' },
-  { name: 'CoinGecko', role: 'Top-100 rankings + prices', color: 'text-orange-400' },
+  { name: 'CoinMarketCap', role: 'Top-200 rankings + prices (primary)', color: 'text-blue-400' },
   { name: 'Tailwind CSS', role: 'Glassmorphism UI system', color: 'text-cyan-400' },
   { name: 'FastAPI', role: 'Python backend (admin ops)', color: 'text-green-400' },
 ]

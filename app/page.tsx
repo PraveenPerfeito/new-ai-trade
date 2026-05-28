@@ -50,7 +50,7 @@ const SAMPLE_SIGNALS = [
 // ── AI Pipeline steps ─────────────────────────────────────────────────────────
 
 const PIPELINE = [
-  { icon: '📡', label: 'Market Data',      desc: '100+ coins via CoinGecko + Binance' },
+  { icon: '📡', label: 'Market Data',      desc: '200+ coins via CoinMarketCap + Binance' },
   { icon: '📊', label: 'MTF Confirmation', desc: '1h / 4h / 1d timeframe alignment' },
   { icon: '⚡', label: 'Volatility Gate',  desc: 'ATR-based volatility screening' },
   { icon: '📈', label: 'Trend Strength',   desc: 'EMA / MACD trend confirmation' },
@@ -65,7 +65,7 @@ const PIPELINE = [
 
 const FEATURES = [
   { icon: Brain,       title: 'Claude AI Validation',    desc: 'Every signal validated by Anthropic Claude Haiku. AI reasoning attached to each setup. Heuristic fallback ensures 100% coverage.' },
-  { icon: Globe,       title: 'Multi-Provider Coverage', desc: 'CoinGecko + Binance cross-validation. Provider failover ensures 99%+ uptime. Market data from 6 independent sources.' },
+  { icon: Globe,       title: 'Multi-Provider Coverage', desc: 'CoinMarketCap + Binance cross-validation. Provider failover ensures 99%+ uptime. Market data from 6 independent sources.' },
   { icon: BarChart2,   title: 'Quantitative Edge',       desc: 'Win rate, expectancy, RR distribution tracked across all signals. Confidence calibration ECE scoring. Real statistics, no hype.' },
   { icon: Shield,      title: 'Risk Intelligence',       desc: 'Grade A–F risk scoring. Futures leverage intelligence. Liquidation zone detection. Portfolio risk caps enforced.' },
   { icon: Activity,    title: '10-Mode Scanner',         desc: 'Spot, Futures, High-Confidence, Momentum, Trending, Watchlist, Rotation, Sniper, Multi-asset, Cross-Validation modes.' },
@@ -145,7 +145,7 @@ export default function HomePage() {
 
           {/* Trust badges */}
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-gray-600 text-xs">
-            {['Claude AI Validated', 'Binance Data', 'CoinGecko Verified', '100+ Coins', 'Realtime Signals', 'A–F Risk Grading'].map(b => (
+            {['Claude AI Validated', 'Binance Data', 'CMC Verified', '200+ Coins', 'Realtime Signals', 'A–F Risk Grading'].map(b => (
               <span key={b} className="flex items-center gap-1.5">
                 <CheckCircle2 size={10} className="text-gray-700" />
                 {b}

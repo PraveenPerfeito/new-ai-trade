@@ -17,8 +17,8 @@ const coinsCache = new Cache<CoinData[]>('market-data', 5 * 60_000, 5);
 
 function buildManager(): ProviderManager {
   const providers = [
-    new CoinGeckoProvider(process.env.COINGECKO_API_KEY),
     new CoinMarketCapProvider(process.env.COINMARKETCAP_API_KEY ?? ''),
+    new CoinGeckoProvider(process.env.COINGECKO_API_KEY),
     new BinanceProvider(),
     new DexScreenerProvider(),
     new CoinPaprikaProvider(),
