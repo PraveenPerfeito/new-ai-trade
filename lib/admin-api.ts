@@ -381,6 +381,12 @@ export const adminApi = {
   },
   scanner: {
     trigger: (mode: string) => post<{ task_id: string; message: string }>('/scanner/trigger', { mode }),
+    status:  ()             => get<{ scan_id: string | null; mode: string | null; status: string; progress: Record<string, unknown> }>('/scanner/status'),
+  },
+  scheduler: {
+    status:  () => get<{ success: boolean; data: { enabled: boolean; scanning: boolean; running_modes: string[]; last_scan_at: number | null } }>('/scheduler/status'),
+    start:   () => post<{ success: boolean; message: string }>('/scheduler/start', {}),
+    stop:    () => post<{ success: boolean; message: string }>('/scheduler/stop',  {}),
   },
   settings: {
     /** All groups with meta + field definitions */

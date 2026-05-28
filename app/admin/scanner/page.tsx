@@ -1,523 +1,312 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import {
-  ScanLine, Play, Square, Pause, RotateCcw, AlertOctagon,
-  RefreshCw, AlertTriangle, ChevronDown,
-} from 'lucide-react'
-import { TradingSignal, CoinData, ScannerMode, RejectionStats, RejectionStage } from '@/types'
+import { ScanLine, Play, Square, AlertOctagon, RefreshCw, AlertTriangle, CheckCircle, Clock } from 'lucide-react'
+import { TradingSignal, ScannerMode, RejectionStats } from '@/types'
+import { adminApi } from '@/lib/admin-api'
 import { cn } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface SchedulerStatus {
-  started:       boolean
-  scanning:      boolean
-  paused:        boolean
-  emergencyStop: boolean
-  mode:          ScannerMode
-  scanCount:     number
-  errorCount:    number
-  lastScanAt:    number | null
-  nextScanAt:    number | null
-  intervalMs:    number
-  uptime?:       number
+interface CeleryStatus {
+  enabled:      boolean
+  scanning:     boolean
+  running_modes: string[]
+  last_scan_at: number | null
 }
 
-interface ControlData {
-  success:        boolean
-  error?:         string
-  scheduler:      SchedulerStatus
-  rejectionStats: RejectionStats | null
-  computedAt:     string
-}
+// ─── Schedule reference ───────────────────────────────────────────────────────
 
-// ─── Stage metadata ──────────────────────────────────────────────────────────
+const SCHEDULE = [
+  { mode: 'spot',             label: 'Standard',         interval: 'Every 15 min',          coins: 80,  minConf: 80  },
+  { mode: 'high_confidence',  label: 'High Confidence',  interval: 'Every 30 min (:05, :35)', coins: 30,  minConf: 87  },
+  { mode: 'futures',          label: 'Futures',          interval: 'Every 30 min (:10, :40)', coins: 50,  minConf: 82  },
+]
 
-const STAGE_LABELS: Record<RejectionStage, string> = {
-  candles:          'Insufficient Data',
-  direction:        'No Trend Direction',
-  mtf:              'Timeframe Conflict',
-  volatility:       'Extreme Volatility',
-  trend_strength:   'Weak Trend',
-  market_structure: 'Market Structure',
-  setup_score:      'Setup Quality',
-  rr_ratio:         'Risk / Reward',
-  volume_tier:      'Low Volume',
-  risk_engine:      'Risk Engine',
-  funding_rate:     'Extreme Funding',
-  extension_risk:   'Extension Risk',
-  continuation:     'Low Continuation',
-  ai_validation:    'AI Confidence',
-}
-
-const STAGE_COLOR: Record<RejectionStage, string> = {
-  ai_validation:    'text-amber-400',
-  trend_strength:   'text-blue-400',
-  market_structure: 'text-purple-400',
-  continuation:     'text-cyan-400',
-  setup_score:      'text-orange-400',
-  mtf:              'text-red-400',
-  direction:        'text-zinc-500',
-  rr_ratio:         'text-yellow-400',
-  volatility:       'text-red-500',
-  volume_tier:      'text-indigo-400',
-  risk_engine:      'text-red-500',
-  extension_risk:   'text-amber-300',
-  funding_rate:     'text-red-400',
-  candles:          'text-zinc-600',
+const MODE_COLORS: Record<string, string> = {
+  spot:            'text-sky-400    border-sky-400/20    bg-sky-400/5',
+  futures:         'text-purple-400 border-purple-400/20 bg-purple-400/5',
+  high_confidence: 'text-emerald-400 border-emerald-400/20 bg-emerald-400/5',
+  trending:        'text-amber-400  border-amber-400/20  bg-amber-400/5',
 }
 
 const MODES: ScannerMode[] = ['spot', 'futures', 'high_confidence', 'trending']
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function StatusPill({ status }: { status: SchedulerStatus }) {
-  if (status.emergencyStop) return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-red-500/15 border border-red-500/30 text-red-400">
-      <AlertOctagon className="w-3 h-3" /> Emergency Stop
-    </span>
-  )
-  if (status.paused) return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400">
-      <Pause className="w-3 h-3" /> Paused
-    </span>
-  )
-  if (status.scanning) return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-400">
-      <RefreshCw className="w-3 h-3 animate-spin" /> Scanning
-    </span>
-  )
-  if (status.started) return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-green-500/15 border border-green-500/30 text-green-400">
-      <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" /> Active
-    </span>
-  )
-  return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-zinc-500/15 border border-zinc-500/30 text-zinc-400">
-      <Square className="w-3 h-3" /> Stopped
-    </span>
-  )
+function timeAgo(ts: number | null): string {
+  if (!ts) return '—'
+  const diff = Math.floor(Date.now() / 1000 - ts)
+  if (diff < 60)   return `${diff}s ago`
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  return `${Math.floor(diff / 3600)}h ago`
 }
 
-function TimeStr({ ts }: { ts: number | null }) {
-  if (!ts) return <span className="text-zinc-600">—</span>
-  const d = new Date(ts)
-  return <span>{d.toLocaleTimeString()}</span>
-}
-
-function OverviewStrip({ stats }: { stats: RejectionStats }) {
-  const rate = stats.totalScanned > 0
-    ? ((stats.totalAccepted / stats.totalScanned) * 100).toFixed(1)
-    : '0'
-  const cards = [
-    { label: 'Scanned',     value: stats.totalScanned,  color: 'text-white'       },
-    { label: 'Accepted',    value: stats.totalAccepted, color: 'text-green-400'   },
-    { label: 'Rejected',    value: stats.totalRejected, color: 'text-red-400'     },
-    { label: 'Accept Rate', value: `${rate}%`,          color: parseFloat(rate) === 0 ? 'text-zinc-500' : parseFloat(rate) >= 10 ? 'text-green-400' : 'text-amber-400' },
-  ]
-  return (
-    <div className="grid grid-cols-4 gap-3">
-      {cards.map(c => (
-        <div key={c.label} className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
-          <p className="text-zinc-500 text-[10px] uppercase tracking-widest mb-1">{c.label}</p>
-          <p className={cn('text-2xl font-bold font-mono tabular-nums', c.color)}>{c.value}</p>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function RejectionBreakdown({ stats }: { stats: RejectionStats }) {
-  const total = stats.totalRejected
-  return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-      <h3 className="text-white text-sm font-semibold mb-3 flex items-center gap-2">
-        Rejection Breakdown
-        <span className="ml-auto text-zinc-600 text-[10px] font-normal">{total} total</span>
-      </h3>
-      {stats.topReasons.length === 0 ? (
-        <p className="text-zinc-600 text-xs py-4 text-center">No scan data yet — run a scan to see rejection analysis.</p>
-      ) : (
-        <div className="space-y-2.5">
-          {stats.topReasons.map(r => (
-            <div key={r.stage}>
-              <div className="flex items-center justify-between mb-0.5">
-                <span className={cn('text-xs font-medium', STAGE_COLOR[r.stage] ?? 'text-zinc-500')}>
-                  {STAGE_LABELS[r.stage] ?? r.stage}
-                </span>
-                <span className="text-zinc-500 text-xs font-mono tabular-nums">{r.count} · {r.pct}%</span>
-              </div>
-              <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-500 bg-current opacity-50"
-                  style={{ width: `${r.pct}%`, color: STAGE_COLOR[r.stage] }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function NearMissPanel({ stats }: { stats: RejectionStats }) {
-  const items = stats.nearMisses
-  return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-      <h3 className="text-white text-sm font-semibold mb-3 flex items-center gap-2">
-        Near-Miss Opportunities
-        <span className="ml-auto text-zinc-600 text-[10px] font-normal">{items.length} setups</span>
-      </h3>
-      {items.length === 0 ? (
-        <p className="text-zinc-600 text-xs py-4 text-center">
-          {stats.totalScanned === 0
-            ? 'No scan data yet — run a scan to surface near-miss setups.'
-            : 'No near-miss setups in this scan. All rejections were decisive.'}
-        </p>
-      ) : (
-        <div className="space-y-2">
-          {items.map((entry, i) => {
-            const hasMetrics = entry.threshold !== undefined && entry.actual !== undefined
-            const missBy = hasMetrics ? (entry.threshold! - entry.actual!).toFixed(1) : null
-            return (
-              <div key={i} className="flex items-start gap-3 py-2 border-b border-zinc-800/60 last:border-0">
-                <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-amber-400/10 border border-amber-400/20 text-amber-400 text-xs font-bold font-mono shrink-0 mt-0.5">
-                  {entry.symbol.slice(0, 3)}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-white text-xs font-semibold">{entry.symbol}</span>
-                    <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded border', STAGE_COLOR[entry.stage] ?? 'text-zinc-500')}>
-                      {STAGE_LABELS[entry.stage] ?? entry.stage}
-                    </span>
-                  </div>
-                  {hasMetrics && (
-                    <p className="text-zinc-600 text-[11px] mt-0.5 font-mono">
-                      {entry.actual} / {entry.threshold} required
-                      {missBy && <span className="text-amber-400/80 ml-1.5">— missed by {missBy}</span>}
-                    </p>
-                  )}
-                  <p className="text-zinc-600 text-[10px] mt-0.5 truncate">{entry.reason}</p>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function CalibrationBadge({ stats }: { stats: RejectionStats | null }) {
-  if (!stats || stats.scannedAt === 0) return null
-  const nearMissRate = stats.totalRejected > 0
-    ? (stats.nearMisses.length / stats.totalRejected) * 100
-    : 0
-  const scanAge = Math.round((Date.now() - stats.scannedAt) / 60_000)
-  const tooTight = nearMissRate > 20
-
-  return (
-    <div className={cn(
-      'flex items-center gap-3 px-4 py-2.5 rounded-xl border text-xs',
-      tooTight
-        ? 'bg-amber-400/5 border-amber-400/20 text-amber-400'
-        : 'bg-zinc-900 border-zinc-800 text-zinc-500',
-    )}>
-      <span>{tooTight ? '⚠' : '✓'}</span>
-      <span>
-        {tooTight
-          ? `${stats.nearMisses.length} near-misses (${nearMissRate.toFixed(0)}% of rejections) — thresholds may be over-filtering`
-          : 'Calibration nominal — rejection margins are decisive'}
-      </span>
-      <span className="ml-auto text-zinc-600">
-        {scanAge < 1 ? 'just now' : `${scanAge}m ago`}
-      </span>
-    </div>
-  )
+function nextScanIn(lastScanAt: number | null, intervalMin = 15): string {
+  if (!lastScanAt) return '—'
+  const nextAt = lastScanAt + intervalMin * 60
+  const diff   = Math.floor(nextAt - Date.now() / 1000)
+  if (diff <= 0) return 'Now'
+  if (diff < 60)   return `${diff}s`
+  return `${Math.floor(diff / 60)}m ${diff % 60}s`
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function AdminScannerPage() {
-  const [controlData, setControlData] = useState<ControlData | null>(null)
-  const [error, setError]             = useState<string | null>(null)
-  const [actionLoading, setAL]        = useState(false)
-  const [selectedMode, setMode]       = useState<ScannerMode>('spot')
-  const [intervalMin, setIntervalMin]  = useState(5)
-  const prevScanning                  = useRef(false)
+  const [status,   setStatus]   = useState<CeleryStatus | null>(null)
+  const [error,    setError]    = useState<string | null>(null)
+  const [loading,  setLoading]  = useState(false)
+  const [scanMode, setScanMode] = useState<ScannerMode>('spot')
+  const [scanning, setScanning] = useState(false)
+  const [scanMsg,  setScanMsg]  = useState<string | null>(null)
 
-  const fetchControl = useCallback(async () => {
+  // rejection stats still from Next.js layer (populated during Scan Now)
+  const [rejStats, setRejStats] = useState<RejectionStats | null>(null)
+
+  const fetchStatus = useCallback(async () => {
     try {
-      const res  = await fetch('/api/scanner/control')
-      const json = await res.json()
-      if (json.success) {
-        setControlData(json)
-        setError(null)
-        if (json.scheduler?.mode) setMode(json.scheduler.mode)
-      } else {
-        setError(json.error)
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    }
+      const res = await adminApi.scheduler.status()
+      if (res.success && res.data) setStatus(res.data)
+    } catch { /* silent */ }
   }, [])
 
   useEffect(() => {
-    fetchControl()
-    const t = setInterval(fetchControl, 5_000)
+    fetchStatus()
+    const t = setInterval(fetchStatus, 8_000)
     return () => clearInterval(t)
-  }, [fetchControl])
+  }, [fetchStatus])
 
-  // Detect scan completion — refresh rejection stats
-  const scheduler = controlData?.scheduler
-  useEffect(() => {
-    if (prevScanning.current && scheduler && !scheduler.scanning) {
-      void fetchControl()
-    }
-    prevScanning.current = scheduler?.scanning ?? false
-  }, [scheduler?.scanning, fetchControl])
-
-  const doAction = useCallback(async (
-    action: string,
-    extra?: Record<string, unknown>
-  ) => {
-    setAL(true)
-    setError(null)
+  // fetch rejection stats from existing control endpoint
+  const fetchRejStats = useCallback(async () => {
     try {
-      const body: Record<string, unknown> = { action, ...extra }
-      const res  = await fetch('/api/scanner/control', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const json = await res.json()
-      if (!json.success) setError(json.error ?? 'Action failed')
-      else void fetchControl()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error')
-    } finally {
-      setAL(false)
-    }
-  }, [fetchControl])
+      const res = await fetch('/api/scanner/control')
+      const j   = await res.json()
+      if (j.rejectionStats) setRejStats(j.rejectionStats)
+    } catch { /* silent */ }
+  }, [])
+  useEffect(() => { fetchRejStats() }, [fetchRejStats])
 
-  const handleStart = () => doAction('start', {
-    config: { mode: selectedMode, intervalMs: intervalMin * 60_000 }
-  })
-  const handleStop          = () => doAction('stop')
-  const handlePause         = () => doAction('pause')
-  const handleResume        = () => doAction('resume')
-  const handleEmergencyStop = () => doAction('emergency_stop')
-  const handleReset         = () => doAction('reset')
+  const handleEnable = async () => {
+    setLoading(true); setError(null)
+    try {
+      await adminApi.scheduler.start()
+      await fetchStatus()
+    } catch (e) { setError(e instanceof Error ? e.message : 'Failed') }
+    finally { setLoading(false) }
+  }
 
-  const handleManualScan = useCallback(async () => {
-    setAL(true)
-    setError(null)
+  const handleDisable = async () => {
+    setLoading(true); setError(null)
+    try {
+      await adminApi.scheduler.stop()
+      await fetchStatus()
+    } catch (e) { setError(e instanceof Error ? e.message : 'Failed') }
+    finally { setLoading(false) }
+  }
+
+  const handleScanNow = async () => {
+    setScanning(true); setScanMsg(null); setError(null)
     try {
       const res  = await fetch('/api/scanner/run', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: selectedMode }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: scanMode }),
       })
       const json = await res.json()
-      if (res.status === 423) { setError('A scan is already running — please wait.'); return }
-      if (!json.success)      { setError(json.error ?? 'Scan failed'); return }
-      void fetchControl()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error')
-    } finally {
-      setAL(false)
-    }
-  }, [selectedMode, fetchControl])
+      if (res.status === 423) { setError('A scan is already running — wait for it to finish.'); return }
+      if (!json.success)       { setError(json.error ?? 'Scan failed'); return }
+      setScanMsg(`Scan queued (${scanMode}) — results appear in Signals page within ~60s`)
+      await fetchStatus()
+    } catch (e) { setError(e instanceof Error ? e.message : 'Network error') }
+    finally { setScanning(false) }
+  }
 
-  const stats = controlData?.rejectionStats ?? null
-  const disabled = actionLoading
+  const isEnabled = status?.enabled ?? null
 
   return (
-    <div className="p-6 space-y-5 max-w-6xl mx-auto">
+    <div className="space-y-6 max-w-5xl mx-auto">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <ScanLine className="w-6 h-6 text-blue-400" />
-          <div>
-            <h1 className="text-xl font-semibold text-white">Scanner Control</h1>
-            <p className="text-sm text-zinc-400">10-gate signal pipeline · mode control · rejection diagnostics</p>
-          </div>
+      <div className="flex items-center gap-3">
+        <ScanLine className="w-6 h-6 text-blue-400" />
+        <div>
+          <h1 className="text-terminal-text text-xl font-semibold">Scanner Control</h1>
+          <p className="text-terminal-muted text-sm mt-0.5">
+            Scanning runs via <span className="text-terminal-text font-medium">Celery Beat on Railway</span> — automatic, no manual start needed
+          </p>
         </div>
-        {scheduler && (
-          <div className="flex items-center gap-3">
-            <StatusPill status={scheduler} />
-            <span className="text-xs text-zinc-600">{scheduler.scanCount} scans</span>
-          </div>
-        )}
       </div>
 
-      {/* Error banner */}
       {error && (
-        <div className="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm flex items-center gap-2">
+        <div className="p-3 rounded-lg bg-red-900/20 border border-red-800 text-red-300 text-sm flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-300">✕</button>
+          <button onClick={() => setError(null)}>✕</button>
         </div>
       )}
 
-      {/* Emergency stop banner */}
-      {scheduler?.emergencyStop && (
-        <div className="p-4 rounded-xl bg-red-900/20 border border-red-500/40 flex items-center gap-4">
-          <AlertOctagon className="w-5 h-5 text-red-400 shrink-0" />
-          <div className="flex-1">
-            <div className="text-sm font-semibold text-red-400">Emergency Stop Active</div>
-            <div className="text-xs text-zinc-500 mt-0.5">All scanning is halted. Reset the system to resume operations.</div>
-          </div>
-          <button
-            onClick={handleReset}
-            disabled={disabled}
-            className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 hover:bg-red-500/25 transition-colors disabled:opacity-50"
-          >
-            <RotateCcw className="w-3.5 h-3.5" /> Reset System
-          </button>
+      {scanMsg && (
+        <div className="p-3 rounded-lg bg-emerald-900/20 border border-emerald-700/50 text-emerald-300 text-sm flex items-center gap-2">
+          <CheckCircle className="w-4 h-4 shrink-0" />
+          {scanMsg}
         </div>
       )}
 
-      {/* Control panel */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-        <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-4">Controls</h2>
-        <div className="flex flex-wrap items-end gap-4">
-
-          {/* Mode selector */}
-          <div className="space-y-1.5">
-            <label className="text-xs text-zinc-500">Mode</label>
-            <div className="flex gap-1">
-              {MODES.map(m => (
-                <button
-                  key={m}
-                  onClick={() => setMode(m)}
-                  className={[
-                    'text-xs px-2.5 py-1.5 rounded border transition-colors',
-                    selectedMode === m
-                      ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
-                      : 'border-zinc-700 text-zinc-500 hover:text-zinc-300',
-                  ].join(' ')}
-                >
-                  {m}
-                </button>
-              ))}
+      {/* Status strip */}
+      <div className="glass-card rounded-xl p-5">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-3">
+            <div className={cn(
+              'w-3 h-3 rounded-full',
+              status === null        ? 'bg-zinc-500 animate-pulse'
+              : isEnabled && status.scanning ? 'bg-blue-400 animate-pulse'
+              : isEnabled            ? 'bg-emerald-400 animate-pulse'
+              : 'bg-zinc-600',
+            )} />
+            <div>
+              <p className="text-terminal-text font-semibold">
+                {status === null        ? 'Connecting…'
+                : isEnabled && status.scanning ? `Scanning — ${status.running_modes.join(', ')}`
+                : isEnabled            ? 'Active — waiting for next scheduled scan'
+                : 'Paused — auto-scanning disabled'}
+              </p>
+              <p className="text-terminal-muted text-xs mt-0.5">
+                Last scan: <span className="text-terminal-text">{timeAgo(status?.last_scan_at ?? null)}</span>
+                {' · '}
+                Next standard: <span className="text-terminal-text">{nextScanIn(status?.last_scan_at ?? null, 15)}</span>
+              </p>
             </div>
           </div>
 
-          {/* Interval */}
-          <div className="space-y-1.5">
-            <label className="text-xs text-zinc-500">Interval</label>
-            <div className="flex gap-1">
-              {[5, 10, 15, 30].map(min => (
-                <button
-                  key={min}
-                  onClick={() => setIntervalMin(min)}
-                  className={[
-                    'text-xs px-2.5 py-1.5 rounded border transition-colors',
-                    intervalMin === min
-                      ? 'bg-zinc-700 border-zinc-600 text-white'
-                      : 'border-zinc-700 text-zinc-500 hover:text-zinc-300',
-                  ].join(' ')}
-                >
-                  {min}m
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex gap-2 ml-auto">
-            <button
-              onClick={handleManualScan}
-              disabled={disabled || (scheduler?.scanning ?? false) || (scheduler?.emergencyStop ?? false)}
-              className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <ScanLine className="w-3.5 h-3.5" />
-              Scan Now
-            </button>
-
-            {!scheduler?.started ? (
+          <div className="flex items-center gap-2">
+            {isEnabled === false ? (
               <button
-                onClick={handleStart}
-                disabled={disabled || (scheduler?.emergencyStop ?? false)}
-                className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-green-500/30 bg-green-500/10 text-green-300 hover:bg-green-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                onClick={handleEnable}
+                disabled={loading}
+                className="flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 transition-colors disabled:opacity-40"
               >
-                <Play className="w-3.5 h-3.5" /> Start Auto
-              </button>
-            ) : scheduler?.paused ? (
-              <button
-                onClick={handleResume}
-                disabled={disabled}
-                className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-green-500/30 bg-green-500/10 text-green-300 hover:bg-green-500/20 transition-colors disabled:opacity-40"
-              >
-                <Play className="w-3.5 h-3.5" /> Resume
+                <Play className="w-4 h-4" /> Enable Auto-Scan
               </button>
             ) : (
               <button
-                onClick={handlePause}
-                disabled={disabled}
-                className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 transition-colors disabled:opacity-40"
+                onClick={handleDisable}
+                disabled={loading || status === null}
+                className="flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 transition-colors disabled:opacity-40"
               >
-                <Pause className="w-3.5 h-3.5" /> Pause
+                <Square className="w-4 h-4" /> Disable Auto-Scan
               </button>
             )}
-
-            <button
-              onClick={handleStop}
-              disabled={disabled || !(scheduler?.started ?? false)}
-              className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-zinc-600 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors disabled:opacity-40"
-            >
-              <Square className="w-3.5 h-3.5" /> Stop
-            </button>
-
-            <button
-              onClick={handleEmergencyStop}
-              disabled={disabled || (scheduler?.emergencyStop ?? false)}
-              className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-40"
-            >
-              <AlertOctagon className="w-3.5 h-3.5" /> E-Stop
-            </button>
           </div>
         </div>
       </div>
 
-      {/* Scheduler status strip */}
-      {scheduler && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { label: 'Scan Count',   value: scheduler.scanCount },
-            { label: 'Error Count',  value: scheduler.errorCount, warn: scheduler.errorCount > 3 },
-            { label: 'Last Scan',    value: <TimeStr ts={scheduler.lastScanAt} /> },
-            { label: 'Next Scan',    value: scheduler.started && !scheduler.paused ? <TimeStr ts={scheduler.nextScanAt} /> : <span className="text-zinc-600">—</span> },
-          ].map((m, i) => (
-            <div key={i} className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
-              <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">{m.label}</div>
-              <div className={cn('text-base font-bold font-mono', (m as any).warn ? 'text-red-400' : 'text-white')}>
-                {m.value}
+      {/* Manual scan */}
+      <div className="glass-card rounded-xl p-5">
+        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-4 font-semibold">Manual Scan</p>
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Mode selector */}
+          <div className="flex gap-1">
+            {MODES.map(m => (
+              <button
+                key={m}
+                onClick={() => setScanMode(m)}
+                className={cn(
+                  'text-sm px-3 py-2 rounded-lg border transition-colors font-medium',
+                  scanMode === m
+                    ? MODE_COLORS[m] ?? 'bg-terminal-bright/20 border-terminal-border text-terminal-text'
+                    : 'border-transparent text-terminal-muted hover:text-terminal-text',
+                )}
+              >
+                {m.replace('_', ' ')}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={handleScanNow}
+            disabled={scanning}
+            className="flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-300 hover:bg-blue-500/25 transition-colors disabled:opacity-40 ml-auto"
+          >
+            {scanning
+              ? <><RefreshCw className="w-4 h-4 animate-spin" /> Queuing…</>
+              : <><ScanLine className="w-4 h-4" /> Scan Now</>
+            }
+          </button>
+        </div>
+        <p className="text-terminal-muted/50 text-xs mt-3">
+          Runs the Python scanner on Railway immediately. Results appear in Signals within ~60s.
+        </p>
+      </div>
+
+      {/* Automatic schedule */}
+      <div>
+        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3 font-semibold">Automatic Schedule (Celery Beat · Railway)</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {SCHEDULE.map(s => (
+            <div key={s.mode} className="glass-card rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className={cn('text-xs font-mono font-semibold px-2 py-0.5 rounded border', MODE_COLORS[s.mode])}>
+                  {s.label}
+                </span>
+                {status?.running_modes?.includes(s.mode) && (
+                  <span className="text-xs text-blue-400 font-semibold animate-pulse">● RUNNING</span>
+                )}
+              </div>
+              <div className="space-y-1.5 text-sm">
+                <div className="flex items-center gap-2 text-terminal-muted">
+                  <Clock className="w-3.5 h-3.5 shrink-0" />
+                  <span>{s.interval}</span>
+                </div>
+                <p className="text-terminal-muted/70 text-xs">
+                  Scans <span className="text-terminal-text">{s.coins} coins</span> · Min confidence <span className="text-terminal-text">{s.minConf}%</span>
+                </p>
               </div>
             </div>
           ))}
         </div>
-      )}
+        <p className="text-terminal-muted/40 text-xs mt-2">
+          Celery Beat fires these tasks automatically — runs 24/7 on Railway regardless of this dashboard.
+        </p>
+      </div>
 
-      {/* Diagnostics */}
-      {stats && (
-        <div className="space-y-4">
-          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Rejection Diagnostics</h2>
-          <OverviewStrip stats={stats} />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <RejectionBreakdown stats={stats} />
-            <NearMissPanel stats={stats} />
+      {/* Rejection stats (populated when Scan Now is used via TS layer) */}
+      {rejStats && rejStats.totalScanned > 0 && (
+        <div>
+          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3 font-semibold">
+            Last Manual Scan — Rejection Breakdown
+          </p>
+          <div className="grid grid-cols-4 gap-3 mb-4">
+            {[
+              { label: 'Scanned',     value: rejStats.totalScanned,  color: 'text-terminal-text' },
+              { label: 'Accepted',    value: rejStats.totalAccepted, color: 'text-emerald-400' },
+              { label: 'Rejected',    value: rejStats.totalRejected, color: 'text-red-400' },
+              { label: 'Accept Rate', value: rejStats.totalScanned > 0 ? `${((rejStats.totalAccepted / rejStats.totalScanned) * 100).toFixed(1)}%` : '0%', color: 'text-blue-400' },
+            ].map(c => (
+              <div key={c.label} className="glass-card rounded-xl px-4 py-3">
+                <p className="text-terminal-muted text-[10px] uppercase tracking-widest mb-1">{c.label}</p>
+                <p className={`text-2xl font-bold font-mono ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
           </div>
-          <CalibrationBadge stats={stats} />
-        </div>
-      )}
-
-      {!controlData && !error && (
-        <div className="flex items-center justify-center h-32 text-zinc-500 text-sm">
-          <RefreshCw className="w-4 h-4 animate-spin mr-2" /> Loading…
+          {rejStats.topReasons.length > 0 && (
+            <div className="glass-card rounded-xl p-4">
+              <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Top Rejection Gates</p>
+              <div className="space-y-2.5">
+                {rejStats.topReasons.map(r => (
+                  <div key={r.stage}>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-terminal-text text-sm capitalize">{r.stage.replace(/_/g, ' ')}</span>
+                      <span className="text-terminal-muted text-xs font-mono">{r.count} · {r.pct}%</span>
+                    </div>
+                    <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-blue-400/40" style={{ width: `${r.pct}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
