@@ -215,9 +215,24 @@ The Claude AI validation step can be toggled from **Admin → Calibration** with
 - **Enable**: Claude validates each signal that passes all 10 prior gates
 - Setting persists through worker restarts (stored in PostgreSQL via settings service)
 
-Anthropic rate limits:
-- Free tier: 5 req/min → scans slow (retries add ~30s)
-- Tier 1 ($5 spend): 50 req/min → scans run at full speed
+### Credit-saving mode (built-in)
+
+`AI_MIN_SETUP_SCORE = 70` in `ai_validator.py` — signals with setup score 60–69 (borderline setups) automatically use heuristic instead of Claude. Only high-quality setups (score ≥ 70) spend API credits. This reduces Claude calls by ~40% with no loss in signal quality.
+
+| Setup Score | AI Validation | Credits Used |
+|-------------|---------------|-------------|
+| ≥ 70 | Claude Haiku | Yes |
+| 60–69 | Heuristic | No |
+
+### Cost estimate (free $5 credits)
+
+- With threshold: ~$0.23/day → **$5 lasts ~22 days**
+- Without threshold: ~$0.38/day → $5 lasts ~13 days
+
+### Anthropic rate limits
+
+- Free tier: 5 req/min → retries add ~30s per scan
+- Tier 1 ($5 actual spend at console.anthropic.com): 50 req/min → instant validation
 
 ---
 

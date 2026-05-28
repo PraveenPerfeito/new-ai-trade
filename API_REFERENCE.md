@@ -54,8 +54,8 @@ celery -A backend.workers.celery_app.celery_app worker --beat --loglevel=info --
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/api/scanner/run` | Session | Trigger scan — proxies to Python backend |
-| GET/POST | `/api/scanner/control` | Session | Scheduler status + start/stop/pause/resume/e-stop |
+| POST | `/api/scanner/run` | Session | Trigger scan — proxies to Python backend `/api/scanner/trigger` |
+| GET/POST | `/api/scanner/control` | Session | Legacy Next.js scheduler state (used by scanner page for rejection stats) |
 
 ```bash
 # Trigger manual scan (proxies to Python backend /api/scanner/trigger)

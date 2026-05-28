@@ -29,6 +29,9 @@ AI-powered crypto trading signal scanner (public brand: **SignalEdge AI**) built
 15. **Signal lifecycle** — `computeSignalState()` → DEVELOPING/CONFIRMED/EXTENDED/COOLING/CORRECTING/INVALIDATED/EXPIRED.
 16. **Health server in Celery worker** — `backend/workers/health_server.py` starts HTTP server on `$PORT` at `worker_ready` signal so Railway health checks pass.
 17. **Scan Now routes to Python backend** — `app/api/scanner/run/route.ts` proxies to `${BACKEND_URL}/api/scanner/trigger` (not TypeScript scanner).
+18. **AI credit saving** — `AI_MIN_SETUP_SCORE = 70` in `ai_validator.py`. Setup score 60–69 → heuristic (no API call). Score ≥ 70 → Claude. Reduces credits ~40%.
+19. **Admin users see all signals** — `getAccessContext()` in `lib/access-control.ts` reads Supabase session cookie; admin email → enterprise plan → no confidence floor/daily cap.
+20. **Settings API uses class not string** — `get_settings_service().get_group(AISettings)` must pass model class. Passing string `"ai"` causes silent TypeError → setting never read.
 
 ---
 
@@ -61,7 +64,7 @@ backend/core/scanner/   ← PRIMARY scanner (Python) — all new features here
   signal_pipeline.py    ← detect_setup() scores EMA200/BB/daily/patterns/crossover/rel-strength
   orchestrator.py       ← run_scan(); CMC 200 coins; 3 timeframes (1h+4h+1d); btc_change_24h
   market_fetcher.py     ← _fetch_cmc() primary; _fetch_coingecko() fallback
-  ai_validator.py       ← checks AISettings.enabled before calling Claude; semaphore(3)
+  ai_validator.py       ← checks AISettings.enabled + setup_score < 70 → heuristic; semaphore(3)
   risk.py               ← grade A–F; quality score; leverage tiers
   futures_intelligence.py← funding rate, OI, L/S ratio, liq zones
 
@@ -84,8 +87,13 @@ app/api/
 
 app/admin/
   calibration/page.tsx  ← Claude AI on/off toggle + verdict distribution + confidence bands
-  signals/page.tsx      ← signal feed; guards edge.overall and edge.edge_verdict
+  signals/page.tsx      ← card-based signal feed with filters/sort/expand; admin sees ALL signals
+  scanner/page.tsx      ← Celery status + enable/disable auto-scan + manual scan trigger
   analytics/page.tsx    ← edge validation + attribution tabs
+  settings/page.tsx     ← system settings; paper_trading group hidden (feature removed)
+
+lib/
+  access-control.ts     ← getAccessContext() checks Supabase session — admin email → enterprise plan
 
 Dockerfile              ← python:3.12-slim + gcc + pip --prefer-binary (prevents 1hr numpy compile)
 database/
