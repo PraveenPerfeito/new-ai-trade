@@ -74,8 +74,8 @@ def _send_failure_alert(mode: str, error: str, attempt: int) -> None:
     name="backend.workers.scan_task.run_scheduled_scan",
     max_retries=2,           # retry transient failures up to 2 times
     queue="scanner",
-    soft_time_limit=10 * 60,  # 10-minute soft kill
-    time_limit=12 * 60,       # 12-minute hard kill
+    soft_time_limit=14 * 60,  # 14-minute soft kill (5 concurrent × 45s/coin × ~60 coins = ~9-11 min)
+    time_limit=16 * 60,       # 16-minute hard kill
 )
 def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
     """

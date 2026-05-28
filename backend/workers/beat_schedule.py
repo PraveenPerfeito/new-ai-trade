@@ -12,7 +12,10 @@ BEAT_SCHEDULE = {
         "schedule": crontab(minute="*/15"),
         "kwargs": {"mode": "standard"},
         "options": {
-            "expires": 14 * 60,  # discard if not started within 14 minutes
+            # Discard if not started within 13 min — keeps task queue clean and
+            # ensures a queued task never fires after the distributed lock (11-min TTL)
+            # has already expired (which would cause a duplicate scan).
+            "expires": 13 * 60,
             "queue": "scanner",
         },
     },
@@ -22,7 +25,7 @@ BEAT_SCHEDULE = {
         "schedule": crontab(minute="5,35"),
         "kwargs": {"mode": "high_confidence"},
         "options": {
-            "expires": 25 * 60,
+            "expires": 13 * 60,
             "queue": "scanner",
         },
     },
@@ -32,7 +35,7 @@ BEAT_SCHEDULE = {
         "schedule": crontab(minute="10,40"),
         "kwargs": {"mode": "futures"},
         "options": {
-            "expires": 25 * 60,
+            "expires": 13 * 60,
             "queue": "scanner",
         },
     },

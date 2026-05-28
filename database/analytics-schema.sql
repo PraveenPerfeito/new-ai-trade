@@ -65,6 +65,15 @@ CREATE INDEX IF NOT EXISTS idx_signal_outcomes_confidence
 CREATE INDEX IF NOT EXISTS idx_signal_outcomes_volatility
   ON signal_outcomes(volatility_regime);
 
+-- Partial composite index for the PENDING outcome resolution query:
+-- WHERE outcome='PENDING' AND created_at > $1 AND check_count < $2
+-- ORDER BY created_at ASC LIMIT $3
+-- Without this, Postgres scans the full outcome index then re-filters on created_at
+-- and check_count. This index covers the exact query shape in signal_metrics.py.
+CREATE INDEX IF NOT EXISTS idx_signal_outcomes_pending_resolution
+  ON signal_outcomes(created_at ASC, check_count)
+  WHERE outcome = 'PENDING';
+
 -- Row-level security (mirrors existing tables)
 ALTER TABLE signal_outcomes ENABLE ROW LEVEL SECURITY;
 
