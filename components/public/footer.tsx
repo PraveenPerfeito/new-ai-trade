@@ -48,7 +48,7 @@ export function PublicFooter() {
               Quantitative AI crypto intelligence. Institutional-grade signal infrastructure.
             </p>
             <p className="text-gray-600 text-[11px]">
-              Powered by Claude AI · Binance · CoinGecko
+              Powered by Claude AI · Binance · CoinMarketCap
             </p>
           </div>
 

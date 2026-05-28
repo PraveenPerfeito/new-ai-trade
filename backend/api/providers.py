@@ -42,11 +42,11 @@ CONFIG_KEY       = "settings:d:providers"
 COINS_CACHE_PAT  = "cache:market-data:*"
 
 _DEFAULT_PRIORITY: dict[str, int] = {
-    "coingecko": 1, "coinmarketcap": 2, "binance": 3,
+    "coinmarketcap": 1, "coingecko": 2, "binance": 3,
     "dexscreener": 4, "coinpaprika": 5, "geckoterm": 6,
 }
 _DEFAULT_ENABLED: dict[str, bool] = {
-    "coingecko": True, "coinmarketcap": False, "binance": True,
+    "coinmarketcap": True, "coingecko": True, "binance": True,
     "dexscreener": True, "coinpaprika": True, "geckoterm": True,
 }
 

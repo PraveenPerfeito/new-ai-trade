@@ -566,22 +566,22 @@ class ProviderSettings(BaseSettingsGroup):
     SCHEMA_VERSION: ClassVar[int] = 1
 
     active_provider: Literal[
-        'coingecko', 'coinmarketcap', 'binance', 'dexscreener', 'coinpaprika', 'geckoterm'
+        'coinmarketcap', 'coingecko', 'binance', 'dexscreener', 'coinpaprika', 'geckoterm'
     ] = Field(
-        'coingecko',
+        'coinmarketcap',
         title='Active Provider',
         description='Primary market data provider — others are failover only',
     )
-    coingecko_enabled:     bool = Field(True,  title='CoinGecko Enabled',      description='Allow CoinGecko as a provider')
-    coinmarketcap_enabled: bool = Field(False, title='CoinMarketCap Enabled',  description='Allow CoinMarketCap as a provider (requires API key)')
-    binance_enabled:       bool = Field(True,  title='Binance Enabled',        description='Allow Binance ticker as a fallback provider')
-    dexscreener_enabled:   bool = Field(True,  title='DexScreener Enabled',    description='Allow DexScreener as a fallback provider')
-    coinpaprika_enabled:   bool = Field(True,  title='CoinPaprika Enabled',    description='Allow CoinPaprika as a fallback provider')
-    geckoterm_enabled:     bool = Field(True,  title='GeckoTerminal Enabled',  description='Allow GeckoTerminal as a fallback provider')
+    coinmarketcap_enabled: bool = Field(True, title='CoinMarketCap Enabled',  description='Allow CoinMarketCap as a provider (requires API key)')
+    coingecko_enabled:     bool = Field(True, title='CoinGecko Enabled',      description='Allow CoinGecko as a fallback provider')
+    binance_enabled:       bool = Field(True, title='Binance Enabled',        description='Allow Binance ticker as a fallback provider')
+    dexscreener_enabled:   bool = Field(True, title='DexScreener Enabled',    description='Allow DexScreener as a fallback provider')
+    coinpaprika_enabled:   bool = Field(True, title='CoinPaprika Enabled',    description='Allow CoinPaprika as a fallback provider')
+    geckoterm_enabled:     bool = Field(True, title='GeckoTerminal Enabled',  description='Allow GeckoTerminal as a fallback provider')
 
     # Priority order (1 = highest): controls failover sequence
-    coingecko_priority:     int = Field(1, ge=1, le=6, title='CoinGecko Priority')
-    coinmarketcap_priority: int = Field(2, ge=1, le=6, title='CoinMarketCap Priority')
+    coinmarketcap_priority: int = Field(1, ge=1, le=6, title='CoinMarketCap Priority')
+    coingecko_priority:     int = Field(2, ge=1, le=6, title='CoinGecko Priority')
     binance_priority:       int = Field(3, ge=1, le=6, title='Binance Priority')
     dexscreener_priority:   int = Field(4, ge=1, le=6, title='DexScreener Priority')
     coinpaprika_priority:   int = Field(5, ge=1, le=6, title='CoinPaprika Priority')
