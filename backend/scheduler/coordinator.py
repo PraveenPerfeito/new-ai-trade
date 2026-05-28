@@ -30,11 +30,13 @@ class SchedulerCoordinator:
     """
 
     def __init__(self) -> None:
-        import ssl as _ssl
         settings = get_settings()
         ssl_opts: dict = {}
         if settings.redis_url.startswith("rediss://"):
-            ssl_opts["ssl_cert_reqs"] = _ssl.CERT_NONE
+            # Use string "none" not ssl.CERT_NONE (=0): redis-py only sets
+            # RedisSSLContext.cert_reqs when the value is truthy, so the integer
+            # 0 is silently skipped leaving cert verification enabled.
+            ssl_opts["ssl_cert_reqs"] = "none"
         self._redis = sync_redis.from_url(
             settings.redis_url,
             decode_responses=True,
