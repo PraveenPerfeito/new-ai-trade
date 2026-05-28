@@ -1,90 +1,73 @@
 # SignalEdge AI
 
-AI-powered cryptocurrency trading signal scanner with multi-timeframe analysis, market regime intelligence, institutional scoring, signal lifecycle states, futures intelligence, risk management, and backtesting — built on a **Next.js 14 frontend** and a **FastAPI/Python backend**.
+AI-powered cryptocurrency trading signal scanner. Scans **200 coins** from CoinMarketCap, applies an 11-gate quality pipeline with advanced technical analysis, and surfaces high-probability setups via a glassmorphism admin dashboard and Telegram alerts.
+
+**Stack:** Next.js 14 · TypeScript · FastAPI (Python 3.12) · Supabase · Upstash Redis · Claude Haiku · Binance API · CoinMarketCap · Railway
 
 ---
 
 ## Features
 
-**Signal Scanner (Phase 6.1 — Tactical Intelligence Engine)**
-- Scans the top 100 coins by market cap (CoinGecko + Binance)
-- Multi-timeframe confirmation: 1h entry signals filtered by 4h trend
-- 11-gate quality pipeline before any AI call (MTF, volatility, trend strength, setup score, RR ratio, risk engine, market structure, futures intelligence, continuation gate, Claude validation)
-- **Market regime intelligence**: BTC 4h USDT candles classify global regime (BULL_TREND/BEAR_TREND/SIDEWAYS/HIGH_VOLATILITY/EUPHORIA/CAPITULATION), cached 5 min per scan
-- **Signal lifecycle states**: every signal tagged DEVELOPING/CONFIRMED/EXTENDED/COOLING/CORRECTING/INVALIDATED/EXPIRED via deterministic indicator snapshot
-- **Institutional score**: multi-dimensional quality composite (AI 25% + grade 20% + trend 20% + quality 15% + vol 10% + RR 5% + futures 5%) ± regime alignment flat adjustment
-- **Continuation probability engine**: RSI zone + EMA extension + volume trend + candle momentum → 10–95 score; < 25 rejects the setup before AI
-- **10 false-positive filters**: includes fake breakout, euphoric spike, momentum decline at RSI extreme
-- **Enhanced AI explainability**: 8 fields — trend, momentum, volatility, rationale, summary + continuationCase, cautionCase, regimeNote
-- Four scan modes: `spot` · `futures` · `high_confidence` · `trending`
-- Distributed auto-scheduler (Celery Beat + Redis lock) — safe for multi-instance deployments
+### Signal Pipeline (11 Gates)
 
-**Risk Engine**
-- Trade quality score (0–100) and risk grade (A–F) per signal
-- Stop-loss distance, volatility, overextension, and liquidity validators
-- Safe leverage tiers: 1×, 2×, 3×, 5×, 10×, 15×, 20×
-- Position-size multiplier based on grade (A = 1.0×, F = rejected)
+1. **Multi-timeframe confirmation** — 1h + 4h + 1d candles must align
+2. **Volatility gate** — ATR-based filter rejects extreme volatility
+3. **Trend strength** — EMA/MACD composite score (0–100)
+4. **Market structure** — 7 false-positive filters (doji, engulfing, fake breakout, wash trade, RSI divergence, overextension, S/R rejection)
+5. **Setup scoring** — multi-factor quality score including:
+   - EMA200 bounce detection (+15 pts)
+   - Bollinger Band squeeze detection (+15 pts)
+   - Daily timeframe alignment (+12 pts)
+   - 10 candlestick patterns: Hammer, Shooting Star, Morning/Evening Star, Three White Soldiers/Black Crows, Marubozu, Inverted Hammer, Hanging Man
+   - Fresh EMA crossover (Golden/Death Cross within 5 candles) (+12 pts)
+   - Relative strength vs BTC (+10 pts)
+6. **R:R ratio** — minimum 2:1 reward-to-risk
+7. **Risk engine** — grade A–F, quality score, safe leverage tiers
+8. **Futures intelligence** — funding rate, OI trend, L/S ratio, liquidation zones (futures/high_confidence modes)
+9. **Continuation gate** — probability score (10–95), rejects low-momentum setups
+10. **Signal lifecycle** — DEVELOPING/CONFIRMED/EXTENDED/COOLING/CORRECTING/INVALIDATED/EXPIRED
+11. **Claude AI validation** — Haiku validates final signal with full context (can be disabled from dashboard to conserve credits)
 
-**Market Structure Filters** *(Python core engine)*
-- Sideways market detection (ADX + range-band analysis)
-- Fake volume / wash-trade signature detection
-- Candle structure quality (doji, rejection wicks)
-- Trend exhaustion (RSI divergence + extension)
-- Support/resistance rejection from swing pivots
-- Overextension guard (ATR multiplier)
-- Failed breakout / stop-hunt detection
+### Indicators (Pure Python — TradingView-matched)
 
-**Futures Intelligence** *(futures / high_confidence modes)*
-- Live funding rate with bias detection (LONG_HEAVY / SHORT_HEAVY / NEUTRAL)
-- Open-interest 24h trend (RISING / FALLING / STABLE)
-- Long/short account ratio (global)
-- Liquidation-zone detection from swing highs/lows + ATR levels
-- Breakout detector: 20-candle consolidation + volume confirmation
-- Trend continuation / pullback depth analysis
-- Composite momentum score (0–100) with BTC/ETH/SOL priority bonus
+- RSI(14) — Wilder EWM smoothing
+- MACD — EMA(12) − EMA(26), signal EMA(9)
+- EMA 20 / 50 / 200
+- ATR(14) — Wilder True Range
+- Volume Spike — current vs 20-candle rolling avg
+- ADX — Wilder DI+/DI- (sideways market detection)
+- Bollinger Bands (20, 2σ) — with squeeze detection
+- Trend Strength Score (0–100 composite)
+- EMA Crossover Freshness (within 5 candles)
+- Candlestick Pattern Detection (10 patterns)
 
-**Paper Trading**
-- Virtual position tracking from signal entry to exit
-- Outcome resolution: TP hit, SL hit, timeout
-- Tracks PnL, win rate, avg RR per signal type and mode
+### Scan Modes
 
-**Performance Analytics**
-- Signal outcome aggregation with win/loss/breakeven breakdown
-- Per-symbol, per-mode, per-grade analytics
-- Rolling daily/weekly performance tables
+| Mode | Min MCap | Min Volume | Min Confidence | Max Coins |
+|------|----------|------------|----------------|-----------|
+| `spot` | $200M | $20M | 80% | 80 |
+| `futures` | $1B | $200M | 82% | 50 |
+| `high_confidence` | $2B | $500M | 87% | 30 |
+| `trending` | $50M | $10M | 78% | 80 |
 
-**Backtesting Engine**
-- Replays 1h historical candles with synthetic 4h aggregation
-- Simulates signal generation using the same live scanner pipeline
-- Metrics: win rate, profit factor, max drawdown, Sharpe ratio, avg RR, equity curve
-- Strategy comparison with composite scoring
-- Results persisted to Supabase
+### Admin Command Center
 
-**Dashboard**
-- TradingView-inspired dark terminal UI
-- Live price ticker, top-mover widgets, stats bar
-- Signal feed with confidence bar, risk grade, futures badges, liquidation zone proximity, signal state badge, institutional score, continuation probability bar, regime badge
-- Paper trading panel: live positions, outcome history
-- Performance analytics panel
-- Backtest panel: run, compare strategies, view trade list, equity curve SVG chart
-
-**Public SaaS Website**
-- Landing page at `/` — SignalEdge AI homepage with live stats, feature highlights, and CTAs
-- `/pricing` — Free / Pro $29/mo / Institutional $99/mo tiers with feature comparison
-- `/investors` — investor overview with thesis, infrastructure pillars, product roadmap
-- `/about` — mission, 11-gate pipeline overview, tech stack grid, design principles
-
-**Production Infrastructure**
-- Redis-backed distributed cache, rate limiting, and scheduler lock
-- Celery workers + Beat scheduler for async scan tasks
-- Prometheus `/metrics` endpoint (FastAPI) + FastAPI health/readiness probe
-- Structured JSON logging: pino (Next.js) + structlog (Python backend)
-- Zod-validated environment variables (Next.js) + pydantic-settings (Python)
-- Per-IP Redis rate limiting on all API routes
-- Security headers (CSP, HSTS, X-Frame-Options, …)
-- React error boundaries
-- Retry with exponential backoff on all external API calls
-- Docker multi-service deployment (web, api, worker, beat, redis)
+| Page | Path | Description |
+|------|------|-------------|
+| Command Overview | `/admin/overview` | Scanner status, regime card, signal metrics, recent signals |
+| Market Intelligence | `/admin/market` | BTC regime, global metrics, market breadth, trending assets |
+| Scanner Control | `/admin/scanner` | Start/stop/pause/resume/e-stop · mode & interval · rejection diagnostics |
+| Signals | `/admin/signals` | Live signal feed with lifecycle, tactical fields, edge stats |
+| Tactical Feed | `/admin/tactical` | Signal lifecycle table — filter by stage, type, mode |
+| Sector Rotation | `/admin/sectors` | CMC ecosystem categories + coin-derived breadth |
+| Regime Intelligence | `/admin/regime` | RSI gauge, trading implication, recommended params |
+| Calibration | `/admin/calibration` | **Claude AI on/off toggle** · verdict distribution · confidence bands |
+| Edge Analytics | `/admin/analytics` | Win rate, expectancy, profit factor, Sharpe — per symbol/mode/grade |
+| Providers | `/admin/providers` | Data source health (CMC, Binance, CoinGecko fallback) |
+| Cache Operations | `/admin/cache` | CMC quota guard, intelligence cache freshness |
+| System Health | `/admin/system` | Process health, uptime, memory |
+| Diagnostics | `/admin/anomalies` | Scanner anomaly log |
+| Settings | `/admin/settings` | System settings with safety layer |
 
 ---
 
@@ -92,402 +75,149 @@ AI-powered cryptocurrency trading signal scanner with multi-timeframe analysis, 
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend framework | Next.js 14 (App Router, server components, Edge middleware) |
-| Frontend language | TypeScript 5 (strict) |
-| UI | React 18 · Tailwind CSS · Lucide icons |
-| Backend framework | FastAPI + Uvicorn (Python 3.12) |
-| Backend language | Python 3.12 (asyncio, pydantic v2) |
+| Frontend | Next.js 14 (App Router) · TypeScript 5 · React 18 · Tailwind CSS |
+| Backend | FastAPI + Uvicorn · Python 3.12 · asyncio · Pydantic v2 |
 | Task queue | Celery 5 + Celery Beat |
-| Cache / broker | Redis 7 (ioredis on Node, redis-py on Python) |
-| Database | Supabase (PostgreSQL) · asyncpg |
-| AI validation | Anthropic Claude Haiku 4.5 |
-| Market data | Binance REST API (spot + futures) |
-| Coin data | CoinGecko API (top 100 by market cap) |
+| Cache / broker | Upstash Redis (`rediss://`) |
+| Database | Supabase PostgreSQL · asyncpg |
+| Auth | Supabase Auth + `@supabase/ssr` |
+| AI validation | Anthropic Claude Haiku 4.5 (toggleable from dashboard) |
+| Market data | Binance REST (spot + futures klines) |
+| Coin data | CoinMarketCap Pro (primary, 200 coins) · CoinGecko (fallback) |
 | Notifications | Telegram Bot API |
-| Indicators (Python) | pandas + numpy (TradingView-compatible Wilder EWM) |
-| Logging | pino (Next.js) · structlog (Python) |
-| Validation | Zod (Next.js) · pydantic-settings (Python) |
-| Metrics | prometheus-client + prometheus-fastapi-instrumentator |
-| Container | Docker (multi-stage) · Docker Compose v2 |
+| Indicators | pandas + numpy (TradingView-compatible Wilder EWM) |
+| Hosting | Vercel (Next.js) · Railway (FastAPI + Celery worker) |
 
 ---
 
-## Quick Start
+## Deployment (Railway + Vercel)
 
-### Prerequisites
+### Services
 
-- Node.js 20+ and npm 10+
-- Python 3.12+ (for running backend locally without Docker)
-- Docker 24+ and Docker Compose v2 (for full-stack deployment)
-- A [Supabase](https://supabase.com) project with schemas applied (see [Database Setup](#database-setup))
-- Binance and CoinGecko are public APIs — no key required for basic use
-- An [Anthropic API key](https://console.anthropic.com) (optional — heuristic fallback used without it)
+| Service | Platform | Start Command |
+|---------|----------|---------------|
+| API | Railway | `uvicorn backend.main:app --host 0.0.0.0 --port $PORT` |
+| Worker | Railway | `celery -A backend.workers.celery_app.celery_app worker --beat --loglevel=info --concurrency=2 -Q celery,scanner` |
+| Frontend | Vercel | Auto (Next.js) |
 
-### 1 — Clone and install
+### Railway worker settings
+- **Builder**: Dockerfile (not Railpack)
+- **Healthcheck Path**: `/health` (the worker starts a health HTTP server on `$PORT`)
+- **Restart Policy**: On Failure
 
-```bash
-git clone <repo-url> crypto-market-scanner
-cd crypto-market-scanner
-npm install
-pip install -r backend/requirements.txt   # only needed for local Python backend
-```
+### Scheduled scans (Celery Beat)
 
-### 2 — Configure environment
-
-```bash
-cp .env.example .env.local
-# Edit .env.local — see Environment Variables section
-```
-
-Minimum required:
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-```
-
-### 3 — Apply database schemas
-
-Run all schema files in your Supabase SQL Editor (Dashboard → SQL Editor):
-
-```
-database/schema.sql
-database/backtest-schema.sql
-database/paper-trading-schema.sql
-database/analytics-schema.sql
-```
-
-### 4 — Start (Docker — recommended)
-
-```bash
-docker compose up --build -d
-# Opens: http://localhost:3000/dashboard
-# API:   http://localhost:8000/health
-```
-
-### 5 — Or start in development mode
-
-```bash
-# Terminal 1: Redis (required)
-docker run -d -p 6379:6379 redis:7-alpine
-
-# Terminal 2: FastAPI backend
-cd backend && uvicorn backend.main:app --reload --port 8000
-
-# Terminal 3: Celery worker
-cd backend && celery -A backend.workers.celery_app worker -l info -Q scanner,paper_trading
-
-# Terminal 4: Next.js frontend
-npm run dev
-```
+| Task | Schedule | Mode |
+|------|----------|------|
+| Standard scan | Every 15 min | `spot` |
+| High-confidence | Every 30 min (offset :05) | `high_confidence` |
+| Futures scan | Every 30 min (offset :10) | `futures` |
+| Outcome tracker | Every 10 min | — |
 
 ---
 
 ## Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `NEXT_PUBLIC_SUPABASE_URL` | ✅ | — | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | — | Supabase anon/public key |
-| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | — | Supabase service role key (server-side only) |
-| `REDIS_URL` | ✅ | `redis://localhost:6379/0` | Redis connection URL (Next.js + Python) |
-| `DATABASE_URL` | ✅ | — | PostgreSQL DSN for Python asyncpg |
-| `ANTHROPIC_API_KEY` | ⚠ | — | Claude API key — heuristic fallback if absent |
-| `TELEGRAM_BOT_TOKEN` | ✗ | — | Telegram bot token for signal alerts |
-| `TELEGRAM_CHAT_ID` | ✗ | — | Telegram chat/channel ID |
-| `COINGECKO_API_KEY` | ✗ | — | CoinGecko API key — free tier used without it |
-| `SCANNER_MIN_CONFIDENCE_ALERT` | ✗ | `85` | Minimum confidence % to send a Telegram alert |
-| `SCANNER_DELAY_MS` | ✗ | `300` | Delay between coins during scan (ms) |
-| `LOG_LEVEL` | ✗ | `info` | `fatal`/`error`/`warn`/`info`/`debug`/`trace` |
-| `ALLOWED_ORIGINS` | ✗ | *(all)* | Comma-separated CORS allow-list |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | ✅ | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | Supabase anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Supabase service role key (server-side only) |
+| `DATABASE_URL` | ✅ | PostgreSQL DSN — use Supabase Transaction Pooler (port 6543) |
+| `REDIS_URL` | ✅ | Upstash `rediss://` URL |
+| `ADMIN_EMAILS` | ✅ | Comma-separated allowed admin emails |
+| `ADMIN_SECRET` | ✅ | 32-byte hex — `openssl rand -hex 32` |
+| `BACKEND_URL` | ✅ | Railway API service URL |
+| `COINMARKETCAP_API_KEY` | ✅ | CMC Startup Plan key (primary coin data source) |
+| `ANTHROPIC_API_KEY` | ⚠ | Claude Haiku key — heuristic fallback if absent or disabled |
+| `BINANCE_API_KEY` | ✗ | Unlocks higher Binance rate limits |
+| `COINGECKO_API_KEY` | ✗ | CoinGecko fallback key |
+| `TELEGRAM_BOT_TOKEN` | ✗ | Bot token for signal alerts |
+| `TELEGRAM_CHAT_ID` | ✗ | Channel ID for signal alerts |
 
 ---
 
-## Database Setup
+## Local Development
 
-Apply schemas in order via Supabase SQL Editor:
+```bash
+# 1. Install dependencies
+npm install
+python -m venv .venv && .venv/Scripts/activate
+pip install -r backend/requirements.txt
 
-```sql
--- 1. Core tables (coins, scan_runs, signals)
-\i database/schema.sql
+# 2. Configure env
+cp .env.example .env.local
+# Fill in Supabase, Redis, CMC, Anthropic keys
 
--- 2. Backtest tables (backtest_runs, backtest_trades)
-\i database/backtest-schema.sql
+# 3. Apply Supabase migrations (SQL Editor)
+#    database/schema.sql
+#    database/backtest-schema.sql
+#    database/analytics-schema.sql
+#    database/admin-auth-migration.sql
+#    database/experiments-migration.sql
 
--- 3. Paper trading tables (paper_positions, paper_trades)
-\i database/paper-trading-schema.sql
-
--- 4. Analytics tables (signal_outcomes, performance_stats)
-\i database/analytics-schema.sql
+# 4. Start services (3 terminals)
+npm run dev                                                           # Terminal 1: Next.js
+uvicorn backend.main:app --reload --port 8000                        # Terminal 2: FastAPI
+celery -A backend.workers.celery_app.celery_app worker --beat -Q celery,scanner  # Terminal 3: Celery
 ```
 
-Tables created:
+---
+
+## Database Tables
 
 | Table | Purpose |
 |-------|---------|
-| `coins` | Top-100 coin metadata, refreshed each scan |
-| `scan_runs` | Audit log of every scan (mode, duration, signals found) |
 | `signals` | Trading signals with indicators, risk grade, futures data |
-| `backtest_runs` | Backtest job metadata and aggregate metrics |
-| `backtest_trades` | Individual simulated trades per backtest run |
-| `paper_positions` | Open and closed paper trading positions |
-| `paper_trades` | Resolved paper trades with PnL |
-| `signal_outcomes` | Tracked real-world outcomes for signals |
-| `performance_stats` | Aggregated analytics by symbol/mode/grade |
+| `scan_runs` | Audit log of every scan |
+| `coins` | Top-200 coin metadata |
+| `signal_outcomes` | TP/SL/timeout outcome tracking |
+| `backtest_runs` | Backtest job metadata |
+| `backtest_trades` | Individual simulated trades |
+| `performance_stats` | Aggregated analytics |
+| `settings_groups` | System settings (9 groups) |
+| `settings_experiments` | Staged experiment rollouts |
+| `admin_auth_log` | Login/logout audit log |
 
 ---
 
-## API Reference
+## API Routes
 
-### Next.js API Routes
+### Next.js (`/api/...`)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/scanner/run` | Trigger a manual scan (`{ mode }`) |
-| `GET` | `/api/signals` | Fetch signals (`?limit=50&minConfidence=75`) |
-| `GET` | `/api/coins/top100` | Fetch cached top-100 coin list |
-| `POST` | `/api/paper-trading/enter` | Open a paper position |
-| `POST` | `/api/paper-trading/exit` | Close a paper position |
-| `GET` | `/api/paper-trading/positions` | List open/closed positions |
-| `GET` | `/api/analytics/performance` | Aggregated signal analytics |
-| `POST` | `/api/backtest/run` | Run a backtest (`{ mode, lookbackDays, … }`) |
-| `GET` | `/api/backtest/results` | List recent backtest runs |
-| `GET` | `/api/backtest/[id]` | Get single backtest run + trades |
-| `GET` | `/api/backtest/compare` | Compare runs (`?ids=id1,id2,id3`) |
-| `GET` | `/api/health` | Next.js liveness probe |
+| `POST` | `/api/scanner/run` | Trigger scan (proxies to Python backend) |
+| `GET` | `/api/signals` | Fetch recent signals (last 7 days, newest first) |
+| `GET` | `/api/coins/top100` | Top 200 coins from CMC via market-data service |
+| `GET/POST` | `/api/scanner/control` | Scheduler status, start/stop/pause/resume |
+| `GET` | `/api/health` | Liveness probe |
+| `POST` | `/api/backtest/run` | Run backtest |
 
-### FastAPI Routes (port 8000)
+### FastAPI (Railway, port 8000)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/health` | FastAPI liveness probe |
-| `GET` | `/health/ready` | Readiness: Redis ping + Postgres SELECT 1 |
-| `GET` | `/api/scheduler/status` | Celery Beat scheduler state |
-| `POST` | `/api/scheduler/start` | Enable scheduled scanning |
-| `POST` | `/api/scheduler/stop` | Disable scheduled scanning |
-| `GET` | `/metrics` | Prometheus metrics endpoint |
+| `GET` | `/health` | Liveness probe |
+| `GET` | `/health/ready` | Readiness: Redis + Postgres |
+| `POST` | `/api/scanner/trigger` | Trigger on-demand scan |
+| `GET` | `/api/analytics/edge/report` | Edge report (win rate, expectancy, Sharpe) |
+| `GET` | `/api/settings/{group}` | Get settings group |
+| `PATCH` | `/api/settings/{group}` | Update settings group |
 
 ---
 
-## Architecture
+## Claude AI Credit Management
 
-```
-┌───────────────────────────────────────────────────────────────┐
-│                           Browser                              │
-│  MarketScanner · PaperTrading · Analytics · BacktestPanel     │
-└───────────────────────┬───────────────────────────────────────┘
-                        │ fetch / polling
-┌───────────────────────▼───────────────────────────────────────┐
-│                  Next.js 14  (port 3000)                       │
-│  middleware.ts  ─  request ID · security headers · CORS       │
-│                                                                │
-│  API Routes                                                    │
-│  /scanner/run  /signals  /coins/top100  /health               │
-│  /paper-trading/*  /analytics/*  /backtest/*                  │
-└──────┬────────────────┬──────────────────────────────────────-┘
-       │                │ Redis-backed cache + rate limit
-       │          ┌─────▼──────┐
-┌──────▼──────┐   │  Redis 7   │
-│  Supabase   │   │  (cache,   │
-│  PostgreSQL │   │   broker,  │
-│             │   │   locks)   │
-│  signals    │   └─────┬──────┘
-│  scan_runs  │         │
-│  coins      │  ┌──────▼────────────────────────────────────┐
-│  backtest_* │  │         FastAPI  (port 8000)               │
-│  paper_*    │  │  /health  /health/ready  /metrics          │
-│  analytics  │  │  /api/scheduler/*                          │
-└─────────────┘  └──────┬────────────────────────────────────┘
-                        │ Celery tasks
-              ┌─────────▼──────────────────────────────────┐
-              │          Celery Workers                      │
-              │                                             │
-              │  run_scheduled_scan(mode)                   │
-              │    └─ Python Core Engine                    │
-              │         backend/core/scanner/               │
-              │           indicators.py  (RSI/MACD/EMA/ATR)│
-              │           risk.py        (grade A–F)        │
-              │           market_structure.py  (7 filters)  │
-              │                                             │
-              │  monitor_paper_positions()                  │
-              └─────────────────────────────────────────────┘
-                        │
-              ┌─────────▼──────────────────────────────────┐
-              │          Celery Beat                         │
-              │  Standard scan  → every 15 min              │
-              │  High-confidence → every 30 min (offset 5)  │
-              │  Futures scan   → every 30 min (offset 10)  │
-              │  Paper monitor  → every 1 min               │
-              └─────────────────────────────────────────────┘
-```
+The Claude AI validation step can be toggled from **Admin → Calibration** without redeploying:
 
----
+- **Disable**: scans use heuristic scoring only — zero API credits consumed
+- **Enable**: Claude validates each signal that passes all 10 prior gates
+- Setting persists through worker restarts (stored in PostgreSQL via settings service)
 
-## Project Structure
-
-```
-signalEdge-ai/
-├── app/
-│   ├── api/
-│   │   ├── analytics/         # signal performance aggregation
-│   │   ├── backtest/          # run · results · [id] · compare
-│   │   ├── coins/top100/
-│   │   ├── health/            # liveness probe
-│   │   ├── paper-trading/     # enter · exit · positions
-│   │   ├── scanner/run/
-│   │   └── signals/
-│   ├── page.tsx               # public landing page
-│   ├── pricing/page.tsx       # public pricing page
-│   ├── investors/page.tsx     # public investor overview
-│   ├── about/page.tsx         # public about page
-│   ├── dashboard/page.tsx
-│   ├── layout.tsx
-│   └── globals.css
-├── backend/
-│   ├── api/
-│   │   ├── health.py          # /health + /health/ready (Redis + Postgres)
-│   │   └── scheduler.py       # /api/scheduler/* (Celery Beat control)
-│   ├── cache/
-│   │   └── redis_cache.py     # async Redis TTL cache with in-memory fallback
-│   ├── core/
-│   │   └── scanner/
-│   │       ├── models.py      # Pydantic models (Candle, TechnicalIndicators, …)
-│   │       ├── indicators.py  # RSI · MACD · EMA · ATR · volume · MTF (pandas)
-│   │       ├── risk.py        # risk scoring · grade A–F · leverage safety
-│   │       ├── market_structure.py  # 7-filter market quality gate
-│   │       └── tests/         # 98 pytest unit tests
-│   ├── database/
-│   │   └── session.py         # asyncpg pool (min=2, max=10)
-│   ├── middleware/
-│   │   ├── rate_limit.py      # slowapi Redis rate limiter
-│   │   └── request_id.py      # structlog request ID binding
-│   ├── scheduler/
-│   │   └── coordinator.py     # Redis SET NX EX distributed scan lock
-│   ├── workers/
-│   │   ├── celery_app.py      # Celery factory
-│   │   ├── beat_schedule.py   # scan + paper monitoring schedule
-│   │   └── scan_task.py       # @shared_task scan entry points
-│   ├── main.py                # FastAPI app factory + lifespan
-│   ├── Dockerfile
-│   ├── .env.example
-│   └── requirements.txt
-├── components/
-│   ├── public/
-│   │   ├── nav.tsx                   # public site navigation
-│   │   └── footer.tsx                # public site footer
-│   └── dashboard/
-│       ├── market-scanner.tsx        # root orchestrator
-│       ├── signals-feed.tsx          # signal cards + state/score/regime badges
-│       ├── paper-trading.tsx         # paper position tracker
-│       ├── performance-analytics.tsx # analytics panel
-│       ├── backtest-panel.tsx        # backtest UI
-│       └── equity-chart.tsx          # SVG equity curve
-├── lib/
-│   ├── ai-validator.ts        # Claude Haiku signal validation + regime/continuation context
-│   ├── analytics-db.ts        # analytics DB operations
-│   ├── backtest.ts            # backtesting engine
-│   ├── binance.ts             # Binance REST client (spot + futures)
-│   ├── cache.ts               # Redis-backed TTL cache
-│   ├── coingecko.ts           # CoinGecko REST client
-│   ├── continuation.ts        # analyzeContinuation() — probability, exhaustion, momentum health
-│   ├── env.ts                 # Zod environment validation
-│   ├── futures-intelligence.ts
-│   ├── indicators.ts          # TypeScript indicator suite (Next.js side)
-│   ├── institutional-score.ts # calcInstitutionalScore() — 7-component weighted composite
-│   ├── logger.ts              # pino structured logger
-│   ├── market-regime.ts       # getMarketRegime() + scoreRegimeAlignment() — BTC 4h classification
-│   ├── market-structure.ts    # 10 false-positive filters (Phase 6.1 adds 3 new filters)
-│   ├── outcome-tracker.ts     # signal outcome resolution
-│   ├── paper-trading-db.ts    # paper trading DB operations
-│   ├── paper-trading-engine.ts
-│   ├── redis.ts               # ioredis singleton (HMR-safe)
-│   ├── retry.ts               # exponential backoff + jitter
-│   ├── risk.ts                # risk engine (TypeScript)
-│   ├── scanner.ts             # full scan pipeline (11-gate waterfall)
-│   ├── signal-analytics.ts    # analytics aggregation
-│   ├── signal-state.ts        # computeSignalState() — 7-state lifecycle machine
-│   ├── supabase.ts            # database operations
-│   ├── telegram.ts            # alert formatting + delivery
-│   └── validate.ts            # Zod request validation helpers
-├── types/index.ts             # all shared TypeScript types
-├── database/
-│   ├── schema.sql
-│   ├── backtest-schema.sql
-│   ├── paper-trading-schema.sql
-│   └── analytics-schema.sql
-├── docs/
-│   ├── PRD.md
-│   └── DEPLOYMENT.md
-├── middleware.ts              # Edge: request ID · security headers · CORS
-├── pytest.ini                 # Python test runner config
-├── next.config.mjs
-├── Dockerfile                 # Next.js multi-stage build
-├── docker-compose.yml         # web · api · worker · beat · redis
-└── .env.example
-```
-
----
-
-## Docker Deployment
-
-See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the complete guide.
-
-Quick reference:
-
-```bash
-# Build and start all services
-docker compose up --build -d
-
-# Health checks
-curl http://localhost:3000/api/health        # Next.js
-curl http://localhost:8000/health/ready      # FastAPI + Redis + Postgres
-
-# View logs
-docker compose logs -f web     # Next.js
-docker compose logs -f api     # FastAPI
-docker compose logs -f worker  # Celery
-
-# Stop everything
-docker compose down
-```
-
-Services started:
-
-| Service | Port | Description |
-|---------|------|-------------|
-| `web` | 3000 | Next.js frontend + API routes |
-| `api` | 8000 | FastAPI backend (health, scheduler, metrics) |
-| `worker` | — | Celery scanner + paper trading worker |
-| `beat` | — | Celery Beat scheduler |
-| `redis` | 6379 | Redis 7 (cache, broker, distributed locks) |
-
----
-
-## Development
-
-```bash
-# Next.js
-npm run dev          # dev server with hot reload
-npm run build        # production build
-npx tsc --noEmit     # type check
-npm run lint         # ESLint
-
-# Python backend
-python -m pytest backend/core/scanner/tests/ -v   # run 98 unit tests
-uvicorn backend.main:app --reload --port 8000      # FastAPI dev server
-celery -A backend.workers.celery_app worker -l info -Q scanner,paper_trading
-```
-
----
-
-## Scan Modes
-
-| Mode | Min Market Cap | Min Volume 24h | Min Confidence | Notes |
-|------|---------------|----------------|----------------|-------|
-| `spot` | $500M | $50M | 80% | Default — broad scan |
-| `futures` | $1B | $200M | 82% | Adds funding + OI + liq zones |
-| `high_confidence` | $2B | $500M | 87% | Tightest filters, best signals |
-| `trending` | $100M | $20M | 78% | Catches momentum plays |
+Anthropic rate limits:
+- Free tier: 5 req/min → scans slow (retries add ~30s)
+- Tier 1 ($5 spend): 50 req/min → scans run at full speed
 
 ---
 

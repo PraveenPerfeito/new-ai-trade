@@ -2,29 +2,33 @@
 
 ## Project Overview
 
-AI-powered crypto trading signal scanner (public brand: **SignalEdge AI**) built with **Next.js 14 App Router** + **TypeScript** + **Python FastAPI** backend. Scans top-100 coins, applies an 11-gate quality pipeline, and surfaces high-probability trade setups via a glassmorphism admin dashboard and Telegram alerts. Includes a public SaaS website at `/`, `/pricing`, `/investors`, `/about`.
+AI-powered crypto trading signal scanner (public brand: **SignalEdge AI**) built with **Next.js 14 App Router** + **TypeScript** + **Python FastAPI** backend. Scans top-**200** coins via **CoinMarketCap** (primary), applies an 11-gate quality pipeline, and surfaces high-probability trade setups via a glassmorphism admin dashboard and Telegram alerts. Deployed on **Vercel** (Next.js) + **Railway** (FastAPI + Celery worker).
 
-**Stack:** Next.js 14 · React 18 · TypeScript · Tailwind CSS · Supabase (PostgreSQL + Auth) · @supabase/ssr · Anthropic Claude Haiku · Binance API · CoinGecko API · FastAPI · Celery · Redis · pino · zod
+**Stack:** Next.js 14 · React 18 · TypeScript · Tailwind CSS · Supabase (PostgreSQL + Auth) · @supabase/ssr · Anthropic Claude Haiku · Binance API · CoinMarketCap API · CoinGecko (fallback) · FastAPI · Celery · Upstash Redis · pino · zod
 
 ---
 
 ## Key Architecture Decisions
 
-1. **11-gate waterfall before AI**: MTF confirmation → volatility gate → trend strength → setup scoring → RR check → risk engine → futures intelligence → continuation gate → Claude Haiku. Each gate reduces expensive API calls.
-2. **`runtime = 'nodejs'`** on all API routes — Edge runtime not used (need pino + Binance TCP connections). Exception: `middleware.ts` uses Edge.
-3. **`globalThis` scheduler singleton** — survives Next.js hot-module replacement without duplicate timers.
-4. **Risk engine before AI** — rejects grade-F signals without spending Anthropic tokens.
-5. **Futures intelligence** only runs for `futures` and `high_confidence` modes.
-6. **Admin auth — two-layer protection:**
+1. **11-gate waterfall before AI**: MTF(1h+4h+1d) → volatility → trend strength → setup score → RR check → risk engine → futures intelligence → continuation gate → Claude Haiku. Each gate reduces expensive API calls.
+2. **CoinMarketCap primary** — 200 coins in a single API call. CoinGecko is fallback only.
+3. **Python scanner is the primary scanner** — `backend/core/scanner/`. The TypeScript `lib/scanner.ts` exists but `/api/scanner/run` now proxies to the Python backend's `/api/scanner/trigger`.
+4. **`runtime = 'nodejs'`** on all API routes — Edge runtime not used. Exception: `middleware.ts`.
+5. **`globalThis` scheduler singleton** — survives Next.js HMR without duplicate timers.
+6. **Risk engine before AI** — rejects grade-F signals without spending Anthropic tokens.
+7. **AI toggle** — `AISettings.enabled` in system settings; checked by `ai_validator.py` before each Claude call. Toggle from Admin → Calibration page without redeploying.
+8. **Futures intelligence** only runs for `futures` and `high_confidence` modes.
+9. **Admin auth — two-layer:**
    - Layer 1: `middleware.ts` (Edge) — Supabase session validation + email allowlist
-   - Layer 2: `AdminAuthMiddleware` (FastAPI) — shared `X-Admin-Secret` header from Next.js proxy
-7. **Settings system — 3-layer cache**: 30s in-process dict → 1h Redis → PostgreSQL (source of truth). Generation counter + Redis pub/sub propagates changes to all workers within ≤ 5 s.
-8. **Safety layer** — `backend/system_settings/safety.py` runs before every `patch_group()` write: Tier 1 hard caps block saves, Tier 2 semantic rules return warnings.
-9. **Experiments** — layered on top of base settings; active experiments are resolved per-request in `SettingsService.get_group()` using context matching and rollout %.
-10. **BTC regime cache** — `lib/market-regime.ts` fetches BTC 4h candles once per `runScan()` call, classifies BULL_TREND/BEAR_TREND/SIDEWAYS/HIGH_VOLATILITY/EUPHORIA/CAPITULATION, caches 5 min module-level, falls back to SIDEWAYS neutral on error.
-11. **Continuation gate before AI** — `analyzeContinuation()` runs after risk engine; setups with continuationProbability < 25 are rejected without spending AI tokens.
-12. **Institutional score replaces confidence-only ranking** — `calcInstitutionalScore()` weighted composite: AI 25% + grade 20% + trend 20% + quality 15% + vol 10% + RR 5% + futures 5%, then ±regimeAlignmentScore flat adjustment, clamped [0, 100].
-13. **Signal lifecycle states** — `computeSignalState()` produces DEVELOPING/CONFIRMED/EXTENDED/COOLING/CORRECTING/INVALIDATED/EXPIRED from a deterministic indicator snapshot decision tree.
+   - Layer 2: `AdminAuthMiddleware` (FastAPI) — shared `X-Admin-Secret` header from proxy
+10. **Settings — 3-layer cache**: 30s in-process dict → 1h Redis → PostgreSQL. Redis pub/sub propagates changes to workers within ≤ 5s.
+11. **Safety layer** — `backend/system_settings/safety.py` runs before every `patch_group()` write.
+12. **BTC regime cache** — `lib/market-regime.ts` classifies BULL_TREND/BEAR_TREND/SIDEWAYS/HIGH_VOLATILITY/EUPHORIA/CAPITULATION, 5-min module cache.
+13. **Continuation gate before AI** — continuationProbability < 25 rejects without AI tokens.
+14. **Institutional score** — `calcInstitutionalScore()`: AI 25% + grade 20% + trend 20% + quality 15% + vol 10% + RR 5% + futures 5% ± regimeAlignment, clamped [0, 100].
+15. **Signal lifecycle** — `computeSignalState()` → DEVELOPING/CONFIRMED/EXTENDED/COOLING/CORRECTING/INVALIDATED/EXPIRED.
+16. **Health server in Celery worker** — `backend/workers/health_server.py` starts HTTP server on `$PORT` at `worker_ready` signal so Railway health checks pass.
+17. **Scan Now routes to Python backend** — `app/api/scanner/run/route.ts` proxies to `${BACKEND_URL}/api/scanner/trigger` (not TypeScript scanner).
 
 ---
 
@@ -32,84 +36,60 @@ AI-powered crypto trading signal scanner (public brand: **SignalEdge AI**) built
 
 ```
 lib/
-  scanner.ts            ← main pipeline; exports detectSetup(), tradeLevels(), scanCoin(), runScan()
-  scheduler.ts          ← auto-scan scheduler with distributed lock (in-memory)
-  indicators.ts         ← RSI, MACD, EMA, ATR, volume spike, trend strength
+  scanner.ts            ← TypeScript scanner (legacy — Scan Now button now proxies to Python backend)
+  coingecko.ts          ← delegates to MarketDataService; CMC primary, CoinGecko fallback
+  market-data/
+    manager.ts          ← ProviderManager; CMC priority 1, CoinGecko priority 2
+    service.ts          ← MarketDataService singleton
+    providers/          ← coinmarketcap.ts · coingecko.ts · binance.ts · dexscreener.ts
+  indicators.ts         ← RSI, MACD, EMA, ATR, volume spike, trend strength (TypeScript)
   risk.ts               ← risk score, quality score, grade A-F, leverage tiers
-  futures-intelligence.ts ← funding rate, OI, L/S ratio, liq zones, breakout, momentum
-  ai-validator.ts       ← Claude Haiku validation + heuristic fallback; accepts continuation + regime context
-  market-regime.ts      ← getMarketRegime() — BTC 4h regime (BULL_TREND/BEAR_TREND/SIDEWAYS/HIGH_VOLATILITY/EUPHORIA/CAPITULATION); 5-min module cache; scoreRegimeAlignment()
-  continuation.ts       ← analyzeContinuation() — probability 10–95, exhaustionRisk, momentumHealth
-  signal-state.ts       ← computeSignalState() — 7-state lifecycle (DEVELOPING→CONFIRMED→EXTENDED→COOLING→CORRECTING→INVALIDATED→EXPIRED)
-  institutional-score.ts ← calcInstitutionalScore() — weighted 7-component composite (0–100) + regime flat adjustment
-  market-structure.ts   ← 10 false-positive filters incl. fake breakout, euphoric spike, momentum decline (Phase 6.1)
+  ai-validator.ts       ← Claude Haiku validation + heuristic fallback
+  market-regime.ts      ← getMarketRegime() — BTC 4h regime; 5-min module cache
+  continuation.ts       ← analyzeContinuation() — probability 10–95
+  signal-state.ts       ← computeSignalState() — 7-state lifecycle
+  institutional-score.ts← calcInstitutionalScore() — 7-component weighted composite
+  market-structure.ts   ← 10 false-positive filters
   binance.ts            ← spot + futures klines, funding, OI, L/S; withApiRetry wrapped
-  coingecko.ts          ← top-100 market data; withApiRetry wrapped
-  supabase.ts           ← all DB operations (signals, scan runs, coins, backtest)
-  telegram.ts           ← signal alert + daily summary formatting
-  logger.ts             ← pino child loggers — use createLogger('module-name')
-  env.ts                ← Zod env validation — use getEnv() or env proxy
-  cache.ts              ← TTL cache; shared instances: coinsCache, signalsCache, etc.
-  retry.ts              ← withRetry(), withApiRetry() with exponential backoff
-  validate.ts           ← parseQuery(), parseBody() + shared Zod schemas
-  backtest.ts           ← historical candle replay engine
+  supabase.ts           ← DB ops; getRecentSignals() orders by created_at DESC (last 7 days)
   admin-api.ts          ← typed fetch client for the Python backend (/api/admin/* proxy)
-  auth-audit.ts         ← logAuthEvent() — writes login/logout/failed events to Supabase
 
-lib/supabase/
-  server.ts             ← createSupabaseServerClient() — cookie-based, for Server Components
-  client.ts             ← createSupabaseBrowserClient() — singleton, for Client Components
-  admin.ts              ← createSupabaseAdminClient() — service role, server-only
+backend/core/scanner/   ← PRIMARY scanner (Python) — all new features here
+  models.py             ← Pydantic models; TechnicalIndicators has ema200, bb, candle_pattern, ema_cross
+  indicators.py         ← RSI·MACD·EMA20/50/200·ATR·BB·volume·ADX·candlestick·EMA crossover
+  market_structure.py   ← 7-filter market quality gate
+  signal_pipeline.py    ← detect_setup() scores EMA200/BB/daily/patterns/crossover/rel-strength
+  orchestrator.py       ← run_scan(); CMC 200 coins; 3 timeframes (1h+4h+1d); btc_change_24h
+  market_fetcher.py     ← _fetch_cmc() primary; _fetch_coingecko() fallback
+  ai_validator.py       ← checks AISettings.enabled before calling Claude; semaphore(3)
+  risk.py               ← grade A–F; quality score; leverage tiers
+  futures_intelligence.py← funding rate, OI, L/S ratio, liq zones
+
+backend/workers/
+  celery_app.py         ← Celery factory + worker_ready signal starts health server
+  health_server.py      ← HTTP server on $PORT — Railway health check target
+  scan_task.py          ← @shared_task run_scheduled_scan + check_signal_outcomes
+  beat_schedule.py      ← standard/high_confidence/futures + outcome tracker schedules
+
+backend/system_settings/
+  groups.py             ← Pydantic v2 models; AISettings.enabled toggles Claude calls
+  service.py            ← SettingsService — 3-layer cache, patch_group()
+  safety.py             ← SAFETY_CAPS + semantic rules
+  propagation.py        ← PropagationListener + CeleryConfigWatcher
 
 app/api/
   admin/[...path]/      ← proxy to Python FastAPI; injects X-Admin-Secret header
-  auth/signout/         ← POST — clears session cookies + writes audit log
-  scanner/run/          ← POST — manual scan trigger (protected by middleware)
-  signals/              ← GET — fetch recent signals (API-key auth)
-  health/               ← GET — liveness probe (public)
-  scheduler/            ← status · start · stop (protected)
-  backtest/             ← run · results · [id] · compare (protected)
+  scanner/run/          ← POST — proxies to Python backend /api/scanner/trigger
+  signals/              ← GET — recent signals (last 7 days, newest first)
 
-app/
-  page.tsx              ← public landing page (SignalEdge AI homepage)
-  pricing/page.tsx      ← public pricing page — Free / Pro / Institutional tiers
-  investors/page.tsx    ← public investor overview page
-  about/page.tsx        ← public about / mission page
-  login/page.tsx        ← email + password login; terminal glassmorphism theme
-  auth/callback/        ← PKCE code exchange (magic-link / OAuth flows)
-  actions/auth.ts       ← Server Actions: recordLoginEvent() for client-side login form
-  admin/layout.tsx      ← async Server Component; secondary auth check; passes user to topbar
+app/admin/
+  calibration/page.tsx  ← Claude AI on/off toggle + verdict distribution + confidence bands
+  signals/page.tsx      ← signal feed; guards edge.overall and edge.edge_verdict
+  analytics/page.tsx    ← edge validation + attribution tabs
 
-components/public/
-  nav.tsx               ← public site top navigation
-  footer.tsx            ← public site footer
-
-components/admin/
-  topbar.tsx            ← receives email + lastSignIn props; renders SessionBadge
-  session-badge.tsx     ← user identity display + sign-out button
-  sidebar.tsx           ← navigation
-
-components/dashboard/
-  market-scanner.tsx    ← root orchestrator; polling + state
-  signals-feed.tsx      ← signal cards with risk grade, futures badges, signal state badge, institutional score bar, continuation probability, regime badge
-
-middleware.ts           ← Edge: Supabase auth gate, email allowlist, security headers, CORS
-
-backend/system_settings/
-  groups.py             ← Pydantic v2 group models (9 groups) with Field bounds
-  service.py            ← SettingsService — 3-layer cache, patch_group(), experiments
-  safety.py             ← check_safety() — SAFETY_CAPS + 5 semantic rule functions
-  experiments.py        ← ExperimentService — staged rollouts, dry-run, context filter
-  propagation.py        ← PropagationListener (FastAPI async) + CeleryConfigWatcher (sync)
-
-backend/middleware/
-  admin_auth.py         ← validates X-Admin-Secret header on all non-public FastAPI routes
-  rate_limit.py         ← slowapi rate limiter
-  request_id.py         ← per-request UUID stamping
-
+Dockerfile              ← python:3.12-slim + gcc + pip --prefer-binary (prevents 1hr numpy compile)
 database/
-  experiments-migration.sql   ← settings_experiments table
-  admin-auth-migration.sql    ← admin_auth_log table + RLS deny policy
+  analytics-schema.sql  ← signal_outcomes with partial index for PENDING resolution query
 ```
 
 ---
