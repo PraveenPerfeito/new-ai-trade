@@ -17,28 +17,29 @@ import {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const GROUP_LABELS: Record<string, string> = {
-  scanner:       'Scanner',
-  signals:       'Signal Thresholds',
-  ai:            'AI',
-  telegram:      'Telegram',
-  risk:          'Risk',
-  paper_trading: 'Paper Trading',
-  anomaly:       'Anomaly Detection',
-  features:      'Feature Flags',
-  infra:         'Infrastructure',
+  scanner:  'Scanner',
+  signals:  'Signal Thresholds',
+  ai:       'AI',
+  telegram: 'Telegram',
+  risk:     'Risk',
+  anomaly:  'Anomaly Detection',
+  features: 'Feature Flags',
+  infra:    'Infrastructure',
 }
 
 const GROUP_DESCRIPTIONS: Record<string, string> = {
-  scanner:       'Scan cadence, coin limits, and confidence thresholds',
-  signals:       'Minimum quality bar for signals to pass the pipeline',
-  ai:            'Claude Haiku validation model and API parameters',
-  telegram:      'Alert delivery and daily summary configuration',
-  risk:          'Grade filters, leverage caps, and portfolio risk limits',
-  paper_trading: 'Virtual portfolio simulation parameters',
-  anomaly:       'Burn-in health check thresholds and alert levels',
-  features:      'Enable or disable major system capabilities',
-  infra:         'Infrastructure limits, pool sizes, and cache TTLs',
+  scanner:  'Scan cadence, coin limits, and confidence thresholds',
+  signals:  'Minimum quality bar for signals to pass the pipeline',
+  ai:       'Claude Haiku validation model and API parameters — toggle on/off from Calibration page',
+  telegram: 'Alert delivery and daily summary configuration',
+  risk:     'Grade filters, leverage caps, and portfolio risk limits',
+  anomaly:  'Burn-in health check thresholds and alert levels',
+  features: 'Enable or disable major system capabilities',
+  infra:    'Infrastructure limits, pool sizes, and cache TTLs',
 }
+
+// Groups to hide from the UI (removed features)
+const HIDDEN_GROUPS = new Set(['paper_trading'])
 
 // ── Operating Modes ───────────────────────────────────────────────────────────
 
@@ -568,7 +569,7 @@ export default function SettingsPage() {
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
-  const tabs   = [...Object.keys(settings), 'audit']
+  const tabs   = [...Object.keys(settings).filter(g => !HIDDEN_GROUPS.has(g)), 'audit']
   const group  = settings[activeTab] as SettingsGroupResponse | undefined
   const fields = group?.fields ?? []
   const meta   = group?.meta

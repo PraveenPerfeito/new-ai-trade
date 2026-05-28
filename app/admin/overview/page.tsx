@@ -118,7 +118,7 @@ export default function CommandOverviewPage() {
   const activeSignals  = signals.filter(s => s.lifecycleStage === 'ACTIVE').length
   const approvedSignals = signals.filter(s => ['AI_APPROVED', 'TELEGRAM_SENT', 'ACTIVE'].includes(s.lifecycleStage)).length
   const freshGroups    = cache ? cache.groups.filter(g => !g.isStale).length : null
-  const quotaPct       = cache ? Math.round(cache.quota.pctUsed) : null
+  const quotaPct       = cache?.quota?.pctUsed != null ? Math.round(cache.quota.pctUsed) : null
 
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
@@ -294,7 +294,7 @@ export default function CommandOverviewPage() {
                     <td className="px-4 py-2 text-right text-xs font-mono text-zinc-300">{sig.confidence}%</td>
                     <td className="px-4 py-2 text-right text-xs font-mono text-zinc-300">{sig.rrRatio.toFixed(1)}</td>
                     <td className="px-4 py-2 text-right text-xs text-zinc-600 tabular-nums">
-                      {timeAgo(new Date(sig.createdAt).getTime())}
+                      {sig.createdAt ? timeAgo(new Date(sig.createdAt).getTime()) : '—'}
                     </td>
                   </tr>
                 ))}

@@ -201,7 +201,7 @@ export default function MarketIntelligencePage() {
           {/* Market Breadth */}
           {data.listings && (
             <div>
-              <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-3">Market Breadth (Top 100)</h2>
+              <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-3">Market Breadth (Top 200 via CMC)</h2>
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
                 <div className="flex items-center gap-6 mb-3">
                   <div>
