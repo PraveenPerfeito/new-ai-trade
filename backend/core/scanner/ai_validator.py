@@ -28,6 +28,17 @@ log = get_logger(__name__)
 
 _client: anthropic.Anthropic | None = None
 
+# Limit concurrent Claude calls to 3 — prevents burst-rate-limit errors when
+# multiple coins pass all gates simultaneously and hit AI validation at once.
+_ai_semaphore: asyncio.Semaphore | None = None
+
+
+def _get_semaphore() -> asyncio.Semaphore:
+    global _ai_semaphore
+    if _ai_semaphore is None:
+        _ai_semaphore = asyncio.Semaphore(3)
+    return _ai_semaphore
+
 
 def _get_client() -> anthropic.Anthropic | None:
     key = get_settings().anthropic_api_key
@@ -62,19 +73,19 @@ async def validate_signal(
     t0 = time.perf_counter()
 
     try:
-        # Run the synchronous Anthropic SDK call in a thread so the event loop
-        # stays free during the network round-trip. asyncio.wait_for enforces
-        # a hard ceiling so a slow/hung API call cannot stall the whole scanner.
-        msg = await asyncio.wait_for(
-            asyncio.to_thread(
-                client.messages.create,
-                model="claude-haiku-4-5-20251001",
-                max_tokens=768,
-                messages=[{"role": "user", "content": prompt}],
-                timeout=15.0,
-            ),
-            timeout=20.0,
-        )
+        # Limit concurrent AI calls to 3 — prevents burst-rate-limit 429s when
+        # multiple coins hit the AI gate simultaneously.
+        async with _get_semaphore():
+            msg = await asyncio.wait_for(
+                asyncio.to_thread(
+                    client.messages.create,
+                    model="claude-haiku-4-5",
+                    max_tokens=768,
+                    messages=[{"role": "user", "content": prompt}],
+                    timeout=15.0,
+                ),
+                timeout=20.0,
+            )
         elapsed    = time.perf_counter() - t0
         latency_ms = int(elapsed * 1000)
         ai_validation_duration_seconds.observe(elapsed)
@@ -105,7 +116,7 @@ async def validate_signal(
             ai_confidence_histogram.observe(confidence)
 
         _record(
-            signal.id, "claude-haiku-4-5-20251001", latency_ms, confidence, validated,
+            signal.id, "claude-haiku-4-5", latency_ms, confidence, validated,
             prompt_tokens=msg.usage.input_tokens if msg.usage else None,
             completion_tokens=msg.usage.output_tokens if msg.usage else None,
         )
@@ -123,14 +134,14 @@ async def validate_signal(
         log.warning("ai_json_parse_failed")
         ai_validation_total.labels(outcome="error").inc()
         result = _heuristic(signal, ind4h, trend_strength, volatility)
-        _record(signal.id, "claude-haiku-4-5-20251001", int((time.perf_counter() - t0) * 1000),
+        _record(signal.id, "claude-haiku-4-5", int((time.perf_counter() - t0) * 1000),
                 result.confidence, result.validated, error="json_parse_failed")
         return result
     except Exception as exc:
         log.warning("ai_api_failed", error=str(exc))
         ai_validation_total.labels(outcome="fallback").inc()
         result = _heuristic(signal, ind4h, trend_strength, volatility)
-        _record(signal.id, "claude-haiku-4-5-20251001", int((time.perf_counter() - t0) * 1000),
+        _record(signal.id, "claude-haiku-4-5", int((time.perf_counter() - t0) * 1000),
                 result.confidence, result.validated, used_fallback=True, error=str(exc))
         return result
 
