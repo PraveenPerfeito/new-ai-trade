@@ -91,13 +91,19 @@ export async function saveSignal(signal: TradingSignal): Promise<string | null> 
   return data.id as string;
 }
 
-export async function getRecentSignals(limit = 50, minConfidence = 70): Promise<TradingSignal[]> {
+export async function getRecentSignals(
+  limit = 50,
+  minConfidence = 70,
+  windowDays = 7,
+): Promise<TradingSignal[]> {
+  const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await db()
     .from('signals')
     .select('*')
     .gte('confidence', minConfidence)
-    .order('confidence', { ascending: false })
-    .order('created_at', { ascending: false })
+    .gte('created_at', cutoff)
+    .order('created_at', { ascending: false })   // newest first
+    .order('confidence', { ascending: false })   // then by quality
     .limit(limit);
 
   if (error) { console.error('[DB] getRecentSignals:', error.message); return []; }
