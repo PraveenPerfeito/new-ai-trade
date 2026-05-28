@@ -89,6 +89,8 @@ def detect_setup(
     strength_1h: float,
     strength_4h: float,
     ind1d: TechnicalIndicators | None = None,
+    coin_change_24h: float = 0.0,
+    btc_change_24h: float = 0.0,
 ) -> SetupResult:
     """
     Pre-AI setup quality score. Threshold 60 (was 65 — lowered to catch more signals).
@@ -213,8 +215,50 @@ def detect_setup(
         elif signal_type == SignalType.SELL and pat in BUY_PATTERNS:
             score -= 10
 
+    # ── EMA crossover freshness (+12) ─────────────────────────────────────────
+    # Fresh EMA20/50 cross (within last 5 candles) = new momentum, not extended
+    cross_1h = ind1h.ema_cross
+    cross_4h = ind4h.ema_cross
+    if signal_type == SignalType.BUY:
+        if cross_4h == "GOLDEN_CROSS":
+            score += 12
+            reasons.append("Fresh 4h golden cross — EMA20 just crossed above EMA50")
+        elif cross_1h == "GOLDEN_CROSS":
+            score += 8
+            reasons.append("Fresh 1h golden cross — new bullish momentum")
+        elif cross_4h == "DEATH_CROSS" or cross_1h == "DEATH_CROSS":
+            score -= 8  # buying into a fresh death cross = counter-trend
+    else:
+        if cross_4h == "DEATH_CROSS":
+            score += 12
+            reasons.append("Fresh 4h death cross — EMA20 just crossed below EMA50")
+        elif cross_1h == "DEATH_CROSS":
+            score += 8
+            reasons.append("Fresh 1h death cross — new bearish momentum")
+        elif cross_4h == "GOLDEN_CROSS" or cross_1h == "GOLDEN_CROSS":
+            score -= 8  # shorting into a fresh golden cross = counter-trend
+
+    # ── Relative strength vs BTC (+10) ────────────────────────────────────────
+    # Coin outperforming BTC in the last 24h = market leadership = stronger signal
+    if coin_change_24h != 0.0:
+        rel_strength = coin_change_24h - btc_change_24h
+        if signal_type == SignalType.BUY and rel_strength >= 3.0:
+            score += 10
+            reasons.append(
+                f"Leading BTC by {rel_strength:.1f}% (coin +{coin_change_24h:.1f}% vs BTC "
+                f"{'+' if btc_change_24h >= 0 else ''}{btc_change_24h:.1f}%)"
+            )
+        elif signal_type == SignalType.BUY and rel_strength <= -5.0:
+            score -= 8   # significant underperformance on a buy signal = weak
+            reasons.append(f"Lagging BTC by {abs(rel_strength):.1f}% — weak relative strength")
+        elif signal_type == SignalType.SELL and rel_strength <= -3.0:
+            score += 10
+            reasons.append(
+                f"Underperforming BTC by {abs(rel_strength):.1f}% — relative weakness on SELL"
+            )
+
     return SetupResult(
-        has_setup=score >= 60,   # lowered from 65 — catches more quality setups
+        has_setup=score >= 60,
         description=". ".join(reasons),
         pre_score=score,
     )
@@ -256,6 +300,7 @@ async def scan_coin(
     coin: CoinData,
     mode: ScannerMode,
     config: ScannerConfig,
+    btc_change_24h: float = 0.0,
 ) -> Signal | None:
     """
     Full 10-step pipeline for one coin.
@@ -319,8 +364,12 @@ async def scan_coin(
             log.info("rejected_market_structure", symbol=coin.symbol, reason=structure.rejection_reason)
             return None
 
-        # Step 7: Setup scoring (now includes daily, EMA200, BB, candle patterns)
-        setup = detect_setup(ind1h, ind4h, signal_type, s1h, s4h, ind1d)
+        # Step 7: Setup scoring (daily, EMA200, BB, candle patterns, EMA cross, rel strength)
+        setup = detect_setup(
+            ind1h, ind4h, signal_type, s1h, s4h, ind1d,
+            coin_change_24h=coin.price_change_24h,
+            btc_change_24h=btc_change_24h,
+        )
         if not setup.has_setup:
             gate_rejections_total.labels(gate="setup_score").inc()
             return None

@@ -99,6 +99,7 @@ class TechnicalIndicators(BaseModel):
     current_price:  float
     trend:          TrendDirection
     candle_pattern: str = ""  # detected pattern: HAMMER, SHOOTING_STAR, MORNING_STAR, etc.
+    ema_cross:      str = ""  # GOLDEN_CROSS | DEATH_CROSS | "" (fresh cross within last 5 candles)
 
 
 class MultiTimeframeResult(BaseModel):

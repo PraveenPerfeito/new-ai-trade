@@ -200,6 +200,11 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
 
         log.info("coins_fetched", count=len(all_coins), mode=mode.value)
 
+        # Extract BTC 24h change for relative-strength scoring
+        btc_change_24h = next(
+            (c.price_change_24h for c in all_coins if c.symbol == "BTC"), 0.0
+        )
+
         # 2. Filter + prioritize
         filtered = _filter_coins(all_coins, config, futures_syms, mode)
         log.info("coins_filtered", count=len(filtered), mode=mode.value)
@@ -216,7 +221,7 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
         errors = 0
 
         async def _scan_one(coin: CoinData) -> Signal | None:
-            return await scan_coin(coin, mode, config)
+            return await scan_coin(coin, mode, config, btc_change_24h=btc_change_24h)
 
         results = await gather_with_concurrency(
             filtered,

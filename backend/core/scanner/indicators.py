@@ -151,6 +151,39 @@ def calc_volume_spike(candles: list[Candle], period: int = 20) -> float:
     return float(min(10.0, volumes.iloc[-1] / avg_vol))
 
 
+# ── EMA crossover freshness ───────────────────────────────────────────────────
+
+def detect_ema_crossover(
+    candles: list[Candle],
+    fast: int = 20,
+    slow: int = 50,
+    lookback: int = 5,
+) -> str:
+    """
+    Returns 'GOLDEN_CROSS' if EMA-fast crossed above EMA-slow within the last
+    `lookback` candles, 'DEATH_CROSS' if it crossed below, or '' if no recent cross.
+
+    A fresh cross (happened today) is far more powerful than a stale one (happened
+    2 weeks ago) — this lets the setup scorer reward fresh momentum.
+    """
+    closes = pd.Series([c.close for c in candles], dtype=float)
+    if len(closes) < slow + lookback + 2:
+        return ""
+
+    ema_fast = closes.ewm(span=fast, adjust=False).mean()
+    ema_slow = closes.ewm(span=slow, adjust=False).mean()
+
+    for i in range(-(lookback + 1), -1):
+        pf, ps = float(ema_fast.iloc[i - 1]), float(ema_slow.iloc[i - 1])
+        cf, cs = float(ema_fast.iloc[i]),     float(ema_slow.iloc[i])
+        if pf <= ps and cf > cs:
+            return "GOLDEN_CROSS"
+        if pf >= ps and cf < cs:
+            return "DEATH_CROSS"
+
+    return ""
+
+
 # ── Bollinger Bands ───────────────────────────────────────────────────────────
 
 def calc_bollinger_bands(candles: list[Candle], period: int = 20, std_dev: float = 2.0) -> BollingerBands:
@@ -306,6 +339,7 @@ def calculate_all_indicators(candles: list[Candle]) -> TechnicalIndicators:
     volume_spike = calc_volume_spike(candles)
     bb           = calc_bollinger_bands(candles)
     pattern      = detect_candlestick_pattern(candles)
+    ema_cross    = detect_ema_crossover(candles)
 
     if ema20 > ema50 and current_price > ema20:
         trend = TrendDirection.BULLISH
@@ -326,6 +360,7 @@ def calculate_all_indicators(candles: list[Candle]) -> TechnicalIndicators:
         current_price  = current_price,
         trend          = trend,
         candle_pattern = pattern,
+        ema_cross      = ema_cross,
     )
 
 
