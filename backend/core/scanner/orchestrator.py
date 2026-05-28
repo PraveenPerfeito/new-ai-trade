@@ -61,10 +61,15 @@ _PRIORITY = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "ADA", "AVAX", "LINK", "
 # Stablecoins and pegged tokens — CoinGecko top-100 includes these but Binance
 # returns 400 for USDTUSDT etc. and they have no tradeable signal anyway.
 _SKIP_SYMBOLS = frozenset({
+    # Stablecoins — no tradeable signal, Binance returns 400 for *USDT pairs
     "USDT", "USDC", "DAI", "BUSD", "TUSD", "USDP", "GUSD", "FRAX",
     "USDD", "FDUSD", "PYUSD", "USDG", "RLSD", "USDE", "USD1", "RLUSD",
-    "WBT",  # Wrapped Bitcoin (not a Binance spot pair)
-    "VVV", "MNT",  # tokens not listed on Binance spot
+    # Wrapped / synthetic tokens not on Binance spot
+    "WBT", "WBTC",
+    # Tokens not listed on Binance spot (400 Bad Request confirmed in logs)
+    "VVV", "MNT", "HYPE", "OKB", "H", "HUSDT",
+    # Other known non-Binance-spot tokens
+    "FF", "GENIUS",
 })
 
 
