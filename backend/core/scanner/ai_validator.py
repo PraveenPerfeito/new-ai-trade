@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 
 import anthropic
@@ -79,6 +80,11 @@ async def validate_signal(
         ai_validation_duration_seconds.observe(elapsed)
 
         text = msg.content[0].text.strip() if msg.content[0].type == "text" else ""
+        # Claude sometimes wraps JSON in markdown fences (```json ... ```)
+        # despite the prompt instruction — strip them before parsing.
+        if text.startswith("```"):
+            m = re.search(r'\{.*\}', text, re.DOTALL)
+            text = m.group() if m else text
         parsed     = json.loads(text)
         confidence = _clamp(float(parsed.get("confidence") or 0), 0, 100)
 

@@ -58,6 +58,15 @@ PROGRESS_TTL   = 3600  # Redis key TTL for progress tracking
 
 _PRIORITY = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "ADA", "AVAX", "LINK", "SUI"]
 
+# Stablecoins and pegged tokens — CoinGecko top-100 includes these but Binance
+# returns 400 for USDTUSDT etc. and they have no tradeable signal anyway.
+_SKIP_SYMBOLS = frozenset({
+    "USDT", "USDC", "DAI", "BUSD", "TUSD", "USDP", "GUSD", "FRAX",
+    "USDD", "FDUSD", "PYUSD", "USDG", "RLSD", "USDE", "USD1", "RLUSD",
+    "WBT",  # Wrapped Bitcoin (not a Binance spot pair)
+    "VVV", "MNT",  # tokens not listed on Binance spot
+})
+
 
 # ── Progress helpers ──────────────────────────────────────────────────────────
 
@@ -119,7 +128,8 @@ def _filter_coins(
     result = [
         c for c in coins
         if (
-            c.volume_24h >= config.min_volume_24h
+            c.symbol.upper() not in _SKIP_SYMBOLS
+            and c.volume_24h >= config.min_volume_24h
             and c.market_cap >= config.min_market_cap
             and c.market_cap > 0
             and (c.volume_24h / c.market_cap) >= 0.005
