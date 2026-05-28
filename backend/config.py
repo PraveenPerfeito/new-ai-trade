@@ -48,7 +48,10 @@ class Settings(BaseSettings):
     binance_api_key: str = ""
     binance_secret_key: str = ""
 
-    # ── CoinGecko ─────────────────────────────────────────────────────────────
+    # ── CoinMarketCap ─────────────────────────────────────────────────────────
+    coinmarketcap_api_key: str = ""
+
+    # ── CoinGecko (fallback) ──────────────────────────────────────────────────
     coingecko_api_key: str = ""
 
     # ── Telegram ─────────────────────────────────────────────────────────────

@@ -39,11 +39,11 @@ log = get_logger(__name__)
 
 CONFIGS: dict[ScannerMode, ScannerConfig] = {
     ScannerMode.SPOT: ScannerConfig(
-        min_market_cap=500_000_000,
-        min_volume_24h=50_000_000,
+        min_market_cap=200_000_000,   # lowered from 500M — CMC gives 200 coins so rank 100-200 now included
+        min_volume_24h=20_000_000,    # lowered from 50M
         min_rr_ratio=2.0,
         min_confidence=80,
-        max_coins_to_scan=50,
+        max_coins_to_scan=80,         # up from 50
         scanner_mode=ScannerMode.SPOT,
     ),
     ScannerMode.FUTURES: ScannerConfig(
@@ -51,7 +51,7 @@ CONFIGS: dict[ScannerMode, ScannerConfig] = {
         min_volume_24h=200_000_000,
         min_rr_ratio=2.0,
         min_confidence=82,
-        max_coins_to_scan=40,
+        max_coins_to_scan=50,         # up from 40
         scanner_mode=ScannerMode.FUTURES,
     ),
     ScannerMode.HIGH_CONFIDENCE: ScannerConfig(
@@ -63,11 +63,11 @@ CONFIGS: dict[ScannerMode, ScannerConfig] = {
         scanner_mode=ScannerMode.HIGH_CONFIDENCE,
     ),
     ScannerMode.TRENDING: ScannerConfig(
-        min_market_cap=100_000_000,
-        min_volume_24h=20_000_000,
+        min_market_cap=50_000_000,    # lowered from 100M — catches emerging coins
+        min_volume_24h=10_000_000,    # lowered from 20M
         min_rr_ratio=2.0,
         min_confidence=78,
-        max_coins_to_scan=60,
+        max_coins_to_scan=80,         # up from 60
         scanner_mode=ScannerMode.TRENDING,
     ),
 }

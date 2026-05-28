@@ -259,40 +259,62 @@ async def fetch_long_short_ratio(symbol: str, period: str = "1h", limit: int = 4
         return []
 
 
-# ── CoinGecko top-100 ─────────────────────────────────────────────────────────
+# ── CoinMarketCap — primary coin source ───────────────────────────────────────
 
-BINANCE_SYMBOL_MAP: dict[str, str] = {
-    "bitcoin": "BTCUSDT", "ethereum": "ETHUSDT", "solana": "SOLUSDT",
-    "binancecoin": "BNBUSDT", "ripple": "XRPUSDT", "dogecoin": "DOGEUSDT",
-    "cardano": "ADAUSDT", "avalanche-2": "AVAXUSDT", "chainlink": "LINKUSDT",
-    "sui": "SUIUSDT", "polkadot": "DOTUSDT", "shiba-inu": "SHIBUSDT",
-    "tron": "TRXUSDT", "litecoin": "LTCUSDT", "matic-network": "MATICUSDT",
-    "internet-computer": "ICPUSDT", "bitcoin-cash": "BCHUSDT", "near": "NEARUSDT",
-    "uniswap": "UNIUSDT", "aptos": "APTUSDT", "stellar": "XLMUSDT",
-    "monero": "XMRUSDT", "ethereum-classic": "ETCUSDT", "cosmos": "ATOMUSDT",
-    "filecoin": "FILUSDT", "hedera-hashgraph": "HBARUSDT", "arbitrum": "ARBUSDT",
-    "optimism": "OPUSDT", "injective-protocol": "INJUSDT", "sei-network": "SEIUSDT",
-    "the-graph": "GRTUSDT", "fetch-ai": "FETUSDT", "render-token": "RENDERUSDT",
-    "algorand": "ALGOUSDT", "sandbox": "SANDUSDT", "decentraland": "MANAUSDT",
-    "axie-infinity": "AXSUSDT", "flow": "FLOWUSDT", "immutable-x": "IMXUSDT",
-    "pepe": "PEPEUSDT", "floki": "FLOKIUSDT", "dogwifcoin": "WIFUSDT",
-    "kaspa": "KASUSDT", "thorchain": "RUNEUSDT", "pendle": "PENDLEUSDT",
-    "toncoin": "TONUSDT", "notcoin": "NOTUSDT", "ethena": "ENAUSDT",
-    "starknet": "STRKUSDT", "dydx-chain": "DYDXUSDT", "aave": "AAVEUSDT",
-    "maker": "MKRUSDT", "curve-dao-token": "CRVUSDT", "fantom": "FTMUSDT",
-    "eos": "EOSUSDT", "vechain": "VETUSDT", "theta-token": "THETAUSDT",
-    "gala": "GALAUSDT", "worldcoin-wld": "WLDUSDT", "celestia": "TIAUSDT",
-    "pyth-network": "PYTHUSDT", "jupiter-exchange-solana": "JUPUSDT",
-    "bonk": "BONKUSDT", "ondo-finance": "ONDOUSDT", "eigenlayer": "EIGENUSDT",
-}
+CMC_BASE = "https://pro-api.coinmarketcap.com/v1"
 
 
-def _parse_coin(raw: dict, index: int) -> CoinData:
-    cg_id = str(raw.get("id", "")).lower()
+def _parse_cmc_coin(raw: dict, index: int) -> CoinData:
     symbol = str(raw.get("symbol", "")).upper()
-    binance_symbol = BINANCE_SYMBOL_MAP.get(cg_id, f"{symbol}USDT")
+    usd    = raw.get("quote", {}).get("USD", {})
     return CoinData(
-        id=cg_id,
+        id=str(raw.get("id", "")),
+        symbol=symbol,
+        name=str(raw.get("name", "")),
+        rank=int(raw.get("cmc_rank") or index + 1),
+        price=float(usd.get("price") or 0),
+        market_cap=float(usd.get("market_cap") or 0),
+        volume_24h=float(usd.get("volume_24h") or 0),
+        price_change_24h=float(usd.get("percent_change_24h") or 0),
+        binance_symbol=f"{symbol}USDT",
+        has_futures=False,
+        image="",
+    )
+
+
+async def _fetch_cmc(limit: int = 200) -> list[CoinData]:
+    """Fetch top coins by market cap from CoinMarketCap (single API call)."""
+    settings = get_settings()
+    if not settings.coinmarketcap_api_key:
+        raise RuntimeError("COINMARKETCAP_API_KEY not configured")
+
+    data = await _get(
+        f"{CMC_BASE}/cryptocurrency/listings/latest",
+        params={
+            "limit": limit,
+            "convert": "USD",
+            "sort": "market_cap",
+            "sort_dir": "desc",
+            "cryptocurrency_type": "all",
+        },
+        headers={
+            "X-CMC_PRO_API_KEY": settings.coinmarketcap_api_key,
+            "Accept": "application/json",
+        },
+        service="coinmarketcap",
+        retries=3,
+    )
+    if not data or "data" not in data:
+        raise RuntimeError(f"CMC unexpected response: {str(data)[:200]}")
+    return [_parse_cmc_coin(c, i) for i, c in enumerate(data["data"])]
+
+
+# ── CoinGecko — fallback only ─────────────────────────────────────────────────
+
+def _parse_cg_coin(raw: dict, index: int) -> CoinData:
+    symbol = str(raw.get("symbol", "")).upper()
+    return CoinData(
+        id=str(raw.get("id", "")).lower(),
         symbol=symbol,
         name=str(raw.get("name", "")),
         rank=int(raw.get("market_cap_rank") or index + 1),
@@ -300,36 +322,33 @@ def _parse_coin(raw: dict, index: int) -> CoinData:
         market_cap=float(raw.get("market_cap") or 0),
         volume_24h=float(raw.get("total_volume") or 0),
         price_change_24h=float(raw.get("price_change_percentage_24h") or 0),
-        binance_symbol=binance_symbol,
+        binance_symbol=f"{symbol}USDT",
         has_futures=False,
         image=str(raw.get("image") or ""),
     )
 
 
-async def fetch_top100() -> list[CoinData]:
-    """Fetch top-100 coins from CoinGecko (two pages of 50)."""
+async def _fetch_coingecko() -> list[CoinData]:
+    """Fetch top-100 coins from CoinGecko (fallback only)."""
     settings = get_settings()
     headers: dict[str, str] = {"Accept": "application/json"}
     if settings.coingecko_api_key:
         headers["x-cg-demo-api-key"] = settings.coingecko_api_key
 
-    def page_params(page: int) -> dict:
-        return {
-            "vs_currency": "usd",
-            "order": "market_cap_desc",
-            "per_page": 50,
-            "page": page,
-            "sparkline": "false",
-            "price_change_percentage": "24h",
-        }
-
-    async def _fetch_page(page: int) -> list[dict]:
+    async def _page(page: int) -> list[dict]:
         if page == 2:
-            await asyncio.sleep(0.4)  # stagger to avoid rate limit
+            await asyncio.sleep(0.4)
         try:
             data = await _get(
                 f"{COINGECKO}/coins/markets",
-                params=page_params(page),
+                params={
+                    "vs_currency": "usd",
+                    "order": "market_cap_desc",
+                    "per_page": 50,
+                    "page": page,
+                    "sparkline": "false",
+                    "price_change_percentage": "24h",
+                },
                 headers=headers,
                 service="coingecko",
                 retries=3,
@@ -339,6 +358,21 @@ async def fetch_top100() -> list[CoinData]:
             log.warning("coingecko_page_failed", page=page, error=str(exc))
             return []
 
-    page1, page2 = await asyncio.gather(_fetch_page(1), _fetch_page(2))
-    raw = page1 + page2
-    return [_parse_coin(c, i) for i, c in enumerate(raw)]
+    p1, p2 = await asyncio.gather(_page(1), _page(2))
+    return [_parse_cg_coin(c, i) for i, c in enumerate(p1 + p2)]
+
+
+async def fetch_top100() -> list[CoinData]:
+    """
+    Fetch top coins — CoinMarketCap primary (200 coins, 1 API call),
+    CoinGecko fallback (100 coins) if CMC key missing or request fails.
+    """
+    try:
+        coins = await _fetch_cmc(limit=200)
+        log.info("coins_fetched_cmc", count=len(coins))
+        return coins
+    except Exception as exc:
+        log.warning("cmc_fetch_failed_using_coingecko", error=str(exc))
+        coins = await _fetch_coingecko()
+        log.info("coins_fetched_coingecko_fallback", count=len(coins))
+        return coins
