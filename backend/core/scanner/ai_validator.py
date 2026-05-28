@@ -63,6 +63,17 @@ async def validate_signal(
     trend_strength: float,
     volatility: VolatilityRating,
 ) -> AIValidationResult:
+    # Check admin toggle — if AI is disabled from the dashboard, skip Claude entirely
+    try:
+        from backend.system_settings.service import get_settings_service
+        ai_cfg = await get_settings_service().get_group("ai")
+        if not ai_cfg.get("enabled", True):
+            result = _heuristic(signal, ind4h, trend_strength, volatility)
+            _record(signal.id, "heuristic", 0, result.confidence, result.validated, used_fallback=True)
+            return result
+    except Exception:
+        pass  # settings unavailable — proceed normally
+
     client = _get_client()
     if not client:
         result = _heuristic(signal, ind4h, trend_strength, volatility)

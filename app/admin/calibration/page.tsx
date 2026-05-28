@@ -1,9 +1,9 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { adminApi, AiSummaryResponse, EdgeReport } from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
-import { Brain, Zap, AlertTriangle, CheckCircle } from 'lucide-react'
+import { Brain, Zap, AlertTriangle, CheckCircle, Power } from 'lucide-react'
 
 function pct(v: number | null | undefined, d = 1) {
   return v != null ? `${(v * 100).toFixed(d)}%` : '—'
@@ -67,6 +67,32 @@ export default function CalibrationPage() {
   const totalVerd = Object.values(verdicts as Record<string, number>).reduce((a, b) => a + b, 0)
   const hasAiData = (ai?.total_calls ?? 0) > 0
 
+  // ── AI enable/disable toggle ──────────────────────────────────────────────
+  const [aiEnabled, setAiEnabled] = useState<boolean | null>(null)
+  const [toggling, setToggling]   = useState(false)
+
+  useEffect(() => {
+    adminApi.settings.group('ai')
+      .then(g => {
+        const field = g.fields?.find((f: { key: string }) => f.key === 'enabled')
+        setAiEnabled((field as any)?.value !== false)
+      })
+      .catch(() => setAiEnabled(true))
+  }, [])
+
+  const toggleAi = async () => {
+    if (aiEnabled === null || toggling) return
+    setToggling(true)
+    try {
+      await adminApi.settings.patch('ai', { enabled: !aiEnabled })
+      setAiEnabled(!aiEnabled)
+    } catch (e) {
+      console.error('Failed to toggle AI', e)
+    } finally {
+      setToggling(false)
+    }
+  }
+
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
 
@@ -76,6 +102,36 @@ export default function CalibrationPage() {
           <h1 className="text-xl font-semibold text-white">Calibration</h1>
           <p className="text-sm text-zinc-400">AI effectiveness · confidence thresholds · edge report</p>
         </div>
+      </div>
+
+      {/* ── Claude API master toggle ── */}
+      <div className={`rounded-xl px-5 py-4 border flex items-center gap-4 ${
+        aiEnabled === false
+          ? 'bg-red-500/5 border-red-500/25'
+          : 'bg-zinc-900 border-zinc-800'
+      }`}>
+        <Power className={`w-5 h-5 shrink-0 ${aiEnabled === false ? 'text-red-400' : 'text-green-400'}`} />
+        <div className="flex-1">
+          <p className={`text-sm font-semibold ${aiEnabled === false ? 'text-red-300' : 'text-white'}`}>
+            Claude AI Validation — {aiEnabled === null ? '...' : aiEnabled ? 'ENABLED' : 'DISABLED'}
+          </p>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            {aiEnabled === false
+              ? 'Disabled — scanner uses heuristic scoring only. Re-enable when API credits are available.'
+              : 'Enabled — each signal is validated by Claude Haiku. Disable to conserve API credits.'}
+          </p>
+        </div>
+        <button
+          onClick={toggleAi}
+          disabled={toggling || aiEnabled === null}
+          className={`text-xs font-semibold px-4 py-2 rounded-lg border transition-all disabled:opacity-40 ${
+            aiEnabled === false
+              ? 'bg-green-500/15 border-green-500/30 text-green-300 hover:bg-green-500/25'
+              : 'bg-red-500/15 border-red-500/30 text-red-300 hover:bg-red-500/25'
+          }`}
+        >
+          {toggling ? '...' : aiEnabled === false ? '▶ Enable Claude' : '⏸ Disable Claude'}
+        </button>
       </div>
 
       {/* Warmup banner */}
