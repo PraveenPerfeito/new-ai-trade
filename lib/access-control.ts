@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 import type { TradingSignal, AccessContext, PlanId } from '@/types';
 import { getPlan, isUnlimited } from './plans';
 import { validateApiKey } from './api-keys';
@@ -7,7 +9,6 @@ import { NextRequest } from 'next/server';
 
 const log = createLogger('lib/access-control');
 
-// Anonymous / unauthenticated requests use the free plan with a synthetic user ID.
 const ANON_USER_ID = '00000000-0000-0000-0000-000000000000';
 
 function adminDb() {
@@ -30,13 +31,18 @@ async function getUserPlan(userId: string): Promise<PlanId> {
   }
 }
 
+function isAdminEmail(email: string): boolean {
+  const allowed = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase());
+  return allowed.includes(email.toLowerCase());
+}
+
 /**
  * Resolve the caller's access context from the incoming request.
- * Checks `X-API-Key` header. Falls back to anonymous free-tier context.
+ * Priority: X-API-Key header → Supabase session (admin → enterprise) → free tier.
  */
 export async function getAccessContext(req: NextRequest): Promise<AccessContext> {
+  // 1. API key auth
   const rawKey = req.headers.get('x-api-key');
-
   if (rawKey) {
     const apiKey = await validateApiKey(rawKey);
     if (apiKey) {
@@ -48,7 +54,23 @@ export async function getAccessContext(req: NextRequest): Promise<AccessContext>
     log.warn({}, 'Invalid API key provided');
   }
 
-  // Unauthenticated — free tier
+  // 2. Supabase session — admin users get enterprise plan (no signal limits)
+  try {
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies: { getAll: () => cookieStore.getAll() } },
+    );
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.email && isAdminEmail(user.email)) {
+      return { userId: user.id, planId: 'enterprise', plan: getPlan('enterprise') };
+    }
+  } catch {
+    // session check failed — fall through to free tier
+  }
+
+  // 3. Unauthenticated — free tier
   return { userId: ANON_USER_ID, planId: 'free', plan: getPlan('free') };
 }
 

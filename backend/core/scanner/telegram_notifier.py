@@ -158,32 +158,86 @@ def _grade_emoji(grade: str) -> str:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+def _confidence_label(conf: int) -> str:
+    if conf >= 90: return "🔥 VERY HIGH"
+    if conf >= 85: return "💪 HIGH"
+    if conf >= 80: return "✅ SOLID"
+    if conf >= 75: return "🟡 MEDIUM"
+    return "⚠️ LOW"
+
+
+def _leverage_text(max_lev: int, mode: str) -> str:
+    if mode == "spot":
+        return "Spot (no leverage)"
+    if max_lev <= 0:
+        return "No leverage recommended"
+    tiers = [x for x in [3, 5, 10, 15, 20] if x <= max_lev]
+    if not tiers:
+        return f"Max {max_lev}× (very cautious)"
+    safe = tiers[-1]
+    return f"Up to {safe}× (max safe: {max_lev}×)"
+
+
 async def send_signal_alert(signal: Signal) -> bool:
-    """Format and enqueue a signal alert. Returns True if enqueued (not yet sent)."""
-    direction  = "📈 LONG" if signal.type.value == "BUY" else "📉 SHORT"
+    """Format and enqueue a detailed signal alert."""
+    is_long    = signal.type.value == "BUY"
+    direction  = "📈 LONG" if is_long else "📉 SHORT"
     grade_icon = _grade_emoji(signal.risk_grade.value)
+    conf_label = _confidence_label(signal.confidence)
+    mode       = signal.scanner_mode.value
+    lev_text   = _leverage_text(signal.max_safe_leverage, mode)
+
+    # Price change %
+    pct_to_tp = abs(signal.target_price - signal.entry_price) / signal.entry_price * 100
+    pct_to_sl = abs(signal.entry_price - signal.stop_loss) / signal.entry_price * 100
 
     lines = [
-        f"<b>{direction} — {signal.symbol}</b> ({signal.scanner_mode.value.upper()})",
+        f"<b>{direction} — {signal.symbol}/USDT</b>",
+        f"Mode: <b>{mode.upper()}</b>  |  Confidence: <b>{signal.confidence}% {conf_label}</b>",
+        f"Grade: {grade_icon} <b>{signal.risk_grade.value}</b>  |  R:R: <b>1:{signal.rr_ratio:.1f}</b>",
         "",
-        f"Entry:    <code>${signal.entry_price:.4f}</code>",
-        f"Target:   <code>${signal.target_price:.4f}</code>",
-        f"Stop:     <code>${signal.stop_loss:.4f}</code>",
-        f"R:R:      1:{signal.rr_ratio:.2f}",
-        f"Confidence: {signal.confidence}%",
+        "📊 <b>Trade Levels</b>",
+        f"  Entry:  <code>${signal.entry_price:.4f}</code>",
+        f"  Target: <code>${signal.target_price:.4f}</code>  (+{pct_to_tp:.2f}%)",
+        f"  Stop:   <code>${signal.stop_loss:.4f}</code>  (-{pct_to_sl:.2f}%)",
         "",
-        f"Grade: {grade_icon} {signal.risk_grade.value}  |  Risk score: {signal.risk_score:.0f}",
-        f"RSI: {signal.indicators.rsi:.1f}  |  Vol spike: {signal.indicators.volume_spike:.1f}×",
+        f"⚡ <b>Leverage:</b> {lev_text}",
     ]
 
+    # Futures-specific data
     if signal.futures_data:
         fd = signal.futures_data
-        lines.append(
-            f"Funding: {fd.funding_rate * 100:.4f}%  |  Momentum: {fd.momentum_score}/100"
-        )
+        bias_icon = "🔴" if fd.funding_bias == "LONG_HEAVY" else "🟢" if fd.funding_bias == "SHORT_HEAVY" else "⚪"
+        lines += [
+            "",
+            "📡 <b>Futures Intelligence</b>",
+            f"  Funding: {fd.funding_rate * 100:.4f}% {bias_icon} ({fd.funding_bias})",
+            f"  OI Trend: {fd.oi_trend}  |  L/S: {fd.long_short_ratio:.2f}",
+            f"  Momentum: {fd.momentum_score}/100",
+        ]
 
-    if signal.ai_explainability:
-        lines += ["", f"<i>{signal.ai_explainability.summary}</i>"]
+    # Technical context
+    ind = signal.indicators
+    ema_cross = f"  EMA Cross: <b>{ind.ema_cross}</b>" if ind.ema_cross else ""
+    pattern   = f"  Pattern: <b>{ind.candle_pattern.replace('_', ' ')}</b>" if ind.candle_pattern else ""
+    bb_note   = "  BB: <b>SQUEEZE ⚡</b>" if ind.bb and ind.bb.squeeze else ""
+
+    tech_lines = [x for x in [ema_cross, pattern, bb_note] if x]
+    if tech_lines:
+        lines += ["", "🔬 <b>Technical</b>"] + tech_lines
+
+    lines += [
+        "",
+        f"RSI: {ind.rsi:.0f}  |  Vol: {ind.volume_spike:.1f}×  |  EMA200: {'above ✅' if ind.current_price > ind.ema200 > 0 else 'below ⚠️'}",
+    ]
+
+    # AI summary
+    if signal.ai_explainability and signal.ai_explainability.summary:
+        lines += ["", f"🤖 <i>{signal.ai_explainability.summary}</i>"]
+
+    # Setup description
+    if signal.setup_description:
+        lines += [f"📝 {signal.setup_description[:120]}"]
 
     _enqueue("\n".join(lines))
     return True
