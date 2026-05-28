@@ -56,13 +56,24 @@ def _clamp(value: float, lo: float, hi: float) -> int:
 
 # ── Claude validation ─────────────────────────────────────────────────────────
 
+AI_MIN_SETUP_SCORE = 70  # only call Claude for setup scores ≥ this; lower = heuristic
+
+
 async def validate_signal(
     signal: Signal,
     coin: CoinData,
     ind4h: TechnicalIndicators,
     trend_strength: float,
     volatility: VolatilityRating,
+    setup_score: int = 100,
 ) -> AIValidationResult:
+    # Skip Claude for borderline setups — conserves API credits for high-quality signals
+    if setup_score < AI_MIN_SETUP_SCORE:
+        log.info("ai_validation_skipped_low_score", symbol=signal.symbol, setup_score=setup_score, threshold=AI_MIN_SETUP_SCORE)
+        result = _heuristic(signal, ind4h, trend_strength, volatility)
+        _record(signal.id, "heuristic", 0, result.confidence, result.validated, used_fallback=True)
+        return result
+
     # Check admin toggle — if AI is disabled from the dashboard, skip Claude entirely
     try:
         from backend.system_settings.service import get_settings_service

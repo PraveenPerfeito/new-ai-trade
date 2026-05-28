@@ -444,7 +444,7 @@ async def scan_coin(
             futures_data=futures_data,
         )
 
-        ai = await validate_signal(draft, coin, ind4h, s1h * 0.4 + s4h * 0.6, volatility)
+        ai = await validate_signal(draft, coin, ind4h, s1h * 0.4 + s4h * 0.6, volatility, setup_score=setup.pre_score)
         if not ai.validated or ai.confidence < config.min_confidence:
             gate_rejections_total.labels(gate="ai").inc()
             return None
