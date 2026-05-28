@@ -27,4 +27,6 @@ USER appuser
 # Default: FastAPI web service.
 # Railway Celery worker service overrides this via its Custom Start Command:
 #   celery -A backend.workers.celery_app.celery_app worker --beat --loglevel=info --concurrency=2 -Q celery,scanner
+# The worker also starts a health HTTP server on $PORT (backend/workers/health_server.py)
+# so Railway web-service health checks pass. Set Healthcheck Path to /health in Railway.
 CMD ["/bin/sh", "-c", "exec uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

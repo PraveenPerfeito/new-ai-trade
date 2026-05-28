@@ -66,7 +66,7 @@ def create_celery() -> Celery:
 celery_app = create_celery()
 
 
-from celery.signals import worker_init
+from celery.signals import worker_init, worker_ready
 
 
 @worker_init.connect
@@ -76,3 +76,10 @@ def setup_settings_watcher(sender, **kwargs):
     from backend.system_settings.propagation import start_celery_config_watcher
     from backend.system_settings.service import get_settings_service
     start_celery_config_watcher(get_settings_service())
+
+
+@worker_ready.connect
+def start_health_check_server(sender, **kwargs):
+    """Start HTTP health server so Railway web-service health checks pass."""
+    from backend.workers.health_server import start_health_server
+    start_health_server()
