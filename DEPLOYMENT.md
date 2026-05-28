@@ -1,6 +1,6 @@
-# Deployment Guide — Phase 7
+# Deployment Guide
 
-Production stack: **Vercel** (Next.js) · **Render** (FastAPI + Celery) · **Upstash** (Redis) · **Supabase** (Postgres + Auth) · **Anthropic** (Claude Haiku)
+Production stack: **Vercel** (Next.js) · **Railway** (FastAPI + Celery worker) · **Upstash** (Redis) · **Supabase** (Postgres + Auth) · **Anthropic** (Claude Haiku) · **CoinMarketCap** (coin data)
 
 ---
 
@@ -11,28 +11,28 @@ Browser
   └─▶ Vercel  (Next.js 14 · App Router · Edge middleware)
         ├─▶ Supabase  (Auth + Postgres)
         ├─▶ Upstash Redis  (intelligence cache · scheduler · rate limit)
-        └─▶ Render Web Service — FastAPI :8000
-              ├─▶ Supabase Postgres  (direct asyncpg)
+        └─▶ Railway Web Service — FastAPI :PORT
+              ├─▶ Supabase Postgres  (direct asyncpg, Transaction Pooler port 6543)
               ├─▶ Upstash Redis  (same instance)
-              └─▶ Render Background Worker — Celery
-                    ├─▶ Binance API
-                    ├─▶ CoinGecko API
-                    ├─▶ CoinMarketCap API
-                    └─▶ Anthropic Claude Haiku
+              └─▶ Railway Background Worker — Celery + Beat
+                    ├─▶ Binance API  (spot + futures klines)
+                    ├─▶ CoinMarketCap API  (200 coins, primary)
+                    ├─▶ CoinGecko API  (fallback only)
+                    └─▶ Anthropic Claude Haiku  (AI validation, toggleable)
 ```
 
 ---
 
 ## Service Overview
 
-| Service | Role | Free tier |
-|---------|------|-----------|
-| **Vercel** | Next.js hosting + CDN | 100 GB bandwidth/mo, unlimited deploys |
-| **Render** | FastAPI + Celery | 750 hrs/mo web service; background workers sleep on free tier — use $7/mo Starter for always-on |
-| **Supabase** | Postgres + Auth | 500 MB DB, 50 K MAU, 2 GB bandwidth |
-| **Upstash** | Redis | 10 K commands/day free; $0.2/100K commands above that |
-| **Anthropic** | Claude Haiku AI | Pay-per-token — Haiku is cheapest (~$0.25/M input tokens) |
-| **CoinMarketCap** | Intelligence cache | Startup Plan: 300K credits/month |
+| Service | Role | Notes |
+|---------|------|-------|
+| **Vercel** | Next.js hosting + CDN | Free tier: 100 GB bandwidth, unlimited deploys |
+| **Railway** | FastAPI + Celery worker | Separate services from same Dockerfile |
+| **Supabase** | Postgres + Auth | Use Transaction Pooler URL (port 6543) for Railway |
+| **Upstash** | Redis (`rediss://`) | Use Singapore region if Railway is Singapore |
+| **Anthropic** | Claude Haiku AI | Toggle on/off from Admin → Calibration to save credits |
+| **CoinMarketCap** | 200 coins per scan | Startup Plan: 10,000 credits/month |
 
 ---
 
@@ -41,18 +41,16 @@ Browser
 ### 1a. Create project
 
 1. Go to [supabase.com](https://supabase.com) → **New project**
-2. Choose a region close to your Render region (e.g. US East)
-3. Save the database password — you need it for `DATABASE_URL`
+2. Choose region close to your Railway region (e.g. Singapore)
+3. Save the database password — needed for `DATABASE_URL`
 
 ### 1b. Run migrations
 
 Open **SQL Editor** in Supabase dashboard and run each file in order:
 
 ```sql
--- Copy/paste contents of each file:
 database/schema.sql
 database/backtest-schema.sql
-database/paper-trading-schema.sql
 database/analytics-schema.sql
 database/admin-auth-migration.sql
 database/experiments-migration.sql
@@ -72,90 +70,89 @@ From **Settings → API**:
 |----------|-------|
 | `NEXT_PUBLIC_SUPABASE_URL` | Settings → API → Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Settings → API → anon / public |
-| `SUPABASE_SERVICE_ROLE_KEY` | Settings → API → service_role (**keep secret**) |
-| `DATABASE_URL` | Settings → Database → URI → **Direct connection** (not pooler) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Settings → API → service_role (keep secret) |
+| `DATABASE_URL` | Settings → Database → URI → **Transaction Pooler** (port **6543**) |
+
+> **Use Transaction Pooler (port 6543)** — not Direct Connection (port 5432).
+> Railway uses IPv6 which is blocked by Supabase's direct connection.
 
 ---
 
 ## Step 2 — Upstash Redis
 
-1. Go to [upstash.com](https://upstash.com) → **Create account → New Database**
-2. Name: `crypto-scanner-prod`, type: **Redis**
-3. Region: pick the same region as your Render + Supabase
-4. Copy the **Redis URL** — it starts with `rediss://`
+1. Go to [upstash.com](https://upstash.com) → **New Database**
+2. Name: `crypto-scanner`, type: **Redis**
+3. Region: same as your Railway region (e.g. Singapore `ap-southeast-1`)
+4. Copy the **Redis URL** — starts with `rediss://`
 
 ```
 rediss://default:<password>@<host>.upstash.io:6379
 ```
 
-This single URL is used by **all three services** (Vercel, Render FastAPI, Render Celery).
+This single URL is used by **all services** (Vercel, Railway API, Railway Worker).
 
 ---
 
-## Step 3 — Anthropic Claude API key
+## Step 3 — Anthropic
 
 1. Go to [console.anthropic.com](https://console.anthropic.com)
-2. **API Keys → Create Key** — name it `crypto-scanner-prod`
-3. Copy it: `sk-ant-api03-...`
-4. Set a spend limit under **Billing → Spend Limits** (e.g. $20/month) to prevent surprises
+2. **API Keys → Create Key** → copy `sk-ant-api03-...`
+3. Set a spend limit under **Billing → Spend Limits** (e.g. $20/month)
+4. To get 50 req/min (vs free 5 req/min): **add payment and spend $5** → auto-upgrades to Tier 1
 
-The app uses **Claude Haiku** for signal validation — cheapest model, ~$0.25/M input tokens.
-
----
-
-## Step 4 — CoinMarketCap API key
-
-1. Go to [coinmarketcap.com/api](https://coinmarketcap.com/api/)
-2. Sign up → **Get Free API Key** (or upgrade to Startup Plan for 300K credits/month)
-3. Copy the key from the developer portal
-
-Used by the intelligence cache layer (`lib/intelligence/`) to power the Market Intelligence, Sector Rotation, and Trending pages.
+> You can toggle Claude on/off from **Admin → Calibration** without redeploying.
+> When off, heuristic scoring is used — zero API credits consumed.
 
 ---
 
-## Step 5 — Render Deployment (FastAPI + Celery)
+## Step 4 — CoinMarketCap
 
-### 5a. Connect GitHub repo
+1. Go to [coinmarketcap.com/api](https://coinmarketcap.com/api/) → Sign up
+2. Get **Startup Plan** key (10,000 credits/month)
+3. Copy the Pro API key
 
-1. Go to [render.com](https://render.com) → **New → Web Service**
-2. Connect your GitHub account → select this repository
-3. Branch: `main`
+Used by the Python scanner to fetch 200 coins per scan in a single API call.
 
-### 5b. FastAPI web service settings
+---
 
-| Setting | Value |
-|---------|-------|
-| **Name** | `crypto-scanner-api` |
-| **Environment** | `Python 3` |
-| **Region** | Same as Supabase/Upstash |
-| **Build Command** | `pip install -r backend/requirements.txt` |
-| **Start Command** | `uvicorn backend.main:app --host 0.0.0.0 --port $PORT` |
-| **Instance Type** | Starter ($7/mo) for always-on; Free tier sleeps after 15 min |
+## Step 5 — Railway Deployment (FastAPI + Celery Worker)
 
-### 5c. Celery background worker settings
+### 5a. Create Railway project
 
-From your Render project → **New → Background Worker** (same repo):
+1. Go to [railway.app](https://railway.app) → **New Project**
+2. **Deploy from GitHub repo** → select your repository
+
+### 5b. API service settings
+
+In Railway → your service → **Settings**:
 
 | Setting | Value |
 |---------|-------|
-| **Name** | `crypto-scanner-worker` |
-| **Build Command** | `pip install -r backend/requirements.txt` |
-| **Start Command** | `celery -A backend.workers.celery_app worker --loglevel=info --concurrency=2` |
-| **Instance Type** | Free or Starter |
+| **Builder** | Dockerfile |
+| **Start Command** | `/bin/sh -c "exec uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}"` |
+| **Healthcheck Path** | `/health` |
 
-### 5d. Environment variables (both Render services)
+### 5c. Create Celery worker service
 
-Set these under **Environment → Environment Variables** in each service:
+In the same Railway project → **New Service → GitHub Repo** (same repo):
+
+| Setting | Value |
+|---------|-------|
+| **Builder** | Dockerfile |
+| **Start Command** | `celery -A backend.workers.celery_app.celery_app worker --beat --loglevel=info --concurrency=2 -Q celery,scanner` |
+| **Healthcheck Path** | `/health` |
+
+> The worker starts a tiny HTTP health server on `$PORT` at startup.
+> Railway requires the healthcheck to pass — this is what makes the worker show Online.
+
+### 5d. Environment variables (both Railway services)
 
 ```bash
-# Python runtime
-PYTHON_VERSION=3.12.0
-
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
 SUPABASE_SERVICE_ROLE_KEY=<service role key>
-DATABASE_URL=postgresql://postgres:<password>@db.<project>.supabase.co:5432/postgres
+DATABASE_URL=postgresql://postgres.<project>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres
 
 # Redis
 REDIS_URL=rediss://default:<password>@<host>.upstash.io:6379
@@ -164,37 +161,30 @@ REDIS_URL=rediss://default:<password>@<host>.upstash.io:6379
 ADMIN_SECRET=<run: openssl rand -hex 32>
 ADMIN_EMAILS=your@email.com
 
-# AI
+# AI (toggleable from Admin → Calibration)
 ANTHROPIC_API_KEY=sk-ant-...
 
-# Telegram (optional)
+# Market data
+COINMARKETCAP_API_KEY=<Startup Plan key>
+COINGECKO_API_KEY=<optional fallback key>
+
+# Telegram
 TELEGRAM_BOT_TOKEN=<token>
 TELEGRAM_CHAT_ID=<chat id>
 
-# Market data
-COINGECKO_API_KEY=<optional — unlocks higher rate limits>
-COINMARKETCAP_API_KEY=<Startup Plan key>
-
 # Scanner
-SCANNER_DELAY_MS=300
 SCANNER_MIN_CONFIDENCE_ALERT=85
 
-# CORS — fill in after you have Vercel URL
-CORS_ORIGINS=https://your-app.vercel.app,https://your-api.onrender.com
-
-# Environment
+# Runtime
 ENVIRONMENT=production
-NODE_ENV=production
 LOG_LEVEL=info
 ```
 
-> Tip: In Render dashboard, you can copy env vars from one service to another under **Environment → Copy From Service**.
+### 5e. Get Railway service URL
 
-### 5e. Get Render service URL
-
-After deploying, copy the public URL from the Render dashboard — it looks like:
+After deploying, copy the public URL from Railway → API service → **Settings → Domains**:
 ```
-https://crypto-scanner-api.onrender.com
+https://crypto-scanner-api-production.up.railway.app
 ```
 You need this for `BACKEND_URL` in Vercel.
 
@@ -206,12 +196,10 @@ You need this for `BACKEND_URL` in Vercel.
 
 1. Go to [vercel.com](https://vercel.com) → **New Project → Import Git Repository**
 2. Select this repository → Framework preset: **Next.js** (auto-detected)
-3. Root directory: `/` (leave as default)
 
 ### 6b. Environment variables
 
-In **Vercel → Project → Settings → Environment Variables**, add all of these.
-Set them for **Production**, **Preview**, and **Development**.
+In **Vercel → Project → Settings → Environment Variables**:
 
 ```bash
 # Supabase
@@ -224,116 +212,72 @@ REDIS_URL=rediss://default:<password>@<host>.upstash.io:6379
 
 # Admin auth — REQUIRED
 ADMIN_EMAILS=your@email.com
-ADMIN_SECRET=<same value as Render>
+ADMIN_SECRET=<same value as Railway>
 
-# Backend — your Render FastAPI URL
-BACKEND_URL=https://crypto-scanner-api.onrender.com
-
-# CORS — your Vercel URL
-ALLOWED_ORIGINS=https://your-app.vercel.app
+# Backend — your Railway FastAPI URL
+BACKEND_URL=https://crypto-scanner-api-production.up.railway.app
 
 # AI
 ANTHROPIC_API_KEY=sk-ant-...
 
 # Market data
-COINGECKO_API_KEY=<optional>
 COINMARKETCAP_API_KEY=<Startup Plan key>
+COINGECKO_API_KEY=<optional>
 
-# Telegram (optional)
+# Telegram
 TELEGRAM_BOT_TOKEN=<token>
 TELEGRAM_CHAT_ID=<chat id>
 
 # Scanner
-SCANNER_DELAY_MS=300
 SCANNER_MIN_CONFIDENCE_ALERT=85
-
-# Runtime
-NODE_ENV=production
-LOG_LEVEL=info
 ```
 
 ### 6c. Deploy
 
 ```bash
-# Pushing to main automatically triggers a Vercel deploy
-git push origin main
+git push origin main   # auto-deploys to Vercel
 ```
-
-Or click **Deploy** in the Vercel dashboard.
 
 ---
 
 ## Step 7 — Post-Deployment Checklist
 
-Run these after every production deploy:
-
 ```bash
-# Render FastAPI health
-curl https://crypto-scanner-api.onrender.com/health
+# Railway FastAPI health
+curl https://crypto-scanner-api-production.up.railway.app/health
 
 # Vercel Next.js health
 curl https://your-app.vercel.app/api/health
 
-# Admin panel loads
+# Admin panel
 open https://your-app.vercel.app/admin
 
-# Test scanner control
-curl https://your-app.vercel.app/api/scanner/control
-
-# Test market intelligence
-curl https://your-app.vercel.app/api/market/intelligence
-```
-
-Expected responses:
-```json
-// FastAPI
-{"status": "ok", "version": "1.0.0"}
-
-// scanner/control
-{"success": true, "scheduler": {"started": false, ...}}
+# Verify scanner works — trigger manual scan
+curl -X POST https://your-app.vercel.app/api/scanner/run \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"spot"}'
 ```
 
 ---
 
 ## Environment Variables — Full Reference
 
-| Variable | Vercel | Render FastAPI | Render Celery |
-|----------|--------|----------------|---------------|
+| Variable | Vercel | Railway API | Railway Worker |
+|----------|--------|-------------|----------------|
 | `NEXT_PUBLIC_SUPABASE_URL` | ✅ | ✅ | ✅ |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | ✅ | ✅ |
 | `SUPABASE_SERVICE_ROLE_KEY` | ✅ | ✅ | ✅ |
 | `DATABASE_URL` | ❌ | ✅ | ✅ |
 | `REDIS_URL` | ✅ | ✅ | ✅ |
-| `ADMIN_EMAILS` | ✅ | ❌ | ❌ |
+| `ADMIN_EMAILS` | ✅ | ✅ | ❌ |
 | `ADMIN_SECRET` | ✅ | ✅ | ❌ |
 | `BACKEND_URL` | ✅ | ❌ | ❌ |
-| `ALLOWED_ORIGINS` | ✅ | ❌ | ❌ |
-| `CORS_ORIGINS` | ❌ | ✅ | ❌ |
 | `ANTHROPIC_API_KEY` | ✅ | ✅ | ✅ |
 | `COINMARKETCAP_API_KEY` | ✅ | ✅ | ✅ |
 | `COINGECKO_API_KEY` | ✅ | ✅ | ✅ |
-| `TELEGRAM_BOT_TOKEN` | ✅ | ✅ | ✅ |
-| `TELEGRAM_CHAT_ID` | ✅ | ✅ | ✅ |
-| `SCANNER_DELAY_MS` | ✅ | ✅ | ✅ |
-| `NODE_ENV` | ✅ | ✅ | ✅ |
+| `TELEGRAM_BOT_TOKEN` | ❌ | ✅ | ✅ |
+| `TELEGRAM_CHAT_ID` | ❌ | ✅ | ✅ |
 | `ENVIRONMENT` | ❌ | ✅ | ✅ |
-
----
-
-## Updating Production
-
-```bash
-# 1. Make changes locally, type-check
-node --max-old-space-size=4096 node_modules/typescript/bin/tsc --noEmit --skipLibCheck
-
-# 2. Commit and push
-git add -p
-git commit -m "feat: ..."
-git push origin main
-
-# Vercel: auto-deploys from main (2-3 min)
-# Render: auto-deploys from main if GitHub integration is enabled (3-5 min)
-```
 
 ---
 
@@ -341,40 +285,36 @@ git push origin main
 
 | What | Where |
 |------|-------|
-| FastAPI logs | Render → service → Logs |
-| Celery task logs | Render → worker → Logs |
+| FastAPI logs | Railway → API service → Logs |
+| Celery scan logs | Railway → Worker service → Logs |
 | Next.js logs | Vercel → project → Deployments → Functions |
-| Redis usage | Upstash → database → Data Browser |
-| Redis commands | Upstash → database → Metrics |
-| DB tables | Supabase → Database → Table Editor |
-| Scan signals | Supabase → Table Editor → `signals` |
-| Admin dashboard | `/admin/overview` — live scanner + regime + signals |
-| Cache health | `/admin/cache` — CMC quota, group freshness, worker status |
-| Scanner control | `/admin/scanner` — start/stop/pause/e-stop |
+| Redis usage | Upstash → database → Metrics |
+| DB tables | Supabase → Table Editor → `signals` |
+| Admin dashboard | `/admin/overview` |
+| Scanner control | `/admin/scanner` |
+| AI toggle | `/admin/calibration` |
+| Signal feed | `/admin/signals` |
 
 ---
 
-## Security Checklist (before going live)
+## Security Checklist
 
-- [ ] `ADMIN_SECRET` is a random 32-byte hex — run `openssl rand -hex 32`
-- [ ] `ADMIN_EMAILS` lists only your email — never left empty
-- [ ] `ALLOWED_ORIGINS` is set to your exact Vercel domain
-- [ ] `SUPABASE_SERVICE_ROLE_KEY` is **never** in a `NEXT_PUBLIC_` variable
-- [ ] `.env` and `.env.local` are in `.gitignore` — run `git status` to verify
+- [ ] `ADMIN_SECRET` is a random 32-byte hex — `openssl rand -hex 32`
+- [ ] `ADMIN_EMAILS` lists only your email
+- [ ] `SUPABASE_SERVICE_ROLE_KEY` is never in a `NEXT_PUBLIC_` variable
+- [ ] `.env` and `.env.local` are in `.gitignore`
 - [ ] Supabase RLS is enabled on all tables
-- [ ] Admin user created in Supabase Auth with a strong password
-- [ ] Anthropic spend limit set in console.anthropic.com
+- [ ] Admin user created in Supabase Auth with strong password
+- [ ] Anthropic spend limit set at console.anthropic.com
 
 ---
 
 ## Rollback
 
 ```bash
-# Vercel: instant rollback
-# Vercel → project → Deployments → find last working deploy → "Promote to Production"
+# Vercel: Vercel → project → Deployments → find last good deploy → Promote to Production
 
-# Render: redeploy a previous build
-# Render → service → Events → find last good deploy → Redeploy
+# Railway: Railway → service → Deployments → find last good deploy → Redeploy
 
 # Git rollback
 git revert HEAD
