@@ -21,6 +21,7 @@ import pandas as pd
 from backend.core.scanner.models import (
     Candle,
     MACDResult,
+    BollingerBands,
     TechnicalIndicators,
     TrendDirection,
     VolatilityRating,
@@ -150,6 +151,136 @@ def calc_volume_spike(candles: list[Candle], period: int = 20) -> float:
     return float(min(10.0, volumes.iloc[-1] / avg_vol))
 
 
+# ── Bollinger Bands ───────────────────────────────────────────────────────────
+
+def calc_bollinger_bands(candles: list[Candle], period: int = 20, std_dev: float = 2.0) -> BollingerBands:
+    """
+    Standard Bollinger Bands (SMA ± 2σ) with squeeze detection.
+    Squeeze = current band width < 80% of 20-period average width (compression before explosion).
+    """
+    closes = pd.Series([c.close for c in candles], dtype=float)
+    if len(closes) < period:
+        p = float(closes.iloc[-1]) if not closes.empty else 1.0
+        return BollingerBands(upper=p * 1.02, middle=p, lower=p * 0.98, width=0.04, squeeze=False)
+
+    sma    = closes.rolling(period).mean()
+    std    = closes.rolling(period).std()
+    upper  = sma + std_dev * std
+    lower  = sma - std_dev * std
+    widths = (upper - lower) / sma.replace(0, np.nan)
+
+    last_mid    = _last(sma,    float(closes.iloc[-1]))
+    last_upper  = _last(upper,  last_mid * 1.02)
+    last_lower  = _last(lower,  last_mid * 0.98)
+    last_width  = (last_upper - last_lower) / last_mid if last_mid > 0 else 0.04
+    avg_width   = _last(widths.rolling(20).mean(), last_width)
+    squeeze     = last_width < avg_width * 0.8
+
+    return BollingerBands(
+        upper   = round(last_upper,  8),
+        middle  = round(last_mid,    8),
+        lower   = round(last_lower,  8),
+        width   = round(last_width,  6),
+        squeeze = squeeze,
+    )
+
+
+# ── Candlestick pattern detection ─────────────────────────────────────────────
+
+def detect_candlestick_pattern(candles: list[Candle]) -> str:
+    """
+    Detect high-probability candlestick reversal / continuation patterns.
+    Returns a pattern name or "" if none found.
+
+    Patterns detected:
+      Reversal:     HAMMER, INVERTED_HAMMER, SHOOTING_STAR, HANGING_MAN,
+                    MORNING_STAR, EVENING_STAR
+      Continuation: THREE_WHITE_SOLDIERS, THREE_BLACK_CROWS, BULLISH_MARUBOZU,
+                    BEARISH_MARUBOZU
+    """
+    if len(candles) < 3:
+        return ""
+
+    c1, c2, c3 = candles[-3], candles[-2], candles[-1]  # oldest → newest
+
+    def _parts(c: Candle):
+        rng = c.high - c.low
+        if rng == 0:
+            return 0.0, 0.0, 0.0, 0.0
+        body        = abs(c.close - c.open)
+        upper_wick  = c.high - max(c.open, c.close)
+        lower_wick  = min(c.open, c.close) - c.low
+        return body / rng, upper_wick / rng, lower_wick / rng, rng
+
+    b3, uw3, lw3, rng3 = _parts(c3)
+    b2, uw2, lw2, rng2 = _parts(c2)
+    b1, uw1, lw1, rng1 = _parts(c1)
+
+    # ── Single-candle patterns ────────────────────────────────────────────────
+
+    # HAMMER — long lower wick, small body at top, at a low (BUY signal)
+    if lw3 >= 0.60 and b3 <= 0.25 and uw3 <= 0.15:
+        prev_lows = [c.low for c in candles[-6:-1]]
+        if prev_lows and c3.low <= min(prev_lows) * 1.01:
+            return "HAMMER"
+
+    # INVERTED_HAMMER — long upper wick, small body at bottom, at a low (BUY signal)
+    if uw3 >= 0.55 and b3 <= 0.25 and lw3 <= 0.20:
+        prev_lows = [c.low for c in candles[-6:-1]]
+        if prev_lows and c3.low <= min(prev_lows) * 1.015:
+            return "INVERTED_HAMMER"
+
+    # SHOOTING_STAR — long upper wick, small body at bottom, at a high (SELL signal)
+    if uw3 >= 0.60 and b3 <= 0.25 and lw3 <= 0.15:
+        prev_highs = [c.high for c in candles[-6:-1]]
+        if prev_highs and c3.high >= max(prev_highs) * 0.99:
+            return "SHOOTING_STAR"
+
+    # HANGING_MAN — like hammer but at highs (SELL signal)
+    if lw3 >= 0.60 and b3 <= 0.25 and uw3 <= 0.15:
+        prev_highs = [c.high for c in candles[-6:-1]]
+        if prev_highs and c3.high >= max(prev_highs) * 0.99:
+            return "HANGING_MAN"
+
+    # BULLISH_MARUBOZU — full-body bullish candle, near-zero wicks (strong BUY)
+    if c3.close > c3.open and b3 >= 0.90 and rng3 > 0:
+        return "BULLISH_MARUBOZU"
+
+    # BEARISH_MARUBOZU — full-body bearish candle, near-zero wicks (strong SELL)
+    if c3.close < c3.open and b3 >= 0.90 and rng3 > 0:
+        return "BEARISH_MARUBOZU"
+
+    # ── Three-candle patterns ─────────────────────────────────────────────────
+
+    # MORNING_STAR — bearish large + small indecision + bullish large (BUY reversal)
+    if (c1.close < c1.open and b1 >= 0.55           # strong bearish
+            and b2 <= 0.30                            # indecision/doji middle
+            and c3.close > c3.open and b3 >= 0.45    # strong bullish
+            and c3.close > (c1.open + c1.close) / 2):
+        return "MORNING_STAR"
+
+    # EVENING_STAR — bullish large + small indecision + bearish large (SELL reversal)
+    if (c1.close > c1.open and b1 >= 0.55
+            and b2 <= 0.30
+            and c3.close < c3.open and b3 >= 0.45
+            and c3.close < (c1.open + c1.close) / 2):
+        return "EVENING_STAR"
+
+    # THREE_WHITE_SOLDIERS — 3 consecutive bullish candles, each higher close (BUY continuation)
+    if (c1.close > c1.open and c2.close > c2.open and c3.close > c3.open
+            and c3.close > c2.close > c1.close
+            and b1 >= 0.50 and b2 >= 0.50 and b3 >= 0.50):
+        return "THREE_WHITE_SOLDIERS"
+
+    # THREE_BLACK_CROWS — 3 consecutive bearish candles, each lower close (SELL continuation)
+    if (c1.close < c1.open and c2.close < c2.open and c3.close < c3.open
+            and c3.close < c2.close < c1.close
+            and b1 >= 0.50 and b2 >= 0.50 and b3 >= 0.50):
+        return "THREE_BLACK_CROWS"
+
+    return ""
+
+
 # ── Full indicator suite ──────────────────────────────────────────────────────
 
 def calculate_all_indicators(candles: list[Candle]) -> TechnicalIndicators:
@@ -160,20 +291,22 @@ def calculate_all_indicators(candles: list[Candle]) -> TechnicalIndicators:
     s = _to_series(candles)
     closes = s["close"]
 
-    # Compute EMAs (need full arrays for trend classification)
-    ema20_series = closes.ewm(span=20, adjust=False).mean()
-    ema50_series = closes.ewm(span=50, adjust=False).mean()
+    ema20_series  = closes.ewm(span=20,  adjust=False).mean()
+    ema50_series  = closes.ewm(span=50,  adjust=False).mean()
+    ema200_series = closes.ewm(span=200, adjust=False).mean()
 
     current_price = float(closes.iloc[-1])
-    ema20 = _last(ema20_series, current_price)
-    ema50 = _last(ema50_series, current_price)
+    ema20  = _last(ema20_series,  current_price)
+    ema50  = _last(ema50_series,  current_price)
+    ema200 = _last(ema200_series, current_price)
 
     rsi          = calc_rsi(candles)
     macd         = calc_macd(candles)
     atr          = calc_atr(candles)
     volume_spike = calc_volume_spike(candles)
+    bb           = calc_bollinger_bands(candles)
+    pattern      = detect_candlestick_pattern(candles)
 
-    # Trend: EMA alignment + price position above/below EMA20
     if ema20 > ema50 and current_price > ema20:
         trend = TrendDirection.BULLISH
     elif ema20 < ema50 and current_price < ema20:
@@ -182,14 +315,17 @@ def calculate_all_indicators(candles: list[Candle]) -> TechnicalIndicators:
         trend = TrendDirection.RANGING
 
     return TechnicalIndicators(
-        rsi           = rsi,
-        macd          = macd,
-        ema20         = ema20,
-        ema50         = ema50,
-        atr           = atr,
-        volume_spike  = volume_spike,
-        current_price = current_price,
-        trend         = trend,
+        rsi            = rsi,
+        macd           = macd,
+        ema20          = ema20,
+        ema50          = ema50,
+        ema200         = ema200,
+        bb             = bb,
+        atr            = atr,
+        volume_spike   = volume_spike,
+        current_price  = current_price,
+        trend          = trend,
+        candle_pattern = pattern,
     )
 
 

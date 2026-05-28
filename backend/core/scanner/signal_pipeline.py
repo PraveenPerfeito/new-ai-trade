@@ -88,14 +88,16 @@ def detect_setup(
     signal_type: SignalType,
     strength_1h: float,
     strength_4h: float,
+    ind1d: TechnicalIndicators | None = None,
 ) -> SetupResult:
     """
-    Pre-AI setup quality score (max ~100, threshold 65).
-    Mirrors detectSetup() in lib/scanner.ts exactly.
+    Pre-AI setup quality score. Threshold 60 (was 65 — lowered to catch more signals).
+    Incorporates EMA200 bounce, Bollinger Band squeeze, daily trend, and candlestick patterns.
     """
     score = 0
     reasons: list[str] = []
 
+    # ── Core trend alignment ──────────────────────────────────────────────────
     if signal_type == SignalType.BUY:
         if ind4h.trend == TrendDirection.BULLISH:
             score += 30
@@ -150,8 +152,69 @@ def detect_setup(
         score += 10
         reasons.append(f"Strong trend score: {combined:.0f}/100")
 
+    # ── EMA200 bounce (+15) ───────────────────────────────────────────────────
+    # Price within 1% of EMA200 on 1h = institutional reference level bounce
+    if ind1h.ema200 > 0:
+        price = ind1h.current_price
+        dist_pct = abs(price - ind1h.ema200) / ind1h.ema200 * 100
+        if dist_pct <= 1.0:
+            if signal_type == SignalType.BUY and price >= ind1h.ema200:
+                score += 15
+                reasons.append(f"Price bouncing off EMA200 ({dist_pct:.2f}% above)")
+            elif signal_type == SignalType.SELL and price <= ind1h.ema200:
+                score += 15
+                reasons.append(f"Price rejected at EMA200 ({dist_pct:.2f}% below)")
+        # Extra bonus: price above/below EMA200 confirms long-term bias
+        elif signal_type == SignalType.BUY and price > ind1h.ema200:
+            score += 5
+            reasons.append("Price above EMA200 — long-term bullish")
+        elif signal_type == SignalType.SELL and price < ind1h.ema200:
+            score += 5
+            reasons.append("Price below EMA200 — long-term bearish")
+
+    # ── Bollinger Band squeeze (+15) ──────────────────────────────────────────
+    # BB squeeze = compression before explosion — strong breakout signal
+    if ind1h.bb is not None and ind1h.bb.squeeze:
+        score += 15
+        reasons.append(f"BB squeeze detected (width {ind1h.bb.width:.3f}) — breakout imminent")
+    elif ind4h.bb is not None and ind4h.bb.squeeze:
+        score += 10
+        reasons.append("4h BB squeeze — higher-timeframe compression")
+
+    # ── Daily trend alignment (+12) ───────────────────────────────────────────
+    if ind1d is not None:
+        if signal_type == SignalType.BUY and ind1d.trend == TrendDirection.BULLISH:
+            score += 12
+            reasons.append("Daily trend bullish — all 3 timeframes aligned")
+        elif signal_type == SignalType.SELL and ind1d.trend == TrendDirection.BEARISH:
+            score += 12
+            reasons.append("Daily trend bearish — all 3 timeframes aligned")
+        elif ind1d.trend == TrendDirection.RANGING:
+            score -= 5  # daily ranging = weak macro context
+
+    # ── Candlestick pattern bonus (+8 to +15) ─────────────────────────────────
+    BUY_PATTERNS  = {"HAMMER", "INVERTED_HAMMER", "MORNING_STAR",
+                     "THREE_WHITE_SOLDIERS", "BULLISH_MARUBOZU"}
+    SELL_PATTERNS = {"SHOOTING_STAR", "HANGING_MAN", "EVENING_STAR",
+                     "THREE_BLACK_CROWS", "BEARISH_MARUBOZU"}
+
+    pat = ind1h.candle_pattern
+    if pat:
+        if signal_type == SignalType.BUY and pat in BUY_PATTERNS:
+            pts = 15 if pat in {"MORNING_STAR", "THREE_WHITE_SOLDIERS"} else 8
+            score += pts
+            reasons.append(f"Bullish candle pattern: {pat.replace('_', ' ').title()}")
+        elif signal_type == SignalType.SELL and pat in SELL_PATTERNS:
+            pts = 15 if pat in {"EVENING_STAR", "THREE_BLACK_CROWS"} else 8
+            score += pts
+            reasons.append(f"Bearish candle pattern: {pat.replace('_', ' ').title()}")
+        elif signal_type == SignalType.BUY and pat in SELL_PATTERNS:
+            score -= 10  # conflicting pattern
+        elif signal_type == SignalType.SELL and pat in BUY_PATTERNS:
+            score -= 10
+
     return SetupResult(
-        has_setup=score >= 65,
+        has_setup=score >= 60,   # lowered from 65 — catches more quality setups
         description=". ".join(reasons),
         pre_score=score,
     )
@@ -205,14 +268,15 @@ async def scan_coin(
 
     try:
         is_futures = mode == ScannerMode.FUTURES
-        candles_1h, candles_4h = await _fetch_both_timeframes(coin, is_futures)
+        candles_1h, candles_4h, candles_1d = await _fetch_all_timeframes(coin, is_futures)
 
         if len(candles_1h) < 60 or len(candles_4h) < 60:
             return None
 
-        # Step 2: Indicators
+        # Step 2: Indicators (1h, 4h, daily)
         ind1h = calculate_all_indicators(candles_1h)
         ind4h = calculate_all_indicators(candles_4h)
+        ind1d = calculate_all_indicators(candles_1d) if len(candles_1d) >= 30 else None
 
         # Step 3: Direction from 4h
         if ind4h.trend == TrendDirection.BULLISH:
@@ -255,8 +319,8 @@ async def scan_coin(
             log.info("rejected_market_structure", symbol=coin.symbol, reason=structure.rejection_reason)
             return None
 
-        # Step 7: Setup scoring
-        setup = detect_setup(ind1h, ind4h, signal_type, s1h, s4h)
+        # Step 7: Setup scoring (now includes daily, EMA200, BB, candle patterns)
+        setup = detect_setup(ind1h, ind4h, signal_type, s1h, s4h, ind1d)
         if not setup.has_setup:
             gate_rejections_total.labels(gate="setup_score").inc()
             return None
@@ -359,11 +423,16 @@ async def scan_coin(
         scanner_concurrency_active.dec()
 
 
-async def _fetch_both_timeframes(
+async def _fetch_all_timeframes(
     coin: CoinData, is_futures: bool
-) -> tuple[list[Candle], list[Candle]]:
+) -> tuple[list[Candle], list[Candle], list[Candle]]:
+    """Fetch 1h, 4h, and 1d candles concurrently.
+    200 candles on 1h/4h gives enough history for EMA200.
+    100 daily candles covers ~3 months for daily trend context.
+    """
     import asyncio
     return await asyncio.gather(
-        fetch_klines(coin.binance_symbol, "1h", 100, is_futures),
-        fetch_klines(coin.binance_symbol, "4h", 100, is_futures),
+        fetch_klines(coin.binance_symbol, "1h",  200, is_futures),
+        fetch_klines(coin.binance_symbol, "4h",  200, is_futures),
+        fetch_klines(coin.binance_symbol, "1d",  100, is_futures),
     )

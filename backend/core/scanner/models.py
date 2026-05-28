@@ -79,15 +79,26 @@ class MACDResult(BaseModel):
     histogram: float
 
 
+class BollingerBands(BaseModel):
+    upper:   float
+    middle:  float
+    lower:   float
+    width:   float  # (upper - lower) / middle — normalized band width
+    squeeze: bool   # True when width < 80% of 20-period average width
+
+
 class TechnicalIndicators(BaseModel):
-    rsi:           float
-    macd:          MACDResult
-    ema20:         float
-    ema50:         float
-    atr:           float
-    volume_spike:  float
-    current_price: float
-    trend:         TrendDirection
+    rsi:            float
+    macd:           MACDResult
+    ema20:          float
+    ema50:          float
+    ema200:         float = 0.0   # 200-period EMA (0.0 when insufficient history)
+    bb:             BollingerBands | None = None  # Bollinger Bands
+    atr:            float
+    volume_spike:   float
+    current_price:  float
+    trend:          TrendDirection
+    candle_pattern: str = ""  # detected pattern: HAMMER, SHOOTING_STAR, MORNING_STAR, etc.
 
 
 class MultiTimeframeResult(BaseModel):
