@@ -144,6 +144,16 @@ class ScannerSettings(BaseSettingsGroup):
         title='RSI Overbought Level',
         description='RSI above this qualifies a candle as overbought',
     )
+    trending_watchlist: list[str] = Field(
+        default_factory=list,
+        title='Trending Watchlist',
+        description=(
+            'Symbols to prioritise in TRENDING scan mode (founder watchlist). '
+            'Max 50 entries, each up to 10 characters. '
+            'Example: ["NEAR", "FIL", "AVAX"]'
+        ),
+        max_length=50,
+    )
 
     @model_validator(mode='after')
     def alert_gte_min(self) -> 'ScannerSettings':

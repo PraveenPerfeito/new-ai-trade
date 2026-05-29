@@ -151,11 +151,9 @@ def _filter_coins(
         ]
 
     if mode == ScannerMode.TRENDING:
-        result = [
-            c for c in result
-            if c.price_change_24h > 5 or (c.volume_24h / (c.market_cap or 1)) > 0.08  # was > 2
-        ]
-        result.sort(key=lambda c: c.volume_24h / (c.market_cap or 1), reverse=True)
+        # Universe is pre-ranked by discovery_score from build_trending_universe().
+        # Preserve that order — only apply a minimal volume-turnover sanity check.
+        result = [c for c in result if (c.volume_24h / (c.market_cap or 1)) > 0.02]
     else:
         result = _prioritize(result)
 
@@ -220,6 +218,23 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
         btc_change_24h = next(
             (c.price_change_24h for c in all_coins if c.symbol == "BTC"), 0.0
         )
+
+        # 1b. TRENDING mode: expand universe with multi-source CMC intelligence
+        if mode == ScannerMode.TRENDING:
+            from backend.core.scanner.trending_universe import build_trending_universe  # noqa: PLC0415
+            tr = await build_trending_universe(
+                base_coins=all_coins,
+                btc_change_24h=btc_change_24h,
+                # watchlist_symbols loaded internally from ScannerSettings.trending_watchlist
+            )
+            all_coins = tr.coins
+            log.info(
+                "trending_universe_applied",
+                total_candidates=tr.total_unique,
+                new_from_cmc_trending=tr.new_from_trending,
+                rising_sectors=tr.rising_sectors,
+                source_counts=tr.source_counts,
+            )
 
         # 2. Filter + prioritize
         filtered = _filter_coins(all_coins, config, futures_syms, mode)

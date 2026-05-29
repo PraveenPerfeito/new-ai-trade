@@ -142,6 +142,73 @@ async def read_intelligence_listings(limit: int = 200) -> IntelligenceCacheResul
     return await _fallback_coingecko(limit)
 
 
+# ── Additional intelligence readers ──────────────────────────────────────────
+# These expose the other cache:intel:* keys written by the TypeScript workers
+# to Python consumers (primarily trending_universe.py).
+
+INTEL_TRENDING_KEY   = "cache:intel:trending"
+INTEL_CATEGORIES_KEY = "cache:intel:categories"
+
+
+async def read_trending_coins() -> list[dict]:
+    """
+    Return the raw TrendingCoin list from cache:intel:trending.
+    Each dict has: id, symbol, name, rank, priceChange1h, priceChange24h,
+    volume24h, marketCap.
+    Returns [] on cache miss or error.
+    """
+    try:
+        redis  = await get_redis()
+        raw    = await redis.get(INTEL_TRENDING_KEY)
+        if raw:
+            snapshot = json.loads(raw)
+            coins = snapshot.get("trending", [])
+            await redis.incr("cache:intel:hits:trending")
+            return coins
+        await redis.incr("cache:intel:misses:trending")
+    except Exception as exc:
+        log.warning("intel_trending_read_error", error=str(exc))
+    return []
+
+
+async def read_categories() -> tuple[list[dict], str]:
+    """
+    Return (all_categories, strongest_sector_name) from cache:intel:categories.
+    Each category dict has: id, name, title, coinCount, avgPriceChange,
+    volume24h, marketCap, marketCapChange, coins (list[str]).
+    Returns ([], "") on cache miss or error.
+    """
+    try:
+        redis = await get_redis()
+        raw   = await redis.get(INTEL_CATEGORIES_KEY)
+        if raw:
+            snapshot   = json.loads(raw)
+            categories = snapshot.get("categories", [])
+            strongest  = snapshot.get("strongest", "")
+            await redis.incr("cache:intel:hits:categories")
+            return categories, strongest
+        await redis.incr("cache:intel:misses:categories")
+    except Exception as exc:
+        log.warning("intel_categories_read_error", error=str(exc))
+    return [], ""
+
+
+async def read_top_movers() -> list[str]:
+    """
+    Return top-mover symbols (by absolute 24h change) from listings.topMovers.
+    Returns up to 10 symbols; [] on cache miss.
+    """
+    try:
+        redis = await get_redis()
+        raw   = await redis.get(INTEL_LISTINGS_KEY)
+        if raw:
+            snapshot = json.loads(raw)
+            return [m["symbol"].upper() for m in snapshot.get("topMovers", [])]
+    except Exception as exc:
+        log.warning("intel_top_movers_read_error", error=str(exc))
+    return []
+
+
 async def _fallback_coingecko(limit: int) -> IntelligenceCacheResult:
     """CoinGecko fallback when the Redis intelligence cache is cold or unreadable."""
     # Lazy import avoids circular dependency at module load time
