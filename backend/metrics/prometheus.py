@@ -230,3 +230,13 @@ oi_interpretation_distribution = Counter(
     # interpretation: NEW_LONGS | NEW_SHORTS | SHORT_COVERING | LONG_LIQUIDATION | NEUTRAL
     # signal_type:    BUY | SELL
 )
+
+# ── Funding trend metrics (Phase 7.4A.4) ─────────────────────────────────────
+
+funding_trend_distribution = Counter(
+    "funding_trend_distribution_total",
+    "Distribution of funding rate trends across futures signals",
+    ["trend", "signal_type"],
+    # trend:       RISING | FALLING | STABLE
+    # signal_type: BUY | SELL
+)

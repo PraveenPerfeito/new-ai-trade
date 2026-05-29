@@ -492,8 +492,9 @@ async def scan_coin(
                     signal_type=signal_type,
                 )
                 fa = classify_funding(
-                    funding_rate = futures_data.funding_rate,
-                    is_buy       = signal_type == SignalType.BUY,
+                    funding_rate  = futures_data.funding_rate,
+                    is_buy        = signal_type == SignalType.BUY,
+                    funding_trend = futures_data.funding_trend.value,  # Phase 7.4A.4
                 )
                 if fa.should_reject:
                     gate_rejections_total.labels(gate="futures").inc()

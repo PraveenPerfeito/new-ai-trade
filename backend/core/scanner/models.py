@@ -223,6 +223,13 @@ class OITrend(str, Enum):
     STABLE  = "STABLE"
 
 
+class FundingTrend(str, Enum):
+    """Phase 7.4A.4 — direction of funding rate across the last 3 readings."""
+    RISING  = "RISING"   # adverse rate increasing — crowding accelerating
+    FALLING = "FALLING"  # adverse rate decreasing — crowding unwinding
+    STABLE  = "STABLE"   # no meaningful change between readings
+
+
 class OIInterpretation(str, Enum):
     """Phase 7.4A.2 — institutional OI interpretation."""
     NEW_LONGS        = "NEW_LONGS"         # price ↑ + OI ↑  (strongest BUY confirmation)
@@ -240,6 +247,7 @@ class FuturesData(BaseModel):
     oi_change_24h:           float
     oi_trend:                OITrend
     oi_interpretation:       OIInterpretation = OIInterpretation.NEUTRAL  # Phase 7.4A.2
+    funding_trend:           FundingTrend     = FundingTrend.STABLE       # Phase 7.4A.4
     long_short_ratio:        float
     long_account_percent:    float
     short_account_percent:   float

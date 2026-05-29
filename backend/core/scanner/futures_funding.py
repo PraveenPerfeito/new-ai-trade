@@ -142,6 +142,12 @@ EXTREME_ADV_THRESHOLD   = 0.007   # adverse > 0.7%/8h → EXTREME → hard rejec
 ELEVATED_ADV_THRESHOLD  = 0.003   # adverse > 0.3%/8h → ELEVATED → -10 pts penalty
 FAVORABLE_THRESHOLD     = 0.001   # favorable ≥ 0.1%/8h → FAVORABLE → +3 pts bonus
 
+# Phase 7.4A.4 — funding trend adjustments to adverse_rate before classification
+# RISING:  multiply adverse by 1.3 (crowding accelerating → more dangerous)
+# FALLING: multiply adverse by 0.7 (crowding unwinding → less dangerous)
+TREND_RISING_MULTIPLIER  = 1.3
+TREND_FALLING_MULTIPLIER = 0.7
+
 # Setup score adjustments
 _ADJ: dict[str, int] = {
     "FAVORABLE": +3,
@@ -195,16 +201,21 @@ class FundingAnalysis:
 
 
 def classify_funding(
-    funding_rate: float,
-    is_buy:       bool,
+    funding_rate:  float,
+    is_buy:        bool,
+    funding_trend: str = "STABLE",   # Phase 7.4A.4: "RISING" | "FALLING" | "STABLE"
 ) -> FundingAnalysis:
     """
     Classify the funding rate context for a futures signal.
 
     Parameters
     ----------
-    funding_rate : 8h funding rate in decimal (e.g. 0.001 = 0.1%/8h)
-    is_buy       : True for BUY signal, False for SELL
+    funding_rate  : 8h funding rate in decimal (e.g. 0.001 = 0.1%/8h)
+    is_buy        : True for BUY signal, False for SELL
+    funding_trend : Phase 7.4A.4 — direction of funding over last 3 readings.
+                    RISING  → multiply adverse by 1.3 (crowding accelerating)
+                    FALLING → multiply adverse by 0.7 (crowding unwinding)
+                    STABLE  → no adjustment (default, backward-compatible)
 
     Returns
     -------
@@ -217,6 +228,12 @@ def classify_funding(
     else:
         adverse   = max(0.0, -funding_rate)   # negative rate = shorts paying = BAD for shorts
         favorable = max(0.0, funding_rate)    # positive rate = longs paying = GOOD for shorts
+
+    # Phase 7.4A.4: adjust adverse_rate based on funding trend before classification
+    if funding_trend == "RISING":
+        adverse = adverse * TREND_RISING_MULTIPLIER
+    elif funding_trend == "FALLING":
+        adverse = adverse * TREND_FALLING_MULTIPLIER
 
     # Classification
     if adverse > EXTREME_ADV_THRESHOLD:
@@ -233,19 +250,20 @@ def classify_funding(
     adj          = _ADJ[context.value]
     should_rej   = context == FundingContext.EXTREME
 
-    # Human-readable log note
-    ann_str = f"{ann_pct:+.1f}%/yr"
+    # Human-readable log note (includes trend when non-STABLE)
+    ann_str    = f"{ann_pct:+.1f}%/yr"
+    trend_note = f" [trend:{funding_trend}]" if funding_trend != "STABLE" else ""
     if context == FundingContext.EXTREME:
         msg = (f"funding_extreme: adverse={adverse:.4f} ({ann_str}) "
-               f"for {direction} — hard reject (too crowded to hold)")
+               f"for {direction}{trend_note} — hard reject (too crowded to hold)")
     elif context == FundingContext.ELEVATED:
         msg = (f"funding_elevated: adverse={adverse:.4f} ({ann_str}) "
-               f"for {direction} — {adj:+d} pts penalty, AI gate tightened")
+               f"for {direction}{trend_note} — {adj:+d} pts penalty, AI gate tightened")
     elif context == FundingContext.FAVORABLE:
         msg = (f"funding_favorable: favorable={favorable:.4f} ({ann_str}) "
-               f"for {direction} — {adj:+d} pts bonus, paid to hold position")
+               f"for {direction}{trend_note} — {adj:+d} pts bonus, paid to hold position")
     else:
-        msg = f"funding_normal: rate={funding_rate:.4f} ({ann_str})"
+        msg = f"funding_normal: rate={funding_rate:.4f} ({ann_str}){trend_note}"
 
     return FundingAnalysis(
         funding_rate    = funding_rate,

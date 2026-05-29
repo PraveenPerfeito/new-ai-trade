@@ -14,7 +14,7 @@ from backend.core.scanner.market_fetcher import (
 from backend.core.scanner.models import (
     Candle, TrendDirection, SignalType,
     LiquidationZone, BreakoutSignal, TrendContinuationData,
-    FuturesData, FundingBias, OITrend, OIInterpretation,
+    FuturesData, FundingBias, OITrend, OIInterpretation, FundingTrend,
 )
 from backend.logging.setup import get_logger
 
@@ -66,6 +66,57 @@ async def _get_ls(symbol: str) -> dict:
         }
     await ls_cache.set(symbol, result)
     return result
+
+
+# ── Funding trend tracking (Phase 7.4A.4) ────────────────────────────────────
+# Store last 3 funding readings per symbol in Redis (TTL = 8h = one funding period).
+# 3 readings are enough to determine direction: oldest → middle → latest.
+
+FUNDING_HIST_KEY     = "futures:funding_trend:{}"  # format with symbol
+FUNDING_HIST_TTL     = 8 * 60 * 60   # 8 hours — matches Binance funding interval
+FUNDING_HIST_MAX     = 3             # keep last 3 readings
+FUNDING_TREND_DELTA  = 0.0002        # min absolute change to classify as RISING/FALLING
+
+
+async def _update_funding_history(symbol: str, rate: float) -> list[float]:
+    """
+    Append the latest funding rate to the symbol's 3-reading history in Redis.
+    Returns the updated list (oldest first, at most 3 entries).
+    """
+    import json  # noqa: PLC0415
+    key = FUNDING_HIST_KEY.format(symbol)
+    try:
+        from backend.cache.redis_cache import get_redis  # noqa: PLC0415
+        redis = await get_redis()
+        raw   = await redis.get(key)
+        hist: list[float] = json.loads(raw) if raw else []
+        hist.append(rate)
+        hist = hist[-FUNDING_HIST_MAX:]   # keep last N
+        await redis.setex(key, FUNDING_HIST_TTL, json.dumps(hist))
+        return hist
+    except Exception as exc:
+        log.warning("funding_history_update_failed", symbol=symbol, error=str(exc))
+        return [rate]
+
+
+def _classify_funding_trend(history: list[float]) -> FundingTrend:
+    """
+    Classify the direction of funding rate change from a list of readings.
+
+    Requires at least 2 readings (oldest to newest).
+    Uses the absolute delta between oldest and latest:
+      delta > +FUNDING_TREND_DELTA  → RISING
+      delta < -FUNDING_TREND_DELTA  → FALLING
+      else                          → STABLE
+    """
+    if len(history) < 2:
+        return FundingTrend.STABLE
+    delta = history[-1] - history[0]
+    if delta > FUNDING_TREND_DELTA:
+        return FundingTrend.RISING
+    if delta < -FUNDING_TREND_DELTA:
+        return FundingTrend.FALLING
+    return FundingTrend.STABLE
 
 
 # ── Liquidation zone detection ────────────────────────────────────────────────
@@ -298,6 +349,27 @@ async def analyze_futures_intelligence(
     current_price = candles_1h[-1].close if candles_1h else 0.0
     ann = funding_rate * 3 * 365 * 100
 
+    # Phase 7.4A.4: update funding history and classify trend
+    funding_history  = await _update_funding_history(symbol, funding_rate)
+    funding_trend    = _classify_funding_trend(funding_history)
+
+    # Telemetry
+    try:
+        from backend.metrics.prometheus import funding_trend_distribution  # noqa: PLC0415
+        funding_trend_distribution.labels(
+            trend=funding_trend.value,
+            signal_type=signal_type.value,
+        ).inc()
+    except Exception:
+        pass
+
+    log.info(
+        "funding_trend_classified",
+        symbol=base_symbol,
+        trend=funding_trend.value,
+        history=[round(r, 6) for r in funding_history],
+    )
+
     funding_bias = (
         FundingBias.LONG_HEAVY  if funding_rate >  0.0002 else
         FundingBias.SHORT_HEAVY if funding_rate < -0.0002 else
@@ -352,6 +424,7 @@ async def analyze_futures_intelligence(
         funding_rate=funding_rate,
         funding_rate_annualized=round(ann, 2),
         funding_bias=funding_bias,
+        funding_trend=funding_trend,
         open_interest=oi_data["current"],
         oi_change_24h=oi_data["change_24h"],
         oi_trend=oi_trend,
