@@ -220,3 +220,13 @@ breakout_detections_total = Counter(
     # breakout_type: 20d_high | 30d_high | 20d_low | 30d_low | bb_expansion | ...
     # strength:      EARLY_BREAKOUT | CONFIRMED_BREAKOUT | HIGH_MOMENTUM_BREAKOUT
 )
+
+# ── OI intelligence metrics (Phase 7.4A.2) ───────────────────────────────────
+
+oi_interpretation_distribution = Counter(
+    "oi_interpretation_distribution_total",
+    "Distribution of OI interpretations across futures signals",
+    ["interpretation", "signal_type"],
+    # interpretation: NEW_LONGS | NEW_SHORTS | SHORT_COVERING | LONG_LIQUIDATION | NEUTRAL
+    # signal_type:    BUY | SELL
+)

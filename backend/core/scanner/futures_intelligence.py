@@ -14,7 +14,7 @@ from backend.core.scanner.market_fetcher import (
 from backend.core.scanner.models import (
     Candle, TrendDirection, SignalType,
     LiquidationZone, BreakoutSignal, TrendContinuationData,
-    FuturesData, FundingBias, OITrend,
+    FuturesData, FundingBias, OITrend, OIInterpretation,
 )
 from backend.logging.setup import get_logger
 
@@ -227,15 +227,16 @@ def analyze_trend_continuation(
 # ── Momentum score ────────────────────────────────────────────────────────────
 
 def calc_momentum_score(
-    funding_rate: float,
-    oi_change_24h: float,
+    funding_rate:     float,
+    oi_change_24h:    float,
     long_short_ratio: float,
-    breakout: BreakoutSignal,
-    trend_cont: TrendContinuationData,
-    rsi: float,
-    trend: TrendDirection,
-    signal_type: SignalType,
-    base_symbol: str,
+    breakout:         BreakoutSignal,
+    trend_cont:       TrendContinuationData,
+    rsi:              float,
+    trend:            TrendDirection,
+    signal_type:      SignalType,
+    base_symbol:      str,
+    oi_score_adj:     int = 0,   # Phase 7.4A.2: from OIAnalysisResult.score_adjustment
 ) -> int:
     score = 50
 
@@ -253,14 +254,9 @@ def calc_momentum_score(
         elif funding_rate < -0.0003: score -= 8
         elif funding_rate < -0.0006: score -= 15
 
-    if signal_type == SignalType.BUY:
-        if   oi_change_24h >  5: score += 10
-        elif oi_change_24h >  2: score += 5
-        elif oi_change_24h < -5: score -= 8
-    else:
-        if   oi_change_24h < -5: score += 10
-        elif oi_change_24h < -2: score += 5
-        elif oi_change_24h >  5: score -= 8
+    # Phase 7.4A.2: OI interpretation replaces raw oi_change_24h scoring.
+    # Directional adj is +10 (confirmation), -5 (warning), or -10 (contra-flow).
+    score += oi_score_adj
 
     if signal_type == SignalType.BUY  and long_short_ratio < 0.8: score += 8
     if signal_type == SignalType.SELL and long_short_ratio > 1.5: score += 8
@@ -313,12 +309,43 @@ async def analyze_futures_intelligence(
         OITrend.STABLE
     )
 
+    # Phase 7.4A.2: Classify OI vs price direction for institutional interpretation
+    price_change_24h = 0.0
+    if len(candles_1h) >= 25:
+        past_close    = candles_1h[-25].close
+        price_change_24h = (
+            (current_price - past_close) / past_close * 100 if past_close > 0 else 0.0
+        )
+
+    from backend.core.scanner.oi_intelligence import classify_oi  # noqa: PLC0415
+    oi_analysis = classify_oi(price_change_24h, oi_data["change_24h"], signal_type)
+
+    # Telemetry
+    try:
+        from backend.metrics.prometheus import oi_interpretation_distribution  # noqa: PLC0415
+        oi_interpretation_distribution.labels(
+            interpretation=oi_analysis.interpretation.value,
+            signal_type=signal_type.value,
+        ).inc()
+    except Exception:
+        pass
+
+    log.info(
+        "oi_interpretation",
+        symbol=base_symbol,
+        interpretation=oi_analysis.interpretation.value,
+        price_change_24h=round(price_change_24h, 2),
+        oi_change_24h=round(oi_data["change_24h"], 2),
+        score_adj=oi_analysis.score_adjustment,
+    )
+
     liq_zones  = detect_liquidation_zones(candles_1h, current_price, atr, funding_rate)
     breakout   = detect_breakout(candles_1h, current_price)
     trend_cont = analyze_trend_continuation(candles_1h, ema20, atr, trend)
     momentum   = calc_momentum_score(
         funding_rate, oi_data["change_24h"], ls_data["ratio"],
         breakout, trend_cont, rsi, trend, signal_type, base_symbol,
+        oi_score_adj=oi_analysis.score_adjustment,
     )
 
     return FuturesData(
@@ -328,6 +355,7 @@ async def analyze_futures_intelligence(
         open_interest=oi_data["current"],
         oi_change_24h=oi_data["change_24h"],
         oi_trend=oi_trend,
+        oi_interpretation=oi_analysis.interpretation,
         long_short_ratio=ls_data["ratio"],
         long_account_percent=ls_data["long_pct"],
         short_account_percent=ls_data["short_pct"],

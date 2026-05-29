@@ -223,6 +223,15 @@ class OITrend(str, Enum):
     STABLE  = "STABLE"
 
 
+class OIInterpretation(str, Enum):
+    """Phase 7.4A.2 — institutional OI interpretation."""
+    NEW_LONGS        = "NEW_LONGS"         # price ↑ + OI ↑  (strongest BUY confirmation)
+    NEW_SHORTS       = "NEW_SHORTS"        # price ↓ + OI ↑  (strongest SELL confirmation)
+    SHORT_COVERING   = "SHORT_COVERING"    # price ↑ + OI ↓  (weak BUY — shorts exiting)
+    LONG_LIQUIDATION = "LONG_LIQUIDATION"  # price ↓ + OI ↓  (longs stopped out, squeeze risk)
+    NEUTRAL          = "NEUTRAL"           # no clear directional OI signal
+
+
 class FuturesData(BaseModel):
     funding_rate:            float
     funding_rate_annualized: float
@@ -230,6 +239,7 @@ class FuturesData(BaseModel):
     open_interest:           float
     oi_change_24h:           float
     oi_trend:                OITrend
+    oi_interpretation:       OIInterpretation = OIInterpretation.NEUTRAL  # Phase 7.4A.2
     long_short_ratio:        float
     long_account_percent:    float
     short_account_percent:   float
