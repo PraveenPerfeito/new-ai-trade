@@ -171,7 +171,10 @@ celery -A backend.workers.celery_app.celery_app worker --beat -Q celery,scanner 
 | `signals` | Trading signals with indicators, risk grade, futures data |
 | `scan_runs` | Audit log of every scan |
 | `coins` | Top-200 coin metadata |
-| `signal_outcomes` | TP/SL/timeout outcome tracking |
+| `signal_outcomes` | TP/SL/timeout outcome tracking (populated by outcome tracker every 10 min) |
+| `ai_call_log` | Every Claude API call — latency, tokens, validated/rejected |
+| `scan_metrics_log` | Per-scan stats — coins scanned, signals found, duration |
+| `analytics_snapshots` | Cached computed analytics (edge report, calibration) |
 | `backtest_runs` | Backtest job metadata |
 | `backtest_trades` | Individual simulated trades |
 | `performance_stats` | Aggregated analytics |
@@ -204,6 +207,44 @@ celery -A backend.workers.celery_app.celery_app worker --beat -Q celery,scanner 
 | `GET` | `/api/analytics/edge/report` | Edge report (win rate, expectancy, Sharpe) |
 | `GET` | `/api/settings/{group}` | Get settings group |
 | `PATCH` | `/api/settings/{group}` | Update settings group |
+
+---
+
+## Telegram Alerts
+
+Every signal that passes all 11 gates is sent to Telegram with full trade detail:
+
+```
+📈 LONG — TON/USDT
+Mode: FUTURES  |  Confidence: 95% 🔥 VERY HIGH
+Grade: 🟢 A  |  R:R: 1:2.5
+
+📊 Trade Levels
+  Entry:  $3.2100
+  Target: $3.6200  (+12.77%)
+  Stop:   $2.9800  (-7.17%)
+
+⚡ Leverage: Up to 10× (max safe: 15×)
+
+📡 Futures Intelligence
+  Funding: 0.0120% 🔴 (LONG_HEAVY)
+  OI Trend: RISING  |  L/S: 1.34
+  Momentum: 78/100
+
+🔬 Technical
+  EMA Cross: GOLDEN_CROSS
+  Pattern: Hammer
+
+RSI: 62  |  Vol: 2.3×  |  EMA200: above ✅
+
+🤖 Strong 4h bullish alignment with BB squeeze breakout
+
+🕐 2026-05-28 09:10 UTC  |  Next alert in 1h
+```
+
+### Deduplication
+
+`ALERT_COOLDOWN_HOURS = 1` in `telegram_notifier.py` — the same coin+direction (e.g. TON LONG) cannot alert again for 1 hour. If the direction flips (LONG → SHORT), it fires immediately regardless. Cooldown stored as a Redis key `tg:alert:{SYMBOL}:{LONG|SHORT}`.
 
 ---
 

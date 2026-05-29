@@ -32,6 +32,7 @@ AI-powered crypto trading signal scanner (public brand: **SignalEdge AI**) built
 18. **AI credit saving** — `AI_MIN_SETUP_SCORE = 70` in `ai_validator.py`. Setup score 60–69 → heuristic (no API call). Score ≥ 70 → Claude. Reduces credits ~40%.
 19. **Admin users see all signals** — `getAccessContext()` in `lib/access-control.ts` reads Supabase session cookie; admin email → enterprise plan → no confidence floor/daily cap.
 20. **Settings API uses class not string** — `get_settings_service().get_group(AISettings)` must pass model class. Passing string `"ai"` causes silent TypeError → setting never read.
+21. **Telegram alert deduplication** — Redis key `tg:alert:{SYMBOL}:{LONG|SHORT}` with 1-hour TTL prevents duplicate alerts for the same coin+direction. Direction flip (BUY→SELL) fires immediately. `ALERT_COOLDOWN_HOURS = 1` in `telegram_notifier.py`.
 
 ---
 
@@ -67,6 +68,7 @@ backend/core/scanner/   ← PRIMARY scanner (Python) — all new features here
   ai_validator.py       ← checks AISettings.enabled + setup_score < 70 → heuristic; semaphore(3)
   risk.py               ← grade A–F; quality score; leverage tiers
   futures_intelligence.py← funding rate, OI, L/S ratio, liq zones
+  telegram_notifier.py  ← detailed signal format with leverage/% targets; 1-hour dedup cooldown per symbol+direction
 
 backend/workers/
   celery_app.py         ← Celery factory + worker_ready signal starts health server
