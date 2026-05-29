@@ -161,7 +161,7 @@ def _grade_emoji(grade: str) -> str:
 # within ALERT_COOLDOWN_HOURS. Same coin can alert again after cooldown expires,
 # or immediately if the direction changes (BUY → SELL or vice versa).
 
-ALERT_COOLDOWN_HOURS = 4
+ALERT_COOLDOWN_HOURS = 1
 
 
 async def _is_duplicate_alert(symbol: str, direction: str) -> bool:
