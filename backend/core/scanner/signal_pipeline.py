@@ -404,9 +404,11 @@ async def scan_coin(
             return None
 
         # Step 10: Futures intelligence (futures / high_confidence modes only)
-        futures_data = None
+        futures_data     = None
+        funding_score_adj = 0   # Phase 7.3A.6: setup_score adjustment from funding context
         if mode in (ScannerMode.FUTURES, ScannerMode.HIGH_CONFIDENCE):
             try:
+                from backend.core.scanner.futures_funding import classify_funding  # noqa: PLC0415
                 futures_data = await analyze_futures_intelligence(
                     symbol=coin.binance_symbol,
                     base_symbol=coin.symbol,
@@ -417,10 +419,26 @@ async def scan_coin(
                     trend=ind1h.trend,
                     signal_type=signal_type,
                 )
-                if abs(futures_data.funding_rate) > 0.005:  # was 0.002; 0.5%/8h = extreme
+                fa = classify_funding(
+                    funding_rate = futures_data.funding_rate,
+                    is_buy       = signal_type == SignalType.BUY,
+                )
+                if fa.should_reject:
                     gate_rejections_total.labels(gate="futures").inc()
-                    log.info("rejected_extreme_funding", symbol=coin.symbol, rate=futures_data.funding_rate)
+                    log.info("rejected_extreme_funding",
+                             symbol=coin.symbol,
+                             rate=futures_data.funding_rate,
+                             adverse=fa.adverse_rate,
+                             context=fa.context.value)
                     return None
+                # ELEVATED → penalty | FAVORABLE → bonus applied to effective setup score
+                funding_score_adj = fa.setup_score_adj
+                if fa.setup_score_adj != 0:
+                    log.info("funding_context_adjustment",
+                             symbol=coin.symbol,
+                             context=fa.context.value,
+                             adj=fa.setup_score_adj,
+                             note=fa.log_message)
             except Exception as exc:
                 log.warning("futures_intelligence_failed", symbol=coin.symbol, error=str(exc))
 
@@ -447,7 +465,8 @@ async def scan_coin(
             futures_data=futures_data,
         )
 
-        ai = await validate_signal(draft, coin, ind4h, s1h * 0.4 + s4h * 0.6, volatility, setup_score=setup.pre_score)
+        effective_score = setup.pre_score + funding_score_adj   # Phase 7.3A.6 funding adjustment
+        ai = await validate_signal(draft, coin, ind4h, s1h * 0.4 + s4h * 0.6, volatility, setup_score=effective_score)
         if not ai.validated or ai.confidence < config.min_confidence:
             gate_rejections_total.labels(gate="ai").inc()
             return None
