@@ -240,3 +240,13 @@ funding_trend_distribution = Counter(
     # trend:       RISING | FALLING | STABLE
     # signal_type: BUY | SELL
 )
+
+# ── Positioning intelligence metrics (Phase 7.4A.5) ──────────────────────────
+
+positioning_distribution = Counter(
+    "positioning_distribution_total",
+    "Distribution of long/short positioning contexts across futures signals",
+    ["context", "signal_type"],
+    # context:     EXTREME_LONG | LONG_HEAVY | BALANCED | SHORT_HEAVY | EXTREME_SHORT
+    # signal_type: BUY | SELL
+)

@@ -230,6 +230,15 @@ class FundingTrend(str, Enum):
     STABLE  = "STABLE"   # no meaningful change between readings
 
 
+class PositioningContext(str, Enum):
+    """Phase 7.4A.5 — crowd positioning classification from L/S ratio."""
+    EXTREME_LONG  = "EXTREME_LONG"   # ratio > 2.0  (>66.7% of traders are long)
+    LONG_HEAVY    = "LONG_HEAVY"     # ratio 1.3–2.0 (56.5–66.7% long)
+    BALANCED      = "BALANCED"       # ratio 0.8–1.3 (44.4–56.5% long)
+    SHORT_HEAVY   = "SHORT_HEAVY"    # ratio 0.5–0.8 (33.3–44.4% long)
+    EXTREME_SHORT = "EXTREME_SHORT"  # ratio < 0.5  (<33.3% of traders are long)
+
+
 class OIInterpretation(str, Enum):
     """Phase 7.4A.2 — institutional OI interpretation."""
     NEW_LONGS        = "NEW_LONGS"         # price ↑ + OI ↑  (strongest BUY confirmation)
@@ -248,6 +257,7 @@ class FuturesData(BaseModel):
     oi_trend:                OITrend
     oi_interpretation:       OIInterpretation = OIInterpretation.NEUTRAL  # Phase 7.4A.2
     funding_trend:           FundingTrend     = FundingTrend.STABLE       # Phase 7.4A.4
+    positioning_context:     PositioningContext = PositioningContext.BALANCED  # Phase 7.4A.5
     long_short_ratio:        float
     long_account_percent:    float
     short_account_percent:   float

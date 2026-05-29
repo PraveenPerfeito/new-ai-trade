@@ -15,6 +15,7 @@ from backend.core.scanner.models import (
     Candle, TrendDirection, SignalType,
     LiquidationZone, BreakoutSignal, TrendContinuationData,
     FuturesData, FundingBias, OITrend, OIInterpretation, FundingTrend,
+    PositioningContext,
 )
 from backend.logging.setup import get_logger
 
@@ -278,16 +279,17 @@ def analyze_trend_continuation(
 # ── Momentum score ────────────────────────────────────────────────────────────
 
 def calc_momentum_score(
-    funding_rate:     float,
-    oi_change_24h:    float,
-    long_short_ratio: float,
-    breakout:         BreakoutSignal,
-    trend_cont:       TrendContinuationData,
-    rsi:              float,
-    trend:            TrendDirection,
-    signal_type:      SignalType,
-    base_symbol:      str,
-    oi_score_adj:     int = 0,   # Phase 7.4A.2: from OIAnalysisResult.score_adjustment
+    funding_rate:        float,
+    oi_change_24h:       float,
+    long_short_ratio:    float,
+    breakout:            BreakoutSignal,
+    trend_cont:          TrendContinuationData,
+    rsi:                 float,
+    trend:               TrendDirection,
+    signal_type:         SignalType,
+    base_symbol:         str,
+    oi_score_adj:        int = 0,   # Phase 7.4A.2: from OIAnalysisResult.score_adjustment
+    positioning_score_adj: int = 0, # Phase 7.4A.5: from PositioningResult.score_adjustment
 ) -> int:
     score = 50
 
@@ -309,8 +311,9 @@ def calc_momentum_score(
     # Directional adj is +10 (confirmation), -5 (warning), or -10 (contra-flow).
     score += oi_score_adj
 
-    if signal_type == SignalType.BUY  and long_short_ratio < 0.8: score += 8
-    if signal_type == SignalType.SELL and long_short_ratio > 1.5: score += 8
+    # Phase 7.4A.5: positioning intelligence replaces old two-case L/S check.
+    # Covers 5 levels: EXTREME_LONG / LONG_HEAVY / BALANCED / SHORT_HEAVY / EXTREME_SHORT
+    score += positioning_score_adj
 
     if breakout.detected:
         aligned = (
@@ -411,6 +414,32 @@ async def analyze_futures_intelligence(
         score_adj=oi_analysis.score_adjustment,
     )
 
+    # Phase 7.4A.5: positioning intelligence
+    from backend.core.scanner.positioning_intelligence import classify_positioning  # noqa: PLC0415
+    pos_analysis = classify_positioning(
+        long_short_ratio = ls_data["ratio"],
+        long_pct         = ls_data["long_pct"],
+        signal_type      = signal_type,
+    )
+
+    try:
+        from backend.metrics.prometheus import positioning_distribution  # noqa: PLC0415
+        positioning_distribution.labels(
+            context=pos_analysis.context.value,
+            signal_type=signal_type.value,
+        ).inc()
+    except Exception:
+        pass
+
+    log.info(
+        "positioning_classified",
+        symbol=base_symbol,
+        context=pos_analysis.context.value,
+        long_short_ratio=round(ls_data["ratio"], 3),
+        long_pct=ls_data["long_pct"],
+        score_adj=pos_analysis.score_adjustment,
+    )
+
     liq_zones  = detect_liquidation_zones(candles_1h, current_price, atr, funding_rate)
     breakout   = detect_breakout(candles_1h, current_price)
     trend_cont = analyze_trend_continuation(candles_1h, ema20, atr, trend)
@@ -418,6 +447,7 @@ async def analyze_futures_intelligence(
         funding_rate, oi_data["change_24h"], ls_data["ratio"],
         breakout, trend_cont, rsi, trend, signal_type, base_symbol,
         oi_score_adj=oi_analysis.score_adjustment,
+        positioning_score_adj=pos_analysis.score_adjustment,
     )
 
     return FuturesData(
@@ -426,6 +456,7 @@ async def analyze_futures_intelligence(
         funding_bias=funding_bias,
         funding_trend=funding_trend,
         open_interest=oi_data["current"],
+        positioning_context=pos_analysis.context,
         oi_change_24h=oi_data["change_24h"],
         oi_trend=oi_trend,
         oi_interpretation=oi_analysis.interpretation,
