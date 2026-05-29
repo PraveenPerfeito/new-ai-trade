@@ -156,6 +156,29 @@ def _grade_emoji(grade: str) -> str:
     return {"A": "🟢", "B": "🔵", "C": "🟡", "D": "🟠", "F": "🔴"}.get(grade, "⚪")
 
 
+# ── Alert deduplication (Redis cooldown) ─────────────────────────────────────
+# Prevents the same symbol+direction from firing multiple Telegram alerts
+# within ALERT_COOLDOWN_HOURS. Same coin can alert again after cooldown expires,
+# or immediately if the direction changes (BUY → SELL or vice versa).
+
+ALERT_COOLDOWN_HOURS = 4
+
+
+async def _is_duplicate_alert(symbol: str, direction: str) -> bool:
+    """Return True if this symbol+direction was already alerted within the cooldown window."""
+    try:
+        from backend.cache.redis_cache import get_redis
+        redis = await get_redis()
+        key = f"tg:alert:{symbol.upper()}:{direction.upper()}"
+        exists = await redis.exists(key)
+        if not exists:
+            await redis.setex(key, ALERT_COOLDOWN_HOURS * 3600, "1")
+        return bool(exists)
+    except Exception as exc:
+        log.warning("alert_dedup_check_failed", error=str(exc))
+        return False  # fail open — send the alert if Redis is down
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def _confidence_label(conf: int) -> str:
@@ -179,7 +202,14 @@ def _leverage_text(max_lev: int, mode: str) -> str:
 
 
 async def send_signal_alert(signal: Signal) -> bool:
-    """Format and enqueue a detailed signal alert."""
+    """Format and enqueue a detailed signal alert. Skips if same symbol+direction was alerted within 4h."""
+    # Deduplication check — prevents spam for the same coin
+    direction_key = "LONG" if signal.type.value == "BUY" else "SHORT"
+    if await _is_duplicate_alert(signal.symbol, direction_key):
+        log.info("telegram_alert_skipped_duplicate", symbol=signal.symbol, direction=direction_key,
+                 cooldown_hours=ALERT_COOLDOWN_HOURS)
+        return False
+
     is_long    = signal.type.value == "BUY"
     direction  = "📈 LONG" if is_long else "📉 SHORT"
     grade_icon = _grade_emoji(signal.risk_grade.value)
@@ -238,6 +268,14 @@ async def send_signal_alert(signal: Signal) -> bool:
     # Setup description
     if signal.setup_description:
         lines += [f"📝 {signal.setup_description[:120]}"]
+
+    # Timestamp + cooldown notice
+    from datetime import datetime, timezone
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    lines += [
+        "",
+        f"🕐 <code>{now_str}</code>  |  Next alert in {ALERT_COOLDOWN_HOURS}h",
+    ]
 
     _enqueue("\n".join(lines))
     return True
