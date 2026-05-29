@@ -188,3 +188,11 @@ intelligence_cache_age_seconds = Histogram(
     "Age of the Redis intelligence snapshot at time of consumption by the scanner",
     buckets=[30, 60, 120, 180, 240, 300, 360, 420, 480, 540, 600],
 )
+
+# ── TrendScore metrics (Phase 7.3A.3) ────────────────────────────────────────
+
+trend_score_histogram = Histogram(
+    "trending_candidate_trend_score",
+    "Distribution of TrendScore values across trending candidates per scan cycle",
+    buckets=[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
+)
