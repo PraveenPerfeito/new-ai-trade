@@ -218,6 +218,21 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
             cache_hit=coin_result.cache_hit,
         )
 
+        # Phase 7.3A.8 — operational visibility when CMC intelligence is degraded
+        if coin_result.cache_source in ("coingecko_fallback", "empty"):
+            cmc_count  = 200   # normal CMC universe size
+            actual     = len(all_coins)
+            log.warning(
+                "intel_provider_degraded",
+                primary="coinmarketcap",
+                fallback=coin_result.cache_source,
+                normal_universe=cmc_count,
+                actual_universe=actual,
+                universe_reduction_pct=round((cmc_count - actual) / cmc_count * 100, 1),
+                mode=mode.value,
+                impact="scan_universe_reduced",
+            )
+
         # Extract BTC 24h change for relative-strength scoring
         btc_change_24h = next(
             (c.price_change_24h for c in all_coins if c.symbol == "BTC"), 0.0

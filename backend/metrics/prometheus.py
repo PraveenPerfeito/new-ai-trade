@@ -202,3 +202,11 @@ sector_intelligence_status_total = Counter(
     "Sector classifications produced per scan cycle (Phase 7.3A.5)",
     ["status"],   # STRONGEST | ACCELERATING | NEUTRAL | WEAKENING | OVERCROWDED
 )
+
+# ── Provider fallback metrics (Phase 7.3A.8) ─────────────────────────────────
+
+intelligence_fallback_total = Counter(
+    "intelligence_fallback_total",
+    "Count of times the scanner fell back from CMC intelligence cache to a secondary provider",
+    ["primary", "fallback", "reason"],
+)

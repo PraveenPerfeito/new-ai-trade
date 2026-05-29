@@ -298,6 +298,44 @@ async def send_scan_summary(
     return True
 
 
+async def send_provider_fallback_alert(
+    primary:    str,
+    fallback:   str,
+    coin_count: int,
+    reason:     str = "cache_cold",
+) -> None:
+    """
+    Operational alert sent when the CMC intelligence cache is cold and the
+    scanner degrades to a secondary provider.
+
+    Called fire-and-forget from intelligence_cache.py.
+    Alert is throttled externally (Redis key) — this function always sends when called.
+    """
+    if not _is_configured():
+        return
+
+    _ICONS = {"coinmarketcap": "📊", "coingecko": "🦎", "binance": "⚡"}
+    p_icon = _ICONS.get(primary.lower(), "📡")
+    f_icon = _ICONS.get(fallback.lower(), "📡")
+    reason_str = reason.replace("_", " ")
+
+    text = (
+        f"⚠️ <b>Intelligence Provider Fallback</b>\n\n"
+        f"{p_icon} <b>{primary.title()}</b>  ❌  {reason_str}\n"
+        f"{f_icon} <b>{fallback.title()}</b>  ✅  active fallback\n\n"
+        f"Scan universe: <b>{coin_count} coins</b> "
+        f"(CMC normally provides 200)\n\n"
+        f"CMC cache will auto-refresh within 5 min.\n"
+        f"<i>Scan continued — no signals dropped.</i>"
+    )
+    try:
+        await _post(text)
+        log.info("ops_alert_sent", alert="provider_fallback",
+                 primary=primary, fallback=fallback)
+    except Exception as exc:
+        log.warning("ops_alert_failed", alert="provider_fallback", error=str(exc))
+
+
 async def send_batch_summary(signals: list[Signal], mode: str) -> bool:
     """Send a condensed summary when many signals arrive in one scan."""
     if not signals:

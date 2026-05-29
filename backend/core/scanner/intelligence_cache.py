@@ -211,12 +211,63 @@ async def read_top_movers() -> list[str]:
     return []
 
 
+# Redis keys for fallback visibility (Phase 7.3A.8)
+FALLBACK_STATUS_KEY    = "intel:fallback:status"     # admin-visible JSON status blob
+FALLBACK_ALERT_TTL_KEY = "intel:fallback:alert_sent"  # throttle key — 15-min TTL
+FALLBACK_STATUS_TTL    = 30 * 60   # 30 min
+FALLBACK_ALERT_TTL     = 15 * 60   # 15 min — minimum gap between Telegram alerts
+FALLBACK_COUNTER_KEY   = "intel:fallback:count_24h"   # daily fallback counter
+
+
+async def _record_fallback_event(coin_count: int) -> bool:
+    """
+    Persist fallback status in Redis for admin visibility and determine whether
+    a Telegram alert should be sent (throttled to once per 15 minutes).
+
+    Returns True if a Telegram alert should be fired, False if throttled.
+    """
+    import time as _time  # noqa: PLC0415
+    should_alert = False
+    try:
+        redis = await get_redis()
+
+        # Admin-visible status blob (30-min TTL)
+        status = json.dumps({
+            "active":           True,
+            "fallback_provider": "coingecko",
+            "primary_provider":  "coinmarketcap",
+            "reason":           "cache_cold",
+            "detected_at":      datetime.now(timezone.utc).isoformat(),
+            "coin_count":       coin_count,
+        })
+        await redis.setex(FALLBACK_STATUS_KEY, FALLBACK_STATUS_TTL, status)
+
+        # Daily counter (resets at 24h)
+        await redis.incr(FALLBACK_COUNTER_KEY)
+        await redis.expire(FALLBACK_COUNTER_KEY, 24 * 60 * 60)
+
+        # Alert throttle check
+        already_alerted = await redis.exists(FALLBACK_ALERT_TTL_KEY)
+        if not already_alerted:
+            await redis.setex(FALLBACK_ALERT_TTL_KEY, FALLBACK_ALERT_TTL, "1")
+            should_alert = True
+
+    except Exception as exc:
+        log.warning("fallback_event_record_failed", error=str(exc))
+
+    return should_alert
+
+
 async def _fallback_coingecko(limit: int) -> IntelligenceCacheResult:
-    """CoinGecko fallback when the Redis intelligence cache is cold or unreadable."""
-    # Lazy import avoids circular dependency at module load time
-    # (market_fetcher imports read_intelligence_listings; intelligence_cache
-    #  imports _fetch_coingecko from market_fetcher — safe as long as both
-    #  imports happen inside functions, not at module level).
+    """
+    CoinGecko fallback when the Redis intelligence cache is cold or unreadable.
+
+    Phase 7.3A.8 additions:
+      - Sets Redis intel:fallback:status for admin dashboard visibility
+      - Increments intel:fallback:count_24h for daily frequency tracking
+      - Sends Telegram operational alert (throttled to once per 15 min)
+      - Increments Prometheus intelligence_fallback_total counter
+    """
     from backend.core.scanner.market_fetcher import _fetch_coingecko  # noqa: PLC0415
 
     intelligence_cache_misses_total.inc()
@@ -227,18 +278,62 @@ async def _fallback_coingecko(limit: int) -> IntelligenceCacheResult:
     except Exception:
         pass
 
-    log.warning("intel_cache_miss_falling_back_to_coingecko")
+    log.warning(
+        "intel_cache_miss_falling_back_to_coingecko",
+        primary="coinmarketcap",
+        fallback="coingecko",
+        reason="cache_cold",
+    )
 
     try:
         coins = await _fetch_coingecko()
+        coin_count = len(coins[:limit])
+
+        # Prometheus counter for fallback events
+        try:
+            from backend.metrics.prometheus import intelligence_fallback_total  # noqa: PLC0415
+            intelligence_fallback_total.labels(
+                primary="coinmarketcap",
+                fallback="coingecko",
+                reason="cache_cold",
+            ).inc()
+        except Exception:
+            pass
+
+        # Redis status + alert throttle check
+        should_alert = await _record_fallback_event(coin_count)
+
+        # Fire-and-forget Telegram operational alert (throttled)
+        if should_alert:
+            import asyncio as _asyncio  # noqa: PLC0415
+            from backend.core.scanner.telegram_notifier import (  # noqa: PLC0415
+                send_provider_fallback_alert,
+            )
+            t = _asyncio.create_task(
+                send_provider_fallback_alert(
+                    primary    = "CoinMarketCap",
+                    fallback   = "CoinGecko",
+                    coin_count = coin_count,
+                    reason     = "cache_cold",
+                )
+            )
+            t.add_done_callback(
+                lambda t: log.warning("ops_alert_task_failed", error=str(t.exception()))
+                if not t.cancelled() and t.exception() else None
+            )
+
         intelligence_cache_hits_total.labels(source="coingecko_fallback").inc()
-        log.info("intel_coingecko_fallback_ok", count=len(coins))
+        log.info(
+            "intel_coingecko_fallback_ok",
+            count=coin_count,
+            alert_sent=should_alert,
+        )
         return IntelligenceCacheResult(
             coins=coins[:limit],
             cache_source="coingecko_fallback",
             cache_hit=False,
             cache_age_seconds=0.0,
-            is_fresh=True,   # freshly fetched — age is effectively zero
+            is_fresh=True,
         )
     except Exception as exc:
         log.error("intel_coingecko_fallback_failed", error=str(exc))
