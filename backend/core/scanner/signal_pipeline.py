@@ -92,6 +92,7 @@ def detect_setup(
     coin_change_24h: float = 0.0,
     btc_change_24h: float = 0.0,
     candle_count_1h: int = 0,
+    candle_count_4h: int = 0,          # Phase 7.4A.3 — 4h EMA200 convergence guard
     candles_1h: "list[Candle]" = [],   # Phase 7.4A.1 — breakout detection
     candles_1d: "list[Candle]" = [],   # Phase 7.4A.1 — breakout detection
 ) -> SetupResult:
@@ -99,6 +100,7 @@ def detect_setup(
     Pre-AI setup quality score. Threshold 60 (was 65 — lowered to catch more signals).
     Incorporates EMA200 bounce, Bollinger Band squeeze, daily trend, and candlestick patterns.
     Phase 7.4A.1: breakout intelligence — 20/30-day high/low + BB expansion.
+    Phase 7.4A.3: 4h EMA200 convergence guard — bounce +8 pts (≥280c), direction +3 pts (≥250c).
     """
     score = 0
     reasons: list[str] = []
@@ -190,6 +192,32 @@ def detect_setup(
             elif signal_type == SignalType.SELL and price < ind1h.ema200:
                 score += 5
                 reasons.append("Price below EMA200 — long-term bearish")
+
+    # ── 4h EMA200 convergence protection (Phase 7.4A.3) ──────────────────────
+    # Same convergence guards as 1h (Phase 7.3A.7) applied to the higher timeframe.
+    # 4h EMA200 is a major institutional reference level (covers ~50 days).
+    # Scores are smaller than 1h (secondary confirmation, not primary gate).
+    if ind4h.ema200 > 0:
+        price4h   = ind4h.current_price
+        dist4h    = abs(price4h - ind4h.ema200) / ind4h.ema200 * 100
+
+        # 4h EMA200 bounce (+8) — requires ≥ 280 candles
+        if bounce_reliable(candle_count_4h) and dist4h <= 2.0:
+            if signal_type == SignalType.BUY and price4h >= ind4h.ema200:
+                score += 8
+                reasons.append(f"4h price bouncing off EMA200 ({dist4h:.2f}% above)")
+            elif signal_type == SignalType.SELL and price4h <= ind4h.ema200:
+                score += 8
+                reasons.append(f"4h price rejected at EMA200 ({dist4h:.2f}% below)")
+
+        # 4h EMA200 direction bias (+3) — requires ≥ 250 candles
+        elif direction_reliable(candle_count_4h):
+            if signal_type == SignalType.BUY and price4h > ind4h.ema200:
+                score += 3
+                reasons.append("4h price above EMA200 — higher-TF bullish bias")
+            elif signal_type == SignalType.SELL and price4h < ind4h.ema200:
+                score += 3
+                reasons.append("4h price below EMA200 — higher-TF bearish bias")
 
     # ── Bollinger Band squeeze (+15) ──────────────────────────────────────────
     # BB squeeze = compression before explosion — strong breakout signal
@@ -413,8 +441,9 @@ async def scan_coin(
             coin_change_24h=coin.price_change_24h,
             btc_change_24h=btc_change_24h,
             candle_count_1h=len(candles_1h),
-            candles_1h=candles_1h,   # Phase 7.4A.1 breakout detection
-            candles_1d=candles_1d,   # Phase 7.4A.1 breakout detection
+            candle_count_4h=len(candles_4h),   # Phase 7.4A.3 — 4h EMA200 guard
+            candles_1h=candles_1h,
+            candles_1d=candles_1d,
         )
         if not setup.has_setup:
             gate_rejections_total.labels(gate="setup_score").inc()
