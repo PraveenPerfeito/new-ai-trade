@@ -15,15 +15,16 @@ AI-powered cryptocurrency trading signal scanner. Scans **200 coins** from CoinM
 3. **Trend strength** — EMA/MACD composite score (0–100)
 4. **Market structure** — 7 false-positive filters (doji, engulfing, fake breakout, wash trade, RSI divergence, overextension, S/R rejection)
 5. **Setup scoring** — multi-factor quality score including:
-   - EMA200 bounce detection (+15 pts)
-   - Bollinger Band squeeze detection (+15 pts)
+   - EMA200 bounce detection (+15 pts, 4h/1h convergence guard)
+   - Bollinger Band squeeze detection (+15 pts) with expansion confirmation
    - Daily timeframe alignment (+12 pts)
    - 10 candlestick patterns: Hammer, Shooting Star, Morning/Evening Star, Three White Soldiers/Black Crows, Marubozu, Inverted Hammer, Hanging Man
    - Fresh EMA crossover (Golden/Death Cross within 5 candles) (+12 pts)
-   - Relative strength vs BTC (+10 pts)
+   - Relative strength vs BTC 4h (+10 pts)
+   - Breakout intelligence (20/30-day high detection) (+5 to +12 pts)
 6. **R:R ratio** — minimum 2:1 reward-to-risk
 7. **Risk engine** — grade A–F, quality score, safe leverage tiers
-8. **Futures intelligence** — funding rate, OI trend, L/S ratio, liquidation zones (futures/high_confidence modes)
+8. **Futures intelligence** — directional funding rate, OI intelligence (price×OI matrix), L/S positioning, liquidation zones, funding trend (futures/high_confidence modes)
 9. **Continuation gate** — probability score (10–95), rejects low-momentum setups
 10. **Signal lifecycle** — DEVELOPING/CONFIRMED/EXTENDED/COOLING/CORRECTING/INVALIDATED/EXPIRED
 11. **Claude AI validation** — Haiku validates final signal with full context (can be disabled from dashboard to conserve credits)
@@ -32,14 +33,18 @@ AI-powered cryptocurrency trading signal scanner. Scans **200 coins** from CoinM
 
 - RSI(14) — Wilder EWM smoothing
 - MACD — EMA(12) − EMA(26), signal EMA(9)
-- EMA 20 / 50 / 200
+- EMA 20 / 50 / 200 (with convergence guards at ≥250 candles)
 - ATR(14) — Wilder True Range
-- Volume Spike — current vs 20-candle rolling avg
+- Volume Spike — current vs 20-candle rolling avg (time-weighted)
 - ADX — Wilder DI+/DI- (sideways market detection)
-- Bollinger Bands (20, 2σ) — with squeeze detection
+- Bollinger Bands (20, 2σ) — with squeeze & expansion detection
 - Trend Strength Score (0–100 composite)
 - EMA Crossover Freshness (within 5 candles)
-- Candlestick Pattern Detection (10 patterns)
+- Candlestick Pattern Detection (10 patterns, TradingView-validated body ratios)
+- Relative Strength Engine (4h coin change / 4h BTC change)
+- Sector Intelligence (STRONGEST/ACCELERATING/NEUTRAL/WEAKENING/OVERCROWDED states)
+- Breakout Detection (20/30-day high/low with volume confirmation)
+- OI Intelligence (NEW_LONGS/NEW_SHORTS/SHORT_COVERING/LONG_LIQUIDATION/NEUTRAL matrix)
 
 ### Scan Modes
 
@@ -258,12 +263,12 @@ The Claude AI validation step can be toggled from **Admin → Calibration** with
 
 ### Credit-saving mode (built-in)
 
-`AI_MIN_SETUP_SCORE = 70` in `ai_validator.py` — signals with setup score 60–69 (borderline setups) automatically use heuristic instead of Claude. Only high-quality setups (score ≥ 70) spend API credits. This reduces Claude calls by ~40% with no loss in signal quality.
+`AI_MIN_SETUP_SCORE = 72` in `ai_validator.py` — signals with setup score < 72 (borderline setups) automatically use heuristic instead of Claude. Only high-quality setups (score ≥ 72) spend API credits. This reduces Claude calls by ~40% with no loss in signal quality.
 
 | Setup Score | AI Validation | Credits Used |
 |-------------|---------------|-------------|
-| ≥ 70 | Claude Haiku | Yes |
-| 60–69 | Heuristic | No |
+| ≥ 72 | Claude Haiku | Yes |
+| < 72 | Heuristic | No |
 
 ### Cost estimate (free $5 credits)
 

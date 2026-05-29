@@ -7,6 +7,28 @@
 
 ---
 
+## Resolution Status (Phase 7.3A & 7.4A — May 2026)
+
+**RESOLVED (10 items):**
+- ✅ **CMC trending endpoint** — Now using 5-source fusion + trend_score.py prioritization
+- ✅ **Double CMC quota consumption** — Python scanner now reads Redis intelligence cache; no direct CMC calls
+- ✅ **EMA200 unconverged** — 300 candles fetched; direction_reliable/bounce_reliable guards at 250/280
+- ✅ **Funding rate rejection** — Threshold raised to directional adverse > 0.007 (EXTREME only)
+- ✅ **Relative strength** — Now using 4h change vs BTC 4h (was 24h)
+- ✅ **Breakout detection** — breakout_intelligence.py added (20/30-day high/low detection)
+- ✅ **OI × price direction** — oi_intelligence.py replaces raw OI change (short-covering detection)
+- ✅ **Funding trend** — Last 3 readings stored; RISING/FALLING/STABLE classification
+- ✅ **Positioning intelligence** — positioning_intelligence.py for L/S crowd context
+- ✅ **AI_MIN_SETUP_SCORE** — Raised to 72 (was 70)
+
+**PENDING (recommend Phase 7.5):**
+- 🔶 Sector-based filtering (sector intelligence available but not gating signals)
+- 🔶 15m timeframe for TRENDING mode (15m klines fetched; not fully integrated)
+- 🔶 CMC→Binance symbol mapping table (MATIC/POLUSDT edge case)
+- 🔶 Candle gap detection (zero-volume consecutive candles)
+
+---
+
 ## Table of Contents
 
 1. [Executive Summary](#executive-summary)

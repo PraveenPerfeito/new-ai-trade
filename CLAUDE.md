@@ -29,10 +29,69 @@ AI-powered crypto trading signal scanner (public brand: **SignalEdge AI**) built
 15. **Signal lifecycle** — `computeSignalState()` → DEVELOPING/CONFIRMED/EXTENDED/COOLING/CORRECTING/INVALIDATED/EXPIRED.
 16. **Health server in Celery worker** — `backend/workers/health_server.py` starts HTTP server on `$PORT` at `worker_ready` signal so Railway health checks pass.
 17. **Scan Now routes to Python backend** — `app/api/scanner/run/route.ts` proxies to `${BACKEND_URL}/api/scanner/trigger` (not TypeScript scanner).
-18. **AI credit saving** — `AI_MIN_SETUP_SCORE = 70` in `ai_validator.py`. Setup score 60–69 → heuristic (no API call). Score ≥ 70 → Claude. Reduces credits ~40%.
+18. **AI credit saving** — `AI_MIN_SETUP_SCORE = 72` in `ai_validator.py`. Setup score < 72 → heuristic (no API call). Score ≥ 72 → Claude. Reduces credits ~40%.
 19. **Admin users see all signals** — `getAccessContext()` in `lib/access-control.ts` reads Supabase session cookie; admin email → enterprise plan → no confidence floor/daily cap.
 20. **Settings API uses class not string** — `get_settings_service().get_group(AISettings)` must pass model class. Passing string `"ai"` causes silent TypeError → setting never read.
 21. **Telegram alert deduplication** — Redis key `tg:alert:{SYMBOL}:{LONG|SHORT}` with 1-hour TTL prevents duplicate alerts for the same coin+direction. Direction flip (BUY→SELL) fires immediately. `ALERT_COOLDOWN_HOURS = 1` in `telegram_notifier.py`.
+
+---
+
+## Phase 7.3A & 7.4A Intelligence Pipeline Overhaul
+
+### Phase 7.3A (CMC Intelligence Pipeline + Trending Universe Fusion + 10 New Intelligence Modules)
+
+**Motivation:** Split CMC quota consumption into two independent paths — TypeScript workers write to Redis cache every 5 minutes, Python scanner reads cache only. Eliminate double-spending that was burning 40% of quota budget on duplicate API calls.
+
+**Key Changes:**
+1. **Redis Intelligence Cache** — TypeScript workers (`lib/intelligence/`) fetch CMC trending, listings, sector data → write to Redis keys `cache:intel:listings`, `cache:intel:trending`, etc. (5-min TTL). Python scanner reads cache, zero direct CMC calls.
+2. **Trending Universe Fusion** — 5-source discovery (CMC Trending, Rising Sectors, Top Movers, Listings, Watchlist) replaces basic 24h price-change filter. Consistent 80-coin universe.
+3. **TrendScore Engine** — 7-component 0-100 prioritization: CMC rank weight, Relative Strength (4h), Sector Strength, Volume, Market Cap Tier, Breakout Momentum, Futures Integration.
+4. **Relative Strength 4h** — Replaced 24h RS (too noisy) with 4h coin close change / 4h BTC close change. BTC 4h fetched once per scan, Redis-cached 5 min.
+5. **Sector Intelligence** — CMC sector states tracked per category: STRONGEST, ACCELERATING, NEUTRAL, WEAKENING, OVERCROWDED (45-min baseline TTL for delta detection).
+6. **Futures Funding Calibration** — Directional decomposition: adverse_rate = max(0, ±funding_rate) based on signal direction. FAVORABLE/NORMAL/ELEVATED/EXTREME tiers.
+7. **EMA200 Convergence Guards** — 1h/4h fetch increased 200→300 candles. `direction_reliable(≥250c)` / `bounce_reliable(≥280c)` gates prevent unconverged EMA200 false signals.
+8. **Fallback Observability** — Redis `intel:fallback:status` key (30-min TTL), Telegram alert on CMC cache cold (15-min throttle), Prometheus counter.
+
+**New files:**
+- `backend/core/scanner/intelligence_cache.py` — Redis CMC cache reader
+- `backend/core/scanner/trending_universe.py` — 5-source trending discovery
+- `backend/core/scanner/trend_score.py` — 7-component prioritization
+- `backend/core/scanner/relative_strength.py` — 4h RS vs BTC
+- `backend/core/scanner/sector_intelligence.py` — CMC sector classification
+- `backend/core/scanner/futures_funding.py` — Directional funding context
+- `backend/core/scanner/ema_convergence.py` — EMA200 convergence math
+
+### Phase 7.4A (Breakout + OI + Positioning Intelligence)
+
+**Motivation:** Detect institutional entry points (breakout above resistance, OI accumulation patterns, crowd position extremes). Add missing 20/30-day momentum signals that systematically missed 25% of best setups.
+
+**Key Changes:**
+1. **Breakout Intelligence** — 20/30-day high/low breakout detection (ALL modes including SPOT). BB expansion after squeeze. NONE/EARLY_BREAKOUT(+5)/CONFIRMED(+8)/HIGH_MOMENTUM(+12) scoring.
+2. **OI Intelligence** — Replaces raw OI_change_24h. Price×OI matrix: NEW_LONGS, NEW_SHORTS, SHORT_COVERING, LONG_LIQUIDATION, NEUTRAL. Fixes bug where SHORT_COVERING rallies were incorrectly penalized.
+3. **4h EMA200 Guard** — `candle_count_4h` passed to `detect_setup()`. Same direction_reliable/bounce_reliable gates applied to 4h EMA200.
+4. **Funding Trend** — Last 3 funding readings stored in Redis (8-hour TTL). RISING/FALLING/STABLE classification. RISING → adverse × 1.3, FALLING → adverse × 0.7 before tier classification.
+5. **Positioning Intelligence** — L/S crowd context (EXTREME_LONG/LONG_HEAVY/BALANCED/SHORT_HEAVY/EXTREME_SHORT). Contrarian scoring: extremes penalized, opposite side rewarded. Replaces old 2-case check.
+
+**New files:**
+- `backend/core/scanner/breakout_intelligence.py` — 20/30-day breakout detection
+- `backend/core/scanner/oi_intelligence.py` — OI × price direction matrix
+- `backend/core/scanner/positioning_intelligence.py` — L/S crowd positioning
+
+**Calibration updates:**
+- AI_MIN_SETUP_SCORE: 70 → 72
+- Funding gate: abs > 0.002 → directional adverse > 0.007
+- Price crash filter: -50% → -20%
+- BB squeeze: 80% → 70% of avg width
+- THREE_WHITE_SOLDIERS: added body overlap check
+- MORNING/EVENING_STAR: body ratio 0.45 → 0.60
+- Futures symbol cache: 30 min → 60 min
+- Stablecoin prefix filter added (USD*, DAI*, BUSD*, USDE*)
+
+**Current scanner config (tuned for production):**
+- **Spot:** min_mcap=$200M, min_vol=$20M, confidence≥80, max_coins=80
+- **Futures:** min_mcap=$1B, min_vol=$200M, confidence≥82, max_coins=50
+- **High_confidence:** min_mcap=$2B, min_vol=$500M, confidence≥87, max_coins=30
+- **Trending:** min_mcap=$50M, min_vol=$10M, confidence≥78, max_coins=80
 
 ---
 
@@ -62,13 +121,23 @@ backend/core/scanner/   ← PRIMARY scanner (Python) — all new features here
   models.py             ← Pydantic models; TechnicalIndicators has ema200, bb, candle_pattern, ema_cross
   indicators.py         ← RSI·MACD·EMA20/50/200·ATR·BB·volume·ADX·candlestick·EMA crossover
   market_structure.py   ← 7-filter market quality gate
-  signal_pipeline.py    ← detect_setup() scores EMA200/BB/daily/patterns/crossover/rel-strength
-  orchestrator.py       ← run_scan(); CMC 200 coins; 3 timeframes (1h+4h+1d); btc_change_24h
-  market_fetcher.py     ← _fetch_cmc() primary; _fetch_coingecko() fallback
-  ai_validator.py       ← checks AISettings.enabled + setup_score < 70 → heuristic; semaphore(3)
+  signal_pipeline.py    ← detect_setup() scores EMA200/BB/daily/patterns/crossover/rel-strength/breakout
+  orchestrator.py       ← run_scan(); CMC 200 coins; 3 timeframes (1h+4h+1d); btc_change_24h; Redis intel cache reader
+  market_fetcher.py     ← reads Redis intelligence cache (populated by TS layer); CMC fallback via TS
+  ai_validator.py       ← checks AISettings.enabled + setup_score < 72 → heuristic; semaphore(3)
   risk.py               ← grade A–F; quality score; leverage tiers
-  futures_intelligence.py← funding rate, OI, L/S ratio, liq zones
+  futures_intelligence.py← directional funding rate, OI×price intelligence, L/S positioning, funding trend
   telegram_notifier.py  ← detailed signal format with leverage/% targets; 1-hour dedup cooldown per symbol+direction
+  intelligence_cache.py ← Redis CMC intelligence reader (trending, listings, sector data)
+  trending_universe.py  ← 5-source fusion (CMC Trending, Rising Sectors, Top Movers, Listings, Watchlist); 80 coins
+  trend_score.py        ← 7-component 0-100 prioritization (CMC rank, RS, sector, volume, mcap tier, momentum, futures)
+  relative_strength.py  ← 4h RS engine vs BTC; cached 5 min
+  sector_intelligence.py← CMC sector states (STRONGEST/ACCELERATING/NEUTRAL/WEAKENING/OVERCROWDED)
+  futures_funding.py    ← directional funding context (FAVORABLE/NORMAL/ELEVATED/EXTREME)
+  ema_convergence.py    ← 250/280 candle guards for direction_reliable / bounce_reliable
+  breakout_intelligence.py← 20/30-day high/low detection; NONE/EARLY_BREAKOUT/CONFIRMED/HIGH_MOMENTUM
+  oi_intelligence.py    ← OI × price direction matrix (NEW_LONGS, NEW_SHORTS, SHORT_COVERING, LONG_LIQUIDATION, NEUTRAL)
+  positioning_intelligence.py← L/S crowd context (EXTREME_LONG/LONG_HEAVY/BALANCED/SHORT_HEAVY/EXTREME_SHORT); contrarian scoring
 
 backend/workers/
   celery_app.py         ← Celery factory + worker_ready signal starts health server

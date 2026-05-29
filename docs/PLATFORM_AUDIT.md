@@ -7,6 +7,12 @@
 
 ---
 
+## Status Note (Phase 7.3A & 7.4A)
+
+**April–May 2026:** Platform audit completed against v1.4. Phase 7.3A/7.4A introduced new intelligence modules (trending_universe, trend_score, oi_intelligence, breakout_intelligence, positioning_intelligence, etc.) but **did not modify admin dashboard UI**. This audit remains current and actionable. Key gaps (mobile usability, workflow friction, sidebar clarity) unchanged and recommended for Phase 7.5+.
+
+---
+
 ## Table of Contents
 
 1. [Executive Summary](#executive-summary)

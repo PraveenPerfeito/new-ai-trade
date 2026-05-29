@@ -10,19 +10,20 @@
 
 ### Vision
 
-A fully automated, AI-validated crypto trading signal scanner that monitors the top 100 cryptocurrencies around the clock, surfaces high-probability trade setups, and delivers actionable alerts to traders — without requiring manual chart analysis.
+A fully automated, AI-validated crypto trading signal scanner that monitors the top 200 cryptocurrencies (via CoinMarketCap) around the clock, surfaces high-probability trade setups with institutional-grade intelligence, and delivers actionable alerts to traders — without requiring manual chart analysis.
 
 ### Problem Statement
 
-Retail traders cannot watch 100 markets simultaneously. Manual scanning is slow, biased, and inconsistent. Existing scanners produce noisy signals with no quality ranking or risk context. This system solves that by:
+Retail traders cannot watch 100+ markets simultaneously. Manual scanning is slow, biased, and inconsistent. Existing scanners produce noisy signals with no quality ranking or risk context. This system solves that by:
 
-1. Running continuous multi-timeframe technical analysis across the top 100 coins
+1. Running continuous multi-timeframe technical analysis across the top 200 coins (CMC primary)
 2. Applying an 11-gate quality pipeline that rejects weak setups before any expensive AI call
-3. Classifying global market regime from BTC 4h candles to align signals with macro context
-4. Computing continuation probability and signal lifecycle state for every setup
-5. Enriching futures signals with market-structure data (funding rates, OI, liquidation zones)
-6. Scoring every surviving signal with a risk grade, quality score, and institutional composite score
-7. Validating the final signal with Claude Haiku (8-field explainability) and delivering it via Telegram
+3. Fusing 5-source trending discovery (CMC Trending, Rising Sectors, Top Movers, Listings, Watchlist)
+4. Classifying global market regime from BTC 4h candles and CMC sector intelligence
+5. Computing continuation probability, signal lifecycle state, and breakout momentum for every setup
+6. Enriching futures signals with institutional-grade intelligence (directional funding, OI×price matrix, L/S positioning)
+7. Scoring every surviving signal with a risk grade, quality score, trend score (for TRENDING mode), and institutional composite score
+8. Validating the final signal with Claude Haiku (8-field explainability) and delivering it via Telegram
 
 ---
 
@@ -40,18 +41,18 @@ Retail traders cannot watch 100 markets simultaneously. Manual scanning is slow,
 
 | ID | Requirement | Priority |
 |----|-------------|----------|
-| SC-01 | Scan top-100 coins by market cap from CoinGecko | Must |
+| SC-01 | Scan top-200 coins by market cap from CoinMarketCap (primary) via Redis intelligence cache | Must |
 | SC-02 | Support four modes: `spot`, `futures`, `high_confidence`, `trending` | Must |
-| SC-03 | Fetch 1h and 4h candles from Binance for each coin | Must |
-| SC-04 | Calculate RSI(14), MACD, EMA20, EMA50, ATR(14), volume spike | Must |
-| SC-05 | Multi-timeframe confirmation: 4h sets direction, 1h confirms entry | Must |
-| SC-06 | Reject signals when 1h/4h trends conflict | Must |
+| SC-03 | Fetch 1h/4h (300 candles each) and 1d (100 candles) from Binance for each coin | Must |
+| SC-04 | Calculate RSI(14), MACD, EMA20/50/200, ATR(14), volume spike, ADX, bollinger bands, patterns | Must |
+| SC-05 | Multi-timeframe confirmation: 4h sets direction, 1h confirms entry, 1d trend context | Must |
+| SC-06 | Reject signals when 1h/4h trends conflict or both sideways (ADX < 16) | Must |
 | SC-07 | Volatility gate: reject EXTREME volatility (ATR > 8% of price) | Must |
-| SC-08 | Pre-AI setup scoring: 0–100 scale, threshold 65 to proceed | Must |
-| SC-09 | ATR-based trade levels (entry, target, stop-loss) | Must |
+| SC-08 | Pre-AI setup scoring: 0–100 scale, threshold 60 to proceed; AI only if ≥72 | Must |
+| SC-09 | ATR-based trade levels (entry, target, stop-loss) with 20/30-day breakout scoring | Must |
 | SC-10 | Enforce minimum R:R ratio of 2.0 before AI call | Must |
 | SC-11 | Rate-limit scan triggers: max 20/hour, min 2-min gap | Must |
-| SC-12 | Persist scan run metadata (mode, duration, signals found) | Must |
+| SC-12 | Persist scan run metadata (mode, duration, signals found, rejection breakdown) | Must |
 
 ### 3.2 Risk Engine
 
@@ -75,19 +76,19 @@ Retail traders cannot watch 100 markets simultaneously. Manual scanning is slow,
 | AI-04 | Signal rejected if confidence < mode's minimum threshold | Must |
 | AI-05 | Heuristic fallback scorer if API key absent or API error | Must |
 
-### 3.4 Futures Intelligence
+### 3.4 Futures Intelligence (Phase 7.3A & 7.4A)
 
 | ID | Requirement | Priority |
 |----|-------------|----------|
-| FI-01 | Fetch live funding rate per symbol (Binance premium index) | Must |
-| FI-02 | Reject signals when |funding rate| > 0.2% (extreme crowding) | Must |
+| FI-01 | Fetch live directional funding rate per symbol (Binance premium index) | Must |
+| FI-02 | Directional funding context: FAVORABLE/NORMAL/ELEVATED/EXTREME (adverse_rate thresholds) | Must |
 | FI-03 | Fetch open-interest history (24h) and classify as RISING / FALLING / STABLE | Must |
-| FI-04 | Fetch global long/short account ratio | Must |
-| FI-05 | Detect liquidation zones from swing highs/lows and ATR levels | Must |
-| FI-06 | Detect 20-candle consolidation breakouts with volume confirmation | Must |
-| FI-07 | Analyse trend-continuation pullbacks via EMA20 proximity | Must |
+| FI-04 | OI × price direction intelligence: NEW_LONGS / NEW_SHORTS / SHORT_COVERING / LONG_LIQUIDATION / NEUTRAL | Must |
+| FI-05 | Funding rate trend (last 3 readings): RISING/FALLING/STABLE classification with multiplier adjustment | Must |
+| FI-06 | Detect liquidation zones from swing highs/lows and ATR levels | Must |
+| FI-07 | L/S positioning context: EXTREME_LONG/LONG_HEAVY/BALANCED/SHORT_HEAVY/EXTREME_SHORT (contrarian scoring) | Must |
 | FI-08 | Compute momentum score (0–100) with BTC/ETH/SOL priority bonus (+5) | Must |
-| FI-09 | Cache funding (5 min), OI (2 min), L/S ratio (5 min) per symbol | Must |
+| FI-09 | Cache funding (5 min), OI (2 min), L/S ratio (5 min), funding trend (8h) per symbol | Must |
 | FI-10 | Non-fatal: proceed without futures data if Binance API unavailable | Must |
 
 ### 3.5 Auto-Scheduler

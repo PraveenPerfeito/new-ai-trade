@@ -6,6 +6,25 @@
 
 ---
 
+## Resolution Status (Phase 7.3A & 7.4A — May 2026)
+
+**RESOLVED (7 items):**
+- ✅ **Candle count minimum** — Increased from 200 → 300 for 1h/4h; 250/280 convergence guards applied
+- ✅ **EMA200 convergence guards** — direction_reliable(≥250c) / bounce_reliable(≥280c) gates prevent false signals
+- ✅ **4h EMA200 guard** — candle_count_4h passed to detect_setup(); same guards applied
+- ✅ **Funding context tiers** — Directional funding (FAVORABLE/NORMAL/ELEVATED/EXTREME) replaces simple abs() check
+- ✅ **OI × price correlation** — oi_intelligence.py NEW_LONGS/NEW_SHORTS/SHORT_COVERING matrix (was missing)
+- ✅ **Funding trend detection** — Last 3 rates stored; RISING/FALLING/STABLE classification with multiplier
+- ✅ **Breakout detection** — 20/30-day high/low + BB expansion added (was missing for SPOT mode)
+
+**PENDING (recommend Phase 7.5):**
+- 🔶 L/S ratio active gate (data fetched but not used in setup scoring)
+- 🔶 Hard 1h direction gate for BUY signals (currently only scoring penalty, not gate)
+- 🔶 Candle gap detection (consecutive zero-volume candles not validated)
+- 🔶 Funding interval dynamic check (assumes 8h, some perps changed to 1h)
+
+---
+
 ## Table of Contents
 
 1. [Data Integrity](#section-1--data-integrity)
