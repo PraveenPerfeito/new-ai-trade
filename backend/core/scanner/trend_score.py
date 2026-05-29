@@ -231,19 +231,44 @@ def _score_relative_strength(rel: float) -> float:
     return 0.0
 
 
-def _score_sector_strength(avg_change: float | None) -> float:
-    """0–15 pts based on sector avgPriceChange. None = no category data (neutral 5)."""
+def _score_sector_strength(
+    avg_change:    float | None,
+    sector_status: str | None = None,
+) -> float:
+    """
+    0–15 pts combining sector avgPriceChange with sector intelligence status (Phase 7.3A.5).
+
+    Base score from avgPriceChange:
+      None → 5 (neutral)   > 7% → 15   > 4% → 12   > 2% → 8   > 0% → 4   ≤ 0% → 0
+
+    Status adjustment:
+      ACCELERATING  +5   early rotation premium — higher than STRONGEST because entry earlier
+      STRONGEST      0   already scores high from avg_change alone
+      NEUTRAL        0   no adjustment
+      WEAKENING     −5   momentum decay penalty
+      OVERCROWDED   cap  capped at 5 regardless of base (reversal risk override)
+    """
+    # Base from avgPriceChange
     if avg_change is None:
-        return 5.0    # neutral — no sector data available
-    if avg_change > 7:
-        return 15.0
-    if avg_change > 4:
-        return 12.0
-    if avg_change > 2:
-        return 8.0
-    if avg_change > 0:
-        return 4.0
-    return 0.0
+        base = 5.0
+    elif avg_change > 7:
+        base = 15.0
+    elif avg_change > 4:
+        base = 12.0
+    elif avg_change > 2:
+        base = 8.0
+    elif avg_change > 0:
+        base = 4.0
+    else:
+        base = 0.0
+
+    if sector_status == "OVERCROWDED":
+        return min(5.0, base)
+    if sector_status == "ACCELERATING":
+        return min(15.0, base + 5.0)
+    if sector_status == "WEAKENING":
+        return max(0.0, base - 5.0)
+    return base
 
 
 def _score_volume_expansion(volume_24h: float, market_cap: float) -> float:
@@ -305,6 +330,7 @@ def compute_trend_score(
     market_cap:         float,
     price_change_1h:    float | None,
     has_futures:        bool,
+    sector_status:      str | None = None,   # Phase 7.3A.5 — SectorStatus.value
 ) -> TrendScoreComponents:
     """
     Compute the full TrendScore for a single candidate.
@@ -312,12 +338,14 @@ def compute_trend_score(
     Parameters
     ----------
     trending_list_rank : 1-based position in CMC trending list, or None
-    relative_strength  : coin_change_24h - btc_change_24h
+    relative_strength  : 4h RS (coin_4h_change − btc_4h_change)
     sector_avg_change  : avgPriceChange of the coin's CMC category, or None
     volume_24h         : 24-hour trading volume (USD)
     market_cap         : market capitalisation (USD)
     price_change_1h    : 1-hour price change %, or None if not available
     has_futures        : True if Binance perpetual futures exist for this coin
+    sector_status      : SectorStatus.value — STRONGEST/ACCELERATING/NEUTRAL/
+                         WEAKENING/OVERCROWDED (or None for backward-compat)
 
     Returns
     -------
@@ -325,7 +353,7 @@ def compute_trend_score(
     """
     cmc   = _score_cmc_trending_rank(trending_list_rank)
     rel   = _score_relative_strength(relative_strength)
-    sec   = _score_sector_strength(sector_avg_change)
+    sec   = _score_sector_strength(sector_avg_change, sector_status)
     vol   = _score_volume_expansion(volume_24h, market_cap)
     mcap  = _score_market_cap_tier(market_cap)
     brk   = _score_breakout_momentum(price_change_1h)

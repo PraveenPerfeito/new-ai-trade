@@ -51,6 +51,10 @@ from backend.core.scanner.relative_strength import (
     proxy_from_cmc_1h,
     proxy_from_cmc_24h,
 )
+from backend.core.scanner.sector_intelligence import (
+    SectorIntelligenceReport,
+    analyze_sectors,
+)
 from backend.core.scanner.trend_score import TrendScoreComponents, compute_trend_score
 from backend.logging.setup import get_logger
 
@@ -113,6 +117,7 @@ class TrendingUniverseResult:
     source_counts:     dict[str, int]          # hits per TrendingSource
     new_from_trending: int                     # coins added from CMC trending (outside top-100)
     rising_sectors:    list[str]               # sector names that triggered category boost
+    sector_report:     SectorIntelligenceReport | None  # Phase 7.3A.5 full sector analysis
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
@@ -244,11 +249,14 @@ async def build_trending_universe(
     watchlist = {s.upper() for s in watchlist_symbols if s.strip()}
 
     # ── Fetch all intelligence sources concurrently ───────────────────────────
-    trending_raw, (categories_raw, _), top_mover_syms = await asyncio.gather(
+    trending_raw, (categories_raw, categories_refreshed_at), top_mover_syms = await asyncio.gather(
         read_trending_coins(),
         read_categories(),
         read_top_movers(),
     )
+
+    # Phase 7.3A.5: full sector intelligence analysis (reads + writes Redis baseline)
+    sector_report = await analyze_sectors(categories_raw, refreshed_at=categories_refreshed_at)
 
     # Build lookup structures
     # trending_rank_map: symbol → 1-based rank in CMC trending list
@@ -336,15 +344,17 @@ async def build_trending_universe(
         else:
             rs = proxy_from_cmc_24h(coin.price_change_24h, btc_ref)   # listing-only: 24h / 6
 
-        # TrendScore uses 4h-derived RS value (Phase 7.3A.4 upgrade)
+        # TrendScore: 4h RS (Phase 7.3A.4) + sector intelligence status (Phase 7.3A.5)
+        sector_analysis = sector_report.get(sector) if (sector_report and sector) else None
         ts = compute_trend_score(
             trending_list_rank = tr_rank,
-            relative_strength  = rs.rs_4h,   # 4h RS instead of raw 24h delta
+            relative_strength  = rs.rs_4h,
             sector_avg_change  = sec_avg_change,
             volume_24h         = coin.volume_24h,
             market_cap         = coin.market_cap,
             price_change_1h    = p1h,
             has_futures        = coin.has_futures,
+            sector_status      = sector_analysis.status.value if sector_analysis else None,
         )
 
         meta[symbol] = TrendingMeta(
@@ -385,6 +395,7 @@ async def build_trending_universe(
         rising_sectors=rising_sectors,
         source_counts=source_counts,
         watchlist_count=len(watchlist),
+        sector_intelligence=sector_report.as_log_dict() if sector_report else {},
         top5_candidates=[
             {
                 "symbol":          c.symbol,
@@ -392,7 +403,12 @@ async def build_trending_universe(
                 "discovery_score": round(meta[c.symbol].discovery_score, 1),
                 "rs_4h":           round(meta[c.symbol].relative_strength, 2),
                 "rs_class":        meta[c.symbol].rs_classification.value,
-                "rs_quality":      meta[c.symbol].rs_result.data_quality if meta[c.symbol].rs_result else "n/a",
+                "sector":          meta[c.symbol].sector,
+                "sector_status":   (
+                    sector_report.get(meta[c.symbol].sector).status.value
+                    if sector_report and meta[c.symbol].sector and sector_report.get(meta[c.symbol].sector)
+                    else None
+                ),
                 "sources":         meta[c.symbol].discovery_sources,
             }
             for c in ranked[:5]
@@ -405,4 +421,5 @@ async def build_trending_universe(
         source_counts=source_counts,
         new_from_trending=new_from_trending,
         rising_sectors=rising_sectors,
+        sector_report=sector_report,
     )

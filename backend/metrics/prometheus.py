@@ -196,3 +196,9 @@ trend_score_histogram = Histogram(
     "Distribution of TrendScore values across trending candidates per scan cycle",
     buckets=[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
 )
+
+sector_intelligence_status_total = Counter(
+    "sector_intelligence_status_total",
+    "Sector classifications produced per scan cycle (Phase 7.3A.5)",
+    ["status"],   # STRONGEST | ACCELERATING | NEUTRAL | WEAKENING | OVERCROWDED
+)

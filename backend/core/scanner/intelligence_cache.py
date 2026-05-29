@@ -173,20 +173,22 @@ async def read_trending_coins() -> list[dict]:
 
 async def read_categories() -> tuple[list[dict], str]:
     """
-    Return (all_categories, strongest_sector_name) from cache:intel:categories.
+    Return (all_categories, refreshed_at) from cache:intel:categories.
     Each category dict has: id, name, title, coinCount, avgPriceChange,
     volume24h, marketCap, marketCapChange, coins (list[str]).
+    refreshed_at is the ISO-8601 timestamp of the snapshot — used by
+    sector_intelligence.analyze_sectors() for baseline change detection.
     Returns ([], "") on cache miss or error.
     """
     try:
         redis = await get_redis()
         raw   = await redis.get(INTEL_CATEGORIES_KEY)
         if raw:
-            snapshot   = json.loads(raw)
-            categories = snapshot.get("categories", [])
-            strongest  = snapshot.get("strongest", "")
+            snapshot     = json.loads(raw)
+            categories   = snapshot.get("categories", [])
+            refreshed_at = snapshot.get("refreshedAt", "")
             await redis.incr("cache:intel:hits:categories")
-            return categories, strongest
+            return categories, refreshed_at
         await redis.incr("cache:intel:misses:categories")
     except Exception as exc:
         log.warning("intel_categories_read_error", error=str(exc))
