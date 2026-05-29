@@ -28,7 +28,7 @@ from backend.core.scanner.db import (
     save_signal,
     upsert_coins,
 )
-from backend.core.scanner.market_fetcher import fetch_top100, fetch_futures_symbols
+from backend.core.scanner.market_fetcher import fetch_top100, fetch_futures_symbols, fetch_btc_4h_change
 from backend.core.scanner.models import (
     CoinData, Signal, ScannerMode, ScannerConfig,
     ScanProgress, ScanResult,
@@ -194,13 +194,17 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
     scan_run_id = await create_scan_run(mode.value)
 
     try:
-        # 1. Fetch top-100 + futures symbols
+        # 1. Fetch top-100 + futures symbols + BTC 4h change (TRENDING mode only)
         async def _no_futures() -> set[str]:
             return set()
 
-        coin_result, futures_syms = await asyncio.gather(
+        async def _btc_4h() -> float:
+            return await fetch_btc_4h_change() if mode == ScannerMode.TRENDING else 0.0
+
+        coin_result, futures_syms, btc_4h_change = await asyncio.gather(
             fetch_top100(),
             fetch_futures_symbols() if mode in (ScannerMode.FUTURES, ScannerMode.HIGH_CONFIDENCE) else _no_futures(),
+            _btc_4h(),
         )
         all_coins = coin_result.coins
 
@@ -225,7 +229,7 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
             tr = await build_trending_universe(
                 base_coins=all_coins,
                 btc_change_24h=btc_change_24h,
-                # watchlist_symbols loaded internally from ScannerSettings.trending_watchlist
+                btc_4h_change=btc_4h_change,      # Phase 7.3A.4: precise 4h RS reference
             )
             all_coins = tr.coins
             log.info(
@@ -234,6 +238,7 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                 new_from_cmc_trending=tr.new_from_trending,
                 rising_sectors=tr.rising_sectors,
                 source_counts=tr.source_counts,
+                btc_4h_change=round(btc_4h_change, 2),
             )
 
         # 2. Filter + prioritize

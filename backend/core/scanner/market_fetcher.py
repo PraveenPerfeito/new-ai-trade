@@ -174,6 +174,30 @@ _FALLBACK_FUTURES = {
 }
 
 
+_btc_4h_cache = RedisCache("btc-4h-change", ttl_seconds=5 * 60)   # 5-min TTL
+
+
+async def fetch_btc_4h_change() -> float:
+    """
+    Return BTC's most recent 4h price change (%) vs the previous 4h close.
+
+    Cached in Redis for 5 minutes — safe to call once per scan without
+    hitting Binance rate limits.  Returns 0.0 on any error.
+    """
+    cached = await _btc_4h_cache.get("btc")
+    if cached is not None:
+        return float(cached)
+    try:
+        candles = await fetch_spot_klines("BTCUSDT", "4h", 3)
+        if len(candles) >= 2:
+            change = (candles[-1].close - candles[-2].close) / candles[-2].close * 100
+            await _btc_4h_cache.set("btc", change)
+            return round(change, 4)
+    except Exception as exc:
+        log.warning("btc_4h_change_fetch_failed", error=str(exc))
+    return 0.0
+
+
 async def fetch_futures_symbols() -> set[str]:
     cached: list[str] | None = await _futures_symbols_cache.get("all")
     if cached:

@@ -45,6 +45,12 @@ from backend.core.scanner.intelligence_cache import (
     read_trending_coins,
 )
 from backend.core.scanner.models import CoinData
+from backend.core.scanner.relative_strength import (
+    RelativeStrength,
+    RelativeStrengthResult,
+    proxy_from_cmc_1h,
+    proxy_from_cmc_24h,
+)
 from backend.core.scanner.trend_score import TrendScoreComponents, compute_trend_score
 from backend.logging.setup import get_logger
 
@@ -84,7 +90,7 @@ class TrendingMeta:
     discovery_sources: list[str]      # e.g. ["cmc_trending", "cmc_category:defi"]
     primary_source:    str            # highest-weight discovery source
     sector:            str | None     # CMC category name (if categorised)
-    relative_strength: float          # coin_change_24h − btc_change_24h
+    relative_strength: float          # 4h RS value (coin_4h_proxy − btc_4h)
 
     # TrendScore inputs (Phase 7.3A.3)
     trending_list_rank: int | None    # 1-based position in CMC trending list
@@ -94,6 +100,10 @@ class TrendingMeta:
     # TrendScore output (Phase 7.3A.3)
     trend_score:            float                    # 0-100 final priority score
     trend_score_components: TrendScoreComponents     # per-component breakdown
+
+    # Relative Strength (Phase 7.3A.4)
+    rs_result:          RelativeStrengthResult | None  # full RS breakdown
+    rs_classification:  RelativeStrength               # OUTPERFORMING / NEUTRAL / UNDERPERFORMING
 
 
 @dataclass
@@ -202,6 +212,7 @@ def _parse_rising_sectors(
 async def build_trending_universe(
     base_coins:        list[CoinData],
     btc_change_24h:    float = 0.0,
+    btc_4h_change:     float = 0.0,
     watchlist_symbols: list[str] | None = None,
 ) -> TrendingUniverseResult:
     """
@@ -210,14 +221,15 @@ async def build_trending_universe(
     Parameters
     ----------
     base_coins        — coins loaded from cache:intel:listings (top-100)
-    btc_change_24h    — BTC 24h price change for relative-strength scoring
+    btc_change_24h    — BTC 24h price change (fallback for RS when 4h unavailable)
+    btc_4h_change     — BTC 4h price change (Phase 7.3A.4: precise RS reference)
     watchlist_symbols — founder watchlist symbols (loaded from settings if None)
 
     Returns
     -------
     TrendingUniverseResult:
-      .coins  — list[CoinData] ordered by trend_score descending (NOT discovery_score)
-      .meta   — full TrendingMeta per symbol (both discovery + trend score)
+      .coins  — list[CoinData] ordered by trend_score descending
+      .meta   — full TrendingMeta including RS classification per coin
     """
     if watchlist_symbols is None:
         try:
@@ -313,14 +325,21 @@ async def build_trending_universe(
             for s in sources
         ]
 
-        # TrendScore (opportunity strength)
+        # Relative Strength (Phase 7.3A.4) — use best available data quality
         tr_rank        = trending_rank_map.get(symbol)
         sec_avg_change = category_avg_change_map.get(symbol)
         p1h            = trending_1h_map.get(symbol)   # None if not in trending snapshot
 
+        btc_ref = btc_4h_change if btc_4h_change != 0.0 else btc_change_24h / 6.0
+        if p1h is not None:
+            rs = proxy_from_cmc_1h(p1h, btc_ref)          # trending coin: priceChange1h × 4
+        else:
+            rs = proxy_from_cmc_24h(coin.price_change_24h, btc_ref)   # listing-only: 24h / 6
+
+        # TrendScore uses 4h-derived RS value (Phase 7.3A.4 upgrade)
         ts = compute_trend_score(
             trending_list_rank = tr_rank,
-            relative_strength  = coin.price_change_24h - btc_change_24h,
+            relative_strength  = rs.rs_4h,   # 4h RS instead of raw 24h delta
             sector_avg_change  = sec_avg_change,
             volume_24h         = coin.volume_24h,
             market_cap         = coin.market_cap,
@@ -334,12 +353,14 @@ async def build_trending_universe(
             discovery_sources  = tags,
             primary_source     = primary.value,
             sector             = sector,
-            relative_strength  = round(coin.price_change_24h - btc_change_24h, 2),
+            relative_strength  = round(rs.rs_4h, 2),
             trending_list_rank = tr_rank,
             sector_avg_change  = sec_avg_change,
             price_change_1h    = p1h,
             trend_score            = ts.total,
             trend_score_components = ts,
+            rs_result              = rs,
+            rs_classification      = rs.classification,
         )
 
     # ── Sort by trend_score descending (Phase 7.3A.3 ordering) ───────────────
@@ -369,8 +390,10 @@ async def build_trending_universe(
                 "symbol":          c.symbol,
                 "trend_score":     round(meta[c.symbol].trend_score, 1),
                 "discovery_score": round(meta[c.symbol].discovery_score, 1),
+                "rs_4h":           round(meta[c.symbol].relative_strength, 2),
+                "rs_class":        meta[c.symbol].rs_classification.value,
+                "rs_quality":      meta[c.symbol].rs_result.data_quality if meta[c.symbol].rs_result else "n/a",
                 "sources":         meta[c.symbol].discovery_sources,
-                "ts_components":   meta[c.symbol].trend_score_components.as_dict(),
             }
             for c in ranked[:5]
         ],
