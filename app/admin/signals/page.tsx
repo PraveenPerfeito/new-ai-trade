@@ -135,45 +135,61 @@ function SignalCard({ sig }: { sig: TradingSignal }) {
         </div>
       </div>
 
-      {/* Expanded detail */}
+      {/* Expanded detail — grouped sections */}
       {expanded && (
-        <div className="border-t border-terminal-border/30 px-5 py-4 grid grid-cols-2 md:grid-cols-4 gap-4 bg-terminal-surface/30">
-          {sig.riskScore != null && (
-            <div>
-              <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Risk Score</p>
-              <p className="text-terminal-text text-sm font-mono">{sig.riskScore.toFixed(0)}/100</p>
+        <div className="border-t border-terminal-border/30 bg-terminal-surface/30">
+          {/* Trade Context */}
+          <div className="px-4 sm:px-5 py-3 grid grid-cols-2 sm:grid-cols-4 gap-3 border-b border-terminal-border/20">
+            {sig.riskScore != null && (
+              <div>
+                <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Risk Score</p>
+                <p className="text-terminal-text text-sm font-mono">{sig.riskScore.toFixed(0)}/100</p>
+              </div>
+            )}
+            {(sig as any).maxSafeLeverage > 0 && (
+              <div>
+                <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Max Leverage</p>
+                <p className="text-terminal-text text-sm font-mono font-bold">{(sig as any).maxSafeLeverage}×</p>
+              </div>
+            )}
+          </div>
+
+          {/* Futures Intelligence — only for futures/high_confidence */}
+          {['futures', 'high_confidence'].includes(sig.scannerMode) && sig.futuresData && (
+            <div className="px-4 sm:px-5 py-3 grid grid-cols-2 sm:grid-cols-4 gap-3 border-b border-terminal-border/20">
+              <div className="col-span-2 sm:col-span-4 text-[10px] text-terminal-muted uppercase tracking-wider mb-1">Futures Intelligence</div>
+              {sig.futuresData.fundingRate != null && (
+                <div>
+                  <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Funding Rate</p>
+                  <p className={`text-sm font-mono ${sig.futuresData.fundingRate > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                    {(sig.futuresData.fundingRate * 100).toFixed(4)}%
+                  </p>
+                </div>
+              )}
+              {sig.futuresData.momentumScore != null && (
+                <div>
+                  <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Momentum</p>
+                  <p className="text-terminal-text text-sm font-mono">{sig.futuresData.momentumScore}/100</p>
+                </div>
+              )}
             </div>
           )}
-          {(sig as any).maxSafeLeverage > 0 && (
-            <div>
-              <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Max Leverage</p>
-              <p className="text-terminal-text text-sm font-mono font-bold">{(sig as any).maxSafeLeverage}×</p>
-            </div>
-          )}
-          {sig.futuresData?.fundingRate != null && (
-            <div>
-              <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Funding Rate</p>
-              <p className={`text-sm font-mono ${sig.futuresData.fundingRate > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                {(sig.futuresData.fundingRate * 100).toFixed(4)}%
-              </p>
-            </div>
-          )}
-          {sig.futuresData?.momentumScore != null && (
-            <div>
-              <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Momentum</p>
-              <p className="text-terminal-text text-sm font-mono">{sig.futuresData.momentumScore}/100</p>
-            </div>
-          )}
-          {sig.aiReasoning && (
-            <div className="col-span-2 md:col-span-4">
-              <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">AI Reasoning</p>
-              <p className="text-terminal-text text-sm leading-relaxed">{sig.aiReasoning}</p>
-            </div>
-          )}
-          {sig.setupDescription && (
-            <div className="col-span-2 md:col-span-4">
-              <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Setup</p>
-              <p className="text-terminal-muted text-sm leading-relaxed">{sig.setupDescription}</p>
+
+          {/* AI Analysis */}
+          {(sig.aiReasoning || sig.setupDescription) && (
+            <div className="px-4 sm:px-5 py-3 space-y-3">
+              {sig.aiReasoning && (
+                <div>
+                  <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">AI Reasoning</p>
+                  <p className="text-terminal-text text-sm leading-relaxed">{sig.aiReasoning}</p>
+                </div>
+              )}
+              {sig.setupDescription && (
+                <div>
+                  <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Setup</p>
+                  <p className="text-terminal-muted text-sm leading-relaxed">{sig.setupDescription}</p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -283,11 +299,48 @@ export default function SignalsPage() {
       )}
 
       {!el && edge && (!edge.overall || edge.edge_verdict?.confidence_level === 'insufficient_data') && (
-        <div className="rounded-xl px-4 py-3 bg-amber-400/5 border border-amber-400/20 text-sm text-terminal-muted">
-          <span className="text-amber-400 font-semibold">◌ Edge warming up · </span>
-          {edge.overall?.total ?? 0} signal{(edge.overall?.total ?? 0) !== 1 ? 's' : ''} tracked — 30+ resolved outcomes needed.
+        <div className="rounded-xl px-4 py-3 bg-amber-400/5 border border-amber-400/20">
+          <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+            <span className="text-amber-400 font-semibold text-sm">◌ Edge warming up</span>
+            <span className="text-terminal-muted text-xs font-mono">
+              {edge.overall?.total ?? 0} / 30 resolved signals
+            </span>
+          </div>
+          <div className="w-full h-1.5 bg-terminal-border/40 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${
+                (edge.overall?.total ?? 0) >= 20 ? 'bg-blue-400' :
+                (edge.overall?.total ?? 0) >= 10 ? 'bg-amber-400' : 'bg-zinc-500'
+              }`}
+              style={{ width: `${Math.min(100, ((edge.overall?.total ?? 0) / 30) * 100)}%` }}
+            />
+          </div>
+          <p className="text-terminal-muted/60 text-xs mt-1.5">
+            Need 30+ resolved outcomes for win rate and expectancy. Keep running scans — outcomes resolve automatically.
+          </p>
         </div>
       )}
+
+      {/* Lifecycle distribution pills */}
+      {rawSignals.length > 0 && (() => {
+        const counts = rawSignals.reduce<Record<string,number>>((a,s) => { const stage = computeLifecycleStage(s); a[stage] = (a[stage]??0)+1; return a }, {})
+        const pills: Array<{label:string;count:number;color:string}> = [
+          { label:'Active',   count: counts['ACTIVE']??0,        color:'text-green-400  border-green-500/20  bg-green-500/5'  },
+          { label:'Sent',     count: (counts['TELEGRAM_SENT']??0)+(counts['AI_APPROVED']??0), color:'text-purple-400 border-purple-500/20 bg-purple-500/5' },
+          { label:'TP Hit',   count: counts['TP_HIT']??0,        color:'text-emerald-400 border-emerald-500/20 bg-emerald-500/5' },
+          { label:'SL Hit',   count: counts['SL_HIT']??0,        color:'text-red-400    border-red-500/20    bg-red-500/5'    },
+          { label:'Stale',    count: counts['STALE']??0,         color:'text-amber-400  border-amber-500/20  bg-amber-500/5'  },
+        ].filter(p => p.count > 0)
+        return pills.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {pills.map(p => (
+              <span key={p.label} className={`text-xs px-2.5 py-1 rounded-full border font-medium ${p.color}`}>
+                {p.count} {p.label}
+              </span>
+            ))}
+          </div>
+        ) : null
+      })()}
 
       {/* Filters + Sort */}
       <div className="flex items-center gap-3 flex-wrap">

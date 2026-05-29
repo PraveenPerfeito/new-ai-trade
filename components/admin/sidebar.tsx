@@ -17,7 +17,7 @@ const SECTIONS = [
     ],
   },
   {
-    label: 'OPERATIONS',
+    label: 'SIGNAL PIPELINE',
     items: [
       { href: '/admin/scanner',  icon: ScanLine,  label: 'Scanner'       },
       { href: '/admin/signals',  icon: Zap,       label: 'Signals'       },
@@ -39,7 +39,7 @@ const SECTIONS = [
       { href: '/admin/providers', icon: Database,      label: 'Providers'        },
       { href: '/admin/cache',     icon: Layers,        label: 'Cache Operations' },
       { href: '/admin/system',    icon: Server,        label: 'System Health'    },
-      { href: '/admin/anomalies', icon: AlertTriangle, label: 'Diagnostics'      },
+      { href: '/admin/anomalies', icon: AlertTriangle, label: 'Anomalies'         },
     ],
   },
   {
