@@ -189,7 +189,7 @@ def detect_ema_crossover(
 def calc_bollinger_bands(candles: list[Candle], period: int = 20, std_dev: float = 2.0) -> BollingerBands:
     """
     Standard Bollinger Bands (SMA ± 2σ) with squeeze detection.
-    Squeeze = current band width < 80% of 20-period average width (compression before explosion).
+    Squeeze = current band width < 70% of 20-period average width (true compression, not normal consolidation).
     """
     closes = pd.Series([c.close for c in candles], dtype=float)
     if len(closes) < period:
@@ -207,7 +207,7 @@ def calc_bollinger_bands(candles: list[Candle], period: int = 20, std_dev: float
     last_lower  = _last(lower,  last_mid * 0.98)
     last_width  = (last_upper - last_lower) / last_mid if last_mid > 0 else 0.04
     avg_width   = _last(widths.rolling(20).mean(), last_width)
-    squeeze     = last_width < avg_width * 0.8
+    squeeze     = last_width < avg_width * 0.7   # was 0.8; 70% avoids false compression signals
 
     return BollingerBands(
         upper   = round(last_upper,  8),
@@ -288,21 +288,23 @@ def detect_candlestick_pattern(candles: list[Candle]) -> str:
     # MORNING_STAR — bearish large + small indecision + bullish large (BUY reversal)
     if (c1.close < c1.open and b1 >= 0.55           # strong bearish
             and b2 <= 0.30                            # indecision/doji middle
-            and c3.close > c3.open and b3 >= 0.45    # strong bullish
+            and c3.close > c3.open and b3 >= 0.60    # strong bullish body (was 0.45)
             and c3.close > (c1.open + c1.close) / 2):
         return "MORNING_STAR"
 
     # EVENING_STAR — bullish large + small indecision + bearish large (SELL reversal)
     if (c1.close > c1.open and b1 >= 0.55
             and b2 <= 0.30
-            and c3.close < c3.open and b3 >= 0.45
+            and c3.close < c3.open and b3 >= 0.60    # strong bearish body (was 0.45)
             and c3.close < (c1.open + c1.close) / 2):
         return "EVENING_STAR"
 
     # THREE_WHITE_SOLDIERS — 3 consecutive bullish candles, each higher close (BUY continuation)
+    # Body overlap: each candle opens within the prior candle's body (TradingView standard).
     if (c1.close > c1.open and c2.close > c2.open and c3.close > c3.open
             and c3.close > c2.close > c1.close
-            and b1 >= 0.50 and b2 >= 0.50 and b3 >= 0.50):
+            and b1 >= 0.50 and b2 >= 0.50 and b3 >= 0.50
+            and c2.open < c1.close and c3.open < c2.close):
         return "THREE_WHITE_SOLDIERS"
 
     # THREE_BLACK_CROWS — 3 consecutive bearish candles, each lower close (SELL continuation)

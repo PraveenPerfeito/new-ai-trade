@@ -56,7 +56,7 @@ def _clamp(value: float, lo: float, hi: float) -> int:
 
 # ── Claude validation ─────────────────────────────────────────────────────────
 
-AI_MIN_SETUP_SCORE = 70  # only call Claude for setup scores ≥ this; lower = heuristic
+AI_MIN_SETUP_SCORE = 72  # only call Claude for setup scores ≥ this; lower = heuristic (was 70)
 
 
 async def validate_signal(

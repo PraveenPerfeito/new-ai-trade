@@ -134,11 +134,13 @@ def _filter_coins(
         c for c in coins
         if (
             c.symbol.upper() not in _SKIP_SYMBOLS
+            # Exclude tokens whose symbol starts with known stablecoin prefixes
+            and not any(c.symbol.upper().startswith(p) for p in ("USD", "DAI", "BUSD", "USDE"))
             and c.volume_24h >= config.min_volume_24h
             and c.market_cap >= config.min_market_cap
             and c.market_cap > 0
             and (c.volume_24h / c.market_cap) >= 0.005
-            and c.price_change_24h > -50
+            and c.price_change_24h > -20    # exclude crash / rug candidates (was -50)
         )
     ]
 
@@ -151,7 +153,7 @@ def _filter_coins(
     if mode == ScannerMode.TRENDING:
         result = [
             c for c in result
-            if c.price_change_24h > 2 or (c.volume_24h / (c.market_cap or 1)) > 0.08
+            if c.price_change_24h > 5 or (c.volume_24h / (c.market_cap or 1)) > 0.08  # was > 2
         ]
         result.sort(key=lambda c: c.volume_24h / (c.market_cap or 1), reverse=True)
     else:

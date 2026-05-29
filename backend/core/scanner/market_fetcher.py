@@ -166,7 +166,7 @@ async def fetch_klines(
 
 # ── Futures symbols ───────────────────────────────────────────────────────────
 
-_futures_symbols_cache = RedisCache("futures-symbols", ttl_seconds=30 * 60)
+_futures_symbols_cache = RedisCache("futures-symbols", ttl_seconds=60 * 60)  # 1h (was 30 min)
 
 _FALLBACK_FUTURES = {
     "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT",

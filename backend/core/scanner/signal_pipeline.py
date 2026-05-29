@@ -91,6 +91,7 @@ def detect_setup(
     ind1d: TechnicalIndicators | None = None,
     coin_change_24h: float = 0.0,
     btc_change_24h: float = 0.0,
+    candle_count_1h: int = 0,
 ) -> SetupResult:
     """
     Pre-AI setup quality score. Threshold 60 (was 65 — lowered to catch more signals).
@@ -155,8 +156,9 @@ def detect_setup(
         reasons.append(f"Strong trend score: {combined:.0f}/100")
 
     # ── EMA200 bounce (+15) ───────────────────────────────────────────────────
-    # Price within 1% of EMA200 on 1h = institutional reference level bounce
-    if ind1h.ema200 > 0:
+    # EMA200 needs ~500 candles to converge; guard requires ≥ 250 to avoid
+    # scoring bounce signals on unconverged (seeded) values.
+    if ind1h.ema200 > 0 and (candle_count_1h == 0 or candle_count_1h >= 250):
         price = ind1h.current_price
         dist_pct = abs(price - ind1h.ema200) / ind1h.ema200 * 100
         if dist_pct <= 1.0:
@@ -369,6 +371,7 @@ async def scan_coin(
             ind1h, ind4h, signal_type, s1h, s4h, ind1d,
             coin_change_24h=coin.price_change_24h,
             btc_change_24h=btc_change_24h,
+            candle_count_1h=len(candles_1h),
         )
         if not setup.has_setup:
             gate_rejections_total.labels(gate="setup_score").inc()
@@ -414,7 +417,7 @@ async def scan_coin(
                     trend=ind1h.trend,
                     signal_type=signal_type,
                 )
-                if abs(futures_data.funding_rate) > 0.002:
+                if abs(futures_data.funding_rate) > 0.005:  # was 0.002; 0.5%/8h = extreme
                     gate_rejections_total.labels(gate="futures").inc()
                     log.info("rejected_extreme_funding", symbol=coin.symbol, rate=futures_data.funding_rate)
                     return None
