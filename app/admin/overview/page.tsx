@@ -23,6 +23,7 @@ interface CacheTelemetry {
   quota: { creditsUsed: number; monthlyBudget: number; pctUsed: number } | null
   groups: Array<{ name: string; isStale: boolean; ageSeconds: number | null }>
 }
+interface ProviderStatus { name: string; healthy: boolean; latencyMs: number; error?: string }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -70,13 +71,14 @@ function StatTile({ label, value, sub, href, accent = 'default' }: {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CommandOverviewPage() {
-  const [celery,     setCelery]     = useState<CeleryStatus | null>(null)
-  const [regime,     setRegime]     = useState<RegimeData | null>(null)
-  const [signals,    setSignals]    = useState<TacticalSignalRow[]>([])
-  const [cache,      setCache]      = useState<CacheTelemetry | null>(null)
-  const [updatedAt,  setUpdatedAt]  = useState<string | null>(null)
-  const [countdown,  setCountdown]  = useState<number | null>(null)
-  const [pausing,    setPausing]    = useState(false)
+  const [celery,    setCelery]    = useState<CeleryStatus | null>(null)
+  const [regime,    setRegime]    = useState<RegimeData | null>(null)
+  const [signals,   setSignals]   = useState<TacticalSignalRow[]>([])
+  const [cache,     setCache]     = useState<CacheTelemetry | null>(null)
+  const [providers, setProviders] = useState<ProviderStatus[]>([])
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null)
+  const [countdown, setCountdown] = useState<number | null>(null)
+  const [pausing,   setPausing]   = useState(false)
 
   const fetchAll = useCallback(async () => {
     await Promise.allSettled([
@@ -84,6 +86,7 @@ export default function CommandOverviewPage() {
       fetch('/api/market/intelligence').then(r => r.json()).then(j => { if (j.success) setRegime(j.regime) }),
       fetch('/api/signals/tactical?limit=100&lifecycleStage=all').then(r => r.json()).then(j => { if (j.success) setSignals(j.signals) }),
       fetch('/api/cache/intelligence').then(r => r.json()).then(j => { if (j.success) setCache(j.telemetry) }),
+      fetch('/api/health/providers').then(r => r.json()).then(j => { if (j.providers) setProviders(j.providers) }).catch(() => {}),
     ])
     setUpdatedAt(new Date().toLocaleTimeString())
   }, [])
@@ -145,6 +148,26 @@ export default function CommandOverviewPage() {
           </button>
         </div>
       </div>
+
+      {/* ── Provider health strip ── */}
+      {providers.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] text-zinc-500 uppercase tracking-wider shrink-0">Providers:</span>
+          {providers.slice(0, 4).map(p => (
+            <Link key={p.name} href="/admin/providers"
+              className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors hover:opacity-80 ${
+                p.healthy ? 'border-green-500/25 bg-green-500/5 text-green-400' : 'border-red-500/25 bg-red-500/5 text-red-400'
+              }`}>
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${p.healthy ? 'bg-green-400' : 'bg-red-400 animate-pulse'}`} />
+              {p.name}
+              {p.healthy && p.latencyMs > 0 && (
+                <span className="text-[10px] opacity-60">{p.latencyMs}ms</span>
+              )}
+              {!p.healthy && <span className="text-[10px] opacity-70">down</span>}
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* ── Scanner status + countdown + emergency pause ── */}
       <div className={`rounded-xl border px-4 py-3 flex flex-wrap items-center gap-3 ${

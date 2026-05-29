@@ -740,7 +740,7 @@ export default function SettingsPage() {
           <span className="h-px flex-1 bg-terminal-border/30" />
           <span className="text-[9px] text-terminal-muted/35 font-mono">patches 5 groups instantly</span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-3">
           {OPERATING_MODES.map(mode => (
             <ModeCard
               key={mode.id}

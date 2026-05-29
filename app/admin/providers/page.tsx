@@ -590,8 +590,8 @@ function ProviderCard({
           </div>
         )}
 
-        {/* API usage */}
-        <div className="grid grid-cols-2 gap-2">
+        {/* API usage — hidden on mobile to reduce card height */}
+        <div className="hidden sm:grid grid-cols-2 gap-2">
           <div className="rounded-lg border border-terminal-border/30 py-2 px-3">
             <p className="text-sm font-mono font-bold text-terminal-text">{provider.requestsToday.toLocaleString()}</p>
             <p className="text-[8px] text-terminal-muted/40 mt-0.5">API Calls Today</p>
@@ -613,8 +613,8 @@ function ProviderCard({
           </div>
         )}
 
-        {/* Coverage chips */}
-        <div className="flex items-center gap-1 flex-wrap">
+        {/* Coverage chips — hidden on mobile */}
+        <div className="hidden sm:flex items-center gap-1 flex-wrap">
           {meta.coverage.map(c => (
             <span key={c} className="text-[8px] px-1.5 py-0.5 rounded border border-terminal-border/35 text-terminal-muted/45 font-mono">{c}</span>
           ))}
