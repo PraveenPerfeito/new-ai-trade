@@ -155,26 +155,38 @@ def detect_setup(
         score += 10
         reasons.append(f"Strong trend score: {combined:.0f}/100")
 
-    # ── EMA200 bounce (+15) ───────────────────────────────────────────────────
-    # EMA200 needs ~500 candles to converge; guard requires ≥ 250 to avoid
-    # scoring bounce signals on unconverged (seeded) values.
-    if ind1h.ema200 > 0 and (candle_count_1h == 0 or candle_count_1h >= 250):
-        price = ind1h.current_price
+    # ── EMA200 convergence protection (Phase 7.3A.7) ─────────────────────────
+    # EMA200 initialised from seed price has significant contamination at < 280
+    # candles. See ema_convergence.py for the exact math.
+    #
+    # direction_reliable (≥ 250): "price above/below EMA200" bias (+5 pts)
+    # bounce_reliable    (≥ 280): "price within ±2% of EMA200" (+15 pts)
+    #
+    # Conservative default: candle_count_1h == 0 means count not provided → DISABLED
+    # (the old code had == 0 → ENABLED, which was a bug).
+    from backend.core.scanner.ema_convergence import direction_reliable, bounce_reliable  # noqa: PLC0415
+
+    if ind1h.ema200 > 0:
+        price    = ind1h.current_price
         dist_pct = abs(price - ind1h.ema200) / ind1h.ema200 * 100
-        if dist_pct <= 1.0:
+
+        # Bounce / rejection detection (±2% proximity) — requires ≥ 280 candles
+        if bounce_reliable(candle_count_1h) and dist_pct <= 2.0:
             if signal_type == SignalType.BUY and price >= ind1h.ema200:
                 score += 15
                 reasons.append(f"Price bouncing off EMA200 ({dist_pct:.2f}% above)")
             elif signal_type == SignalType.SELL and price <= ind1h.ema200:
                 score += 15
                 reasons.append(f"Price rejected at EMA200 ({dist_pct:.2f}% below)")
-        # Extra bonus: price above/below EMA200 confirms long-term bias
-        elif signal_type == SignalType.BUY and price > ind1h.ema200:
-            score += 5
-            reasons.append("Price above EMA200 — long-term bullish")
-        elif signal_type == SignalType.SELL and price < ind1h.ema200:
-            score += 5
-            reasons.append("Price below EMA200 — long-term bearish")
+
+        # Direction bias — price above/below EMA200 (+5 pts), requires ≥ 250 candles
+        elif direction_reliable(candle_count_1h):
+            if signal_type == SignalType.BUY and price > ind1h.ema200:
+                score += 5
+                reasons.append("Price above EMA200 — long-term bullish")
+            elif signal_type == SignalType.SELL and price < ind1h.ema200:
+                score += 5
+                reasons.append("Price below EMA200 — long-term bearish")
 
     # ── Bollinger Band squeeze (+15) ──────────────────────────────────────────
     # BB squeeze = compression before explosion — strong breakout signal
@@ -497,13 +509,19 @@ async def scan_coin(
 async def _fetch_all_timeframes(
     coin: CoinData, is_futures: bool
 ) -> tuple[list[Candle], list[Candle], list[Candle]]:
-    """Fetch 1h, 4h, and 1d candles concurrently.
-    200 candles on 1h/4h gives enough history for EMA200.
-    100 daily candles covers ~3 months for daily trend context.
+    """
+    Fetch 1h, 4h, and 1d candles concurrently.
+
+    300 candles on 1h/4h (Phase 7.3A.7):
+      EMA200 seed influence at 200c = 13.8% — unreliable for bounce detection.
+      EMA200 seed influence at 300c = 4.9%  — acceptable for direction and bounce.
+      See ema_convergence.py for the full mathematical derivation.
+
+    100 daily candles covers ~3 months of daily trend context.
     """
     import asyncio
     return await asyncio.gather(
-        fetch_klines(coin.binance_symbol, "1h",  200, is_futures),
-        fetch_klines(coin.binance_symbol, "4h",  200, is_futures),
+        fetch_klines(coin.binance_symbol, "1h",  300, is_futures),
+        fetch_klines(coin.binance_symbol, "4h",  300, is_futures),
         fetch_klines(coin.binance_symbol, "1d",  100, is_futures),
     )
