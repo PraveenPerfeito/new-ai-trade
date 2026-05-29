@@ -210,3 +210,13 @@ intelligence_fallback_total = Counter(
     "Count of times the scanner fell back from CMC intelligence cache to a secondary provider",
     ["primary", "fallback", "reason"],
 )
+
+# ── Breakout intelligence metrics (Phase 7.4A.1) ─────────────────────────────
+
+breakout_detections_total = Counter(
+    "breakout_detections_total",
+    "Breakout signals detected by the institutional breakout engine",
+    ["breakout_type", "strength"],
+    # breakout_type: 20d_high | 30d_high | 20d_low | 30d_low | bb_expansion | ...
+    # strength:      EARLY_BREAKOUT | CONFIRMED_BREAKOUT | HIGH_MOMENTUM_BREAKOUT
+)

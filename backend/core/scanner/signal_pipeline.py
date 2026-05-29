@@ -92,10 +92,13 @@ def detect_setup(
     coin_change_24h: float = 0.0,
     btc_change_24h: float = 0.0,
     candle_count_1h: int = 0,
+    candles_1h: "list[Candle]" = [],   # Phase 7.4A.1 — breakout detection
+    candles_1d: "list[Candle]" = [],   # Phase 7.4A.1 — breakout detection
 ) -> SetupResult:
     """
     Pre-AI setup quality score. Threshold 60 (was 65 — lowered to catch more signals).
     Incorporates EMA200 bounce, Bollinger Band squeeze, daily trend, and candlestick patterns.
+    Phase 7.4A.1: breakout intelligence — 20/30-day high/low + BB expansion.
     """
     score = 0
     reasons: list[str] = []
@@ -271,6 +274,32 @@ def detect_setup(
                 f"Underperforming BTC by {abs(rel_strength):.1f}% — relative weakness on SELL"
             )
 
+    # ── Breakout intelligence (Phase 7.4A.1) ──────────────────────────────────
+    # Detects 20/30-day high/low structural breakouts + BB expansion after squeeze.
+    # Requires real candle lists; silently skips if not provided.
+    if candles_1h or candles_1d:
+        from backend.core.scanner.breakout_intelligence import (  # noqa: PLC0415
+            detect_breakout_strength,
+        )
+        from backend.metrics.prometheus import breakout_detections_total  # noqa: PLC0415
+
+        br = detect_breakout_strength(candles_1d, candles_1h, signal_type)
+        if br.detected:
+            score += br.score_bonus
+            reasons.append(br.details)
+            breakout_detections_total.labels(
+                breakout_type=br.breakout_type,
+                strength=br.strength.value,
+            ).inc()
+            log.info(
+                "breakout_detected",
+                symbol=getattr(ind1h, "symbol", "?"),
+                strength=br.strength.value,
+                breakout_type=br.breakout_type,
+                volume_ratio=br.volume_ratio,
+                score_bonus=br.score_bonus,
+            )
+
     return SetupResult(
         has_setup=score >= 60,
         description=". ".join(reasons),
@@ -384,6 +413,8 @@ async def scan_coin(
             coin_change_24h=coin.price_change_24h,
             btc_change_24h=btc_change_24h,
             candle_count_1h=len(candles_1h),
+            candles_1h=candles_1h,   # Phase 7.4A.1 breakout detection
+            candles_1d=candles_1d,   # Phase 7.4A.1 breakout detection
         )
         if not setup.has_setup:
             gate_rejections_total.labels(gate="setup_score").inc()
