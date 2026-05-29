@@ -259,57 +259,7 @@ async def fetch_long_short_ratio(symbol: str, period: str = "1h", limit: int = 4
         return []
 
 
-# ── CoinMarketCap — primary coin source ───────────────────────────────────────
-
-CMC_BASE = "https://pro-api.coinmarketcap.com/v1"
-
-
-def _parse_cmc_coin(raw: dict, index: int) -> CoinData:
-    symbol = str(raw.get("symbol", "")).upper()
-    usd    = raw.get("quote", {}).get("USD", {})
-    return CoinData(
-        id=str(raw.get("id", "")),
-        symbol=symbol,
-        name=str(raw.get("name", "")),
-        rank=int(raw.get("cmc_rank") or index + 1),
-        price=float(usd.get("price") or 0),
-        market_cap=float(usd.get("market_cap") or 0),
-        volume_24h=float(usd.get("volume_24h") or 0),
-        price_change_24h=float(usd.get("percent_change_24h") or 0),
-        binance_symbol=f"{symbol}USDT",
-        has_futures=False,
-        image="",
-    )
-
-
-async def _fetch_cmc(limit: int = 200) -> list[CoinData]:
-    """Fetch top coins by market cap from CoinMarketCap (single API call)."""
-    settings = get_settings()
-    if not settings.coinmarketcap_api_key:
-        raise RuntimeError("COINMARKETCAP_API_KEY not configured")
-
-    data = await _get(
-        f"{CMC_BASE}/cryptocurrency/listings/latest",
-        params={
-            "limit": limit,
-            "convert": "USD",
-            "sort": "market_cap",
-            "sort_dir": "desc",
-            "cryptocurrency_type": "all",
-        },
-        headers={
-            "X-CMC_PRO_API_KEY": settings.coinmarketcap_api_key,
-            "Accept": "application/json",
-        },
-        service="coinmarketcap",
-        retries=3,
-    )
-    if not data or "data" not in data:
-        raise RuntimeError(f"CMC unexpected response: {str(data)[:200]}")
-    return [_parse_cmc_coin(c, i) for i, c in enumerate(data["data"])]
-
-
-# ── CoinGecko — fallback only ─────────────────────────────────────────────────
+# ── CoinGecko — fallback only (primary path: Redis intelligence cache) ────────
 
 def _parse_cg_coin(raw: dict, index: int) -> CoinData:
     symbol = str(raw.get("symbol", "")).upper()
@@ -362,17 +312,19 @@ async def _fetch_coingecko() -> list[CoinData]:
     return [_parse_cg_coin(c, i) for i, c in enumerate(p1 + p2)]
 
 
-async def fetch_top100() -> list[CoinData]:
+async def fetch_top100() -> "IntelligenceCacheResult":
     """
-    Fetch top coins — CoinMarketCap primary (200 coins, 1 API call),
-    CoinGecko fallback (100 coins) if CMC key missing or request fails.
+    Return top coins via the Redis intelligence cache.
+
+    The TypeScript intelligence workers (lib/intelligence/workers.ts) are the
+    sole CMC callers. Python reads the pre-populated cache:intel:listings key —
+    no direct CMC calls, no quota double-spending.
+
+    Falls back to CoinGecko when the cache is cold.
+    Returns an IntelligenceCacheResult (not bare list[CoinData]).
     """
-    try:
-        coins = await _fetch_cmc(limit=200)
-        log.info("coins_fetched_cmc", count=len(coins))
-        return coins
-    except Exception as exc:
-        log.warning("cmc_fetch_failed_using_coingecko", error=str(exc))
-        coins = await _fetch_coingecko()
-        log.info("coins_fetched_coingecko_fallback", count=len(coins))
-        return coins
+    from backend.core.scanner.intelligence_cache import (  # noqa: PLC0415
+        IntelligenceCacheResult,
+        read_intelligence_listings,
+    )
+    return await read_intelligence_listings(limit=200)

@@ -198,12 +198,21 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
         async def _no_futures() -> set[str]:
             return set()
 
-        all_coins, futures_syms = await asyncio.gather(
+        coin_result, futures_syms = await asyncio.gather(
             fetch_top100(),
             fetch_futures_symbols() if mode in (ScannerMode.FUTURES, ScannerMode.HIGH_CONFIDENCE) else _no_futures(),
         )
+        all_coins = coin_result.coins
 
-        log.info("coins_fetched", count=len(all_coins), mode=mode.value)
+        log.info(
+            "coins_fetched",
+            count=len(all_coins),
+            mode=mode.value,
+            cache_source=coin_result.cache_source,
+            cache_age_s=round(coin_result.cache_age_seconds, 1),
+            cache_is_fresh=coin_result.is_fresh,
+            cache_hit=coin_result.cache_hit,
+        )
 
         # Extract BTC 24h change for relative-strength scoring
         btc_change_24h = next(

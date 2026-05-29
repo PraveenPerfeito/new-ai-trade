@@ -166,3 +166,25 @@ asyncpg_pool_free = Gauge(
     "asyncpg_pool_free",
     "Number of idle asyncpg connections available in the pool",
 )
+
+# ── Intelligence cache metrics ─────────────────────────────────────────────────
+# Track the CMC intelligence pipeline: Redis cache → scanner.
+# Python never calls CMC directly; it reads the Redis key written by
+# the TypeScript intelligence workers (lib/intelligence/workers.ts).
+
+intelligence_cache_hits_total = Counter(
+    "intelligence_cache_hits_total",
+    "Intelligence cache hits by data source when scanner fetches coin list",
+    ["source"],   # redis_intelligence | coingecko_fallback
+)
+
+intelligence_cache_misses_total = Counter(
+    "intelligence_cache_misses_total",
+    "Intelligence cache misses (Redis cold — fell back to CoinGecko)",
+)
+
+intelligence_cache_age_seconds = Histogram(
+    "intelligence_cache_age_seconds",
+    "Age of the Redis intelligence snapshot at time of consumption by the scanner",
+    buckets=[30, 60, 120, 180, 240, 300, 360, 420, 480, 540, 600],
+)
