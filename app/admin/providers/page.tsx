@@ -191,90 +191,395 @@ function isStackActive(providers: ProviderHealth[]): boolean {
   )
 }
 
-// ── Tactical Operations Summary ───────────────────────────────────────────────
+// ── Provider Status Board ─────────────────────────────────────────────────────
 
-function TacticalOperationsSummary({
+function ProviderStatusBoard({ providers }: { providers: ProviderHealth[] }) {
+  const m = useMemo(() => Object.fromEntries(providers.map(p => [p.name, p])), [providers])
+
+  const slots: { key: string; label: string; meta: ProviderMeta }[] = [
+    { key: 'coinmarketcap', label: 'CoinMarketCap', meta: PROVIDER_META.coinmarketcap },
+    { key: 'binance',       label: 'Binance',       meta: PROVIDER_META.binance },
+    { key: 'coingecko',     label: 'CoinGecko',     meta: PROVIDER_META.coingecko },
+  ]
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {slots.map(({ key, meta }) => {
+        const p = m[key]
+        const quotaPct = p?.quota?.dailyLimit > 0 ? p.quota.pct : null
+
+        return (
+          <div
+            key={key}
+            className="glass-card rounded-xl border border-terminal-border/50 px-4 py-3 flex flex-col gap-2"
+            style={{ minHeight: '120px' }}
+          >
+            {/* Top row: dot + name + status badge */}
+            <div className="flex items-center gap-2">
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 ${p ? statusDot(p.status) : 'bg-terminal-muted/40'}`}
+              />
+              <span className="text-xs font-semibold text-terminal-text truncate flex-1">{meta.label}</span>
+              {p && (
+                <span
+                  className="text-[8px] font-mono px-1.5 py-0.5 rounded border leading-tight shrink-0"
+                  style={{
+                    color:           p.enabled ? meta.color : '#6b7280',
+                    borderColor:     p.enabled ? meta.color + '55' : 'rgba(255,255,255,0.08)',
+                    backgroundColor: p.enabled ? meta.color + '15' : 'transparent',
+                  }}
+                >
+                  {statusLabel(p.status)}
+                </span>
+              )}
+            </div>
+
+            {/* Middle row: latency + health score */}
+            <div className="flex items-center gap-3">
+              <div className="flex flex-col">
+                <span className={`text-sm font-mono font-bold leading-none ${p && p.latencyMs > 0 ? latencyColor(p.latencyMs) : 'text-terminal-muted/40'}`}>
+                  {p && p.latencyMs > 0 ? `${p.latencyMs}ms` : '—'}
+                </span>
+                <span className="text-[8px] text-terminal-muted/40 mt-0.5">Latency</span>
+              </div>
+              <div className="flex flex-col">
+                <span
+                  className="text-sm font-mono font-bold leading-none"
+                  style={{
+                    color: p
+                      ? (p.healthScore >= 80 ? '#00d084' : p.healthScore >= 60 ? '#f59e0b' : '#ff3b5c')
+                      : '#4b5563',
+                  }}
+                >
+                  {p ? p.healthScore : '—'}
+                </span>
+                <span className="text-[8px] text-terminal-muted/40 mt-0.5">Health</span>
+              </div>
+            </div>
+
+            {/* Quota bar — CMC only */}
+            {quotaPct !== null && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[8px] font-mono text-terminal-muted/40">
+                  <span>Quota</span>
+                  <span>{quotaPct.toFixed(0)}% used</span>
+                </div>
+                <div className="h-1 rounded-full bg-terminal-bright/25 overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width:           `${Math.min(quotaPct, 100)}%`,
+                      backgroundColor: quotaPct >= 90 ? '#ff3b5c' : quotaPct >= 75 ? '#f97316'
+                                     : quotaPct >= 50 ? '#f59e0b' : '#00d084',
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Operations Summary ────────────────────────────────────────────────────────
+
+function OperationsSummary({
   providers,
   events,
 }: {
   providers: ProviderHealth[]
   events:    FailoverEvent[]
 }) {
-  const m        = useMemo(() => Object.fromEntries(providers.map(p => [p.name, p])), [providers])
-  const cmc      = m.coinmarketcap
-  const binance  = m.binance
-  const gecko    = m.coingecko
+  const m       = useMemo(() => Object.fromEntries(providers.map(p => [p.name, p])), [providers])
+  const cmc     = m.coinmarketcap
+  const binance = m.binance
+  const gecko   = m.coingecko
 
-  const cmcQuota     = cmc?.quota
-  const scansLeft    = cmcQuota ? scansRemainingEst(cmcQuota) : null
-  const quotaPct     = cmcQuota && cmcQuota.dailyLimit > 0 ? cmcQuota.pct : 0
+  // Primary provider: enabled provider with lowest priority
+  const enabledSorted = [...providers].filter(p => p.enabled).sort((a, b) => a.priority - b.priority)
+  const primary   = enabledSorted[0]
+  const primaryMeta = primary ? (PROVIDER_META[primary.name] ?? null) : null
 
-  const recentEvents = events.filter(e => {
-    const diff = Date.now() - new Date(e.occurredAt).getTime()
-    return diff < 86_400_000
+  // Execution provider (binance)
+  const execLabel = binance?.enabled
+    ? `Binance · ${statusLabel(binance.status)}`
+    : 'Binance (disabled)'
+
+  // Fallback provider (coingecko)
+  const fallbackLabel = gecko?.enabled
+    ? `CoinGecko · ${statusLabel(gecko.status)}`
+    : 'CoinGecko (disabled)'
+
+  // Quota remaining
+  const quotaRemaining = cmc?.quota?.dailyLimit > 0
+    ? `${cmc.quota.remaining.toLocaleString()} / ${cmc.quota.dailyLimit.toLocaleString()}`
+    : cmc ? '∞' : '—'
+
+  // Failovers today
+  const now = Date.now()
+  const failoversToday = events.filter(e => {
+    const ts = new Date(e.occurredAt).getTime()
+    return (now - ts) < 86_400_000
   }).length
 
-  const cells: { label: string; value: string; sub: string; color: string; warn?: boolean }[] = [
+  const cells: { label: string; value: string; color: string }[] = [
     {
-      label: 'Market Intelligence',
-      value: cmc ? (cmc.enabled ? cmc.healthScore.toString() : 'Off') : '—',
-      sub:   cmc ? (cmc.enabled ? `CMC · ${statusLabel(cmc.status)}` : 'CoinMarketCap disabled') : 'Not loaded',
-      color: cmc?.enabled && cmc.status === 'healthy' ? '#3861fb' : '#6b7280',
+      label: 'Primary Provider',
+      value: primaryMeta ? primaryMeta.label : '—',
+      color: primary && primary.status === 'healthy' ? '#00d084' : '#f59e0b',
     },
     {
-      label: 'Tactical Execution',
-      value: binance ? (binance.enabled ? (binance.latencyMs > 0 ? `${binance.latencyMs}ms` : '—') : 'Off') : '—',
-      sub:   binance ? (binance.enabled ? `Binance · ${statusLabel(binance.status)}` : 'Binance disabled') : 'Not loaded',
+      label: 'Execution Provider',
+      value: binance?.enabled ? 'Binance' : '—',
       color: binance?.enabled && binance.status === 'healthy' ? '#f0b90b' : '#6b7280',
     },
     {
-      label: 'Futures Intelligence',
-      value: binance?.enabled ? statusLabel(binance.status) : 'Off',
-      sub:   binance?.enabled ? 'Funding · OI · L/S Ratios' : 'Binance disabled',
-      color: binance?.enabled && binance.status === 'healthy' ? '#00d084' : '#6b7280',
-    },
-    {
-      label: 'Quota Health',
-      value: cmcQuota?.dailyLimit > 0 ? `${(100 - quotaPct).toFixed(0)}%` : '∞',
-      sub:   scansLeft != null
-        ? `~${scansLeft.toLocaleString()} scans remaining`
-        : cmcQuota?.dailyLimit > 0 ? `${cmcQuota.remaining.toLocaleString()} calls left` : 'Unlimited quota',
-      color: quotaPct >= 90 ? '#ff3b5c' : quotaPct >= 70 ? '#f59e0b' : '#00d084',
-      warn: quotaPct >= 75,
-    },
-    {
-      label: 'Backup Reliability',
-      value: gecko ? (gecko.enabled ? gecko.healthScore.toString() : 'Off') : '—',
-      sub:   gecko?.enabled
-        ? `CoinGecko · ${statusLabel(gecko.status)}`
-        : 'CoinGecko backup disabled',
+      label: 'Fallback Provider',
+      value: gecko?.enabled ? 'CoinGecko' : '—',
       color: gecko?.enabled && gecko.status === 'healthy' ? '#2d9e49' : '#6b7280',
     },
     {
-      label: 'Failover Stability',
-      value: recentEvents === 0 ? 'Stable' : `${recentEvents}`,
-      sub:   recentEvents === 0 ? 'No events in last 24h' : `routing event${recentEvents !== 1 ? 's' : ''} today`,
-      color: recentEvents === 0 ? '#00d084' : recentEvents <= 2 ? '#f59e0b' : '#ff3b5c',
-      warn: recentEvents > 2,
+      label: 'Quota Remaining',
+      value: quotaRemaining,
+      color: cmc?.quota?.dailyLimit > 0 && cmc.quota.pct >= 90
+        ? '#ff3b5c'
+        : cmc?.quota?.dailyLimit > 0 && cmc.quota.pct >= 70
+        ? '#f59e0b'
+        : '#00d084',
+    },
+    {
+      label: 'Failovers Today',
+      value: failoversToday === 0 ? 'Stable' : String(failoversToday),
+      color: failoversToday === 0 ? '#00d084' : failoversToday <= 2 ? '#f59e0b' : '#ff3b5c',
     },
   ]
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5">
+    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
       {cells.map(c => (
         <div
           key={c.label}
-          className={`glass-card rounded-xl px-3.5 py-3 border transition-colors ${
-            c.warn ? 'border-signal-high/25 bg-signal-high/5' : 'border-terminal-border/50'
-          }`}
+          className="glass-card rounded-xl border border-terminal-border/50 px-3.5 py-3"
         >
-          <p className="text-[8px] text-terminal-muted/45 uppercase tracking-widest mb-1.5 leading-tight">{c.label}</p>
-          <p className="text-lg font-mono font-bold leading-none mb-1" style={{ color: c.color }}>
+          <p className="text-[8px] text-terminal-muted/45 uppercase tracking-widest mb-1.5 leading-tight font-mono">
+            {c.label}
+          </p>
+          <p
+            className="text-sm font-mono font-bold leading-none truncate"
+            style={{ color: c.color }}
+          >
             {c.value}
           </p>
-          <p className="text-[8px] text-terminal-muted/40 font-mono leading-snug">{c.sub}</p>
         </div>
       ))}
+    </div>
+  )
+}
+
+// ── Quota Burn Forecast ───────────────────────────────────────────────────────
+
+function QuotaBurnForecast({ providers }: { providers: ProviderHealth[] }) {
+  const cmc = useMemo(
+    () => providers.find(p => p.name === 'coinmarketcap'),
+    [providers],
+  )
+
+  if (!cmc || !cmc.quota || cmc.quota.dailyLimit === 0) return null
+
+  const { perHr } = rateEst(cmc.requestsToday)
+  const hoursLeft  = perHr > 0 ? cmc.quota.remaining / perHr : null
+  const pct        = cmc.quota.pct
+
+  const forecastColor = pct >= 85 ? '#ff3b5c' : pct >= 60 ? '#f59e0b' : '#00d084'
+  const forecastLabel = pct >= 85 ? 'High' : pct >= 60 ? 'Moderate' : 'Safe'
+
+  let daysLabel = 'Unknown'
+  if (hoursLeft !== null) {
+    if (hoursLeft < 1)        daysLabel = '< 1 hr remaining'
+    else if (hoursLeft < 24)  daysLabel = `~${Math.round(hoursLeft)}h remaining`
+    else                      daysLabel = `~${(hoursLeft / 24).toFixed(1)}d remaining`
+  }
+
+  const stats: { label: string; value: string }[] = [
+    { label: 'Remaining Calls', value: cmc.quota.remaining.toLocaleString() },
+    { label: 'Daily Limit',     value: cmc.quota.dailyLimit.toLocaleString() },
+    { label: 'Current Rate',    value: perHr > 0 ? `${perHr}/hr` : '—' },
+  ]
+
+  return (
+    <div className="glass-card rounded-xl border border-terminal-border/50 px-4 py-3 space-y-3">
+      {/* Header row */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] text-terminal-muted/40 uppercase tracking-widest font-mono">
+            Quota Burn Forecast
+          </span>
+          <span
+            className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border leading-tight"
+            style={{ color: forecastColor, borderColor: forecastColor + '55', backgroundColor: forecastColor + '15' }}
+          >
+            {forecastLabel}
+          </span>
+        </div>
+        <span className="text-[10px] font-mono" style={{ color: forecastColor }}>
+          {daysLabel}
+        </span>
+      </div>
+
+      {/* Burn bar */}
+      <div className="space-y-1">
+        <div className="h-2 rounded-full bg-terminal-bright/25 overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all"
+            style={{
+              width:           `${Math.min(pct, 100)}%`,
+              backgroundColor: forecastColor,
+            }}
+          />
+        </div>
+        <div className="flex items-center justify-between text-[8px] font-mono text-terminal-muted/40">
+          <span>0%</span>
+          <span>{pct.toFixed(1)}% consumed</span>
+          <span>100%</span>
+        </div>
+      </div>
+
+      {/* Stat tiles */}
+      <div className="grid grid-cols-3 gap-2">
+        {stats.map(s => (
+          <div key={s.label} className="rounded-lg bg-terminal-bright/10 px-2.5 py-2 text-center">
+            <p className="text-xs font-mono font-bold text-terminal-text leading-none">{s.value}</p>
+            <p className="text-[8px] text-terminal-muted/40 mt-1 leading-tight">{s.label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Compact Provider Card ─────────────────────────────────────────────────────
+
+function CompactProviderCard({
+  provider,
+  allProviders,
+  onToggle,
+  onSetPrimary,
+  onForceFailover,
+  onResetMetrics,
+  loading,
+}: {
+  provider:        ProviderHealth
+  allProviders:    ProviderHealth[]
+  onToggle:        (name: ProviderName, enabled: boolean) => void
+  onSetPrimary:    (name: ProviderName) => void
+  onForceFailover: (name: ProviderName) => void
+  onResetMetrics:  (name: ProviderName) => void
+  loading: boolean
+}) {
+  const [expanded, setExpanded] = useState(false)
+
+  const meta = PROVIDER_META[provider.name] ?? {
+    label: provider.name, role: 'Data Provider', roleShort: 'PROVIDER',
+    color: '#6b7280', description: '', coverage: [], tier: 'legacy' as ProviderTier,
+    freeLabel: null, needsKey: false, quotaNote: '', stackRole: '',
+  }
+
+  const quotaPct    = provider.quota.dailyLimit > 0 ? provider.quota.pct : null
+  const activeColor = provider.enabled ? meta.color : '#374151'
+
+  return (
+    <div
+      className="glass-card rounded-xl border overflow-hidden transition-all"
+      style={{
+        borderColor: provider.enabled
+          ? (provider.status === 'healthy' ? meta.color + '35' : meta.color + '20')
+          : 'rgba(255,255,255,0.07)',
+      }}
+    >
+      {/* Collapsed row (~56px tall) */}
+      <div className="flex items-center gap-3 px-4 py-3.5">
+        {/* Status dot */}
+        <span className={`w-2 h-2 rounded-full shrink-0 ${statusDot(provider.status)}`} />
+
+        {/* Name */}
+        <span className="text-sm font-semibold text-terminal-text truncate flex-1 min-w-0">
+          {meta.label}
+        </span>
+
+        {/* Role badge */}
+        <span
+          className="text-[8px] font-mono px-1.5 py-0.5 rounded-sm border leading-tight shrink-0"
+          style={{ color: activeColor, borderColor: activeColor + '55', backgroundColor: activeColor + '15' }}
+        >
+          {meta.roleShort}
+        </span>
+
+        {/* Latency — hidden on mobile */}
+        <span
+          className={`hidden sm:block text-xs font-mono w-14 text-right shrink-0 ${
+            provider.latencyMs > 0 ? latencyColor(provider.latencyMs) : 'text-terminal-muted/30'
+          }`}
+        >
+          {provider.latencyMs > 0 ? `${provider.latencyMs}ms` : '—'}
+        </span>
+
+        {/* Quota bar — hidden on mobile, CMC only */}
+        {quotaPct !== null && (
+          <div className="hidden sm:flex items-center gap-1.5 w-20 shrink-0">
+            <div className="flex-1 h-1 rounded-full bg-terminal-bright/25 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{
+                  width:           `${Math.min(quotaPct, 100)}%`,
+                  backgroundColor: quotaPct >= 90 ? '#ff3b5c' : quotaPct >= 75 ? '#f97316'
+                                 : quotaPct >= 50 ? '#f59e0b' : '#00d084',
+                }}
+              />
+            </div>
+            <span className="text-[8px] font-mono text-terminal-muted/40 w-7 text-right shrink-0">
+              {quotaPct.toFixed(0)}%
+            </span>
+          </div>
+        )}
+
+        {/* Toggle */}
+        <button
+          onClick={() => onToggle(provider.name, !provider.enabled)}
+          disabled={loading}
+          title={provider.enabled ? 'Disable provider' : 'Enable provider'}
+          className="shrink-0 disabled:opacity-50"
+        >
+          <div className={`relative w-8 h-4 rounded-full transition-colors ${provider.enabled ? 'bg-bull-default/70' : 'bg-terminal-bright/60'}`}>
+            <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${provider.enabled ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+          </div>
+        </button>
+
+        {/* Details button */}
+        <button
+          onClick={() => setExpanded(v => !v)}
+          className="flex items-center gap-1 text-[10px] px-2 py-1 rounded border border-terminal-border/40 text-terminal-muted/50 hover:text-terminal-text hover:border-terminal-border font-mono transition-colors shrink-0"
+        >
+          Details
+          <ChevronDown size={10} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
+
+      {/* Expanded full card */}
+      {expanded && (
+        <div className="border-t border-terminal-border/30">
+          <ProviderCard
+            provider={provider}
+            allProviders={allProviders}
+            onToggle={onToggle}
+            onSetPrimary={onSetPrimary}
+            onForceFailover={onForceFailover}
+            onResetMetrics={onResetMetrics}
+            loading={loading}
+          />
+        </div>
+      )}
     </div>
   )
 }
@@ -914,7 +1219,7 @@ export default function ProvidersPage() {
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-terminal-text text-xl font-semibold">Provider Network</h1>
+          <h1 className="text-terminal-text text-xl font-semibold">Operations Dashboard</h1>
           <p className="text-terminal-muted text-sm mt-0.5">
             {loading
               ? 'Loading intelligence infrastructure…'
@@ -959,18 +1264,19 @@ export default function ProvidersPage() {
         </div>
       )}
 
-      {/* Tactical Operations Summary */}
+      {/* Provider Status Board */}
       {!loading && allProviders.length > 0 && (
-        <TacticalOperationsSummary providers={allProviders} events={events} />
+        <ProviderStatusBoard providers={allProviders} />
       )}
 
-      {/* Institutional Stack Card */}
+      {/* Operations Summary */}
       {!loading && allProviders.length > 0 && (
-        <InstitutionalStackCard
-          providers={allProviders}
-          onActivate={handleActivateStack}
-          loading={actionLoading}
-        />
+        <OperationsSummary providers={allProviders} events={events} />
+      )}
+
+      {/* Quota Burn Forecast */}
+      {!loading && allProviders.length > 0 && (
+        <QuotaBurnForecast providers={allProviders} />
       )}
 
       {/* Intelligence Stack — core providers */}
@@ -984,13 +1290,13 @@ export default function ProvidersPage() {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {[1, 2, 3, 4].map(i => <div key={i} className="h-64 skeleton rounded-xl" />)}
+          <div className="space-y-2">
+            {[1, 2, 3, 4].map(i => <div key={i} className="h-14 skeleton rounded-xl" />)}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="space-y-2">
             {coreProviders.map(p => (
-              <ProviderCard
+              <CompactProviderCard
                 key={p.name}
                 provider={p}
                 allProviders={allProviders}
@@ -1004,6 +1310,15 @@ export default function ProvidersPage() {
           </div>
         )}
       </div>
+
+      {/* Institutional Stack Card */}
+      {!loading && allProviders.length > 0 && (
+        <InstitutionalStackCard
+          providers={allProviders}
+          onActivate={handleActivateStack}
+          loading={actionLoading}
+        />
+      )}
 
       {/* Legacy providers (collapsed) */}
       {!loading && legacyProviders.length > 0 && (
