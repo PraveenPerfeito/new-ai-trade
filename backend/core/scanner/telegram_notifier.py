@@ -245,14 +245,32 @@ async def send_signal_alert(signal: Signal) -> bool:
             f"  OI Trend: {fd.oi_trend}  |  L/S: {fd.long_short_ratio:.2f}",
             f"  Momentum: {fd.momentum_score}/100",
         ]
+        # Phase 7.4A.6.4 — compact institutional context line (omit neutral/balanced values)
+        _trend_arrow = {"RISING": "↗", "FALLING": "↘"}.get(signal.funding_trend or "", "")
+        _intel: list[str] = []
+        if signal.oi_interpretation and signal.oi_interpretation != "NEUTRAL":
+            _intel.append(f"OI: <b>{signal.oi_interpretation.replace('_', ' ')}</b>")
+        if signal.positioning_context and signal.positioning_context not in ("BALANCED",):
+            _intel.append(f"Pos: <b>{signal.positioning_context.replace('_', ' ')}</b>")
+        if signal.funding_trend and signal.funding_trend != "STABLE":
+            _intel.append(f"Fund: <b>{signal.funding_trend}</b> {_trend_arrow}")
+        if _intel:
+            lines.append(f"  Intel: {' · '.join(_intel)}")
 
     # Technical context
     ind = signal.indicators
     ema_cross = f"  EMA Cross: <b>{ind.ema_cross}</b>" if ind.ema_cross else ""
     pattern   = f"  Pattern: <b>{ind.candle_pattern.replace('_', ' ')}</b>" if ind.candle_pattern else ""
     bb_note   = "  BB: <b>SQUEEZE ⚡</b>" if ind.bb and ind.bb.squeeze else ""
+    # Phase 7.4A.6.4 — breakout context (structured, all scan modes)
+    if signal.breakout_type and signal.breakout_strength:
+        _short_str  = signal.breakout_strength.replace("_BREAKOUT", "").replace("HIGH_MOMENTUM", "HIGH MOM")
+        _short_type = signal.breakout_type.split("+")[0].replace("_", " ")
+        breakout_note = f"  Breakout: <b>{_short_str}</b> ({_short_type})"
+    else:
+        breakout_note = ""
 
-    tech_lines = [x for x in [ema_cross, pattern, bb_note] if x]
+    tech_lines = [x for x in [ema_cross, pattern, bb_note, breakout_note] if x]
     if tech_lines:
         lines += ["", "🔬 <b>Technical</b>"] + tech_lines
 
