@@ -73,12 +73,21 @@ def _extract_field_meta(name: str, fi: FieldInfo) -> FieldMeta:
 
     extra = fi.json_schema_extra or {}
 
+    # Resolve default — fi.default is PydanticUndefined for default_factory fields
+    try:
+        from pydantic_core import PydanticUndefined  # noqa: PLC0415
+        raw_default = fi.default
+        if raw_default is PydanticUndefined:
+            raw_default = fi.default_factory() if callable(fi.default_factory) else None
+    except Exception:
+        raw_default = None
+
     return FieldMeta(
         key=name,
         data_type=data_type,
         label=fi.title or name.replace('_', ' ').title(),
         description=fi.description or '',
-        default=fi.default,
+        default=raw_default,
         min_val=min_val,
         max_val=max_val,
         allowed_values=allowed_values,
