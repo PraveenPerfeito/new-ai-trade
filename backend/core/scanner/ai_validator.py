@@ -236,6 +236,7 @@ R:R:     1:{signal.rr_ratio:.2f}
 Trend strength score: {trend_strength:.0f}/100
 Volatility:           {volatility}
 Breakout:             {signal.breakout_type or "none"}
+Sector:               {signal.sector_status or "n/a"}
 Setup:                {signal.setup_description}
 
 ═══ REJECTION CRITERIA ═══════════

@@ -270,7 +270,15 @@ async def send_signal_alert(signal: Signal) -> bool:
     else:
         breakout_note = ""
 
-    tech_lines = [x for x in [ema_cross, pattern, bb_note, breakout_note] if x]
+    # Phase 7.4A.7.2 — sector intelligence (TRENDING mode only; silent when NEUTRAL or absent)
+    sector_note = ""
+    if signal.sector_status and signal.sector_status not in ("NEUTRAL",):
+        _sector_icon = {"ACCELERATING": "🚀", "STRONGEST": "⭐", "WEAKENING": "📉", "OVERCROWDED": "⚠️"}.get(
+            signal.sector_status, "🏛"
+        )
+        sector_note = f"  Sector: <b>{_sector_icon} {signal.sector_status}</b>"
+
+    tech_lines = [x for x in [ema_cross, pattern, bb_note, breakout_note, sector_note] if x]
     if tech_lines:
         lines += ["", "🔬 <b>Technical</b>"] + tech_lines
 

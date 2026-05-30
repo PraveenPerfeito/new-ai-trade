@@ -379,7 +379,8 @@ async def scan_coin(
     mode: ScannerMode,
     config: ScannerConfig,
     btc_change_24h: float = 0.0,
-    trend_score: float | None = None,  # Phase 7.4A.7.1 — passed from TrendingMeta (TRENDING mode)
+    trend_score:   float | None = None,  # Phase 7.4A.7.1 — from TrendingMeta (TRENDING mode)
+    sector_status: str   | None = None,  # Phase 7.4A.7.2 — from SectorIntelligenceReport (TRENDING mode)
 ) -> Signal | None:
     """
     Full 10-step pipeline for one coin.
@@ -545,6 +546,7 @@ async def scan_coin(
             breakout_type=setup.breakout_type,       # Phase 7.4A.6.1
             breakout_strength=setup.breakout_strength, # Phase 7.4A.6.3
             trend_score=trend_score,                   # Phase 7.4A.7.1
+            sector_status=sector_status,               # Phase 7.4A.7.2
             # Phase 7.4A.6.3 — promote FuturesData intelligence to top-level Signal fields
             oi_interpretation=(futures_data.oi_interpretation.value if futures_data else None),
             funding_trend=(futures_data.funding_trend.value if futures_data else None),

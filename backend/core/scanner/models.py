@@ -338,6 +338,8 @@ class Signal(BaseModel):
     oi_interpretation:       str | None = None   # NEW_LONGS | NEW_SHORTS | SHORT_COVERING | LONG_LIQUIDATION | NEUTRAL
     funding_trend:           str | None = None   # RISING | FALLING | STABLE
     positioning_context:     str | None = None   # EXTREME_LONG | LONG_HEAVY | BALANCED | SHORT_HEAVY | EXTREME_SHORT
+    # Phase 7.4A.7.2 — sector intelligence from SectorIntelligenceReport (TRENDING mode)
+    sector_status:           str | None = None   # STRONGEST | ACCELERATING | NEUTRAL | WEAKENING | OVERCROWDED
 
 
 # ── Scan orchestration models ─────────────────────────────────────────────────

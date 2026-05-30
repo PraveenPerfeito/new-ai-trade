@@ -74,13 +74,15 @@ async def register_signal_outcome(signal: Signal) -> str | None:
                 volatility_regime, risk_grade, risk_score, quality_score,
                 breakout_type, breakout_strength,
                 oi_interpretation, funding_trend,
-                positioning_context, momentum_score, trend_score
+                positioning_context, momentum_score, trend_score,
+                sector_status
             ) VALUES (
                 $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
                 $12,$13,$14,$15,
                 $16,$17,
                 $18,$19,
-                $20,$21,$22
+                $20,$21,$22,
+                $23
             )
             ON CONFLICT (signal_id) DO NOTHING
             RETURNING id::text
@@ -107,6 +109,7 @@ async def register_signal_outcome(signal: Signal) -> str | None:
             positioning_context,         # Phase 7.4A.6.1
             momentum_score,              # Phase 7.4A.6.1
             signal.trend_score,          # Phase 7.4A.6.1
+            signal.sector_status,        # Phase 7.4A.7.2
         )
         return row["id"] if row else None
     except Exception as exc:

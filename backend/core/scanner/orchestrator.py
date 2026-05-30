@@ -238,9 +238,10 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
             (c.price_change_24h for c in all_coins if c.symbol == "BTC"), 0.0
         )
 
-        # Phase 7.4A.7.1: trend_score_map populated for TRENDING mode; empty for all others.
-        # Keyed by UPPER symbol to match TrendingMeta.symbol convention.
-        trend_score_map: dict[str, float] = {}
+        # Phase 7.4A.7.1/7.4A.7.2: per-coin intelligence maps for TRENDING mode.
+        # Empty for all other modes → NULL on Signal (correct).
+        trend_score_map:   dict[str, float] = {}
+        sector_status_map: dict[str, str]   = {}
 
         # 1b. TRENDING mode: expand universe with multi-source CMC intelligence
         if mode == ScannerMode.TRENDING:
@@ -251,12 +252,18 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                 btc_4h_change=btc_4h_change,      # Phase 7.3A.4: precise 4h RS reference
             )
             all_coins = tr.coins
-            # Build per-symbol TrendScore lookup for propagation to Signal
+            # Build per-symbol lookups for Signal propagation (Phase 7.4A.7.1 / 7.4A.7.2)
             trend_score_map = {
                 sym: round(meta.trend_score, 2)
                 for sym, meta in tr.meta.items()
                 if meta.trend_score is not None
             }
+            if tr.sector_report:
+                for sym, meta in tr.meta.items():
+                    if meta.sector:
+                        analysis = tr.sector_report.get(meta.sector)
+                        if analysis:
+                            sector_status_map[sym] = analysis.status.value
             log.info(
                 "trending_universe_applied",
                 total_candidates=tr.total_unique,
@@ -282,9 +289,15 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
         errors = 0
 
         async def _scan_one(coin: CoinData) -> Signal | None:
-            # Phase 7.4A.7.1: pass TrendScore per coin (None for non-TRENDING modes)
+            # Phase 7.4A.7.1 / 7.4A.7.2: pass per-coin intelligence (None for non-TRENDING)
             ts = trend_score_map.get(coin.symbol)
-            return await scan_coin(coin, mode, config, btc_change_24h=btc_change_24h, trend_score=ts)
+            ss = sector_status_map.get(coin.symbol)
+            return await scan_coin(
+                coin, mode, config,
+                btc_change_24h=btc_change_24h,
+                trend_score=ts,
+                sector_status=ss,
+            )
 
         results = await gather_with_concurrency(
             filtered,
