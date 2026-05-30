@@ -32,6 +32,44 @@ _client: anthropic.Anthropic | None = None
 # multiple coins pass all gates simultaneously and hit AI validation at once.
 _ai_semaphore: asyncio.Semaphore | None = None
 
+# Per-minute ceiling — Haiku tier allows up to 50 RPM but a full 80-coin scan
+# could burst up to ~40 calls in seconds; 12 RPM leaves headroom and avoids 429s.
+_REQUESTS_PER_MINUTE = 12
+# On a 429, retry with exponential back-off before falling back to heuristic.
+_MAX_429_RETRIES  = 2        # up to 3 total attempts (attempt 0, 1, 2)
+_429_BASE_DELAY_S = 5.0      # delays: 5s, 10s
+
+
+class _SlidingWindowRateLimiter:
+    """Sliding-window per-minute rate limiter. acquire() blocks until a slot is free."""
+
+    def __init__(self, limit: int) -> None:
+        self._limit      = limit
+        self._timestamps: list[float] = []
+        self._lock       = asyncio.Lock()
+
+    async def acquire(self) -> None:
+        while True:
+            async with self._lock:
+                now = time.monotonic()
+                self._timestamps = [t for t in self._timestamps if now - t < 60.0]
+                if len(self._timestamps) < self._limit:
+                    self._timestamps.append(now)
+                    return
+                # Wait until the oldest slot exits the 60-second window
+                wait_s = 60.0 - (now - self._timestamps[0]) + 0.1
+            await asyncio.sleep(wait_s)
+
+
+_rate_limiter: _SlidingWindowRateLimiter | None = None
+
+
+def _get_rate_limiter() -> _SlidingWindowRateLimiter:
+    global _rate_limiter
+    if _rate_limiter is None:
+        _rate_limiter = _SlidingWindowRateLimiter(_REQUESTS_PER_MINUTE)
+    return _rate_limiter
+
 
 def _get_semaphore() -> asyncio.Semaphore:
     global _ai_semaphore
@@ -97,19 +135,29 @@ async def validate_signal(
     t0 = time.perf_counter()
 
     try:
-        # Limit concurrent AI calls to 3 — prevents burst-rate-limit 429s when
-        # multiple coins hit the AI gate simultaneously.
+        # Semaphore(3) caps concurrency; rate limiter caps RPM; retry handles 429.
         async with _get_semaphore():
-            msg = await asyncio.wait_for(
-                asyncio.to_thread(
-                    client.messages.create,
-                    model="claude-haiku-4-5",
-                    max_tokens=768,
-                    messages=[{"role": "user", "content": prompt}],
-                    timeout=15.0,
-                ),
-                timeout=20.0,
-            )
+            for attempt in range(_MAX_429_RETRIES + 1):
+                await _get_rate_limiter().acquire()
+                try:
+                    msg = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            client.messages.create,
+                            model="claude-haiku-4-5",
+                            max_tokens=768,
+                            messages=[{"role": "user", "content": prompt}],
+                            timeout=15.0,
+                        ),
+                        timeout=20.0,
+                    )
+                    break  # success — exit retry loop
+                except anthropic.RateLimitError as exc:
+                    if attempt >= _MAX_429_RETRIES:
+                        log.warning("ai_rate_limit_exhausted", symbol=signal.symbol, attempts=attempt + 1, error=str(exc))
+                        raise
+                    delay = _429_BASE_DELAY_S * (2 ** attempt)
+                    log.warning("ai_rate_limited_retry", symbol=signal.symbol, attempt=attempt + 1, delay_s=delay)
+                    await asyncio.sleep(delay)
         elapsed    = time.perf_counter() - t0
         latency_ms = int(elapsed * 1000)
         ai_validation_duration_seconds.observe(elapsed)
