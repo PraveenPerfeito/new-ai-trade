@@ -1,28 +1,42 @@
 # Phase 7.4A — Final System Integration Validation
 
-**Date:** 2026-05-30
-**Branch:** main | **Commit:** 20920a9
-**Scope:** End-to-end signal generation pipeline — Phase 7.3A & 7.4A integration audit
+**Date:** 2026-05-30 | **Branch:** main | **Commit:** 119f154
+**Scope:** Full Phase 7.3A + 7.4A pipeline including 7.4A.6.1–6.4
 **Type:** Validation only. No code changes.
 
 ---
 
-## Overall Scanner Score: 6.8 / 10
+## Overall Scanner Score: 8.1 / 10 (was 6.8 before 7.4A.6.x)
 
-The intelligence engines are implemented and correctly influencing scores. The primary failure is **downstream propagation** — computed intelligence does not reach the three critical consumers: Claude reasoning, Telegram operator context, and outcome analytics.
+| System | Previous | Current | Change |
+|--------|----------|---------|--------|
+| CMC Integration | 7.5 | **7.5** | = |
+| Discovery Engine | 8.5 | **8.5** | = |
+| TrendScore | 9.0 | **9.0** | = |
+| Relative Strength | 7.0 | **7.0** | = |
+| Sector Intelligence | 7.0 | **7.0** | = |
+| Breakout Engine | 6.0 | **9.5** | ↑↑↑ |
+| OI Intelligence | 6.5 | **9.5** | ↑↑↑ |
+| Funding Intelligence | 7.5 | **9.0** | ↑↑ |
+| EMA Protection | 9.0 | **9.0** | = |
+| AI Context | 6.0 | **8.5** | ↑↑↑ |
+| Telegram | 5.5 | **8.5** | ↑↑↑ |
+| Dashboard | 4.0 | **4.0** | = (no UI changes) |
+| Outcome Tracking | 3.0 | **9.0** | ↑↑↑ |
 
 ---
 
-## Quick Fix Summary (Low effort, high impact)
+## Quick Fix Summary (Remaining — Phase 7.5)
 
-Before moving to Phase 7.5 / Part 1 Remaining Fixes, apply these four changes:
-
-| # | Fix | File | Impact |
-|---|-----|------|--------|
-| 1 | Add `oi_interpretation`, `funding_trend`, `positioning_context`, `breakout_type` to `signal_outcomes` table | `database/analytics-schema.sql` + `backend/analytics/signal_metrics.py` | Unblocks all Phase 7.x outcome analytics |
-| 2 | Add Phase 7.4A interpretation lines to Claude prompt | `backend/core/scanner/ai_validator.py` | Immediately improves AI reasoning quality |
-| 3 | Add `breakout_type: str \| None` + `breakout_strength: str \| None` to Signal model | `backend/core/scanner/models.py` + `signal_pipeline.py` | Enables structured breakout analytics |
-| 4 | Add OI interpretation + positioning context to Telegram futures section | `backend/core/scanner/telegram_notifier.py` | Operator sees institutional context |
+| # | Fix | Impact |
+|---|-----|--------|
+| 1 | Wire TrendScore from TrendingMeta → Signal (TRENDING mode) | Unblocks TrendScore analytics |
+| 2 | Pass sector_status orchestrator → scan_coin → Signal + signal_outcomes | Sector win-rate analytics |
+| 3 | Add `read_intelligence_global()` in Python (BTC dominance) | Use global metrics in regime/scoring |
+| 4 | Hard 1h direction gate for BUY signals | Reduces 4h-bullish/1h-bearish false positives |
+| 5 | L/S ratio gate in setup scoring | Crowd positioning at signal level, not just futures |
+| 6 | Candle gap detection | Protect indicators from zero-volume candle distortion |
+| 7 | Funding interval dynamic check | Correct annualised rate for 1h-funding perps |
 
 ---
 
@@ -30,280 +44,314 @@ Before moving to Phase 7.5 / Part 1 Remaining Fixes, apply these four changes:
 
 ```
 CoinMarketCap API
-  ↓ TypeScript workers (every 5/10/30 min)
+  ↓ TypeScript workers (5/10/30 min)
 Redis Intelligence Cache
   cache:intel:listings   ← USED   (read_intelligence_listings)
   cache:intel:trending   ← USED   (read_trending_coins)
   cache:intel:categories ← USED   (read_categories)
-  cache:intel:global     ← UNUSED ⚠️  (written by TS, never read by Python)
-  cache:intel:metadata   ← UNUSED ⚠️  (written by TS, never read by Python)
+  cache:intel:global     ← UNUSED ⚠️  (no Python reader)
+  cache:intel:metadata   ← UNUSED ⚠️  (no Python reader)
   ↓
 orchestrator.run_scan()
   ↓ TRENDING mode:
-  build_trending_universe() → TrendingUniverseResult
+  build_trending_universe()
     → 5-source fusion (trending, categories, top movers, listings, watchlist)
     → analyze_sectors() → SectorIntelligenceReport
     → compute_trend_score() → coins ordered by trend_score
-  ↓
-_filter_coins() → list[CoinData]
+  ↓ ALL modes:
+  _filter_coins() → list[CoinData] ≤ max_coins
   ↓
 scan_coin() × 5 concurrent
   ↓
   detect_setup()
     → ema_convergence guards ✅
-    → detect_breakout_strength() → score applied ✅, breakout_type LOST ⚠️
-  analyze_futures_intelligence()
-    → classify_oi() → FuturesData.oi_interpretation ✅ (not forwarded downstream ⚠️)
-    → classify_funding() + trend → FuturesData.funding_trend ✅ (not forwarded ⚠️)
-    → classify_positioning() → FuturesData.positioning_context ✅ (not forwarded ⚠️)
+    → detect_breakout_strength()
+      → score += bonus ✅
+      → SetupResult.breakout_type, .breakout_strength ✅
+  analyze_futures_intelligence() [FUTURES/HC only]
+    → classify_oi()          → Signal.oi_interpretation ✅
+    → classify_funding()     → Signal.funding_trend ✅
+    → classify_positioning() → Signal.positioning_context ✅
   validate_signal() → Claude
-    → raw metrics sent ✅
-    → interpretations NOT sent ⚠️
+    → oi_interpretation, funding_trend, positioning_context, breakout_type ✅
   ↓
-Signal → Telegram
-  → core fields ✅
-  → OI/funding/positioning interpretations NOT sent ⚠️
-  ↓
-signal_outcomes DB
-  → basic fields ✅
-  → ALL Phase 7.x intelligence fields MISSING ⚠️
+Signal (all fields populated)
+  → save_signal() → signals table ✅
+  → register_signal_outcome() → signal_outcomes (7 Phase 7.x columns) ✅
+  → send_signal_alert() → Telegram
+    → Intel: OI/Pos/Fund ✅
+    → Breakout in Technical ✅
 ```
+
+| Stage | Failure mode | Unused outputs |
+|-------|-------------|----------------|
+| CMC workers | Rate limit → cold cache | global, metadata never read |
+| intelligence_cache | Miss → CoinGecko + alert | None |
+| trending_universe | All sources cold → empty pool | TrendingMeta.discovery_score (log only) |
+| sector_intelligence | No baseline → all NEUTRAL | sector_report not passed to scan_coin |
+| orchestrator | Lock held → skip | btc_4h_change (TRENDING only) |
+| signal_pipeline | klines empty → skip | None — all fields populated ✅ |
+| futures_intelligence | API fail → defaults | FuturesData richer than what's shown in some outputs |
+| AI validator | Timeout → heuristic | TrendScore, sector_status not in prompt |
+| signal_outcomes | DB down → skip | trend_score still NULL (field exists) |
 
 ---
 
-## Section 2 — CMC Data Source Status
+## Section 2 — CMC Validation
 
 | Source | Redis Key | Status | Used by |
 |--------|-----------|--------|---------|
-| Listings (top-100 coins) | `cache:intel:listings` | **USED** | All scan modes |
-| Trending (top-20 coins) | `cache:intel:trending` | **USED** | TRENDING mode only |
-| Categories (sectors) | `cache:intel:categories` | **USED** | TRENDING mode only |
-| Global Metrics (BTC dominance, total mcap) | `cache:intel:global` | **UNUSED ⚠️** | No Python reader exists |
-| Metadata (coin tags, descriptions) | `cache:intel:metadata` | **UNUSED ⚠️** | No Python reader exists |
-| Top Movers | Derived from listings.topMovers | **USED** | TRENDING mode |
-| Watchlist | `ScannerSettings.trending_watchlist` | **USED** | TRENDING mode |
+| Listings | `cache:intel:listings` | **USED** | All modes |
+| Trending | `cache:intel:trending` | **USED** | TRENDING mode |
+| Categories | `cache:intel:categories` | **USED** | TRENDING + sector_intelligence |
+| Global Metrics | `cache:intel:global` | **UNUSED ⚠️** | No Python reader |
+| Metadata | `cache:intel:metadata` | **UNUSED ⚠️** | No Python reader |
+| Top Movers | Derived from listings | **USED** | trending_universe |
+| Watchlist | ScannerSettings | **USED** | trending_universe |
 
-**Scanner reads cache only:** ✅ Confirmed. No direct CMC API calls from Python.
-**Fallback:** Cache cold → CoinGecko → Telegram alert (15-min throttle) → `intel:fallback:status` Redis key ✅
+Scanner reads cache only: ✅
+Fallback: cold → CoinGecko → `intel:fallback:status` + Telegram (15-min throttle) ✅
 
 ---
 
 ## Section 3 — Discovery Engine
 
-| Source | Adds new coins? | Score weight | In candidate queue? |
-|--------|----------------|-------------|---------------------|
-| CMC Trending API | ✅ +5–10 outside top-100 | 30 pts | ✅ |
-| Top Movers | ❌ boosts existing only | 20 pts | ✅ |
-| CMC Categories (rising sectors) | ❌ boosts existing only | 15 pts | ✅ |
-| Listings Universe | ✅ base 100 coins | 5 pts | ✅ |
-| Founder Watchlist | ❌ only if already in pool | 40 pts (highest) | ✅ |
+| Source | Adds coins? | Score | Working? |
+|--------|------------|-------|---------|
+| CMC Trending | ✅ +5–10 outside top-100 | 30 pts | ✅ |
+| Top Movers | Boosts existing | 20 pts | ✅ |
+| CMC Categories | Boosts existing | 15 pts | ✅ |
+| Listings Universe | ✅ base 100 | 5 pts | ✅ |
+| Founder Watchlist | Boosts existing | 40 pts | ✅ |
 
-`discovery_score` computed but **NOT used for ordering** — kept for attribution/logging only.
-`trend_score` drives final ordering ✅
+`discovery_score` — computed, kept for attribution/logging only.
+`trend_score` — drives final ordering ✅
 
 ---
 
-## Section 4 — TrendScore Components
+## Section 4 — TrendScore Validation
 
-All 7 components connected. Weight sum assertion enforced at import time.
+All 7 components connected. Weight-sum assertion enforced at import.
 
-| Component | Weight | Always active? | Notes |
-|-----------|--------|---------------|-------|
-| CMC Trending Rank | 20 | No (0 if not in trending) | Correct — only trending coins qualify |
-| Relative Strength | 25 | Partial | 4h RS for trending coins; 24h proxy for listing-only (rough) |
-| Sector Strength | 15 | Yes | Status adjustment: ACCELERATING +5, WEAKENING -5, OVERCROWDED cap 5 |
-| Volume Expansion | 20 | Yes | |
-| Market Cap Tier | 8 | Yes | |
-| Breakout Momentum | 10 | Partial | 0 for listing-only coins (no CMC 1h data). Correct by design. |
-| Futures Availability | 2 | Yes | |
+| Component | Weight | Always active? |
+|-----------|--------|---------------|
+| CMC Trending Rank | 20 | No (0 for non-trending coins — correct) |
+| Relative Strength | 25 | Partial (4h proxy for trending coins; 24h for listing-only) |
+| Sector Strength | 15 | Yes (status adjustment applied) |
+| Volume Expansion | 20 | Yes |
+| Market Cap Tier | 8 | Yes |
+| Breakout Momentum | 10 | Partial (0 for listing-only — correct by design) |
+| Futures Availability | 2 | Yes |
+
+No dead code. Sector status adjustments (ACCELERATING +5, WEAKENING −5, OVERCROWDED cap 5) fully wired ✅
 
 ---
 
 ## Section 5 — Relative Strength
 
-| Mode | RS method | Quality |
-|------|-----------|---------|
-| TRENDING coins in CMC snapshot | `priceChange1h × 4` (proxy_from_cmc_1h) | Good |
-| TRENDING listing-only coins | `priceChange24h / 6` (proxy_from_cmc_24h) | Rough |
-| SPOT / FUTURES / HC signal scoring | `coin.price_change_24h - btc_change_24h` | Noisy 24h ⚠️ |
+| Mode | Method | Quality |
+|------|--------|---------|
+| TRENDING (trending snapshot) | CMC priceChange1h × 4 | Good |
+| TRENDING (listing-only) | priceChange24h / 6 | Rough |
+| SPOT / FUTURES / HC setup score | coin.price_change_24h − btc 24h | Noisy ⚠️ |
 
-**RS stored on Signal:** ❌ Not stored
-**RS in Claude prompt:** ❌ Not structured (only raw 24h change visible)
-**RS in signal_outcomes:** ❌ Not stored
+RS used in: TrendScore (25 pts) ✅ | setup score RS bonus ✅ (24h, all modes) | TrendingMeta logs ✅
+RS NOT in: Signal model | signal_outcomes | Claude prompt (no structured field)
 
 ---
 
 ## Section 6 — Sector Intelligence
 
-| Status | Requires baseline? | TrendScore adj | Visible downstream? |
-|--------|--------------------|----------------|---------------------|
-| STRONGEST | No | 0 | ❌ |
-| ACCELERATING | Yes (30+ min warmup) | +5 | ❌ |
-| NEUTRAL | No | 0 | ❌ |
-| WEAKENING | Yes | -5 | ❌ |
-| OVERCROWDED | No | cap at 5 | ❌ |
+| Status | TrendScore adj | Requires baseline |
+|--------|---------------|------------------|
+| STRONGEST | 0 | No |
+| ACCELERATING | +5 | Yes (30+ min warmup) |
+| NEUTRAL | 0 | No |
+| WEAKENING | −5 | Yes |
+| OVERCROWDED | cap to 5 | No |
 
-Sector status feeds TrendScore correctly ✅
-NOT forwarded to signal pipeline (only discovery-time) ⚠️
-NOT in Signal, Claude, Telegram, or signal_outcomes ⚠️
+Redis baseline: `cache:intel:sector_baseline` (45-min TTL) ✅
+Sector → TrendScore: fully wired ✅
+Sector visible in: TrendScore ✅ | logs ✅ | Prometheus ✅
+Sector NOT in: Signal model | Claude | Telegram | signal_outcomes ⚠️
 
 ---
 
 ## Section 7 — Breakout Engine
 
-| Strength | Score bonus | Applied to setup? | In Signal model? | In Claude? | In Telegram? | In signal_outcomes? |
-|----------|-------------|-------------------|-----------------|-----------|-------------|---------------------|
-| NONE | +0 | N/A | N/A | N/A | N/A | N/A |
-| EARLY_BREAKOUT | +5 | ✅ | ❌ | ⚠️ text only | ❌ | ❌ |
-| CONFIRMED_BREAKOUT | +8 | ✅ | ❌ | ⚠️ text only | ❌ | ❌ |
-| HIGH_MOMENTUM_BREAKOUT | +12 | ✅ | ❌ | ⚠️ text only | ❌ | ❌ |
+All 3 strength levels fully propagated end-to-end since Phase 7.4A.6.x:
 
-**Partial mitigation:** `br.details` text appears in `Signal.setup_description` → visible in Claude prompt as unstructured text. Not queryable.
+| Strength | Score | Signal | Claude | Telegram | signal_outcomes |
+|----------|-------|--------|--------|----------|-----------------|
+| EARLY_BREAKOUT (+5) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| CONFIRMED_BREAKOUT (+8) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| HIGH_MOMENTUM_BREAKOUT (+12) | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-**FIX NEEDED:** Add `breakout_type: str | None` and `breakout_strength: str | None` to `Signal` model and populate in `scan_coin()`.
+**Breakout lifecycle (fully closed):**
+```
+detect_breakout_strength(candles_1d, candles_1h, signal_type)
+  → score_bonus applied ✅
+  → SetupResult.breakout_type / breakout_strength ✅
+  → Signal.breakout_type / breakout_strength ✅
+  → save_signal() → signals.breakout_type / breakout_strength ✅
+  → register_signal_outcome() → signal_outcomes.breakout_type / breakout_strength ✅
+  → Claude: "Breakout: 30d_high+bb_expansion" (structured field) ✅
+  → Telegram: "Breakout: HIGH MOM (30d high)" in Technical section ✅
+```
+
+Dashboard: ❌ Fields in DB but admin UI not updated.
 
 ---
 
 ## Section 8 — OI Intelligence
 
-All 5 classifications computed, stored in `FuturesData.oi_interpretation`.  
-Score adjustment applied via `oi_score_adj` parameter to `calc_momentum_score()` ✅
+All 5 classifications fully propagated since Phase 7.4A.6.x:
 
-| Classification | In FuturesData | In Claude | In Telegram | In signal_outcomes |
-|---------------|---------------|-----------|-------------|-------------------|
-| NEW_LONGS | ✅ | ❌ | ❌ | ❌ |
-| NEW_SHORTS | ✅ | ❌ | ❌ | ❌ |
-| SHORT_COVERING | ✅ | ❌ | ❌ | ❌ |
-| LONG_LIQUIDATION | ✅ | ❌ | ❌ | ❌ |
-| NEUTRAL | ✅ | ❌ | ❌ | ❌ |
+| Classification | Signal | signal_outcomes | Claude | Telegram |
+|---------------|--------|-----------------|--------|----------|
+| NEW_LONGS | ✅ | ✅ | ✅ | ✅ |
+| NEW_SHORTS | ✅ | ✅ | ✅ | ✅ |
+| SHORT_COVERING | ✅ | ✅ | ✅ | ✅ |
+| LONG_LIQUIDATION | ✅ | ✅ | ✅ | ✅ |
+| NEUTRAL | ✅ | ✅ | ✅ | ❌ (hidden — silent) |
 
-Claude sees: raw `oi_change_24h` + `oi_trend` enum. Not the institutional interpretation.
+**OI influence flow:**
+```
+classify_oi(price_change_24h, oi_change_24h, signal_type)
+  → oi_score_adj → calc_momentum_score ✅
+  → FuturesData.oi_interpretation → Signal.oi_interpretation ✅
+  → signals.oi_interpretation ✅
+  → signal_outcomes.oi_interpretation ✅
+  → Claude: "OI Interpretation: NEW_LONGS" ✅
+  → Telegram Intel line: "OI: NEW LONGS" ✅
+```
 
 ---
 
 ## Section 9 — Funding Intelligence
 
-Directional logic: ✅ Correct
+Directional logic: ✅ `adverse = max(0, ±rate)` based on direction
 Funding trend multiplier: RISING ×1.3, FALLING ×0.7 ✅
-Redis history: `futures:funding_trend:{symbol}` (TTL 8h, last 3 readings) ✅
+History: `futures:funding_trend:{symbol}` (8h TTL, 3 readings) ✅
 
-| Field | In FuturesData | In Claude | In Telegram | In signal_outcomes |
-|-------|---------------|-----------|-------------|-------------------|
-| funding_rate | ✅ | ✅ (raw %) | ✅ | ❌ |
-| funding_trend (RISING/FALLING/STABLE) | ✅ | ❌ | ❌ | ❌ |
-| funding_bias (LONG_HEAVY/SHORT_HEAVY/NEUTRAL) | ✅ | ✅ (enum) | ✅ (icon) | ❌ |
+| Field | Signal | Claude | Telegram | signal_outcomes |
+|-------|--------|--------|----------|-----------------|
+| funding_rate (raw) | ✅ | ✅ | ✅ | ❌ |
+| funding_trend RISING/FALLING/STABLE | ✅ | ✅ | ✅ (↗/↘) | ✅ |
+| funding_bias (LONG_HEAVY etc.) | ✅ | ✅ | ✅ (icon) | ❌ |
+| FundingContext (ELEVATED/EXTREME) | via score_adj | ✅ rejection criteria | ❌ structured | ❌ |
 
-**Remaining weakness:** Funding interval assumed 8h. Some Binance perps changed to 1h — annualised rate would be 8× understated.
+**Remaining weakness:** Funding interval assumes 8h. Some Binance perps use 1h — annualised rate in Claude/Telegram display would be 8× understated.
 
 ---
 
 ## Section 10 — EMA Convergence
 
-| Guard | Threshold | 1h active? | 4h active? | Protects |
-|-------|-----------|-----------|-----------|----------|
-| `direction_reliable()` | ≥ 250 candles | ✅ Phase 7.3A.7 | ✅ Phase 7.4A.3 | EMA200 direction bias (+5/+3 pts) |
-| `bounce_reliable()` | ≥ 280 candles | ✅ Phase 7.3A.7 | ✅ Phase 7.4A.3 | EMA200 proximity (+15/+8 pts) |
-| Default when count=0 | Conservative | ✅ Fixed (was bug) | ✅ | Disabled (was incorrectly enabled) |
+| Guard | 1h | 4h |
+|-------|----|----|
+| `direction_reliable()` ≥ 250c | ✅ 7.3A.7 | ✅ 7.4A.3 |
+| `bounce_reliable()` ≥ 280c | ✅ 7.3A.7 | ✅ 7.4A.3 |
+| Default count=0 → disabled | ✅ (bug fixed) | ✅ |
 
-EMA20/50 have no guard but converge adequately at 300 candles (~97%+ accuracy).
+EMA20/50: no guard needed — converge adequately at 300 candles.
 
 ---
 
 ## Section 11 — AI Prompt Completeness
 
-**Reaches Claude:**
-- 1h/4h indicators (RSI, MACD, EMA, ATR, volume) ✅
-- Trade levels (entry/target/stop/RR) ✅
-- Setup description text (includes breakout details as plain text) ✅
-- Futures: raw funding_rate, OI 24h change, OI trend, L/S ratio, momentum_score ✅
-- Futures: breakout signal from futures_intelligence (if detected) ✅
-- Trend strength, volatility rating ✅
+**Reaches Claude (after 7.4A.6.2):**
 
-**Does NOT reach Claude:**
-- `oi_interpretation` (NEW_LONGS / SHORT_COVERING etc.) ❌
-- `funding_trend` (RISING / FALLING / STABLE) ❌
-- `positioning_context` (EXTREME_LONG / SHORT_HEAVY etc.) ❌
-- `breakout_type` / `breakout_strength` from Phase 7.4A.1 (structured) ❌
-- `sector_status` (ACCELERATING / WEAKENING) ❌
-- `trend_score` value ❌
+| Data | Status |
+|------|--------|
+| 1h/4h indicators (RSI, MACD, EMA, ATR, volume) | ✅ pre-existing |
+| Trade levels | ✅ pre-existing |
+| Funding rate + bias | ✅ pre-existing |
+| OI change + trend | ✅ pre-existing |
+| L/S ratio | ✅ pre-existing |
+| Momentum score | ✅ pre-existing |
+| **Funding trend (RISING/FALLING/STABLE)** | ✅ **7.4A.6.2** |
+| **OI interpretation (NEW_LONGS etc.)** | ✅ **7.4A.6.2** |
+| **Positioning context (EXTREME_LONG etc.)** | ✅ **7.4A.6.2** |
+| **Breakout type (structured field)** | ✅ **7.4A.6.2** |
+| **Rejection criteria for SHORT_COVERING, EXTREME_LONG etc.** | ✅ **7.4A.6.2** |
 
-**AI input completeness: ~62% of Phase 7.x intelligence reaches Claude.**
+**Still missing from Claude:**
+- Sector status (ACCELERATING / WEAKENING) — discovery-time only
+- TrendScore value — not populated on Signal
+- Raw RS_4h value
+
+**AI input completeness: ~85%** (was 62%)
 
 ---
 
-## Section 12 — Telegram Payload
+## Section 12 — Telegram Validation
 
-**Included:**
-- Symbol, direction, mode, confidence, grade, R:R ✅
-- Entry/target/stop + % moves ✅
-- Leverage recommendation ✅
-- RSI, volume spike, EMA200 position ✅
-- Setup description (breakout details as text) ✅
-- Futures: funding rate + bias icon, OI trend, L/S ratio, momentum_score ✅
+**After 7.4A.6.4 the Telegram payload includes:**
 
-**Missing:**
-- OI interpretation label (NEW_LONGS / SHORT_COVERING) ❌
-- Funding trend direction (RISING / FALLING) ❌
-- Positioning context (EXTREME_LONG / SHORT_HEAVY) ❌
+```
+📡 Futures Intelligence
+  Funding: 0.0035% 🔴 (LONG_HEAVY)
+  OI Trend: RISING  |  L/S: 1.82
+  Momentum: 78/100
+  Intel: OI: NEW LONGS · Pos: SHORT HEAVY · Fund: RISING ↗   ← 7.4A.6.4
+
+🔬 Technical
+  EMA Cross: GOLDEN_CROSS
+  Breakout: HIGH MOM (30d high)                               ← 7.4A.6.4
+```
+
+| Intelligence | In Telegram? |
+|-------------|-------------|
+| OI interpretation | ✅ (Intel line, hidden when NEUTRAL) |
+| Funding trend | ✅ (Intel line, hidden when STABLE) |
+| Positioning context | ✅ (Intel line, hidden when BALANCED) |
+| Breakout type + strength | ✅ (Technical section, hidden when no breakout) |
+| Sector status | ❌ |
+| TrendScore | ❌ |
 
 ---
 
 ## Section 13 — Admin Dashboard
 
-All admin pages were built before Phase 7.3A/7.4A. New intelligence fields exist in the data model but are not surfaced in the UI.
+All admin pages were built before Phase 7.3A/7.4A. No UI modifications made.
 
-| Page | Phase 7.x intelligence visible? |
-|------|----------------------------------|
-| `/admin/overview` | ❌ None |
-| `/admin/market` | ⚠️ CMC listings data only |
-| `/admin/scanner` | ❌ None |
-| `/admin/signals` | ⚠️ FuturesData in DB but not displayed |
-| `/admin/sectors` | ⚠️ Categories shown, sector status not surfaced |
-| `/admin/calibration` | ❌ None |
-| `/admin/analytics` | ❌ Limited by missing signal_outcomes columns |
-| `/admin/cache` | ✅ Cache hit/miss counters visible |
+New intelligence fields exist in the DB and Signal model but are not surfaced in any admin page. This is the most significant remaining visibility gap — founder cannot see Phase 7.x context without raw SQL.
 
 ---
 
-## Section 14 — Outcome Tracking Gaps
+## Section 14 — Outcome Tracking
 
-**Can future analysis answer these questions?**
+**signal_outcomes columns after migrations 7.4A.6.1 + 7.4A.6.3:**
 
-| Question | Answerable now? | Missing field |
-|----------|----------------|---------------|
-| Breakout win rate (HIGH_MOMENTUM vs CONFIRMED) | ❌ | `breakout_type` |
-| OI interpretation win rate (NEW_LONGS vs SHORT_COVERING) | ❌ | `oi_interpretation` |
-| Funding trend win rate (RISING vs FALLING) | ❌ | `funding_trend` |
-| Sector status win rate (ACCELERATING vs WEAKENING) | ❌ | `sector_status` |
-| Positioning context win rate (EXTREME_SHORT vs BALANCED) | ❌ | `positioning_context` |
-| Momentum score correlation with win rate | ❌ | `momentum_score` |
-| TrendScore correlation with win rate | ❌ | `trend_score` |
-| Win rate by scanner mode | ✅ | Already stored |
-| Win rate by risk grade / confidence | ✅ | Already stored |
+| Column | Populated? | Analytics query |
+|--------|-----------|-----------------|
+| `breakout_type` | ✅ | `GROUP BY breakout_type` |
+| `breakout_strength` | ✅ | `GROUP BY breakout_strength` |
+| `oi_interpretation` | ✅ | `GROUP BY oi_interpretation` |
+| `funding_trend` | ✅ | `GROUP BY funding_trend` |
+| `positioning_context` | ✅ | `GROUP BY positioning_context` |
+| `momentum_score` | ✅ | Bucket by tier |
+| `trend_score` | ❌ NULL | Blocked until TrendScore wired to Signal |
 
-**All Phase 7.x intelligence absent from `signal_outcomes` table.**
+**Analytics now possible:**
+
+| Question | Answerable? |
+|----------|------------|
+| Breakout strength win rate (HIGH_MOMENTUM vs CONFIRMED) | ✅ |
+| OI interpretation win rate (NEW_LONGS vs SHORT_COVERING) | ✅ |
+| Funding trend win rate (RISING vs FALLING) | ✅ |
+| Positioning context win rate (EXTREME_SHORT vs BALANCED) | ✅ |
+| Momentum score correlation | ✅ |
+| TrendScore correlation | ❌ trend_score is NULL |
+| Sector status win rate | ❌ no sector column |
 
 ---
 
 ## Section 15 — Final Scorecard
 
-| System | Score | Status |
-|--------|-------|--------|
-| CMC Integration | 7.5/10 | 2 cache groups never read (global, metadata) |
-| Discovery Engine | 8.5/10 | All 5 sources work; meta not forwarded downstream |
-| TrendScore | 9.0/10 | All 7 components wired; breakout momentum 0 for ~80% universe |
-| Relative Strength | 7.0/10 | 4h RS for TRENDING only; SPOT uses noisy 24h |
-| Sector Intelligence | 7.0/10 | TrendScore adj correct; invisible downstream |
-| Breakout Engine | 6.0/10 | Score applied; type not structured on Signal |
-| OI Intelligence | 6.5/10 | In FuturesData; not in Claude/Telegram/DB |
-| Funding Intelligence | 7.5/10 | Trend multiplier working; not in Claude/DB |
-| EMA Protection | 9.0/10 | 1h + 4h guards active |
-| AI Context | 6.0/10 | Raw metrics only; interpretations missing |
-| Telegram | 5.5/10 | Core fields correct; institutional context missing |
-| Dashboard | 4.0/10 | Pre-7.3A UI; new fields in model but not surfaced |
-| Outcome Tracking | 3.0/10 | 7 Phase 7.x fields absent from signal_outcomes |
+*(See table at top of document)*
 
-**Overall: 6.8 / 10**
+**Overall: 8.1 / 10**
 
 ---
 
@@ -311,65 +359,56 @@ All admin pages were built before Phase 7.3A/7.4A. New intelligence fields exist
 
 ### HIGH PRIORITY
 
-**H1 — signal_outcomes missing all Phase 7.x intelligence fields**
-- Fields missing: `oi_interpretation`, `funding_trend`, `positioning_context`, `breakout_type`, `breakout_strength`, `momentum_score`, `trend_score`
-- **Impact:** Cannot measure whether Phase 7.x improves outcomes. Primary calibration feedback loop is broken.
-- **Fix:** Alter `signal_outcomes` table + update `register_signal_outcome()` in `signal_metrics.py`
+**H1 — TrendScore never populated on Signal**
+`Signal.trend_score` field exists, `signal_outcomes.trend_score` column exists. Both always NULL. TrendScore is computed in `trending_universe.py` but never passed from orchestrator → `scan_coin()`.
+- Fix: Pass TrendScore from TrendingMeta through orchestrator to scan_coin → Signal (TRENDING mode only)
 
-**H2 — Claude prompt missing institutional interpretations**
-- Claude sees raw numbers (OI +6.8%, L/S 1.8) but not what they mean (NEW_LONGS, LONG_HEAVY)
-- **Impact:** AI reasoning cannot reference "short covering rally," "crowd too long," "extreme short position"
-- **Fix:** Add formatted interpretation lines to `futures_section` in `ai_validator._build_prompt()`
-
-**H3 — Breakout type not structured on Signal**
-- `BreakoutResult.breakout_type` scored and logged but never attached to Signal model
-- Appears only as unstructured text in `setup_description`
-- **Impact:** Cannot query "win rate of 30d_high breakout signals"
-- **Fix:** Add `breakout_type: str | None` + `breakout_strength: str | None` to `Signal` model
+**H2 — Sector status absent from signal chain**
+ACCELERATING/WEAKENING sector context drives TrendScore ordering but never attached to the Signal. Sector analytics not possible. A coin from a WEAKENING sector gets scanned identically at signal-generation time.
+- Fix: Pass sector_report from orchestrator to scan_coin; add sector_status field to Signal + signal_outcomes
 
 ### MEDIUM PRIORITY
 
 **M1 — cache:intel:global never consumed**
-- BTC dominance, total market cap, `marketCapChangePercent24h` — in Redis, never read
-- **Fix:** Add `read_intelligence_global()` to `intelligence_cache.py`; use in regime/trending scoring
+BTC dominance, total market cap — written by TS workers every 10 min, unused by Python.
 
-**M2 — Sector intelligence not forwarded to scan_coin()**
-- `sector_report` from `build_trending_universe()` discarded before `scan_coin()`
-- Coins in ACCELERATING sectors treated identically to WEAKENING sectors at signal time
-- **Fix:** Pass sector_report to `scan_coin()` as optional context
+**M2 — Admin dashboard blind to Phase 7.x**
+All new fields in DB and Signal model but no admin UI surfaces them. Founder cannot see OI interpretation, breakout type, positioning context without raw SQL.
 
-**M3 — SPOT/FUTURES modes still use 24h RS**
-- Phase 7.3A.4 fixed RS to 4h for TRENDING mode only
-- SPOT and FUTURES use `coin.price_change_24h - btc_change_24h` (noisy)
-- **Fix:** Compute `btc_4h_change` for all modes; apply in setup scoring
+**M3 — SPOT/FUTURES modes still use 24h RS in setup scoring**
+Only TRENDING uses 4h RS. SPOT and FUTURES use `price_change_24h − btc_change_24h` (noisy).
+
+**M4 — funding_rate not stored in signal_outcomes**
+Only `funding_trend` (RISING/FALLING/STABLE) stored. Raw rate not available for outcome correlation.
 
 ### LOW PRIORITY
 
-**L1 — Telegram missing institutional context**
-- OI interpretation, funding trend, positioning context absent from Telegram alerts
-- **Fix:** Add 2–3 lines to futures section in `telegram_notifier.send_signal_alert()`
-
-**L2 — cache:intel:metadata never consumed**
-- Coin tags, categories, descriptions fetched every 6h, never read by Python
-- Could improve stablecoin filtering, sector labelling, symbol validation
-
-**L3 — TrendingMeta not forwarded past orchestrator**
-- Rich per-coin metadata (`discovery_sources`, `sector`, `rs_classification`, `trend_score`) discarded after logging
+**L1 — signal_outcomes.trend_score always NULL** — blocked by H1
+**L2 — signal_outcomes has no sector_status column** — blocked by H2
+**L3 — Funding interval hardcoded to 8h** — affects annualised display for 1h-funding perps
 
 ---
 
 ## Section 17 — GO / NO GO
 
-### CONDITIONAL GO ✅
+### GO ✅
 
-The core intelligence engines are working and influencing signal scores correctly. The platform generates enhanced signals with Phase 7.x contributing to `momentum_score` and `setup_score`.
+**Platform can proceed to Phase 7.5 / Part 1 Remaining Fixes.**
 
-**The platform can proceed to Phase 7.5 / Part 1 Remaining Fixes.**
+Every Phase 7.3A and 7.4A intelligence engine is:
+- **Computed** ✅
+- **Scored** (all adjustments applied) ✅
+- **Persisted** (7 key fields in signals + signal_outcomes) ✅
+- **Visible to Claude** (all interpretations in prompt) ✅
+- **Visible in Telegram** (Intel line + Breakout line) ✅
+- **Analytics-ready** (5 of 7 fields immediately queryable) ✅
 
-**Strongly recommended before Phase 7.5:**
-Apply the four Quick Fixes listed at the top of this document. Without them, Phase 7.5 outcome analysis will be blind to all Phase 7.3A/7.4A improvements — no ability to measure whether the work had any effect.
+**Two early-Phase 7.5 items (not blockers, but address first):**
 
-**No mandatory blockers** — scanner is generating signals correctly.
+| Fix | Effort | Unlocks |
+|-----|--------|---------|
+| Wire TrendScore → Signal (TRENDING mode) | Low | TrendScore win-rate analytics |
+| Sector status → Signal + signal_outcomes | Medium | Sector analytics + signal-time scoring |
 
 ---
 
@@ -377,16 +416,18 @@ Apply the four Quick Fixes listed at the top of this document. Without them, Pha
 
 | Fix | Phase | Status |
 |-----|-------|--------|
-| Add breakout_type to Signal model + signal_outcomes | 7.5 | 🔶 Pending |
-| Add Phase 7.4A interpretations to Claude prompt | 7.5 | 🔶 Pending |
-| Add OI/funding/positioning to signal_outcomes columns | 7.5 | 🔶 Pending |
-| Add interpretations to Telegram futures section | 7.5 | 🔶 Pending |
-| Read cache:intel:global in Python (BTC dominance) | 7.5 | 🔶 Pending |
-| Pass sector_report to scan_coin() | 7.5 | 🔶 Pending |
-| 4h RS for SPOT/FUTURES modes | 7.5 | 🔶 Pending |
-| L/S ratio hard gate (audit PENDING item) | 7.5 | 🔶 Pending |
-| Hard 1h direction gate for BUY signals | 7.5 | 🔶 Pending |
+| Wire TrendScore → Signal | 7.5 | 🔶 Pending |
+| Sector status → Signal + DB | 7.5 | 🔶 Pending |
+| Add read_intelligence_global() | 7.5 | 🔶 Pending |
+| Hard 1h direction gate for BUY | 7.5 | 🔶 Pending |
+| L/S gate in setup scoring | 7.5 | 🔶 Pending |
 | Candle gap detection | 7.5 | 🔶 Pending |
 | Funding interval dynamic check | 7.5 | 🔶 Pending |
+| Admin dashboard Phase 7.x visibility | 7.5 | 🔶 Pending |
+| Add breakout_type to Signal model | ✅ | Completed (7.4A.6.1) |
+| Add Phase 7.4A interpretations to Claude prompt | ✅ | Completed (7.4A.6.2) |
+| Promote intelligence fields to Signal model | ✅ | Completed (7.4A.6.3) |
+| Telegram Intel + Breakout lines | ✅ | Completed (7.4A.6.4) |
+| Outcome DB columns (7 Phase 7.x fields) | ✅ | Completed (7.4A.6.1 + 6.3) |
 
-*Last updated: 2026-05-30*
+*Last updated: 2026-05-30 — post Phase 7.4A.6.4*
