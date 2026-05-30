@@ -277,10 +277,11 @@ class TradeLevels(BaseModel):
 
 
 class SetupResult(BaseModel):
-    has_setup:    bool
-    description:  str
-    pre_score:    int
-    breakout_type: str | None = None  # Phase 7.4A.6.1 — from detect_breakout_strength()
+    has_setup:        bool
+    description:      str
+    pre_score:        int
+    breakout_type:    str | None = None   # Phase 7.4A.6.1
+    breakout_strength: str | None = None  # Phase 7.4A.6.3 — BreakoutStrength enum value
 
 
 class AIExplainability(BaseModel):
@@ -329,8 +330,14 @@ class Signal(BaseModel):
     telegram_sent:           bool = False
     scan_run_id:             str | None = None
     id:                      str | None = None
-    breakout_type:           str | None = None   # Phase 7.4A.6.1 — 20d_high/30d_high/bb_expansion
-    trend_score:             float | None = None  # Phase 7.4A.6.1 — from TrendScore (TRENDING mode)
+    # Phase 7.4A.6.1
+    breakout_type:           str | None = None   # 20d_high | 30d_high | bb_expansion | ...
+    trend_score:             float | None = None  # 0-100 TrendScore (TRENDING mode; else None)
+    # Phase 7.4A.6.3 — promoted from FuturesData for top-level querying / persistence
+    breakout_strength:       str | None = None   # EARLY_BREAKOUT | CONFIRMED_BREAKOUT | HIGH_MOMENTUM_BREAKOUT
+    oi_interpretation:       str | None = None   # NEW_LONGS | NEW_SHORTS | SHORT_COVERING | LONG_LIQUIDATION | NEUTRAL
+    funding_trend:           str | None = None   # RISING | FALLING | STABLE
+    positioning_context:     str | None = None   # EXTREME_LONG | LONG_HEAVY | BALANCED | SHORT_HEAVY | EXTREME_SHORT
 
 
 # ── Scan orchestration models ─────────────────────────────────────────────────

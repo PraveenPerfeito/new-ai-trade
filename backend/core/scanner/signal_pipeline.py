@@ -306,7 +306,8 @@ def detect_setup(
     # Detects 20/30-day high/low structural breakouts + BB expansion after squeeze.
     # Phase 7.4A.6.1: breakout_type captured on SetupResult so scan_coin can
     # attach it to the Signal for persistence in signals and signal_outcomes.
-    _breakout_type: str | None = None
+    _breakout_type:     str | None = None
+    _breakout_strength: str | None = None
     if candles_1h or candles_1d:
         from backend.core.scanner.breakout_intelligence import (  # noqa: PLC0415
             detect_breakout_strength,
@@ -317,7 +318,8 @@ def detect_setup(
         if br.detected:
             score += br.score_bonus
             reasons.append(br.details)
-            _breakout_type = br.breakout_type
+            _breakout_type     = br.breakout_type
+            _breakout_strength = br.strength.value   # Phase 7.4A.6.3
             breakout_detections_total.labels(
                 breakout_type=br.breakout_type,
                 strength=br.strength.value,
@@ -336,6 +338,7 @@ def detect_setup(
         description=". ".join(reasons),
         pre_score=score,
         breakout_type=_breakout_type,
+        breakout_strength=_breakout_strength,   # Phase 7.4A.6.3
     )
 
 
@@ -538,7 +541,12 @@ async def scan_coin(
             risk_grade=risk.risk_grade,
             risk_warnings=risk.warnings,
             max_safe_leverage=risk.max_safe_leverage,
-            breakout_type=setup.breakout_type,   # Phase 7.4A.6.1
+            breakout_type=setup.breakout_type,       # Phase 7.4A.6.1
+            breakout_strength=setup.breakout_strength, # Phase 7.4A.6.3
+            # Phase 7.4A.6.3 — promote FuturesData intelligence to top-level Signal fields
+            oi_interpretation=(futures_data.oi_interpretation.value if futures_data else None),
+            funding_trend=(futures_data.funding_trend.value if futures_data else None),
+            positioning_context=(futures_data.positioning_context.value if futures_data else None),
             position_size_multiplier=risk.position_size_multiplier,
             futures_data=futures_data,
         )
