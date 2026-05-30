@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState, useMemo } from 'react'
+import { useCallback, useState, useMemo, useEffect } from 'react'
 import { TradingSignal } from '@/types'
 import { adminApi, EdgeReport } from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
@@ -137,31 +137,49 @@ function SignalCard({ sig }: { sig: TradingSignal }) {
         </div>
 
         {/* Confidence — always visible */}
-        <div className="w-[70px] shrink-0">
+        <div className="w-[65px] shrink-0">
           <p className={`text-sm font-bold font-mono ${conf.color}`}>{sig.confidence}%</p>
           <p className={`text-[9px] font-semibold ${conf.color}`}>{conf.text}</p>
         </div>
 
-        {/* Trade levels — hidden on small mobile */}
-        <div className="hidden sm:block w-[120px] shrink-0">
+        {/* Entry price — sm+ */}
+        <div className="hidden sm:block shrink-0 w-[88px]">
+          <p className="text-[9px] text-terminal-muted/50 uppercase tracking-wider">Entry</p>
           <p className="text-terminal-text text-xs font-mono font-semibold">${sig.entryPrice.toFixed(4)}</p>
-          <p className="text-emerald-400 text-[10px] font-mono">↑ +{tpPct}% · SL -{slPct}%</p>
         </div>
 
-        {/* R:R — visible on sm+ */}
-        <div className="hidden sm:block shrink-0">
+        {/* Target % — lg+ (separate column, more readable) */}
+        <div className="hidden lg:block shrink-0 w-[52px]">
+          <p className="text-[9px] text-terminal-muted/50 uppercase tracking-wider">Target</p>
+          <p className="text-emerald-400 text-xs font-mono font-semibold">+{tpPct}%</p>
+        </div>
+
+        {/* Stop % — lg+ */}
+        <div className="hidden lg:block shrink-0 w-[48px]">
+          <p className="text-[9px] text-terminal-muted/50 uppercase tracking-wider">Stop</p>
+          <p className="text-red-400 text-xs font-mono font-semibold">-{slPct}%</p>
+        </div>
+
+        {/* Combined tp/sl on sm-lg only */}
+        <div className="hidden sm:block lg:hidden shrink-0">
+          <p className="text-emerald-400 text-[10px] font-mono">+{tpPct}%</p>
+          <p className="text-red-400 text-[10px] font-mono">-{slPct}%</p>
+        </div>
+
+        {/* R:R — sm+ */}
+        <div className="hidden sm:block shrink-0 w-[40px]">
           <p className="text-[9px] text-terminal-muted/50 uppercase tracking-wider">R:R</p>
           <p className="text-terminal-text text-xs font-mono font-bold">1:{rr}</p>
         </div>
 
-        {/* Grade badge */}
+        {/* Grade badge — sm+ */}
         {sig.riskGrade && (
           <span className={`text-xs font-bold px-1.5 py-0.5 rounded border shrink-0 hidden sm:inline ${GRADE_COLORS[sig.riskGrade] ?? 'text-terminal-muted border-terminal-border'}`}>
             {sig.riskGrade}
           </span>
         )}
 
-        {/* Mode badge — hidden on mobile */}
+        {/* Mode badge — md+ */}
         <span className={`text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded border shrink-0 hidden md:inline ${MODE_COLORS[sig.scannerMode] ?? 'text-terminal-muted border-terminal-border'}`}>
           {sig.scannerMode?.replace('_', ' ').toUpperCase()}
         </span>
@@ -401,6 +419,8 @@ export default function SignalsPage() {
   const [filterMode,  setFilterMode]  = useState<FilterMode>('all')
   const [filterType,  setFilterType]  = useState<FilterType>('all')
   const [minConf,     setMinConf]     = useState(0)
+  const [pageSize,    setPageSize]    = useState(50)
+  const [currentPage, setCurrentPage] = useState(1)
 
   const edgeFetcher = useCallback(() => adminApi.analytics.edgeReport(168), [])
   const { data: edge, loading: el } = useAutoRefresh<EdgeReport>(edgeFetcher, 60_000)
@@ -429,6 +449,12 @@ export default function SignalsPage() {
     })
     return s
   }, [rawSignals, filterMode, filterType, minConf, sortKey, sortAsc])
+
+  // Reset to page 1 when any filter/sort changes
+  useEffect(() => { setCurrentPage(1) }, [filterMode, filterType, minConf, sortKey, sortAsc])
+
+  const totalPages        = Math.max(1, Math.ceil(signals.length / pageSize))
+  const paginatedSignals  = signals.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc(a => !a)
@@ -618,9 +644,66 @@ export default function SignalsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {signals.map(sig => (
+          {paginatedSignals.map(sig => (
             <SignalCard key={sig.id ?? `${sig.symbol}-${sig.createdAt}`} sig={sig} />
           ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {signals.length > 0 && (
+        <div className="flex items-center justify-between flex-wrap gap-3 pt-2 border-t border-terminal-border/30">
+          <div className="flex items-center gap-3">
+            <select
+              value={pageSize}
+              onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1) }}
+              className="text-xs bg-transparent border border-terminal-border/50 rounded px-2 py-1.5 text-terminal-muted hover:border-terminal-border transition-colors"
+            >
+              <option value={25}>25 / page</option>
+              <option value={50}>50 / page</option>
+              <option value={100}>100 / page</option>
+            </select>
+            <span className="text-terminal-muted text-xs font-mono">
+              {signals.length} signal{signals.length !== 1 ? 's' : ''} · page {currentPage} of {totalPages}
+            </span>
+          </div>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="text-xs px-3 py-1.5 rounded border border-terminal-border/50 text-terminal-muted hover:text-terminal-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                ← Previous
+              </button>
+              {/* Page number buttons — show up to 5 */}
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const start = Math.max(1, Math.min(currentPage - 2, totalPages - 4))
+                const pageNum = start + i
+                if (pageNum > totalPages) return null
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`text-xs w-8 py-1.5 rounded border transition-colors ${
+                      currentPage === pageNum
+                        ? 'bg-terminal-bright/20 border-terminal-border text-terminal-text'
+                        : 'border-terminal-border/40 text-terminal-muted hover:text-terminal-text'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                )
+              })}
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="text-xs px-3 py-1.5 rounded border border-terminal-border/50 text-terminal-muted hover:text-terminal-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                Next →
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
