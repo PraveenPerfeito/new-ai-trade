@@ -82,228 +82,307 @@ const FUND_ARROW: Record<string, string> = { RISING: '↗', FALLING: '↘' }
 
 const INTEL_CHIP = 'flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-mono font-semibold'
 
+// ─── Section label helper ─────────────────────────────────────────────────────
+
+function SectionLabel({ label }: { label: string }) {
+  return (
+    <p className="text-[9px] text-terminal-muted/50 uppercase tracking-widest font-semibold mb-2 flex items-center gap-1.5">
+      <span className="h-px flex-1 bg-terminal-border/20" />
+      {label}
+      <span className="h-px flex-1 bg-terminal-border/20" />
+    </p>
+  )
+}
+
 // ─── Signal Card ──────────────────────────────────────────────────────────────
 
 function SignalCard({ sig }: { sig: TradingSignal }) {
   const [expanded, setExpanded] = useState(false)
-  const isBuy     = sig.type === 'BUY'
-  const stage     = computeLifecycleStage(sig)
-  const stageCfg  = LIFECYCLE_CONFIG[stage]
-  const conf      = confLabel(sig.confidence)
-  const tpPct     = pct(sig.entryPrice, sig.targetPrice)
-  const slPct     = pct(sig.entryPrice, sig.stopLoss)
-  const rr        = sig.stopLoss > 0
+  const isBuy    = sig.type === 'BUY'
+  const stage    = computeLifecycleStage(sig)
+  const stageCfg = LIFECYCLE_CONFIG[stage]
+  const conf     = confLabel(sig.confidence)
+  const tpPct    = pct(sig.entryPrice, sig.targetPrice)
+  const slPct    = pct(sig.entryPrice, sig.stopLoss)
+  const rr       = sig.stopLoss > 0
     ? (Math.abs(sig.targetPrice - sig.entryPrice) / Math.abs(sig.entryPrice - sig.stopLoss)).toFixed(1)
     : '—'
+  const hasIntel = sig.trendScore != null || sig.sectorStatus || sig.breakoutStrength ||
+    sig.oiInterpretation || sig.fundingTrend || sig.positioningContext
 
   return (
     <div className="glass-card rounded-xl border border-terminal-border/50 overflow-hidden">
-      {/* Main row */}
+
+      {/* ── Collapsed header row ─────────────────────────────────────────────── */}
       <div
-        className="px-5 py-4 flex items-center gap-4 cursor-pointer hover:bg-terminal-bright/5 transition-colors"
+        className="px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-terminal-bright/5 transition-colors"
         onClick={() => setExpanded(e => !e)}
       >
         {/* Direction icon */}
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
           isBuy ? 'bg-emerald-400/10 border border-emerald-400/25' : 'bg-red-400/10 border border-red-400/25'
         }`}>
           {isBuy
-            ? <ArrowUpRight className="w-5 h-5 text-emerald-400" />
-            : <ArrowDownRight className="w-5 h-5 text-red-400" />
+            ? <ArrowUpRight className="w-4 h-4 text-emerald-400" />
+            : <ArrowDownRight className="w-4 h-4 text-red-400" />
           }
         </div>
 
-        {/* Symbol + type */}
-        <div className="min-w-[100px]">
-          <p className="text-terminal-text text-base font-bold font-mono">{sig.symbol}</p>
-          <p className={`text-xs font-semibold font-mono ${isBuy ? 'text-emerald-400' : 'text-red-400'}`}>
+        {/* Symbol + direction — always visible */}
+        <div className="w-[90px] shrink-0">
+          <p className="text-terminal-text text-sm font-bold font-mono leading-tight">{sig.symbol}</p>
+          <p className={`text-[10px] font-semibold font-mono ${isBuy ? 'text-emerald-400' : 'text-red-400'}`}>
             {isBuy ? '▲ LONG' : '▼ SHORT'}
           </p>
         </div>
 
-        {/* Confidence */}
-        <div className="min-w-[90px]">
-          <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-0.5">Confidence</p>
+        {/* Confidence — always visible */}
+        <div className="w-[70px] shrink-0">
           <p className={`text-sm font-bold font-mono ${conf.color}`}>{sig.confidence}%</p>
-          <p className={`text-[10px] font-semibold ${conf.color}`}>{conf.text}</p>
+          <p className={`text-[9px] font-semibold ${conf.color}`}>{conf.text}</p>
         </div>
 
-        {/* Trade levels */}
-        <div className="min-w-[130px]">
-          <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-0.5">Entry → Target</p>
-          <p className="text-terminal-text text-sm font-mono font-semibold">${sig.entryPrice.toFixed(4)}</p>
-          <p className="text-emerald-400 text-xs font-mono">→ ${sig.targetPrice.toFixed(4)} <span className="text-emerald-400/60">(+{tpPct}%)</span></p>
+        {/* Trade levels — hidden on small mobile */}
+        <div className="hidden sm:block w-[120px] shrink-0">
+          <p className="text-terminal-text text-xs font-mono font-semibold">${sig.entryPrice.toFixed(4)}</p>
+          <p className="text-emerald-400 text-[10px] font-mono">↑ +{tpPct}% · SL -{slPct}%</p>
         </div>
 
-        {/* Stop & RR */}
-        <div className="min-w-[110px]">
-          <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-0.5">Stop Loss</p>
-          <p className="text-red-400 text-sm font-mono">${sig.stopLoss.toFixed(4)}</p>
-          <p className="text-terminal-muted text-xs font-mono">-{slPct}% · R:R <span className="text-terminal-text font-bold">1:{rr}</span></p>
+        {/* R:R — visible on sm+ */}
+        <div className="hidden sm:block shrink-0">
+          <p className="text-[9px] text-terminal-muted/50 uppercase tracking-wider">R:R</p>
+          <p className="text-terminal-text text-xs font-mono font-bold">1:{rr}</p>
         </div>
 
-        {/* Grade */}
-        <div className="min-w-[60px]">
-          <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Grade</p>
-          {sig.riskGrade ? (
-            <span className={`text-sm font-bold px-2 py-0.5 rounded border ${GRADE_COLORS[sig.riskGrade] ?? 'text-terminal-muted border-terminal-border'}`}>
-              {sig.riskGrade}
-            </span>
-          ) : <span className="text-terminal-muted">—</span>}
-        </div>
-
-        {/* Mode */}
-        <div className="min-w-[90px]">
-          <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Mode</p>
-          <span className={`text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded border ${MODE_COLORS[sig.scannerMode] ?? 'text-terminal-muted border-terminal-border'}`}>
-            {sig.scannerMode?.replace('_', ' ').toUpperCase()}
+        {/* Grade badge */}
+        {sig.riskGrade && (
+          <span className={`text-xs font-bold px-1.5 py-0.5 rounded border shrink-0 hidden sm:inline ${GRADE_COLORS[sig.riskGrade] ?? 'text-terminal-muted border-terminal-border'}`}>
+            {sig.riskGrade}
           </span>
-        </div>
+        )}
 
-        {/* Lifecycle */}
-        <div className="min-w-[80px]">
-          <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Stage</p>
-          <span className={`text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded border ${stageCfg.badge}`}>
-            {stageCfg.label}
-          </span>
-        </div>
+        {/* Mode badge — hidden on mobile */}
+        <span className={`text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded border shrink-0 hidden md:inline ${MODE_COLORS[sig.scannerMode] ?? 'text-terminal-muted border-terminal-border'}`}>
+          {sig.scannerMode?.replace('_', ' ').toUpperCase()}
+        </span>
+
+        {/* Stage badge — always visible, prominent */}
+        <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded border shrink-0 ${stageCfg.badge}`}>
+          {stageCfg.label}
+        </span>
 
         {/* Time + expand */}
-        <div className="ml-auto text-right shrink-0">
-          <p className="text-terminal-muted text-xs font-mono whitespace-nowrap">
+        <div className="ml-auto text-right shrink-0 flex flex-col items-end gap-0.5">
+          <p className="text-terminal-muted text-[10px] font-mono whitespace-nowrap">
             {formatTs(sig.createdAt instanceof Date ? sig.createdAt.toISOString() : sig.createdAt)}
           </p>
           {expanded
-            ? <ChevronUp className="w-4 h-4 text-terminal-muted/40 mt-1 ml-auto" />
-            : <ChevronDown className="w-4 h-4 text-terminal-muted/40 mt-1 ml-auto" />
+            ? <ChevronUp className="w-3.5 h-3.5 text-terminal-muted/40" />
+            : <ChevronDown className="w-3.5 h-3.5 text-terminal-muted/40" />
           }
         </div>
       </div>
 
-      {/* Expanded detail — grouped sections */}
+      {/* ── Expanded detail — 5 grouped sections ────────────────────────────── */}
       {expanded && (
-        <div className="border-t border-terminal-border/30 bg-terminal-surface/30">
-          {/* Trade Context */}
-          <div className="px-4 sm:px-5 py-3 grid grid-cols-2 sm:grid-cols-4 gap-3 border-b border-terminal-border/20">
-            {sig.riskScore != null && (
+        <div className="border-t border-terminal-border/30 bg-terminal-surface/20 divide-y divide-terminal-border/15">
+
+          {/* ── TRADE ─── */}
+          <div className="px-4 py-3">
+            <SectionLabel label="Trade" />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div>
-                <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Risk Score</p>
-                <p className="text-terminal-text text-sm font-mono">{sig.riskScore.toFixed(0)}/100</p>
+                <p className="text-terminal-muted text-[9px] uppercase tracking-wider mb-0.5">Entry</p>
+                <p className="text-terminal-text text-sm font-mono font-semibold">${sig.entryPrice.toFixed(4)}</p>
               </div>
-            )}
+              <div>
+                <p className="text-terminal-muted text-[9px] uppercase tracking-wider mb-0.5">Target</p>
+                <p className="text-emerald-400 text-sm font-mono font-semibold">${sig.targetPrice.toFixed(4)}</p>
+                <p className="text-emerald-400/60 text-[10px] font-mono">+{tpPct}%</p>
+              </div>
+              <div>
+                <p className="text-terminal-muted text-[9px] uppercase tracking-wider mb-0.5">Stop Loss</p>
+                <p className="text-red-400 text-sm font-mono font-semibold">${sig.stopLoss.toFixed(4)}</p>
+                <p className="text-red-400/60 text-[10px] font-mono">-{slPct}%</p>
+              </div>
+              <div>
+                <p className="text-terminal-muted text-[9px] uppercase tracking-wider mb-0.5">R:R · Risk</p>
+                <p className="text-terminal-text text-sm font-mono font-bold">1:{rr}</p>
+                {sig.riskScore != null && (
+                  <p className="text-terminal-muted text-[10px] font-mono">Risk {sig.riskScore.toFixed(0)}/100</p>
+                )}
+              </div>
+            </div>
+            {/* Grade + Mode + Leverage on mobile (hidden in header) */}
+            <div className="flex flex-wrap gap-1.5 mt-2.5 sm:hidden">
+              {sig.riskGrade && (
+                <span className={`text-xs font-bold px-2 py-0.5 rounded border ${GRADE_COLORS[sig.riskGrade] ?? 'text-terminal-muted border-terminal-border'}`}>
+                  {sig.riskGrade}
+                </span>
+              )}
+              <span className={`text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded border ${MODE_COLORS[sig.scannerMode] ?? 'text-terminal-muted border-terminal-border'}`}>
+                {sig.scannerMode?.replace('_', ' ').toUpperCase()}
+              </span>
+              {(sig as any).maxSafeLeverage > 0 && (
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-terminal-border text-terminal-muted">
+                  {(sig as any).maxSafeLeverage}× max
+                </span>
+              )}
+            </div>
+            {/* Max leverage on desktop */}
             {(sig as any).maxSafeLeverage > 0 && (
-              <div>
-                <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Max Leverage</p>
-                <p className="text-terminal-text text-sm font-mono font-bold">{(sig as any).maxSafeLeverage}×</p>
-              </div>
+              <p className="hidden sm:block text-[10px] text-terminal-muted/50 font-mono mt-1.5">
+                Max safe leverage: {(sig as any).maxSafeLeverage}×
+              </p>
             )}
           </div>
 
-          {/* Phase 7.x Intelligence — shown when any intelligence field is present */}
-          {(sig.trendScore != null || sig.sectorStatus || sig.breakoutStrength ||
-            sig.oiInterpretation || sig.fundingTrend || sig.positioningContext) && (
-            <div className="px-4 sm:px-5 py-3 border-b border-terminal-border/20">
-              <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-2">
-                Intelligence
-              </p>
-              <div className="flex flex-wrap gap-1.5">
+          {/* ── TECHNICAL ─── */}
+          {sig.indicators && (
+            <div className="px-4 py-3">
+              <SectionLabel label="Technical" />
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-2">
+                <div>
+                  <p className="text-terminal-muted text-[9px] uppercase tracking-wider mb-0.5">RSI</p>
+                  <p className={`text-sm font-mono font-semibold ${sig.indicators.rsi > 70 ? 'text-red-400' : sig.indicators.rsi < 30 ? 'text-emerald-400' : 'text-terminal-text'}`}>
+                    {sig.indicators.rsi.toFixed(1)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-terminal-muted text-[9px] uppercase tracking-wider mb-0.5">Vol Spike</p>
+                  <p className={`text-sm font-mono font-semibold ${sig.indicators.volumeSpike >= 1.5 ? 'text-emerald-400' : 'text-terminal-muted'}`}>
+                    {sig.indicators.volumeSpike.toFixed(1)}×
+                  </p>
+                </div>
+                <div>
+                  <p className="text-terminal-muted text-[9px] uppercase tracking-wider mb-0.5">ATR</p>
+                  <p className="text-terminal-text text-sm font-mono font-semibold">{sig.indicators.atr.toFixed(4)}</p>
+                </div>
+                <div>
+                  <p className="text-terminal-muted text-[9px] uppercase tracking-wider mb-0.5">Trend</p>
+                  <p className={`text-sm font-mono font-semibold ${
+                    sig.indicators.trend === 'BULLISH' ? 'text-emerald-400' :
+                    sig.indicators.trend === 'BEARISH' ? 'text-red-400' : 'text-terminal-muted'
+                  }`}>{sig.indicators.trend}</p>
+                </div>
+              </div>
+              {sig.setupDescription && (
+                <p className="text-terminal-muted/70 text-xs leading-relaxed line-clamp-3">
+                  {sig.setupDescription}
+                </p>
+              )}
+            </div>
+          )}
 
-                {/* TrendScore */}
+          {/* ── AI ─── */}
+          {(sig.aiReasoning || (sig.strengths && sig.strengths.length > 0) || (sig.risks && sig.risks.length > 0)) && (
+            <div className="px-4 py-3">
+              <SectionLabel label="AI" />
+              {sig.aiReasoning && (
+                <p className="text-terminal-text text-xs leading-relaxed mb-2">{sig.aiReasoning}</p>
+              )}
+              {sig.strengths && sig.strengths.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-1.5">
+                  {sig.strengths.slice(0, 3).map((s, i) => (
+                    <span key={i} className="text-[9px] px-1.5 py-0.5 rounded border border-emerald-400/20 bg-emerald-400/5 text-emerald-400/80 font-mono">
+                      ✓ {s}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {sig.risks && sig.risks.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {sig.risks.slice(0, 2).map((r, i) => (
+                    <span key={i} className="text-[9px] px-1.5 py-0.5 rounded border border-red-400/20 bg-red-400/5 text-red-400/80 font-mono">
+                      ⚠ {r}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── INTELLIGENCE ─── */}
+          {hasIntel && (
+            <div className="px-4 py-3">
+              <SectionLabel label="Intelligence" />
+              <div className="flex flex-wrap gap-1.5">
                 {sig.trendScore != null && (() => {
                   const tier = trendScoreTier(sig.trendScore)
                   return (
                     <span className={`${INTEL_CHIP} ${tier.cls}`}>
-                      <span className="opacity-60">TS</span>
-                      {sig.trendScore.toFixed(0)}
-                      <span className="opacity-50">·</span>
-                      {tier.label}
+                      <span className="opacity-60">TS</span>{sig.trendScore.toFixed(0)}
+                      <span className="opacity-50">·</span>{tier.label}
                     </span>
                   )
                 })()}
-
-                {/* Sector */}
                 {sig.sectorStatus && sig.sectorStatus !== 'NEUTRAL' && (
                   <span className={`${INTEL_CHIP} ${SECTOR_CLS[sig.sectorStatus] ?? 'text-terminal-muted border-terminal-border/30'}`}>
                     🏛 {sig.sectorStatus}
                   </span>
                 )}
-
-                {/* Breakout */}
                 {sig.breakoutStrength && (
                   <span className={`${INTEL_CHIP} ${BREAKOUT_CLS[sig.breakoutStrength] ?? 'text-terminal-muted border-terminal-border/30'}`}>
-                    ⚡{' '}
-                    {sig.breakoutStrength.replace('_BREAKOUT', '').replace('HIGH_MOMENTUM', 'HI-MOM')}
-                    {sig.breakoutType && (
-                      <span className="opacity-50 ml-0.5">
-                        ({sig.breakoutType.split('+')[0].replace(/_/g, ' ')})
-                      </span>
-                    )}
+                    ⚡ {sig.breakoutStrength.replace('_BREAKOUT', '').replace('HIGH_MOMENTUM', 'HI-MOM')}
+                    {sig.breakoutType && <span className="opacity-50 ml-0.5">({sig.breakoutType.split('+')[0].replace(/_/g, ' ')})</span>}
                   </span>
                 )}
-
-                {/* OI Interpretation */}
                 {sig.oiInterpretation && sig.oiInterpretation !== 'NEUTRAL' && (
                   <span className={`${INTEL_CHIP} ${OI_CLS[sig.oiInterpretation] ?? 'text-terminal-muted border-terminal-border/30'}`}>
                     OI: {sig.oiInterpretation.replace(/_/g, ' ')}
                   </span>
                 )}
-
-                {/* Funding Trend */}
                 {sig.fundingTrend && sig.fundingTrend !== 'STABLE' && (
                   <span className={`${INTEL_CHIP} ${FUND_CLS[sig.fundingTrend] ?? 'text-terminal-muted border-terminal-border/30'}`}>
                     {FUND_ARROW[sig.fundingTrend]} FUND {sig.fundingTrend}
                   </span>
                 )}
-
-                {/* Positioning */}
                 {sig.positioningContext && sig.positioningContext !== 'BALANCED' && (
                   <span className={`${INTEL_CHIP} ${POS_CLS[sig.positioningContext] ?? 'text-terminal-muted border-terminal-border/30'}`}>
                     {sig.positioningContext.replace(/_/g, ' ')}
                   </span>
                 )}
-
               </div>
             </div>
           )}
 
-          {/* Futures Intelligence — only for futures/high_confidence */}
+          {/* ── FUTURES ─── */}
           {['futures', 'high_confidence'].includes(sig.scannerMode) && sig.futuresData && (
-            <div className="px-4 sm:px-5 py-3 grid grid-cols-2 sm:grid-cols-4 gap-3 border-b border-terminal-border/20">
-              <div className="col-span-2 sm:col-span-4 text-[10px] text-terminal-muted uppercase tracking-wider mb-1">Futures Intelligence</div>
-              {sig.futuresData.fundingRate != null && (
-                <div>
-                  <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Funding Rate</p>
-                  <p className={`text-sm font-mono ${sig.futuresData.fundingRate > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                    {(sig.futuresData.fundingRate * 100).toFixed(4)}%
-                  </p>
-                </div>
-              )}
-              {sig.futuresData.momentumScore != null && (
-                <div>
-                  <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Momentum</p>
-                  <p className="text-terminal-text text-sm font-mono">{sig.futuresData.momentumScore}/100</p>
-                </div>
-              )}
+            <div className="px-4 py-3">
+              <SectionLabel label="Futures" />
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {sig.futuresData.fundingRate != null && (
+                  <div>
+                    <p className="text-terminal-muted text-[9px] uppercase tracking-wider mb-0.5">Funding</p>
+                    <p className={`text-sm font-mono font-semibold ${sig.futuresData.fundingRate > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                      {(sig.futuresData.fundingRate * 100).toFixed(4)}%
+                    </p>
+                  </div>
+                )}
+                {sig.futuresData.momentumScore != null && (
+                  <div>
+                    <p className="text-terminal-muted text-[9px] uppercase tracking-wider mb-0.5">Momentum</p>
+                    <p className="text-terminal-text text-sm font-mono font-semibold">{sig.futuresData.momentumScore}/100</p>
+                  </div>
+                )}
+                {sig.futuresData.oiTrend && (
+                  <div>
+                    <p className="text-terminal-muted text-[9px] uppercase tracking-wider mb-0.5">OI Trend</p>
+                    <p className={`text-sm font-mono font-semibold ${sig.futuresData.oiTrend === 'RISING' ? 'text-emerald-400' : sig.futuresData.oiTrend === 'FALLING' ? 'text-red-400' : 'text-terminal-muted'}`}>
+                      {sig.futuresData.oiTrend}
+                    </p>
+                  </div>
+                )}
+                {sig.futuresData.longShortRatio != null && (
+                  <div>
+                    <p className="text-terminal-muted text-[9px] uppercase tracking-wider mb-0.5">L/S Ratio</p>
+                    <p className="text-terminal-text text-sm font-mono font-semibold">{sig.futuresData.longShortRatio.toFixed(2)}</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
-          {/* AI Analysis */}
-          {(sig.aiReasoning || sig.setupDescription) && (
-            <div className="px-4 sm:px-5 py-3 space-y-3">
-              {sig.aiReasoning && (
-                <div>
-                  <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">AI Reasoning</p>
-                  <p className="text-terminal-text text-sm leading-relaxed">{sig.aiReasoning}</p>
-                </div>
-              )}
-              {sig.setupDescription && (
-                <div>
-                  <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-1">Setup</p>
-                  <p className="text-terminal-muted text-sm leading-relaxed">{sig.setupDescription}</p>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
     </div>
