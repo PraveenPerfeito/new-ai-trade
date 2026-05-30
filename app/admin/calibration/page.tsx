@@ -147,6 +147,11 @@ export default function CalibrationPage() {
         </div>
       )}
 
+      {/* ── SECTION: CURRENT STATE ── */}
+      <p className="text-[9px] text-zinc-600 uppercase tracking-widest flex items-center gap-2 pt-1">
+        <span className="h-px flex-1 bg-zinc-800" />Current State<span className="h-px flex-1 bg-zinc-800" />
+      </p>
+
       {/* Key metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard
@@ -173,6 +178,11 @@ export default function CalibrationPage() {
           accent={ai?.error_rate != null ? (ai.error_rate < 0.1 ? 'good' : ai.error_rate < 0.3 ? 'warn' : 'bad') : 'default'}
         />
       </div>
+
+      {/* ── SECTION: PERFORMANCE ── */}
+      <p className="text-[9px] text-zinc-600 uppercase tracking-widest flex items-center gap-2 pt-1">
+        <span className="h-px flex-1 bg-zinc-800" />Performance<span className="h-px flex-1 bg-zinc-800" />
+      </p>
 
       {/* Verdict distribution */}
       {totalVerd > 0 && (
@@ -205,69 +215,60 @@ export default function CalibrationPage() {
         </div>
       )}
 
-      {/* Confidence threshold reference */}
-      <div>
-        <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-3">Confidence Threshold Reference</h2>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-zinc-800 text-xs text-zinc-500 uppercase tracking-wider">
-                <th className="text-left px-4 py-3">Tier</th>
-                <th className="text-left px-4 py-3">Range</th>
-                <th className="text-left px-4 py-3">Description</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-800">
-              {CONFIDENCE_THRESHOLDS.map((t) => (
-                <tr key={t.tier} className="hover:bg-zinc-800/40">
-                  <td className={`px-4 py-3 font-semibold ${t.color}`}>{t.tier}</td>
-                  <td className="px-4 py-3 text-zinc-300 font-mono text-xs">{t.range}</td>
-                  <td className="px-4 py-3 text-zinc-500 text-xs">{t.description}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {/* ── SECTION: HISTORICAL PERFORMANCE ── */}
+      <div className="pt-2">
+        <p className="text-[9px] text-zinc-600 uppercase tracking-widest mb-3 flex items-center gap-2">
+          <span className="h-px flex-1 bg-zinc-800" />Historical Performance<span className="h-px flex-1 bg-zinc-800" />
+        </p>
+
+        {/* Live confidence bands */}
+        {edge?.confidence_calibration?.bands && edge.confidence_calibration.bands.length > 0 ? (
+          <div className="space-y-1.5">
+            {edge.confidence_calibration.bands.map((b) => (
+              <div key={b.label} className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 flex items-center gap-3">
+                <span className="text-zinc-300 font-mono text-xs w-16 shrink-0">{b.label}</span>
+                <span className="text-zinc-500 text-xs w-12 shrink-0">{b.total} sig</span>
+                <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                  {!b.insufficient_data && b.win_rate != null && (
+                    <div className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${(b.win_rate * 100).toFixed(0)}%`,
+                        backgroundColor: b.win_rate >= 0.6 ? '#22c55e' : b.win_rate >= 0.5 ? '#f59e0b' : '#ef4444',
+                      }} />
+                  )}
+                </div>
+                <span className={`text-xs font-mono font-semibold w-12 text-right shrink-0 ${
+                  b.insufficient_data || b.win_rate == null ? 'text-zinc-600' :
+                  b.win_rate >= 0.6 ? 'text-green-400' : b.win_rate >= 0.5 ? 'text-amber-400' : 'text-red-400'
+                }`}>
+                  {b.insufficient_data || b.win_rate == null ? '—' : `${(b.win_rate * 100).toFixed(1)}%`}
+                </span>
+                <span className="text-zinc-600 font-mono text-xs w-14 text-right shrink-0 hidden sm:block">
+                  {b.expectancy != null ? `${b.expectancy > 0 ? '+' : ''}${b.expectancy.toFixed(2)}R` : '—'}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-zinc-600 text-xs">No resolved signals yet — run scans to populate confidence performance.</p>
+        )}
       </div>
 
-      {/* Confidence bands from edge report */}
-      {edge?.confidence_calibration?.bands && edge.confidence_calibration.bands.length > 0 && (
-        <div>
-          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-3">Live Confidence Performance</h2>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-zinc-800 text-xs text-zinc-500 uppercase tracking-wider">
-                  <th className="text-left px-4 py-3">Band</th>
-                  <th className="text-right px-4 py-3">Signals</th>
-                  <th className="text-right px-4 py-3">Win Rate</th>
-                  <th className="text-right px-4 py-3">Expectancy</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800">
-                {edge.confidence_calibration.bands.map((b) => (
-                  <tr key={b.label} className="hover:bg-zinc-800/40">
-                    <td className="px-4 py-2.5 text-zinc-300 font-mono text-xs">{b.label}</td>
-                    <td className="px-4 py-2.5 text-right text-zinc-400">{b.total}</td>
-                    <td className="px-4 py-2.5 text-right">
-                      {b.insufficient_data ? (
-                        <span className="text-zinc-600 text-xs">—</span>
-                      ) : (
-                        <span className={`font-mono text-xs font-medium ${(b.win_rate ?? 0) >= 0.6 ? 'text-green-400' : (b.win_rate ?? 0) >= 0.5 ? 'text-amber-400' : 'text-red-400'}`}>
-                          {pct(b.win_rate)}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-zinc-400 font-mono text-xs">
-                      {b.expectancy != null ? `${b.expectancy > 0 ? '+' : ''}${b.expectancy.toFixed(2)}R` : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      {/* ── SECTION: REFERENCE ── */}
+      <div className="pt-2">
+        <p className="text-[9px] text-zinc-600 uppercase tracking-widest mb-3 flex items-center gap-2">
+          <span className="h-px flex-1 bg-zinc-800" />Confidence Tiers<span className="h-px flex-1 bg-zinc-800" />
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {CONFIDENCE_THRESHOLDS.map((t) => (
+            <div key={t.tier} className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5">
+              <p className={`text-sm font-bold mb-0.5 ${t.color}`}>{t.tier}</p>
+              <p className="text-zinc-400 font-mono text-xs">{t.range}</p>
+              <p className="text-zinc-600 text-[10px] mt-1 leading-snug hidden sm:block">{t.description}</p>
+            </div>
+          ))}
         </div>
-      )}
+      </div>
     </div>
   )
 }

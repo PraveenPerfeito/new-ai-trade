@@ -32,45 +32,49 @@ function rr(n: number | null): string {
 
 function CalibrationTable({ bands }: { bands: EdgeReport['confidence_calibration']['bands'] }) {
   return (
-    <table className="w-full text-xs">
-      <thead>
-        <tr className="border-b border-terminal-border">
-          {['Band', 'Signals', 'Win Rate', 'Expectancy', 'Status'].map(h => (
-            <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {bands.map(b => (
-          <tr key={b.label} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
-            <td className="py-2.5 px-3 font-mono text-terminal-text">{b.label}</td>
-            <td className="py-2.5 px-3 font-mono text-terminal-muted">{b.total}</td>
-            <td className="py-2.5 px-3 font-mono">
-              {b.insufficient_data || b.win_rate == null
-                ? <span className="text-terminal-muted/40">—</span>
-                : <span className={b.win_rate >= 0.55 ? 'text-bull-default' : 'text-bear-default'}>
-                    {(b.win_rate * 100).toFixed(1)}%
-                  </span>
-              }
-            </td>
-            <td className="py-2.5 px-3 font-mono">
-              {b.insufficient_data || b.expectancy == null
-                ? <span className="text-terminal-muted/40">—</span>
-                : <span className={b.expectancy > 0 ? 'text-bull-default' : 'text-bear-default'}>
-                    {b.expectancy > 0 ? '+' : ''}{b.expectancy.toFixed(2)}R
-                  </span>
-              }
-            </td>
-            <td className="py-2.5 px-3">
-              {b.insufficient_data
-                ? <span className="text-xs text-terminal-muted/40 border border-terminal-border rounded px-1.5 py-0.5">INSUFFICIENT</span>
-                : <span className="text-xs text-bull-default/70 border border-bull-default/20 rounded px-1.5 py-0.5">OK</span>
-              }
-            </td>
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs min-w-[380px]">
+        <thead>
+          <tr className="border-b border-terminal-border">
+            <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Band</th>
+            <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Signals</th>
+            <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Win Rate</th>
+            <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold hidden sm:table-cell">Expectancy</th>
+            <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Status</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {bands.map(b => (
+            <tr key={b.label} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
+              <td className="py-2.5 px-3 font-mono text-terminal-text">{b.label}</td>
+              <td className="py-2.5 px-3 font-mono text-terminal-muted">{b.total}</td>
+              <td className="py-2.5 px-3 font-mono">
+                {b.insufficient_data || b.win_rate == null
+                  ? <span className="text-terminal-muted/40">—</span>
+                  : <span className={b.win_rate >= 0.55 ? 'text-bull-default' : 'text-bear-default'}>
+                      {(b.win_rate * 100).toFixed(1)}%
+                    </span>
+                }
+              </td>
+              <td className="py-2.5 px-3 font-mono hidden sm:table-cell">
+                {b.insufficient_data || b.expectancy == null
+                  ? <span className="text-terminal-muted/40">—</span>
+                  : <span className={b.expectancy > 0 ? 'text-bull-default' : 'text-bear-default'}>
+                      {b.expectancy > 0 ? '+' : ''}{b.expectancy.toFixed(2)}R
+                    </span>
+                }
+              </td>
+              <td className="py-2.5 px-3">
+                {b.insufficient_data
+                  ? <span className="text-[10px] text-terminal-muted/40 border border-terminal-border rounded px-1.5 py-0.5">WARMING</span>
+                  : <span className="text-[10px] text-bull-default/70 border border-bull-default/20 rounded px-1.5 py-0.5">OK</span>
+                }
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }
 
@@ -218,13 +222,15 @@ function DimTable({ title, rows }: { title: string; rows: AttributionDimension[]
   return (
     <div>
       <p className="text-terminal-muted text-xs uppercase tracking-wider mb-2">{title}</p>
-      <div className="glass-card rounded-lg overflow-hidden">
-        <table className="w-full text-xs">
+      <div className="glass-card rounded-lg overflow-hidden overflow-x-auto">
+        <table className="w-full text-xs min-w-[320px]">
           <thead>
             <tr className="border-b border-terminal-border">
-              {['Dimension', 'Signals', 'Win Rate', 'Avg RR', 'Expectancy'].map(h => (
-                <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
-              ))}
+              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Dimension</th>
+              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Signals</th>
+              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Win Rate</th>
+              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold hidden sm:table-cell">Avg RR</th>
+              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold hidden sm:table-cell">Expectancy</th>
             </tr>
           </thead>
           <tbody>
@@ -238,8 +244,8 @@ function DimTable({ title, rows }: { title: string; rows: AttributionDimension[]
                     : <span className="text-terminal-muted/40">—</span>
                   }
                 </td>
-                <td className="py-2 px-3 font-mono text-terminal-muted">{rr(d.avgRRAchieved)}</td>
-                <td className="py-2 px-3 font-mono">
+                <td className="py-2 px-3 font-mono text-terminal-muted hidden sm:table-cell">{rr(d.avgRRAchieved)}</td>
+                <td className="py-2 px-3 font-mono hidden sm:table-cell">
                   {d.expectancy != null
                     ? <span className={d.expectancy > 0 ? 'text-bull-default' : 'text-bear-default'}>{exp(d.expectancy)}</span>
                     : <span className="text-terminal-muted/40">—</span>
