@@ -238,6 +238,10 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
             (c.price_change_24h for c in all_coins if c.symbol == "BTC"), 0.0
         )
 
+        # Phase 7.4A.7.1: trend_score_map populated for TRENDING mode; empty for all others.
+        # Keyed by UPPER symbol to match TrendingMeta.symbol convention.
+        trend_score_map: dict[str, float] = {}
+
         # 1b. TRENDING mode: expand universe with multi-source CMC intelligence
         if mode == ScannerMode.TRENDING:
             from backend.core.scanner.trending_universe import build_trending_universe  # noqa: PLC0415
@@ -247,6 +251,12 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                 btc_4h_change=btc_4h_change,      # Phase 7.3A.4: precise 4h RS reference
             )
             all_coins = tr.coins
+            # Build per-symbol TrendScore lookup for propagation to Signal
+            trend_score_map = {
+                sym: round(meta.trend_score, 2)
+                for sym, meta in tr.meta.items()
+                if meta.trend_score is not None
+            }
             log.info(
                 "trending_universe_applied",
                 total_candidates=tr.total_unique,
@@ -272,7 +282,9 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
         errors = 0
 
         async def _scan_one(coin: CoinData) -> Signal | None:
-            return await scan_coin(coin, mode, config, btc_change_24h=btc_change_24h)
+            # Phase 7.4A.7.1: pass TrendScore per coin (None for non-TRENDING modes)
+            ts = trend_score_map.get(coin.symbol)
+            return await scan_coin(coin, mode, config, btc_change_24h=btc_change_24h, trend_score=ts)
 
         results = await gather_with_concurrency(
             filtered,
