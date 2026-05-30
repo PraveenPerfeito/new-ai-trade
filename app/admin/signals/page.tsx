@@ -189,25 +189,32 @@ function SignalCard({ sig }: { sig: TradingSignal }) {
           {stageCfg.label}
         </span>
 
-        {/* Intelligence mini-strip — fills gap on lg+, hidden otherwise */}
-        <div className="hidden lg:flex items-center gap-1 flex-1 min-w-0 overflow-hidden mx-1">
+        {/* Context strip — fills ALL remaining gap on lg+, always has content */}
+        <div className="hidden lg:flex items-center gap-2 flex-1 min-w-0 overflow-hidden mx-2">
+          {/* Setup description preview — always present, truncated */}
+          {sig.setupDescription && (
+            <p className="text-[10px] text-terminal-muted/35 font-mono truncate flex-1 min-w-0 leading-none">
+              {sig.setupDescription.split('|')[0].trim()}
+            </p>
+          )}
+          {/* Intelligence chips — shown when non-neutral, shrink-0 so they don't disappear */}
           {sig.breakoutStrength && (
-            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-emerald-500/20 bg-emerald-500/5 text-emerald-400/70 whitespace-nowrap shrink-0">
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-emerald-500/20 bg-emerald-500/5 text-emerald-400/60 whitespace-nowrap shrink-0">
               ⚡ {sig.breakoutStrength.replace('_BREAKOUT','').replace('HIGH_MOMENTUM','HI-MOM')}
             </span>
           )}
           {sig.oiInterpretation && sig.oiInterpretation !== 'NEUTRAL' && (
-            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-terminal-border/40 text-terminal-muted/50 whitespace-nowrap shrink-0">
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-terminal-border/40 text-terminal-muted/45 whitespace-nowrap shrink-0">
               {sig.oiInterpretation.replace(/_/g,' ')}
             </span>
           )}
           {sig.sectorStatus && !['NEUTRAL','BALANCED'].includes(sig.sectorStatus) && (
-            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-terminal-border/40 text-terminal-muted/50 whitespace-nowrap shrink-0">
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-terminal-border/40 text-terminal-muted/45 whitespace-nowrap shrink-0">
               🏛 {sig.sectorStatus}
             </span>
           )}
           {sig.trendScore != null && (
-            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-terminal-border/40 text-terminal-muted/40 whitespace-nowrap shrink-0">
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-terminal-border/30 text-terminal-muted/35 whitespace-nowrap shrink-0">
               TS {sig.trendScore.toFixed(0)}
             </span>
           )}
