@@ -447,79 +447,105 @@ function TacticalControlCard({ def, entry, value, isSaving, isSaved, isDirty, er
   )
 }
 
-// ── OperationalStatusCards ────────────────────────────────────────────────────
+// ── FounderSummaryCard ────────────────────────────────────────────────────────
 
-function OperationalStatusCards({ settings, dirty, activeMode }: {
-  settings: SettingsData; dirty: Record<string, boolean | number | string>; activeMode: ModeId | null
+function FounderSummaryCard({ activeMode, settings, dirty }: {
+  activeMode: ModeId | null
+  settings: SettingsData
+  dirty: Record<string, boolean | number | string>
 }) {
   const get = (grp: string, key: string): number => {
-    const k   = `${grp}.${key}`
+    const k = `${grp}.${key}`
     const raw = dirty[k] !== undefined ? dirty[k] : settings[grp]?.fields.find(f => f.key === key)?.value
     return Number(raw ?? 0)
   }
-  const strictness  = get('scanner', 'min_confidence')
-  const rrMin       = get('signals', 'min_rr_ratio')
-  const alertVolume = get('telegram', 'max_alerts_per_hour')
-  const mode        = activeMode ? OPERATING_MODES.find(m => m.id === activeMode) : null
+  const mode = activeMode ? OPERATING_MODES.find(m => m.id === activeMode) : null
+  const conf = get('scanner', 'min_confidence')
+  const rr   = get('signals', 'min_rr_ratio')
+  const riskPct = get('risk', 'max_portfolio_risk_pct')
 
-  const alertLabel = alertVolume <= 3 ? 'Minimal' : alertVolume <= 8 ? 'Low' : alertVolume <= 15 ? 'Medium' : 'High'
-  const alertColor = alertVolume <= 3 ? '#00d084' : alertVolume <= 8 ? '#3b82f6' : alertVolume <= 15 ? '#f59e0b' : '#f97316'
-  const strictPct  = Math.max(0, Math.min(100, ((strictness - 60) / 39) * 100))
-  const strictColor = strictness >= 85 ? '#00d084' : strictness >= 75 ? '#f59e0b' : '#ff3b5c'
-  const rrColor     = rrMin >= 3.0 ? '#00d084' : rrMin >= 2.0 ? '#f59e0b' : '#ff3b5c'
+  // Expected signals/day label
+  const freqLabel = mode
+    ? mode.frequency <= 1 ? '1–2 / day' : mode.frequency <= 2 ? '2–4 / day' : mode.frequency <= 3 ? '4–8 / day' : '8–15 / day'
+    : conf >= 87 ? '1–2 / day' : conf >= 80 ? '4–8 / day' : '8–15 / day'
+
+  // Quality label
+  const qualLabel = conf >= 87 ? 'Very High' : conf >= 80 ? 'High' : conf >= 75 ? 'Medium' : 'Lower'
+  const qualColor = conf >= 87 ? '#00d084' : conf >= 80 ? '#3b82f6' : conf >= 75 ? '#f59e0b' : '#ff3b5c'
+
+  // Risk label
+  const riskNum = mode?.riskLevel ?? (riskPct <= 0.01 ? 1 : riskPct <= 0.02 ? 2 : riskPct <= 0.03 ? 3 : 4)
+  const riskLabel = riskNum <= 1 ? 'Low' : riskNum <= 2 ? 'Moderate' : riskNum <= 3 ? 'Elevated' : 'High'
+  const riskColor = riskNum <= 1 ? '#00d084' : riskNum <= 2 ? '#3b82f6' : riskNum <= 3 ? '#f59e0b' : '#ff3b5c'
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-      <div className="glass-card rounded-xl p-4 border border-terminal-border/50">
-        <p className="text-[9px] text-terminal-muted/45 uppercase tracking-widest mb-2">Current Mode</p>
-        {mode ? (
-          <>
-            <div className="flex items-center gap-1.5 mb-0.5">
-              <span className="text-lg leading-none" style={{ color: mode.color }}>{mode.icon}</span>
-              <span className="text-sm font-semibold text-terminal-text">{mode.label}</span>
+    <div className="glass-card rounded-xl border border-terminal-border/50 px-5 py-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <p className="text-terminal-muted text-[10px] uppercase tracking-widest mb-0.5">Platform Behavior</p>
+          {mode ? (
+            <div className="flex items-center gap-2">
+              <span className="text-base leading-none" style={{ color: mode.color }}>{mode.icon}</span>
+              <span className="text-base font-semibold text-terminal-text">{mode.label}</span>
+              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full border" style={{ color: mode.color, borderColor: mode.color + '60', backgroundColor: mode.color + '18' }}>ACTIVE</span>
             </div>
-            <p className="text-[9px] text-terminal-muted/40">Active profile</p>
-          </>
-        ) : (
-          <>
-            <span className="text-sm font-semibold text-terminal-muted">Custom</span>
-            <p className="text-[9px] text-terminal-muted/40 mt-0.5">Manual configuration</p>
-          </>
-        )}
+          ) : (
+            <span className="text-base font-semibold text-terminal-text">Custom</span>
+          )}
+        </div>
+        <p className="text-[10px] text-terminal-muted/50 hidden sm:block">Understand your platform in &lt;5 seconds</p>
       </div>
-
-      <div className="glass-card rounded-xl p-4 border border-terminal-border/50">
-        <p className="text-[9px] text-terminal-muted/45 uppercase tracking-widest mb-2">Signal Strictness</p>
-        <div className="flex items-baseline gap-1 mb-1.5">
-          <span className="text-xl font-mono font-bold text-terminal-text">{strictness}</span>
-          <span className="text-[10px] text-terminal-muted/45">/ 99</span>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-terminal-bright/10 rounded-lg px-3 py-2.5">
+          <p className="text-[9px] text-terminal-muted/50 uppercase tracking-wider mb-1">Signals / Day</p>
+          <p className="text-sm font-mono font-bold text-terminal-text">{freqLabel}</p>
         </div>
-        <div className="h-1 rounded-full bg-terminal-bright/25 overflow-hidden">
-          <div className="h-full rounded-full transition-all" style={{ width: `${strictPct}%`, backgroundColor: strictColor }} />
+        <div className="bg-terminal-bright/10 rounded-lg px-3 py-2.5">
+          <p className="text-[9px] text-terminal-muted/50 uppercase tracking-wider mb-1">Signal Quality</p>
+          <p className="text-sm font-mono font-bold" style={{ color: qualColor }}>{qualLabel}</p>
+        </div>
+        <div className="bg-terminal-bright/10 rounded-lg px-3 py-2.5">
+          <p className="text-[9px] text-terminal-muted/50 uppercase tracking-wider mb-1">Risk Level</p>
+          <p className="text-sm font-mono font-bold" style={{ color: riskColor }}>{riskLabel}</p>
+        </div>
+        <div className="bg-terminal-bright/10 rounded-lg px-3 py-2.5">
+          <p className="text-[9px] text-terminal-muted/50 uppercase tracking-wider mb-1">Minimum R:R</p>
+          <p className="text-sm font-mono font-bold text-terminal-text">{rr.toFixed(1)}×</p>
         </div>
       </div>
+    </div>
+  )
+}
 
-      <div className="glass-card rounded-xl p-4 border border-terminal-border/50">
-        <p className="text-[9px] text-terminal-muted/45 uppercase tracking-widest mb-2">Min Risk / Reward</p>
-        <div className="flex items-baseline gap-0.5 mb-0.5">
-          <span className="text-xl font-mono font-bold" style={{ color: rrColor }}>{rrMin.toFixed(1)}</span>
-          <span className="text-sm font-mono" style={{ color: rrColor }}>×</span>
-        </div>
-        <p className="text-[9px] text-terminal-muted/40">
-          {rrMin >= 3.0 ? 'Institutional grade' : rrMin >= 2.0 ? 'Solid threshold' : 'Permissive — review'}
-        </p>
-      </div>
+// ── ActiveSettingsSummary ─────────────────────────────────────────────────────
 
-      <div className="glass-card rounded-xl p-4 border border-terminal-border/50">
-        <p className="text-[9px] text-terminal-muted/45 uppercase tracking-widest mb-2">Alert Volume</p>
-        <div className="flex items-baseline gap-1.5 mb-1">
-          <span className="text-xl font-mono font-bold text-terminal-text">{alertVolume}</span>
-          <span className="text-[10px] text-terminal-muted/45">/hr</span>
-        </div>
-        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border"
-          style={{ color: alertColor, borderColor: alertColor + '55', backgroundColor: alertColor + '18' }}>
-          {alertLabel}
-        </span>
+function ActiveSettingsSummary({ settings, dirty, activeMode }: {
+  settings: SettingsData
+  dirty: Record<string, boolean | number | string>
+  activeMode: ModeId | null
+}) {
+  const get = (grp: string, key: string) => {
+    const k = `${grp}.${key}`
+    return dirty[k] !== undefined ? dirty[k] : settings[grp]?.fields.find(f => f.key === key)?.value
+  }
+  const mode = activeMode ? OPERATING_MODES.find(m => m.id === activeMode) : null
+  const conf = get('scanner', 'min_confidence')
+  const rr   = get('signals', 'min_rr_ratio')
+  const rows = [
+    { label: 'Active Mode',          value: mode ? mode.label : 'Custom' },
+    { label: 'Confidence Threshold', value: conf != null ? `${conf}%` : '—' },
+    { label: 'Minimum R:R',          value: rr   != null ? `${Number(rr).toFixed(1)}×` : '—' },
+  ]
+  return (
+    <div className="glass-card rounded-xl border border-terminal-border/40 px-5 py-4">
+      <p className="text-[10px] text-terminal-muted/50 uppercase tracking-widest mb-3">Current Active Settings</p>
+      <div className="grid grid-cols-3 gap-4">
+        {rows.map(({ label, value }) => (
+          <div key={label}>
+            <p className="text-[9px] text-terminal-muted/45 uppercase tracking-wider mb-0.5">{label}</p>
+            <p className="text-sm font-mono font-semibold text-terminal-text">{String(value)}</p>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -539,11 +565,13 @@ export default function SettingsPage() {
   const [auditLog,     setAuditLog]     = useState<AuditEntry[]>([])
   const [auditGroup,   setAuditGroup]   = useState('all')
   const [auditLoading, setAuditLoading] = useState(false)
-  const [resetConfirm,   setResetConfirm]   = useState<string | null>(null)
-  const [saveWarnings,   setSaveWarnings]   = useState<Record<string, string[]>>({})
-  const [applyingMode,   setApplyingMode]   = useState<ModeId | null>(null)
-  const [activeMode,     setActiveMode]     = useState<ModeId | null>(null)
-  const [advancedOpen,   setAdvancedOpen]   = useState(false)
+  const [resetConfirm,        setResetConfirm]        = useState<string | null>(null)
+  const [saveWarnings,        setSaveWarnings]        = useState<Record<string, string[]>>({})
+  const [applyingMode,        setApplyingMode]        = useState<ModeId | null>(null)
+  const [activeMode,          setActiveMode]          = useState<ModeId | null>(null)
+  const [advancedOpen,        setAdvancedOpen]        = useState(false)
+  const [advancedPresetsOpen, setAdvancedPresetsOpen] = useState(false)
+  const [advancedControlsOpen, setAdvancedControlsOpen] = useState(false)
 
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
@@ -684,7 +712,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="space-y-5 animate-fade-in">
-        <h1 className="text-terminal-text text-xl font-semibold">Operator Control</h1>
+        <h1 className="text-terminal-text text-xl font-semibold">Founder Control Center</h1>
         <div className="glass-card rounded-lg p-10 text-center text-terminal-muted text-sm">Loading configuration…</div>
       </div>
     )
@@ -693,7 +721,7 @@ export default function SettingsPage() {
   if (fetchError) {
     return (
       <div className="space-y-5 animate-fade-in">
-        <h1 className="text-terminal-text text-xl font-semibold">Operator Control</h1>
+        <h1 className="text-terminal-text text-xl font-semibold">Founder Control Center</h1>
         <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-bear-default/5 border border-bear-default/20 text-bear-default text-xs">
           <AlertCircle size={13} />
           <span>Failed to load settings: {fetchError}</span>
@@ -702,6 +730,23 @@ export default function SettingsPage() {
       </div>
     )
   }
+
+  // ── Primary tactical controls (top 4) ─────────────────────────────────────
+
+  const primaryControlKeys = [
+    { group: 'scanner', key: 'min_confidence' },
+    { group: 'scanner', key: 'max_coins_per_run' },
+    { group: 'risk',    key: 'max_portfolio_risk_pct' },
+    { group: 'signals', key: 'min_rr_ratio' },
+  ]
+
+  const primaryControls = primaryControlKeys
+    .map(({ group: g, key: k }) => TACTICAL_CONTROLS.find(d => d.group === g && d.key === k))
+    .filter((d): d is TacticalControlDef => d !== undefined)
+
+  const advancedControls = TACTICAL_CONTROLS.filter(d =>
+    !primaryControls.some(p => p.group === d.group && p.key === d.key)
+  )
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -722,70 +767,96 @@ export default function SettingsPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-terminal-text text-xl font-semibold">Operator Control</h1>
-          <p className="text-terminal-muted text-sm mt-0.5">Tactical mission control · select a mode or tune individual controls</p>
+          <h1 className="text-terminal-text text-xl font-semibold">Founder Control Center</h1>
+          <p className="text-terminal-muted text-sm mt-0.5">One-click modes · key controls · advanced configuration</p>
         </div>
         <Settings2 size={20} className="text-terminal-muted/40 mt-0.5" />
       </div>
 
-      {/* Status cards */}
-      <OperationalStatusCards settings={settings} dirty={dirty} activeMode={activeMode} />
+      {/* Founder Summary Card */}
+      <FounderSummaryCard activeMode={activeMode} settings={settings} dirty={dirty} />
 
-      {/* ── Layer 1: Quick Modes ─────────────────────────────────────────── */}
+      {/* ── Operating Mode ───────────────────────────────────────────────── */}
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <span className="text-[9px] text-terminal-muted/40 uppercase tracking-widest font-mono">Layer 1</span>
-          <span className="h-px flex-1 bg-terminal-border/30" />
-          <span className="text-xs text-terminal-text font-semibold">Quick Modes</span>
-          <span className="h-px flex-1 bg-terminal-border/30" />
-          <span className="text-[9px] text-terminal-muted/35 font-mono">patches 5 groups instantly</span>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-3">
-          {OPERATING_MODES.map(mode => (
-            <ModeCard
-              key={mode.id}
-              mode={mode}
-              isActive={activeMode === mode.id}
-              isApplying={applyingMode === mode.id}
-              disabled={!!applyingMode}
-              onApply={applyMode}
-            />
+        <p className="text-terminal-text text-sm font-semibold">Operating Mode</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {OPERATING_MODES.filter(m => ['conservative', 'balanced', 'aggressive'].includes(m.id)).map(mode => (
+            <ModeCard key={mode.id} mode={mode} isActive={activeMode === mode.id}
+              isApplying={applyingMode === mode.id} disabled={!!applyingMode} onApply={applyMode} />
           ))}
+        </div>
+
+        {/* Advanced Presets accordion */}
+        <div className="border border-terminal-border/40 rounded-xl overflow-hidden">
+          <button type="button" onClick={() => setAdvancedPresetsOpen(v => !v)}
+            className="w-full flex items-center justify-between px-4 py-3 hover:bg-terminal-bright/5 transition-colors">
+            <span className="text-xs font-semibold text-terminal-muted">Advanced Presets</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] text-terminal-muted/40 font-mono hidden sm:block">Institutional · Sniper · Futures Tactical · Rotation Hunter</span>
+              <ChevronDown size={13} className={`text-terminal-muted/50 transition-transform ${advancedPresetsOpen ? 'rotate-180' : ''}`} />
+            </div>
+          </button>
+          {advancedPresetsOpen && (
+            <div className="border-t border-terminal-border/30 p-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {OPERATING_MODES.filter(m => !['conservative', 'balanced', 'aggressive'].includes(m.id)).map(mode => (
+                  <ModeCard key={mode.id} mode={mode} isActive={activeMode === mode.id}
+                    isApplying={applyingMode === mode.id} disabled={!!applyingMode} onApply={applyMode} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* ── Layer 2: Tactical Controls ───────────────────────────────────── */}
+      {/* ── Key Controls ─────────────────────────────────────────────────── */}
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <span className="text-[9px] text-terminal-muted/40 uppercase tracking-widest font-mono">Layer 2</span>
-          <span className="h-px flex-1 bg-terminal-border/30" />
-          <span className="text-xs text-terminal-text font-semibold">Tactical Controls</span>
-          <span className="h-px flex-1 bg-terminal-border/30" />
-          <span className="text-[9px] text-terminal-muted/35 font-mono">human-readable · auto-save</span>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-          {TACTICAL_CONTROLS.map(def => {
+        <p className="text-terminal-text text-sm font-semibold">Key Controls</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          {primaryControls.map(def => {
             const entry = getTacticalEntry(def.group, def.key)
             if (!entry) return null
-            const k     = `${def.group}.${def.key}`
+            const k = `${def.group}.${def.key}`
             const value = getTacticalValue(def.group, def.key)
             return (
-              <TacticalControlCard
-                key={k}
-                def={def}
-                entry={entry}
-                value={value}
-                isSaving={saving.has(k)}
-                isSaved={saved.has(k)}
-                isDirty={dirty[k] !== undefined}
-                error={errors[k]}
-                onChange={v => handleChange(entry, v)}
-                onSave={() => handleManualSave(entry)}
-              />
+              <TacticalControlCard key={k} def={def} entry={entry} value={value}
+                isSaving={saving.has(k)} isSaved={saved.has(k)}
+                isDirty={dirty[k] !== undefined} error={errors[k]}
+                onChange={v => handleChange(entry, v)} onSave={() => handleManualSave(entry)} />
             )
           })}
         </div>
+
+        {/* Advanced Settings accordion */}
+        <div className="border border-terminal-border/40 rounded-xl overflow-hidden">
+          <button type="button" onClick={() => setAdvancedControlsOpen(v => !v)}
+            className="w-full flex items-center justify-between px-4 py-3 hover:bg-terminal-bright/5 transition-colors">
+            <span className="text-xs font-semibold text-terminal-muted">Advanced Settings</span>
+            <ChevronDown size={13} className={`text-terminal-muted/50 transition-transform ${advancedControlsOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {advancedControlsOpen && (
+            <div className="border-t border-terminal-border/30 p-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                {advancedControls.map(def => {
+                  const entry = getTacticalEntry(def.group, def.key)
+                  if (!entry) return null
+                  const k = `${def.group}.${def.key}`
+                  const value = getTacticalValue(def.group, def.key)
+                  return (
+                    <TacticalControlCard key={k} def={def} entry={entry} value={value}
+                      isSaving={saving.has(k)} isSaved={saved.has(k)}
+                      isDirty={dirty[k] !== undefined} error={errors[k]}
+                      onChange={v => handleChange(entry, v)} onSave={() => handleManualSave(entry)} />
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Active Settings Summary */}
+      <ActiveSettingsSummary settings={settings} dirty={dirty} activeMode={activeMode} />
 
       {/* ── Layer 3: Advanced Infrastructure (accordion) ─────────────────── */}
       <div className="border border-terminal-border/50 rounded-xl overflow-hidden">
