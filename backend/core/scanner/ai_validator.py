@@ -195,9 +195,9 @@ def _build_prompt(
         )
         futures_section = f"""
 ═══ FUTURES INTELLIGENCE ════════════════════
-Funding rate:   {fd.funding_rate * 100:.4f}%  ({fd.funding_rate_annualized:.1f}% ann.)  |  Bias: {fd.funding_bias}
-OI 24h change:  {'+' if fd.oi_change_24h >= 0 else ''}{fd.oi_change_24h:.2f}%  |  Trend: {fd.oi_trend}
-L/S ratio:      {fd.long_short_ratio:.2f}  (Long {fd.long_account_percent:.1f}% / Short {fd.short_account_percent:.1f}%)
+Funding rate:   {fd.funding_rate * 100:.4f}%  ({fd.funding_rate_annualized:.1f}% ann.)  |  Bias: {fd.funding_bias}  |  Trend: {fd.funding_trend}
+OI 24h change:  {'+' if fd.oi_change_24h >= 0 else ''}{fd.oi_change_24h:.2f}%  |  Trend: {fd.oi_trend}  |  Interpretation: {fd.oi_interpretation}
+L/S ratio:      {fd.long_short_ratio:.2f}  (Long {fd.long_account_percent:.1f}% / Short {fd.short_account_percent:.1f}%)  |  Positioning: {fd.positioning_context}
 Momentum score: {fd.momentum_score}/100
 {bk_line}
 Pullback:       {'Yes — depth ' + str(tc.pullback_depth) + '× ATR  |  Holding key level: ' + str(tc.holding_key_level) + '  |  Cont. confidence: ' + str(tc.continuation_confidence) + '%' if tc.is_pullback else 'No pullback pattern'}
@@ -235,6 +235,7 @@ R:R:     1:{signal.rr_ratio:.2f}
 ═══ QUALITY METRICS ════════════════
 Trend strength score: {trend_strength:.0f}/100
 Volatility:           {volatility}
+Breakout:             {signal.breakout_type or "none"}
 Setup:                {signal.setup_description}
 
 ═══ REJECTION CRITERIA ═══════════
@@ -248,6 +249,9 @@ Reject (confidence < 80) if ANY of these apply:
 • MACD histogram direction conflicts with trade direction
 • Futures only: funding rate bias strongly against trade direction
 • Futures only: momentum score < 35
+• Futures only: OI Interpretation is SHORT_COVERING on BUY (weak rally) or LONG_LIQUIDATION on SELL (squeeze risk)
+• Futures only: Positioning is EXTREME_LONG on BUY or EXTREME_SHORT on SELL (crowd too crowded)
+• Futures only: Funding trend RISING with ELEVATED bias on BUY (crowding accelerating)
 
 Respond ONLY with valid JSON (no markdown):
 {{"confidence":<integer 0-100>,"validated":<boolean>,"reasoning":"<1-sentence verdict>","risks":["<risk>"],"strengths":["<strength>"],"trend":"<1-2 sentences on MTF trend>","momentum":"<1-2 sentences on RSI/MACD/volume>","volatility":"<1 sentence on ATR regime>","rationale":"<1 sentence on why this confidence level>","summary":"<one concise trade thesis>"}}"""
