@@ -448,5 +448,13 @@ function rowToSignal(row: Record<string, unknown>): TradingSignal {
     continuation:          contProb != null
       ? { continuationProbability: contProb, exhaustionRisk: 'low', momentumHealth: 'healthy', reasons: [] }
       : undefined,
+    // Phase 7.x intelligence pipeline
+    breakoutType:       row.breakout_type       as string | undefined ?? undefined,
+    breakoutStrength:   row.breakout_strength   as string | undefined ?? undefined,
+    oiInterpretation:   row.oi_interpretation   as string | undefined ?? undefined,
+    fundingTrend:       row.funding_trend        as string | undefined ?? undefined,
+    positioningContext: row.positioning_context  as string | undefined ?? undefined,
+    trendScore:         row.trend_score  != null ? Number(row.trend_score) : undefined,
+    sectorStatus:       row.sector_status        as string | undefined ?? undefined,
   };
 }

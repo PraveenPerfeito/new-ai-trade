@@ -181,6 +181,14 @@ export interface TradingSignal {
   entryQualityScore?:      number;
   extensionRisk?:          ExtensionRisk;
   pullbackQuality?:        PullbackQuality;
+  // Phase 7.x — intelligence pipeline
+  breakoutType?:           string;   // 20d_high | 30d_high | bb_expansion | ...
+  breakoutStrength?:       string;   // EARLY_BREAKOUT | CONFIRMED_BREAKOUT | HIGH_MOMENTUM_BREAKOUT
+  oiInterpretation?:       string;   // NEW_LONGS | NEW_SHORTS | SHORT_COVERING | LONG_LIQUIDATION | NEUTRAL
+  fundingTrend?:           string;   // RISING | FALLING | STABLE
+  positioningContext?:     string;   // EXTREME_LONG | LONG_HEAVY | BALANCED | SHORT_HEAVY | EXTREME_SHORT
+  trendScore?:             number;   // 0-100 TrendScore (TRENDING mode only)
+  sectorStatus?:           string;   // STRONGEST | ACCELERATING | NEUTRAL | WEAKENING | OVERCROWDED
 }
 
 export interface ScanRun {

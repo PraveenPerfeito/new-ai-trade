@@ -37,6 +37,51 @@ const MODE_COLORS: Record<string, string> = {
   trending:         'text-amber-400  border-amber-400/30  bg-amber-400/5',
 }
 
+// ─── Phase 7.x Intelligence Helpers ──────────────────────────────────────────
+
+function trendScoreTier(score: number): { label: string; cls: string } {
+  if (score >= 90) return { label: 'Elite',  cls: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30' }
+  if (score >= 80) return { label: 'Strong', cls: 'text-blue-400   bg-blue-400/10   border-blue-400/30' }
+  if (score >= 70) return { label: 'Good',   cls: 'text-amber-400  bg-amber-400/10  border-amber-400/30' }
+  return               { label: 'Weak',   cls: 'text-red-400    bg-red-400/10    border-red-400/30' }
+}
+
+const SECTOR_CLS: Record<string, string> = {
+  ACCELERATING: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30',
+  STRONGEST:    'text-blue-400   bg-blue-400/10   border-blue-400/30',
+  WEAKENING:    'text-amber-400  bg-amber-400/10  border-amber-400/30',
+  OVERCROWDED:  'text-red-400    bg-red-400/10    border-red-400/30',
+}
+
+const BREAKOUT_CLS: Record<string, string> = {
+  HIGH_MOMENTUM_BREAKOUT: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30',
+  CONFIRMED_BREAKOUT:     'text-blue-400   bg-blue-400/10   border-blue-400/30',
+  EARLY_BREAKOUT:         'text-amber-400  bg-amber-400/10  border-amber-400/30',
+}
+
+const OI_CLS: Record<string, string> = {
+  NEW_LONGS:        'text-emerald-400 bg-emerald-400/10 border-emerald-400/30',
+  NEW_SHORTS:       'text-red-400    bg-red-400/10    border-red-400/30',
+  SHORT_COVERING:   'text-amber-400  bg-amber-400/10  border-amber-400/30',
+  LONG_LIQUIDATION: 'text-orange-400 bg-orange-400/10 border-orange-400/30',
+}
+
+const POS_CLS: Record<string, string> = {
+  EXTREME_LONG:  'text-red-400    bg-red-400/10    border-red-400/30',
+  LONG_HEAVY:    'text-amber-400  bg-amber-400/10  border-amber-400/30',
+  SHORT_HEAVY:   'text-sky-400    bg-sky-400/10    border-sky-400/30',
+  EXTREME_SHORT: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30',
+}
+
+const FUND_CLS: Record<string, string> = {
+  RISING:  'text-red-400    bg-red-400/10    border-red-400/30',
+  FALLING: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30',
+}
+
+const FUND_ARROW: Record<string, string> = { RISING: '↗', FALLING: '↘' }
+
+const INTEL_CHIP = 'flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-mono font-semibold'
+
 // ─── Signal Card ──────────────────────────────────────────────────────────────
 
 function SignalCard({ sig }: { sig: TradingSignal }) {
@@ -153,6 +198,73 @@ function SignalCard({ sig }: { sig: TradingSignal }) {
               </div>
             )}
           </div>
+
+          {/* Phase 7.x Intelligence — shown when any intelligence field is present */}
+          {(sig.trendScore != null || sig.sectorStatus || sig.breakoutStrength ||
+            sig.oiInterpretation || sig.fundingTrend || sig.positioningContext) && (
+            <div className="px-4 sm:px-5 py-3 border-b border-terminal-border/20">
+              <p className="text-terminal-muted text-[10px] uppercase tracking-wider mb-2">
+                Intelligence
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+
+                {/* TrendScore */}
+                {sig.trendScore != null && (() => {
+                  const tier = trendScoreTier(sig.trendScore)
+                  return (
+                    <span className={`${INTEL_CHIP} ${tier.cls}`}>
+                      <span className="opacity-60">TS</span>
+                      {sig.trendScore.toFixed(0)}
+                      <span className="opacity-50">·</span>
+                      {tier.label}
+                    </span>
+                  )
+                })()}
+
+                {/* Sector */}
+                {sig.sectorStatus && sig.sectorStatus !== 'NEUTRAL' && (
+                  <span className={`${INTEL_CHIP} ${SECTOR_CLS[sig.sectorStatus] ?? 'text-terminal-muted border-terminal-border/30'}`}>
+                    🏛 {sig.sectorStatus}
+                  </span>
+                )}
+
+                {/* Breakout */}
+                {sig.breakoutStrength && (
+                  <span className={`${INTEL_CHIP} ${BREAKOUT_CLS[sig.breakoutStrength] ?? 'text-terminal-muted border-terminal-border/30'}`}>
+                    ⚡{' '}
+                    {sig.breakoutStrength.replace('_BREAKOUT', '').replace('HIGH_MOMENTUM', 'HI-MOM')}
+                    {sig.breakoutType && (
+                      <span className="opacity-50 ml-0.5">
+                        ({sig.breakoutType.split('+')[0].replace(/_/g, ' ')})
+                      </span>
+                    )}
+                  </span>
+                )}
+
+                {/* OI Interpretation */}
+                {sig.oiInterpretation && sig.oiInterpretation !== 'NEUTRAL' && (
+                  <span className={`${INTEL_CHIP} ${OI_CLS[sig.oiInterpretation] ?? 'text-terminal-muted border-terminal-border/30'}`}>
+                    OI: {sig.oiInterpretation.replace(/_/g, ' ')}
+                  </span>
+                )}
+
+                {/* Funding Trend */}
+                {sig.fundingTrend && sig.fundingTrend !== 'STABLE' && (
+                  <span className={`${INTEL_CHIP} ${FUND_CLS[sig.fundingTrend] ?? 'text-terminal-muted border-terminal-border/30'}`}>
+                    {FUND_ARROW[sig.fundingTrend]} FUND {sig.fundingTrend}
+                  </span>
+                )}
+
+                {/* Positioning */}
+                {sig.positioningContext && sig.positioningContext !== 'BALANCED' && (
+                  <span className={`${INTEL_CHIP} ${POS_CLS[sig.positioningContext] ?? 'text-terminal-muted border-terminal-border/30'}`}>
+                    {sig.positioningContext.replace(/_/g, ' ')}
+                  </span>
+                )}
+
+              </div>
+            </div>
+          )}
 
           {/* Futures Intelligence — only for futures/high_confidence */}
           {['futures', 'high_confidence'].includes(sig.scannerMode) && sig.futuresData && (
