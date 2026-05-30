@@ -29,6 +29,9 @@ import {
 } from './indicators';
 import { detectSetup, tradeLevels } from './scanner';
 import { sleep } from './utils';
+import { createLogger } from './logger';
+
+const log = createLogger('lib/backtest');
 
 // ─── 4h synthesis ─────────────────────────────────────────────────────────────
 
@@ -278,9 +281,9 @@ export async function runBacktest(
       const trades = await backtestCoin(coin, config);
       all.push(...trades);
       coinsRan.push(coin.symbol);
-      console.log(`[Backtest] ${coin.symbol}: ${trades.length} trades`);
+      log.info({ symbol: coin.symbol, trades: trades.length }, 'backtest coin done');
     } catch (err) {
-      console.error(`[Backtest] ${coin.symbol} error:`, err);
+      log.error({ symbol: coin.symbol, err }, 'backtest coin error');
     }
     await sleep(300); // Binance rate-limit courtesy delay
   }

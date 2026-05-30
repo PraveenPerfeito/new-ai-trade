@@ -20,6 +20,9 @@ import { runScan } from './scanner';
 import { ScannerMode, ScanResult } from '@/types';
 import { runStartupCheck } from './startup-check';
 import { startIntelligenceWorkers, preloadIntelligence } from './intelligence';
+import { createLogger } from './logger';
+
+const log = createLogger('lib/scheduler');
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -199,12 +202,10 @@ class ScanScheduler {
 
     if (this._consecutiveFailures >= PAUSE_AFTER_N) {
       this._pausedUntil = new Date(Date.now() + PAUSE_DURATION);
-      console.warn(
-        `[Scheduler] ${PAUSE_AFTER_N} consecutive failures — pausing until ${this._pausedUntil.toISOString()}`,
-      );
+      log.warn({ pausedUntil: this._pausedUntil.toISOString(), consecutiveFailures: this._consecutiveFailures }, 'scheduler paused after consecutive failures');
     } else {
       const delay = RETRY_DELAYS[Math.min(retryCount, RETRY_DELAYS.length - 1)];
-      console.log(`[Scheduler] Retrying mode:${mode} in ${delay / 1000}s (attempt ${retryCount + 1})`);
+      log.info({ mode, delayMs: delay, attempt: retryCount + 1 }, 'scheduler retry scheduled');
       setTimeout(() => void this._doScan(mode, 'retry', retryCount + 1), delay);
     }
   }
@@ -219,16 +220,16 @@ class ScanScheduler {
   private async _doScan(mode: ScannerMode, triggeredBy: ScanTrigger, retryCount = 0): Promise<void> {
     // User-initiated pause or emergency stop
     if (this._manualPaused) {
-      console.log('[Scheduler] Manually paused — skipping tick');
+      log.info('scheduler tick skipped — manually paused');
       return;
     }
     if (this._emergencyStop) {
-      console.log('[Scheduler] Emergency stop active — skipping tick');
+      log.info('scheduler tick skipped — emergency stop active');
       return;
     }
     // Error-recovery pause
     if (this._pausedUntil && Date.now() < this._pausedUntil.getTime()) {
-      console.log(`[Scheduler] Paused until ${this._pausedUntil.toISOString()}`);
+      log.info({ pausedUntil: this._pausedUntil.toISOString() }, 'scheduler tick skipped — error recovery pause');
       return;
     }
 
@@ -236,7 +237,7 @@ class ScanScheduler {
     if (triggeredBy !== 'retry') {
       const check = this.checkCanRun();
       if (!check.ok) {
-        console.warn('[Scheduler] Tick skipped:', check.reason);
+        log.warn({ reason: check.reason }, 'scheduler tick skipped — rate limit');
         return;
       }
     }
@@ -245,28 +246,25 @@ class ScanScheduler {
     if (!this.tryAcquireLock(triggeredBy)) {
       if (triggeredBy === 'scheduler' && !this._queuedMode) {
         this._queuedMode = mode;
-        console.log('[Scheduler] Lock held, queued mode:', mode);
+        log.info({ mode }, 'scheduler lock held — mode queued');
       }
       return;
     }
 
     const id = this.beginScan(mode, triggeredBy, retryCount);
-    console.log(`[Scheduler] Scan start — mode:${mode} trigger:${triggeredBy} retry:${retryCount}`);
+    log.info({ mode, triggeredBy, retryCount }, 'scheduler scan start');
 
     try {
       // Warm intelligence cache before scan so scanner reads fresh data
       await preloadIntelligence().catch((err) =>
-        console.warn('[Scheduler] Intelligence preload failed (non-fatal):', err),
+        log.warn({ err }, 'scheduler intelligence preload failed'),
       );
 
       const result = await runScan(mode);
       this.completeScan(id, result);
-      console.log(
-        `[Scheduler] Scan done — ${result.coinsScanned} coins, ` +
-        `${result.signals.length} signals, ${result.duration}ms`,
-      );
+      log.info({ coinsScanned: result.coinsScanned, signals: result.signals.length, durationMs: result.duration }, 'scheduler scan done');
     } catch (err) {
-      console.error(`[Scheduler] Scan failed (consec #${this._consecutiveFailures + 1}):`, err);
+      log.error({ err, consecutiveFailures: this._consecutiveFailures + 1 }, 'scheduler scan failed');
       this.failScan(id, err, mode, retryCount);
     } finally {
       this.releaseLock();
@@ -275,7 +273,7 @@ class ScanScheduler {
       if (this._queuedMode) {
         const queued     = this._queuedMode;
         this._queuedMode = null;
-        console.log('[Scheduler] Draining queue, mode:', queued);
+        log.info({ mode: queued }, 'scheduler draining queue');
         setTimeout(() => void this._doScan(queued, 'scheduler'), 2_000);
       }
     }
@@ -294,9 +292,7 @@ class ScanScheduler {
 
     this._started = true;
     this._reschedule();
-    console.log(
-      `[Scheduler] Started — mode:${this._config.mode} interval:${this._config.intervalMs / 1000}s`,
-    );
+    log.info({ mode: this._config.mode, intervalMs: this._config.intervalMs }, 'scheduler started');
   }
 
   stop(): void {
@@ -307,7 +303,7 @@ class ScanScheduler {
     this._started    = false;
     this._nextScanAt = null;
     this._queuedMode = null;
-    console.log('[Scheduler] Stopped');
+    log.info('scheduler stopped');
   }
 
   private _reschedule(): void {
@@ -347,18 +343,18 @@ class ScanScheduler {
 
   pause(): void {
     this._manualPaused = true;
-    console.log('[Scheduler] Manually paused');
+    log.info('scheduler manually paused');
   }
 
   resume(): void {
     this._manualPaused = false;
-    console.log('[Scheduler] Resumed');
+    log.info('scheduler resumed');
   }
 
   emergencyStop(): void {
     this._emergencyStop = true;
     this.stop();
-    console.warn('[Scheduler] Emergency stop activated');
+    log.warn('scheduler emergency stop activated');
   }
 
   reset(): void {
@@ -366,7 +362,7 @@ class ScanScheduler {
     this._manualPaused       = false;
     this._consecutiveFailures = 0;
     this._pausedUntil        = null;
-    console.log('[Scheduler] State reset');
+    log.info('scheduler state reset');
   }
 
   // ── Status ─────────────────────────────────────────────────────────────
