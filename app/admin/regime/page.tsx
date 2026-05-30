@@ -1,12 +1,14 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import {
   Target, RefreshCw, AlertTriangle,
   ArrowUpRight, ArrowDownRight, Minus,
   TrendingUp, TrendingDown, Activity,
+  CheckCircle2, Zap, X, ChevronRight,
 } from 'lucide-react'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
+import { adminApi } from '@/lib/admin-api'
 import type { MarketRegime } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -25,6 +27,12 @@ interface IntelligenceResponse {
   error?:     string
   regime:     RegimeData
   computedAt: string
+}
+
+interface LastApplied {
+  regime:      MarketRegime
+  profileName: string
+  appliedAt:   string   // ISO string
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -135,11 +143,196 @@ const SCANNER_PARAMS: Record<MarketRegime, { label: string; value: string }[]> =
   CAPITULATION:    [{ label: 'Min Confidence', value: '80%' }, { label: 'Preferred Modes', value: 'spot longs' },               { label: 'R:R Minimum', value: '2.0:1' }],
 }
 
+// ─── Regime Settings Map ──────────────────────────────────────────────────────
+
+interface RegimeSetting {
+  group: string
+  key:   string
+  value: number
+  label: string
+}
+
+interface RegimeSettingsEntry {
+  profileName:  string
+  description:  string
+  settings:     RegimeSetting[]
+}
+
+const REGIME_SETTINGS_MAP: Record<MarketRegime, RegimeSettingsEntry> = {
+  BULL_TREND: {
+    profileName: 'Aggressive',
+    description: 'Higher frequency · lower confidence · trending conditions',
+    settings: [
+      { group: 'scanner', key: 'min_confidence',    value: 72,  label: 'Min Confidence' },
+      { group: 'scanner', key: 'alert_confidence',  value: 78,  label: 'Alert Threshold' },
+      { group: 'scanner', key: 'max_coins_per_run', value: 100, label: 'Scan Coverage' },
+      { group: 'signals', key: 'min_rr_ratio',      value: 1.5, label: 'Min R:R' },
+    ],
+  },
+  BEAR_TREND: {
+    profileName: 'Conservative',
+    description: 'Strict quality gates · reduced signal volume',
+    settings: [
+      { group: 'scanner', key: 'min_confidence',    value: 87,  label: 'Min Confidence' },
+      { group: 'scanner', key: 'alert_confidence',  value: 92,  label: 'Alert Threshold' },
+      { group: 'scanner', key: 'max_coins_per_run', value: 50,  label: 'Scan Coverage' },
+      { group: 'signals', key: 'min_rr_ratio',      value: 2.5, label: 'Min R:R' },
+    ],
+  },
+  SIDEWAYS: {
+    profileName: 'Balanced',
+    description: 'Quality-focused · moderate frequency',
+    settings: [
+      { group: 'scanner', key: 'min_confidence',    value: 80,  label: 'Min Confidence' },
+      { group: 'scanner', key: 'alert_confidence',  value: 85,  label: 'Alert Threshold' },
+      { group: 'scanner', key: 'max_coins_per_run', value: 80,  label: 'Scan Coverage' },
+      { group: 'signals', key: 'min_rr_ratio',      value: 2.0, label: 'Min R:R' },
+    ],
+  },
+  HIGH_VOLATILITY: {
+    profileName: 'Conservative',
+    description: 'Strict RR · reduced exposure · ATR protection',
+    settings: [
+      { group: 'scanner', key: 'min_confidence',    value: 87,  label: 'Min Confidence' },
+      { group: 'scanner', key: 'alert_confidence',  value: 92,  label: 'Alert Threshold' },
+      { group: 'scanner', key: 'max_coins_per_run', value: 30,  label: 'Scan Coverage' },
+      { group: 'signals', key: 'min_rr_ratio',      value: 2.5, label: 'Min R:R' },
+    ],
+  },
+  EUPHORIA: {
+    profileName: 'Institutional',
+    description: 'Maximum selectivity · mean-reversion risk is high',
+    settings: [
+      { group: 'scanner', key: 'min_confidence',    value: 90,  label: 'Min Confidence' },
+      { group: 'scanner', key: 'alert_confidence',  value: 94,  label: 'Alert Threshold' },
+      { group: 'scanner', key: 'max_coins_per_run', value: 30,  label: 'Scan Coverage' },
+      { group: 'signals', key: 'min_rr_ratio',      value: 3.0, label: 'Min R:R' },
+    ],
+  },
+  CAPITULATION: {
+    profileName: 'Balanced',
+    description: 'Moderate confidence · capitulation reversal setups',
+    settings: [
+      { group: 'scanner', key: 'min_confidence',    value: 80,  label: 'Min Confidence' },
+      { group: 'scanner', key: 'alert_confidence',  value: 85,  label: 'Alert Threshold' },
+      { group: 'scanner', key: 'max_coins_per_run', value: 80,  label: 'Scan Coverage' },
+      { group: 'signals', key: 'min_rr_ratio',      value: 2.0, label: 'Min R:R' },
+    ],
+  },
+}
+
+const LS_KEY = 'regime_last_applied'
+
+function formatRelativeTime(isoString: string): string {
+  const diff = Date.now() - new Date(isoString).getTime()
+  const mins  = Math.floor(diff / 60_000)
+  const hours = Math.floor(diff / 3_600_000)
+  const days  = Math.floor(diff / 86_400_000)
+  if (mins < 1)   return 'just now'
+  if (mins < 60)  return `${mins}m ago`
+  if (hours < 24) return `${hours}h ago`
+  return `${days}d ago`
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function RegimePage() {
   const [data, setData]   = useState<IntelligenceResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // ── new state ──
+  const [applying,      setApplying]      = useState(false)
+  const [showPreview,   setShowPreview]   = useState(false)
+  const [applySuccess,  setApplySuccess]  = useState(false)
+  const [applyError,    setApplyError]    = useState<string | null>(null)
+  const [lastApplied,   setLastApplied]   = useState<LastApplied | null>(null)
+  const [currentSettings, setCurrentSettings] = useState<Record<string, Record<string, number>>>({})
+
+  // ── load lastApplied from localStorage on mount ──
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LS_KEY)
+      if (raw) setLastApplied(JSON.parse(raw) as LastApplied)
+    } catch {
+      // ignore malformed storage
+    }
+  }, [])
+
+  // ── auto-dismiss success toast ──
+  useEffect(() => {
+    if (!applySuccess) return
+    const timer = setTimeout(() => setApplySuccess(false), 3000)
+    return () => clearTimeout(timer)
+  }, [applySuccess])
+
+  // ── fetch current settings on mount ──
+  const fetchCurrentSettings = useCallback(async () => {
+    try {
+      const all = await adminApi.settings.all()
+      const scanner = all['scanner']?.fields ?? []
+      const signals = all['signals']?.fields ?? []
+
+      const scannerMap: Record<string, number> = {}
+      for (const f of scanner) {
+        if (['min_confidence', 'alert_confidence', 'max_coins_per_run'].includes(f.key)) {
+          scannerMap[f.key] = f.value as number
+        }
+      }
+
+      const signalsMap: Record<string, number> = {}
+      for (const f of signals) {
+        if (f.key === 'min_rr_ratio') {
+          signalsMap[f.key] = f.value as number
+        }
+      }
+
+      setCurrentSettings({ scanner: scannerMap, signals: signalsMap })
+    } catch {
+      // non-fatal — preview will just show "—" for current values
+    }
+  }, [])
+
+  useEffect(() => { void fetchCurrentSettings() }, [fetchCurrentSettings])
+
+  // ── apply regime settings ──
+  const handleApplyRegime = useCallback(async (regimeKey: MarketRegime) => {
+    const entry = REGIME_SETTINGS_MAP[regimeKey]
+    setApplying(true)
+    setApplyError(null)
+
+    try {
+      // Group settings by their group key
+      const byGroup = entry.settings.reduce<Record<string, Record<string, number>>>((acc, s) => {
+        if (!acc[s.group]) acc[s.group] = {}
+        acc[s.group][s.key] = s.value
+        return acc
+      }, {})
+
+      // Patch each group
+      await Promise.all(
+        Object.entries(byGroup).map(([group, fields]) =>
+          adminApi.settings.patch(group, fields as Record<string, unknown>)
+        )
+      )
+
+      const applied: LastApplied = {
+        regime:      regimeKey,
+        profileName: entry.profileName,
+        appliedAt:   new Date().toISOString(),
+      }
+      localStorage.setItem(LS_KEY, JSON.stringify(applied))
+      setLastApplied(applied)
+      setApplySuccess(true)
+      setShowPreview(false)
+
+      // Refresh current settings to reflect the new values
+      void fetchCurrentSettings()
+    } catch (err) {
+      setApplyError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setApplying(false)
+    }
+  }, [fetchCurrentSettings])
 
   const fetch_ = useCallback(async () => {
     try {
@@ -154,9 +347,15 @@ export default function RegimePage() {
 
   useAutoRefresh(fetch_, 30_000)
 
-  const regime = data?.regime
-  const meta   = regime ? REGIME_META[regime.regime] : null
-  const params = regime ? SCANNER_PARAMS[regime.regime] : null
+  const regime       = data?.regime
+  const meta         = regime ? REGIME_META[regime.regime] : null
+  const params       = regime ? SCANNER_PARAMS[regime.regime] : null
+  const regimeEntry  = regime ? REGIME_SETTINGS_MAP[regime.regime] : null
+
+  const isSynced =
+    lastApplied !== null &&
+    regime !== undefined &&
+    lastApplied.profileName === REGIME_SETTINGS_MAP[regime.regime]?.profileName
 
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
@@ -173,6 +372,14 @@ export default function RegimePage() {
         {data && <span className="text-xs text-zinc-600">Updated {new Date(data.computedAt).toLocaleTimeString()}</span>}
       </div>
 
+      {/* Success toast */}
+      {applySuccess && (
+        <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-green-900/30 border border-green-700/50 text-green-300 text-sm">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>Regime settings applied successfully.</span>
+        </div>
+      )}
+
       {error && (
         <div className="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0" /> {error}
@@ -185,8 +392,54 @@ export default function RegimePage() {
         </div>
       )}
 
-      {data && regime && meta && (
+      {data && regime && meta && regimeEntry && (
         <>
+          {/* Regime Status Card */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+            <div className="flex flex-wrap items-center gap-4 justify-between">
+              <div className="flex items-center gap-6">
+                <div>
+                  <div className="text-xs text-zinc-500 mb-1">Current Regime</div>
+                  <div className={`text-sm font-semibold ${meta.color}`}>{meta.label}</div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-zinc-600 hidden sm:block" />
+                <div>
+                  <div className="text-xs text-zinc-500 mb-1">Applied Profile</div>
+                  <div className="text-sm font-semibold text-white">
+                    {lastApplied?.profileName ?? 'Not applied'}
+                  </div>
+                </div>
+                {lastApplied && (
+                  <>
+                    <ChevronRight className="w-4 h-4 text-zinc-600 hidden sm:block" />
+                    <div>
+                      <div className="text-xs text-zinc-500 mb-1">Last Applied</div>
+                      <div className="text-sm text-zinc-300">
+                        {formatRelativeTime(lastApplied.appliedAt)}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div>
+                {lastApplied && isSynced && (
+                  <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border font-medium text-green-400 border-green-500/30 bg-green-500/10">
+                    <CheckCircle2 className="w-3 h-3" /> Synced
+                  </span>
+                )}
+                {lastApplied && !isSynced && (
+                  <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border font-medium text-amber-400 border-amber-500/30 bg-amber-500/10">
+                    <AlertTriangle className="w-3 h-3" /> Mismatch — apply {regimeEntry.profileName}
+                  </span>
+                )}
+                {!lastApplied && (
+                  <span className="text-xs text-zinc-600">No profile applied yet</span>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Regime Hero */}
           <div className={`rounded-xl border p-6 ${meta.bg} ${meta.border}`}>
             <div className="flex items-start justify-between gap-6">
@@ -226,6 +479,17 @@ export default function RegimePage() {
                   {regime.btcTrend4h}
                 </div>
               </div>
+            </div>
+
+            {/* Apply button row */}
+            <div className="mt-4 pt-4 border-t border-white/10 flex justify-end">
+              <button
+                onClick={() => { setApplyError(null); setShowPreview(true) }}
+                className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-mono font-medium transition-colors ${meta.color} ${meta.border} hover:bg-white/5`}
+              >
+                <Zap className="w-3.5 h-3.5" />
+                Apply {meta.label} Settings
+              </button>
             </div>
           </div>
 
@@ -288,6 +552,95 @@ export default function RegimePage() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Preview Modal */}
+      {showPreview && regime && meta && regimeEntry && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="glass-card rounded-xl border border-zinc-700 p-6 max-w-md w-full bg-zinc-900 shadow-2xl">
+            {/* Modal header */}
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h2 className="text-base font-semibold text-white">
+                  Apply {meta.label} Settings
+                </h2>
+                <div className="mt-0.5">
+                  <span className={`text-xs font-mono font-medium ${meta.color}`}>{regimeEntry.profileName}</span>
+                  <span className="text-xs text-zinc-500 ml-2">{regimeEntry.description}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPreview(false)}
+                className="text-zinc-500 hover:text-white transition-colors ml-4 shrink-0"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Changes table */}
+            <div className="rounded-lg border border-zinc-800 overflow-hidden mb-5">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-800 text-xs text-zinc-500 uppercase tracking-wider bg-zinc-800/40">
+                    <th className="text-left px-3 py-2">Setting</th>
+                    <th className="text-right px-3 py-2">Current</th>
+                    <th className="px-2 py-2" />
+                    <th className="text-right px-3 py-2">New</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800">
+                  {regimeEntry.settings.map((s) => {
+                    const current = currentSettings[s.group]?.[s.key]
+                    const currentStr = current !== undefined ? String(current) : '—'
+                    const newStr = String(s.value)
+                    const changed = current !== undefined && current !== s.value
+                    return (
+                      <tr key={`${s.group}.${s.key}`} className="bg-zinc-900">
+                        <td className="px-3 py-2 text-xs text-zinc-400">{s.label}</td>
+                        <td className="px-3 py-2 text-right font-mono text-xs text-zinc-500">{currentStr}</td>
+                        <td className="px-2 py-2 text-center">
+                          <ChevronRight className={`w-3 h-3 mx-auto ${changed ? 'text-amber-400' : 'text-zinc-700'}`} />
+                        </td>
+                        <td className={`px-3 py-2 text-right font-mono text-xs font-semibold ${changed ? meta.color : 'text-zinc-400'}`}>
+                          {newStr}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Error */}
+            {applyError && (
+              <div className="mb-4 p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-xs flex items-center gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {applyError}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex items-center gap-3 justify-end">
+              <button
+                onClick={() => setShowPreview(false)}
+                disabled={applying}
+                className="text-xs px-4 py-2 rounded-lg border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleApplyRegime(regime.regime)}
+                disabled={applying}
+                className={`inline-flex items-center gap-1.5 text-xs px-4 py-2 rounded-lg border font-semibold transition-colors disabled:opacity-60 ${meta.color} ${meta.border} hover:bg-white/5`}
+              >
+                {applying
+                  ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Applying…</>
+                  : <><Zap className="w-3.5 h-3.5" /> Apply Settings</>
+                }
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
