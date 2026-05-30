@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import {
   Crosshair, RefreshCw, AlertTriangle,
   CheckCircle2, Clock, Send, Zap, XCircle, TrendingUp,
@@ -127,10 +127,34 @@ function SignalCard({ sig }: { sig: TacticalSignalRow }) {
           {sig.confidence}%
         </span>
 
-        {/* R:R — hidden on small mobile */}
+        {/* R:R — sm+ */}
         <span className={`hidden sm:inline text-xs font-mono font-semibold shrink-0 ${sig.rrRatio >= 2 ? 'text-green-400' : sig.rrRatio >= 1.5 ? 'text-amber-400' : 'text-zinc-500'}`}>
           {fmt(sig.rrRatio, 1)}:1
         </span>
+
+        {/* Entry — md+ */}
+        <div className="hidden md:block shrink-0 w-[80px]">
+          <p className="text-[9px] text-zinc-600 uppercase tracking-wider">Entry</p>
+          <p className="text-xs font-mono text-zinc-300">${fmt(sig.entryPrice, sig.entryPrice < 1 ? 4 : 2)}</p>
+        </div>
+
+        {/* Target % — lg+ */}
+        <div className="hidden lg:block shrink-0 w-[48px]">
+          <p className="text-[9px] text-zinc-600 uppercase tracking-wider">Tgt</p>
+          <p className="text-xs font-mono font-semibold text-emerald-400">+{tpPct}%</p>
+        </div>
+
+        {/* Stop % — lg+ */}
+        <div className="hidden lg:block shrink-0 w-[44px]">
+          <p className="text-[9px] text-zinc-600 uppercase tracking-wider">SL</p>
+          <p className="text-xs font-mono font-semibold text-red-400">-{slPct}%</p>
+        </div>
+
+        {/* Combined tp/sl on md-lg only */}
+        <div className="hidden md:block lg:hidden shrink-0">
+          <p className="text-[10px] font-mono text-emerald-400">+{tpPct}%</p>
+          <p className="text-[10px] font-mono text-red-400">-{slPct}%</p>
+        </div>
 
         {/* Age + expand */}
         <div className="ml-auto flex items-center gap-1.5 shrink-0">
@@ -145,32 +169,38 @@ function SignalCard({ sig }: { sig: TacticalSignalRow }) {
       {open && (
         <div className="border-t border-zinc-800/60 px-4 py-3 space-y-3 bg-zinc-800/20">
 
-          {/* Trade levels */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          {/* Trade levels — shown on mobile/tablet only (desktop already has them in row) */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:hidden gap-2.5">
             <div>
               <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Entry</p>
               <p className="text-sm font-mono font-semibold text-white">${fmt(sig.entryPrice, sig.entryPrice < 1 ? 4 : 2)}</p>
             </div>
             <div>
               <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Target</p>
-              <p className="text-sm font-mono font-semibold text-emerald-400">
-                ${fmt(sig.targetPrice, sig.targetPrice < 1 ? 4 : 2)}
-              </p>
+              <p className="text-sm font-mono font-semibold text-emerald-400">${fmt(sig.targetPrice, sig.targetPrice < 1 ? 4 : 2)}</p>
               <p className="text-[9px] text-emerald-400/60 font-mono">+{tpPct}%</p>
             </div>
             <div>
-              <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Stop Loss</p>
-              <p className="text-sm font-mono font-semibold text-red-400">
-                ${fmt(sig.stopLoss, sig.stopLoss < 1 ? 4 : 2)}
-              </p>
+              <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Stop</p>
+              <p className="text-sm font-mono font-semibold text-red-400">${fmt(sig.stopLoss, sig.stopLoss < 1 ? 4 : 2)}</p>
               <p className="text-[9px] text-red-400/60 font-mono">-{slPct}%</p>
             </div>
             <div>
-              <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">R:R · Mode</p>
-              <p className={`text-sm font-mono font-semibold ${sig.rrRatio >= 2 ? 'text-green-400' : sig.rrRatio >= 1.5 ? 'text-amber-400' : 'text-zinc-400'}`}>
-                {fmt(sig.rrRatio, 1)}:1
-              </p>
-              <p className="text-[9px] text-zinc-500 font-mono">{sig.scannerMode} · {sig.timeframe}</p>
+              <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">R:R · TF</p>
+              <p className={`text-sm font-mono font-semibold ${sig.rrRatio >= 2 ? 'text-green-400' : sig.rrRatio >= 1.5 ? 'text-amber-400' : 'text-zinc-400'}`}>{fmt(sig.rrRatio, 1)}:1</p>
+              <p className="text-[9px] text-zinc-500 font-mono">{sig.timeframe}</p>
+            </div>
+          </div>
+
+          {/* Full trade detail on md+ (prices not shown in row) */}
+          <div className="hidden md:grid grid-cols-2 gap-2.5">
+            <div>
+              <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Target Price</p>
+              <p className="text-sm font-mono font-semibold text-emerald-400">${fmt(sig.targetPrice, sig.targetPrice < 1 ? 4 : 2)}</p>
+            </div>
+            <div>
+              <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Stop Price</p>
+              <p className="text-sm font-mono font-semibold text-red-400">${fmt(sig.stopLoss, sig.stopLoss < 1 ? 4 : 2)}</p>
             </div>
           </div>
 
@@ -214,9 +244,11 @@ export default function TacticalPage() {
   const [loading,    setLoading]    = useState(true)
   const [computedAt, setComputedAt] = useState<string | null>(null)
 
-  const [preset,     setPreset]     = useState<PresetId>('all')
-  const [typeFilter, setTypeFilter] = useState<'BUY' | 'SELL' | 'all'>('all')
-  const [modeFilter, setModeFilter] = useState<string>('all')
+  const [preset,      setPreset]      = useState<PresetId>('all')
+  const [typeFilter,  setTypeFilter]  = useState<'BUY' | 'SELL' | 'all'>('all')
+  const [modeFilter,  setModeFilter]  = useState<string>('all')
+  const [pageSize,    setPageSize]    = useState(50)
+  const [currentPage, setCurrentPage] = useState(1)
 
   const fetch_ = useCallback(async () => {
     try {
@@ -238,6 +270,9 @@ export default function TacticalPage() {
     acc[s.lifecycleStage] = (acc[s.lifecycleStage] ?? 0) + 1; return acc
   }, {})
 
+  // Reset to page 1 when filters change
+  useEffect(() => { setCurrentPage(1) }, [preset, typeFilter, modeFilter])
+
   const presetObj = PRESETS.find(p => p.id === preset)
   const signals   = allSignals.filter(s => {
     const stageOk = preset === 'all' ? true : presetObj?.stages.includes(s.lifecycleStage) ?? true
@@ -245,6 +280,9 @@ export default function TacticalPage() {
     const modeOk  = modeFilter === 'all' ? true : s.scannerMode === modeFilter
     return stageOk && typeOk && modeOk
   })
+
+  const totalPages       = Math.max(1, Math.ceil(signals.length / pageSize))
+  const paginatedSignals = signals.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 
   // Count per preset for badges
   const presetCounts = {
@@ -353,13 +391,66 @@ export default function TacticalPage() {
       {/* Signal cards */}
       {!loading && signals.length > 0 && (
         <div className="space-y-2">
-          {signals.map((sig, i) => <SignalCard key={sig.id ?? i} sig={sig} />)}
+          {paginatedSignals.map((sig, i) => <SignalCard key={sig.id ?? i} sig={sig} />)}
         </div>
       )}
 
       {!loading && signals.length === 0 && !error && (
         <div className="text-center py-16 text-zinc-500 text-sm">
           No signals match the current filters.
+        </div>
+      )}
+
+      {/* Pagination */}
+      {signals.length > 0 && (
+        <div className="flex items-center justify-between flex-wrap gap-3 pt-2 border-t border-zinc-800/50">
+          <div className="flex items-center gap-3">
+            <select
+              value={pageSize}
+              onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1) }}
+              className="text-xs bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-zinc-400 hover:border-zinc-600"
+            >
+              <option value={25}>25 / page</option>
+              <option value={50}>50 / page</option>
+              <option value={100}>100 / page</option>
+            </select>
+            <span className="text-xs text-zinc-600 font-mono">
+              {signals.length} signals · page {currentPage} of {totalPages}
+            </span>
+          </div>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="text-xs px-3 py-1.5 rounded border border-zinc-700 text-zinc-500 hover:text-zinc-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                ← Prev
+              </button>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const start   = Math.max(1, Math.min(currentPage - 2, totalPages - 4))
+                const pageNum = start + i
+                if (pageNum > totalPages) return null
+                return (
+                  <button key={pageNum} onClick={() => setCurrentPage(pageNum)}
+                    className={`text-xs w-8 py-1.5 rounded border transition-colors ${
+                      currentPage === pageNum
+                        ? 'bg-zinc-700 border-zinc-600 text-white'
+                        : 'border-zinc-700 text-zinc-500 hover:text-zinc-300'
+                    }`}>
+                    {pageNum}
+                  </button>
+                )
+              })}
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="text-xs px-3 py-1.5 rounded border border-zinc-700 text-zinc-500 hover:text-zinc-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                Next →
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
