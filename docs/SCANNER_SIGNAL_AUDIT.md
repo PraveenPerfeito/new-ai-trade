@@ -1,6 +1,6 @@
 # SignalEdge AI — Scanner & Signal Intelligence Audit
 
-**Date:** 2026-05-28  
+**Date:** 2026-05-30  
 **Scope:** Python scanner engine, signal pipeline, provider architecture, AI validation, futures/spot/trending logic  
 **Auditor:** Deep source-code analysis across 13 backend files  
 **Files analysed:** `orchestrator.py` · `signal_pipeline.py` · `indicators.py` · `market_structure.py` · `ai_validator.py` · `market_fetcher.py` · `risk.py` · `futures_intelligence.py` · `models.py` · `telegram_notifier.py` · `beat_schedule.py` · `market-data/manager.ts` · `intelligence/reader.ts`
@@ -9,17 +9,22 @@
 
 ## Resolution Status (Phase 7.3A & 7.4A — May 2026)
 
-**RESOLVED (10 items):**
-- ✅ **CMC trending endpoint** — Now using 5-source fusion + trend_score.py prioritization
-- ✅ **Double CMC quota consumption** — Python scanner now reads Redis intelligence cache; no direct CMC calls
-- ✅ **EMA200 unconverged** — 300 candles fetched; direction_reliable/bounce_reliable guards at 250/280
-- ✅ **Funding rate rejection** — Threshold raised to directional adverse > 0.007 (EXTREME only)
-- ✅ **Relative strength** — Now using 4h change vs BTC 4h (was 24h)
-- ✅ **Breakout detection** — breakout_intelligence.py added (20/30-day high/low detection)
-- ✅ **OI × price direction** — oi_intelligence.py replaces raw OI change (short-covering detection)
-- ✅ **Funding trend** — Last 3 readings stored; RISING/FALLING/STABLE classification
-- ✅ **Positioning intelligence** — positioning_intelligence.py for L/S crowd context
-- ✅ **AI_MIN_SETUP_SCORE** — Raised to 72 (was 70)
+**RESOLVED (15 items):**
+- ✅ **CMC trending endpoint** — Now using 5-source fusion + trend_score.py prioritization (Phase 7.3A)
+- ✅ **Double CMC quota consumption** — Python scanner now reads Redis intelligence cache; no direct CMC calls (Phase 7.3A)
+- ✅ **EMA200 unconverged** — 300 candles fetched; direction_reliable/bounce_reliable guards at 250/280 (Phase 7.3A)
+- ✅ **Funding rate rejection** — Threshold raised to directional adverse > 0.007 (EXTREME only) (Phase 7.3A)
+- ✅ **Relative strength** — Now using 4h change vs BTC 4h (was 24h) (Phase 7.3A)
+- ✅ **Breakout detection** — breakout_intelligence.py added (20/30-day high/low detection, all modes) (Phase 7.4A.1)
+- ✅ **OI × price direction** — oi_intelligence.py replaces raw OI change (NEW_LONGS/NEW_SHORTS/SHORT_COVERING/LONG_LIQUIDATION/NEUTRAL matrix) (Phase 7.4A.2)
+- ✅ **Funding trend** — Last 3 readings stored; RISING/FALLING/STABLE classification with multiplier (Phase 7.4A.4)
+- ✅ **Positioning intelligence** — positioning_intelligence.py for L/S crowd context (EXTREME_LONG/LONG_HEAVY/BALANCED/SHORT_HEAVY/EXTREME_SHORT) (Phase 7.4A.5)
+- ✅ **4h EMA200 guard** — candle_count_4h passed to detect_setup(); same convergence guards applied (Phase 7.4A.3)
+- ✅ **AI_MIN_SETUP_SCORE** — Raised to 72 (was 70) (Phase 7.4A)
+- ✅ **Signal Intelligence Persistence** — signals + signal_outcomes: +breakout_type, +breakout_strength, +oi_interpretation, +funding_trend, +positioning_context, +momentum_score, +trend_score, +sector_status (Phase 7.4A.6, 7.4A.7)
+- ✅ **Claude Institutional Context** — OI, funding trend, positioning, breakout context now in prompt; AI input completeness 62% → 85% (Phase 7.4A.6.2)
+- ✅ **Telegram Institutional Context** — Intel line, breakout line, sector status added to signal alerts (Phase 7.4A.6.4)
+- ✅ **Dashboard Intelligence Visibility** — /admin/signals expanded cards show TrendScore, Sector, Breakout, OI, Funding, Positioning (Phase 7.2B.0)
 
 **PENDING (recommend Phase 7.5):**
 - 🔶 Sector-based filtering (sector intelligence available but not gating signals)

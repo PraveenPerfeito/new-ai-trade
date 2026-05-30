@@ -9,7 +9,7 @@
 
 ## Status Note (Phase 7.3A & 7.4A)
 
-**April–May 2026:** Platform audit completed against v1.4. Phase 7.3A/7.4A introduced new intelligence modules (trending_universe, trend_score, oi_intelligence, breakout_intelligence, positioning_intelligence, etc.) but **did not modify admin dashboard UI**. This audit remains current and actionable. Key gaps (mobile usability, workflow friction, sidebar clarity) unchanged and recommended for Phase 7.5+.
+**May 2026:** Platform audit completed against v1.4–7.4A. Phase 7.3A/7.4A introduced new intelligence modules (trending_universe, trend_score, oi_intelligence, breakout_intelligence, positioning_intelligence, funding_trend, sector_status) and **added Intelligence section to expanded signal cards** showing TrendScore, Sector status, Breakout strength+type, OI interpretation, Funding trend, and Positioning context (Phase 7.2B.0). Other key gaps (mobile usability, workflow friction, sidebar clarity) unchanged and recommended for Phase 7.5+.
 
 ---
 

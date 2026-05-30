@@ -2,7 +2,7 @@
 
 **Version:** 1.2  
 **Status:** Live  
-**Last updated:** 2026-05-20
+**Last updated:** 2026-05-30
 
 ---
 
@@ -78,18 +78,20 @@ Retail traders cannot watch 100+ markets simultaneously. Manual scanning is slow
 
 ### 3.4 Futures Intelligence (Phase 7.3A & 7.4A)
 
-| ID | Requirement | Priority |
-|----|-------------|----------|
-| FI-01 | Fetch live directional funding rate per symbol (Binance premium index) | Must |
-| FI-02 | Directional funding context: FAVORABLE/NORMAL/ELEVATED/EXTREME (adverse_rate thresholds) | Must |
-| FI-03 | Fetch open-interest history (24h) and classify as RISING / FALLING / STABLE | Must |
-| FI-04 | OI × price direction intelligence: NEW_LONGS / NEW_SHORTS / SHORT_COVERING / LONG_LIQUIDATION / NEUTRAL | Must |
-| FI-05 | Funding rate trend (last 3 readings): RISING/FALLING/STABLE classification with multiplier adjustment | Must |
-| FI-06 | Detect liquidation zones from swing highs/lows and ATR levels | Must |
-| FI-07 | L/S positioning context: EXTREME_LONG/LONG_HEAVY/BALANCED/SHORT_HEAVY/EXTREME_SHORT (contrarian scoring) | Must |
-| FI-08 | Compute momentum score (0–100) with BTC/ETH/SOL priority bonus (+5) | Must |
-| FI-09 | Cache funding (5 min), OI (2 min), L/S ratio (5 min), funding trend (8h) per symbol | Must |
-| FI-10 | Non-fatal: proceed without futures data if Binance API unavailable | Must |
+| ID | Requirement | Priority | Status |
+|----|-------------|----------|--------|
+| FI-01 | Fetch live directional funding rate per symbol (Binance premium index) | Must | ✅ 7.3A |
+| FI-02 | Directional funding context: FAVORABLE/NORMAL/ELEVATED/EXTREME (adverse_rate thresholds) | Must | ✅ 7.3A |
+| FI-03 | Fetch open-interest history (24h) and classify as RISING / FALLING / STABLE | Must | ✅ 7.4A.2 |
+| FI-04 | OI × price direction intelligence: NEW_LONGS / NEW_SHORTS / SHORT_COVERING / LONG_LIQUIDATION / NEUTRAL | Must | ✅ 7.4A.2 |
+| FI-05 | Funding rate trend (last 3 readings): RISING/FALLING/STABLE classification with multiplier adjustment | Must | ✅ 7.4A.4 |
+| FI-06 | Detect liquidation zones from swing highs/lows and ATR levels | Must | ✅ 7.3A |
+| FI-07 | L/S positioning context: EXTREME_LONG/LONG_HEAVY/BALANCED/SHORT_HEAVY/EXTREME_SHORT (contrarian scoring) | Must | ✅ 7.4A.5 |
+| FI-08 | Compute momentum score (0–100) with BTC/ETH/SOL priority bonus (+5) | Must | ✅ 7.3A |
+| FI-09 | Cache funding (5 min), OI (2 min), L/S ratio (5 min), funding trend (8h) per symbol | Must | ✅ 7.4A.4 |
+| FI-10 | Non-fatal: proceed without futures data if Binance API unavailable | Must | ✅ 7.3A |
+| FI-11 | Breakout detection (20/30-day high/low with BB expansion) for ALL modes including SPOT | Must | ✅ 7.4A.1 |
+| FI-12 | 4h EMA200 convergence guard (direction_reliable ≥ 250c, bounce_reliable ≥ 280c) | Must | ✅ 7.4A.3 |
 
 ### 3.5 Auto-Scheduler
 

@@ -25,7 +25,7 @@ AI-powered crypto trading signal scanner (public brand: **SignalEdge AI**) built
 11. **Safety layer** — `backend/system_settings/safety.py` runs before every `patch_group()` write.
 12. **BTC regime cache** — `lib/market-regime.ts` classifies BULL_TREND/BEAR_TREND/SIDEWAYS/HIGH_VOLATILITY/EUPHORIA/CAPITULATION, 5-min module cache.
 13. **Continuation gate before AI** — continuationProbability < 25 rejects without AI tokens.
-14. **Institutional score** — `calcInstitutionalScore()`: AI 25% + grade 20% + trend 20% + quality 15% + vol 10% + RR 5% + futures 5% ± regimeAlignment, clamped [0, 100].
+14. **Institutional score** — `calcInstitutionalScore()`: AI 25% + grade 20% + trend 20% + quality 15% + vol 10% + RR 5% + futures 5% ± regimeAlignment, clamped [0, 100]. FuturesData now includes 5 Phase 7.4A fields: oi_interpretation, funding_trend, positioning_context, breakout_strength, momentum_score.
 15. **Signal lifecycle** — `computeSignalState()` → DEVELOPING/CONFIRMED/EXTENDED/COOLING/CORRECTING/INVALIDATED/EXPIRED.
 16. **Health server in Celery worker** — `backend/workers/health_server.py` starts HTTP server on `$PORT` at `worker_ready` signal so Railway health checks pass.
 17. **Scan Now routes to Python backend** — `app/api/scanner/run/route.ts` proxies to `${BACKEND_URL}/api/scanner/trigger` (not TypeScript scanner).
@@ -70,12 +70,17 @@ AI-powered crypto trading signal scanner (public brand: **SignalEdge AI**) built
 2. **OI Intelligence** — Replaces raw OI_change_24h. Price×OI matrix: NEW_LONGS, NEW_SHORTS, SHORT_COVERING, LONG_LIQUIDATION, NEUTRAL. Fixes bug where SHORT_COVERING rallies were incorrectly penalized.
 3. **4h EMA200 Guard** — `candle_count_4h` passed to `detect_setup()`. Same direction_reliable/bounce_reliable gates applied to 4h EMA200.
 4. **Funding Trend** — Last 3 funding readings stored in Redis (8-hour TTL). RISING/FALLING/STABLE classification. RISING → adverse × 1.3, FALLING → adverse × 0.7 before tier classification.
-5. **Positioning Intelligence** — L/S crowd context (EXTREME_LONG/LONG_HEAVY/BALANCED/SHORT_HEAVY/EXTREME_SHORT). Contrarian scoring: extremes penalized, opposite side rewarded. Replaces old 2-case check.
+5. **Positioning Intelligence** — L/S crowd context (EXTREME_LONG/LONG_HEAVY/BALANCED/SHORT_HEAVY/EXTREME_SHORT). Contrarian scoring: EXTREME_SHORT on BUY = +8, EXTREME_LONG on BUY = −8. Replaces old 2-case check.
 
 **New files:**
 - `backend/core/scanner/breakout_intelligence.py` — 20/30-day breakout detection
 - `backend/core/scanner/oi_intelligence.py` — OI × price direction matrix
 - `backend/core/scanner/positioning_intelligence.py` — L/S crowd positioning
+
+**Database migrations:**
+- `database/phase-7-4a-intelligence-migration.sql` — signals + signal_outcomes: +breakout_type, +breakout_strength, +oi_interpretation, +funding_trend, +positioning_context, +momentum_score, +trend_score
+- `database/phase-7-4a-6-3-migration.sql` — Signal model: +breakout_strength, +oi_interpretation, +funding_trend, +positioning_context
+- `database/phase-7-4a-7-2-migration.sql` — signals + signal_outcomes: +sector_status
 
 **Calibration updates:**
 - AI_MIN_SETUP_SCORE: 70 → 72
@@ -86,6 +91,30 @@ AI-powered crypto trading signal scanner (public brand: **SignalEdge AI**) built
 - MORNING/EVENING_STAR: body ratio 0.45 → 0.60
 - Futures symbol cache: 30 min → 60 min
 - Stablecoin prefix filter added (USD*, DAI*, BUSD*, USDE*)
+
+**Phase 7.4A.6 — Claude Institutional Context Upgrade:**
+- Claude prompt now receives OI interpretation, funding trend, positioning context, breakout type, rejection criteria
+- AI input completeness: 62% → 85%
+
+**Phase 7.4A.6.4 — Telegram Institutional Context Upgrade:**
+- Intel line: "OI: NEW LONGS · Pos: SHORT HEAVY · Fund: RISING ↗"
+- Breakout line: "Breakout: HIGH MOM (30d high)" in Technical section
+
+**Phase 7.4A.7.1 — TrendScore Signal Propagation:**
+- trend_score_map built from TrendingMeta in orchestrator
+- TrendScore flows: TrendingMeta → scan_coin() → Signal → signals table → signal_outcomes
+
+**Phase 7.4A.7.2 — Sector Intelligence Signal Propagation:**
+- sector_status_map built from SectorIntelligenceReport in orchestrator
+- sector_status flows: orchestrator → scan_coin() → Signal → DB → Claude → Telegram
+- Telegram: "Sector: 🚀 ACCELERATING" in Technical section
+- Claude: "Sector: ACCELERATING" in Quality Metrics section
+
+**Phase 7.2B.0 — Dashboard Intelligence Visibility:**
+- /admin/signals: Intelligence section added to every expanded signal card
+- Shows: TrendScore tier badge, Sector status, Breakout strength+type, OI interpretation, Funding trend, Positioning context
+- Color-coded: Elite/Strong/Good/Weak tiers for TrendScore
+- Mobile: flex-wrap chips, readable on all screen sizes
 
 **Current scanner config (tuned for production):**
 - **Spot:** min_mcap=$200M, min_vol=$20M, confidence≥80, max_coins=80
@@ -135,9 +164,9 @@ backend/core/scanner/   ← PRIMARY scanner (Python) — all new features here
   sector_intelligence.py← CMC sector states (STRONGEST/ACCELERATING/NEUTRAL/WEAKENING/OVERCROWDED)
   futures_funding.py    ← directional funding context (FAVORABLE/NORMAL/ELEVATED/EXTREME)
   ema_convergence.py    ← 250/280 candle guards for direction_reliable / bounce_reliable
-  breakout_intelligence.py← 20/30-day high/low detection; NONE/EARLY_BREAKOUT/CONFIRMED/HIGH_MOMENTUM
-  oi_intelligence.py    ← OI × price direction matrix (NEW_LONGS, NEW_SHORTS, SHORT_COVERING, LONG_LIQUIDATION, NEUTRAL)
-  positioning_intelligence.py← L/S crowd context (EXTREME_LONG/LONG_HEAVY/BALANCED/SHORT_HEAVY/EXTREME_SHORT); contrarian scoring
+  breakout_intelligence.py← 20/30-day high/low detection; detect_breakout_strength() returns EARLY_BREAKOUT(+5)/CONFIRMED_BREAKOUT(+8)/HIGH_MOMENTUM_BREAKOUT(+12); BB expansion after squeeze
+  oi_intelligence.py    ← OI × price direction matrix; classify_oi() → NEW_LONGS/NEW_SHORTS/SHORT_COVERING/LONG_LIQUIDATION/NEUTRAL; corrects inverted scoring
+  positioning_intelligence.py← L/S crowd context (EXTREME_LONG/LONG_HEAVY/BALANCED/SHORT_HEAVY/EXTREME_SHORT); contrarian scoring: EXTREME_SHORT on BUY = +8 pts
 
 backend/workers/
   celery_app.py         ← Celery factory + worker_ready signal starts health server

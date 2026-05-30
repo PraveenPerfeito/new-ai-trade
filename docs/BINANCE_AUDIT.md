@@ -1,7 +1,7 @@
 # SignalEdge AI — Binance Tactical Audit
 
-**Date:** 2026-05-30
-**Scope:** Complete Binance execution layer — 11 pipeline files, 51 numeric thresholds, 7 market-structure sub-gates
+**Date:** 2026-05-30  
+**Scope:** Complete Binance execution layer — 11 pipeline files, 51 numeric thresholds, 7 market-structure sub-gates  
 **Auditor:** Static analysis of `backend/core/scanner/`
 
 ---
@@ -9,13 +9,13 @@
 ## Resolution Status (Phase 7.3A & 7.4A — May 2026)
 
 **RESOLVED (7 items):**
-- ✅ **Candle count minimum** — Increased from 200 → 300 for 1h/4h; 250/280 convergence guards applied
-- ✅ **EMA200 convergence guards** — direction_reliable(≥250c) / bounce_reliable(≥280c) gates prevent false signals
-- ✅ **4h EMA200 guard** — candle_count_4h passed to detect_setup(); same guards applied
-- ✅ **Funding context tiers** — Directional funding (FAVORABLE/NORMAL/ELEVATED/EXTREME) replaces simple abs() check
-- ✅ **OI × price correlation** — oi_intelligence.py NEW_LONGS/NEW_SHORTS/SHORT_COVERING matrix (was missing)
-- ✅ **Funding trend detection** — Last 3 rates stored; RISING/FALLING/STABLE classification with multiplier
-- ✅ **Breakout detection** — 20/30-day high/low + BB expansion added (was missing for SPOT mode)
+- ✅ **Candle count minimum** — Increased from 200 → 300 for 1h/4h; 250/280 convergence guards applied (Phase 7.3A)
+- ✅ **EMA200 convergence guards** — direction_reliable(≥250c) / bounce_reliable(≥280c) gates prevent false signals (Phase 7.3A)
+- ✅ **4h EMA200 guard** — candle_count_4h passed to detect_setup(); same guards applied (Phase 7.4A.3)
+- ✅ **Funding context tiers** — Directional funding (FAVORABLE/NORMAL/ELEVATED/EXTREME) replaces simple abs() check (Phase 7.3A)
+- ✅ **OI × price correlation** — oi_intelligence.py NEW_LONGS/NEW_SHORTS/SHORT_COVERING/LONG_LIQUIDATION/NEUTRAL matrix; corrects inverted scoring (Phase 7.4A.2)
+- ✅ **Funding trend detection** — Last 3 rates stored in Redis (8h TTL); RISING/FALLING/STABLE classification with multiplier (Phase 7.4A.4)
+- ✅ **Breakout detection** — 20/30-day high/low + BB expansion; detect_breakout_strength() added for SPOT + FUTURES (Phase 7.4A.1)
 
 **PENDING (recommend Phase 7.5):**
 - 🔶 L/S ratio active gate (data fetched but not used in setup scoring)

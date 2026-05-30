@@ -15,16 +15,16 @@ AI-powered cryptocurrency trading signal scanner. Scans **200 coins** from CoinM
 3. **Trend strength** — EMA/MACD composite score (0–100)
 4. **Market structure** — 7 false-positive filters (doji, engulfing, fake breakout, wash trade, RSI divergence, overextension, S/R rejection)
 5. **Setup scoring** — multi-factor quality score including:
-   - EMA200 bounce detection (+15 pts, 4h/1h convergence guard)
+   - EMA200 bounce detection (+15 pts, 4h/1h convergence guard with ≥250 candles)
    - Bollinger Band squeeze detection (+15 pts) with expansion confirmation
    - Daily timeframe alignment (+12 pts)
    - 10 candlestick patterns: Hammer, Shooting Star, Morning/Evening Star, Three White Soldiers/Black Crows, Marubozu, Inverted Hammer, Hanging Man
    - Fresh EMA crossover (Golden/Death Cross within 5 candles) (+12 pts)
    - Relative strength vs BTC 4h (+10 pts)
-   - Breakout intelligence (20/30-day high detection) (+5 to +12 pts)
+   - Breakout intelligence — 20/30-day high/low detection with BB expansion, EARLY_BREAKOUT/CONFIRMED/HIGH_MOMENTUM scoring (+5 to +12 pts)
 6. **R:R ratio** — minimum 2:1 reward-to-risk
 7. **Risk engine** — grade A–F, quality score, safe leverage tiers
-8. **Futures intelligence** — directional funding rate, OI intelligence (price×OI matrix), L/S positioning, liquidation zones, funding trend (futures/high_confidence modes)
+8. **Futures intelligence** — directional funding rate with FAVORABLE/NORMAL/ELEVATED/EXTREME tiers, OI intelligence (NEW_LONGS/NEW_SHORTS/SHORT_COVERING/LONG_LIQUIDATION/NEUTRAL matrix), L/S positioning (EXTREME_LONG/LONG_HEAVY/BALANCED/SHORT_HEAVY/EXTREME_SHORT with contrarian scoring), funding trend (RISING/FALLING/STABLE with trend multiplier), liquidation zones (futures/high_confidence modes)
 9. **Continuation gate** — probability score (10–95), rejects low-momentum setups
 10. **Signal lifecycle** — DEVELOPING/CONFIRMED/EXTENDED/COOLING/CORRECTING/INVALIDATED/EXPIRED
 11. **Claude AI validation** — Haiku validates final signal with full context (can be disabled from dashboard to conserve credits)
@@ -258,7 +258,7 @@ RSI: 62  |  Vol: 2.3×  |  EMA200: above ✅
 The Claude AI validation step can be toggled from **Admin → Calibration** without redeploying:
 
 - **Disable**: scans use heuristic scoring only — zero API credits consumed
-- **Enable**: Claude validates each signal that passes all 10 prior gates
+- **Enable**: Claude validates each signal that passes all 11 prior gates
 - Setting persists through worker restarts (stored in PostgreSQL via settings service)
 
 ### Credit-saving mode (built-in)
