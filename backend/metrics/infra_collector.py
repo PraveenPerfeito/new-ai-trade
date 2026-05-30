@@ -58,7 +58,10 @@ async def _collect_once() -> None:
 
 async def _run_loop() -> None:
     while True:
-        await _collect_once()
+        try:
+            await _collect_once()
+        except Exception as exc:
+            log.warning("infra_collector_error", error=str(exc))
         await asyncio.sleep(_INTERVAL)
 
 
