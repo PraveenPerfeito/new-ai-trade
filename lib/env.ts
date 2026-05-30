@@ -48,8 +48,11 @@ const schema = z.object({
 
   // Shared secret between the Next.js proxy and the Python FastAPI backend.
   // Generate with: openssl rand -hex 32
-  // If unset, the Python backend accepts all proxied requests (fine for local dev).
-  ADMIN_SECRET: z.string().optional(),
+  // REQUIRED in production (enforced below). Optional in local dev.
+  // When set, must be ≥ 32 characters to prevent brute-force.
+  ADMIN_SECRET: z.string()
+    .min(32, 'ADMIN_SECRET must be at least 32 characters — generate with: openssl rand -hex 32')
+    .optional(),
 
   // Python backend base URL (used by the /api/admin/* proxy)
   BACKEND_URL: z.string().url().optional(),
