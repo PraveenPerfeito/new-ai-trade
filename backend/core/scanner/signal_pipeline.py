@@ -97,10 +97,12 @@ def detect_setup(
     candles_1d: "list[Candle]" = [],   # Phase 7.4A.1 — breakout detection
 ) -> SetupResult:
     """
-    Pre-AI setup quality score. Threshold 60 (was 65 — lowered to catch more signals).
+    Pre-AI setup quality score. Threshold 72 (aligned with AI_MIN_SETUP_SCORE — eliminates
+    the 60-72 dead zone where signals passed setup but were too weak to benefit from Claude).
     Incorporates EMA200 bounce, Bollinger Band squeeze, daily trend, and candlestick patterns.
     Phase 7.4A.1: breakout intelligence — 20/30-day high/low + BB expansion.
     Phase 7.4A.3: 4h EMA200 convergence guard — bounce +8 pts (≥280c), direction +3 pts (≥250c).
+    M6: pre_score clamped to 100 — perfect setups previously accumulated up to ~199.
     """
     score = 0
     reasons: list[str] = []
@@ -333,8 +335,9 @@ def detect_setup(
                 score_bonus=br.score_bonus,
             )
 
+    score = min(score, 100)   # M6: clamp — each bonus component is valid but they can sum above 100
     return SetupResult(
-        has_setup=score >= 60,
+        has_setup=score >= 72,   # M1: raised from 60 to match AI_MIN_SETUP_SCORE — eliminates dead zone
         description=". ".join(reasons),
         pre_score=score,
         breakout_type=_breakout_type,
