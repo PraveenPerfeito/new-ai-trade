@@ -302,9 +302,11 @@ def detect_setup(
                 f"Underperforming BTC by {abs(rel_strength):.1f}% — relative weakness on SELL"
             )
 
-    # ── Breakout intelligence (Phase 7.4A.1) ──────────────────────────────────
+    # ── Breakout intelligence (Phase 7.4A.1 / 7.4A.6.1) ─────────────────────
     # Detects 20/30-day high/low structural breakouts + BB expansion after squeeze.
-    # Requires real candle lists; silently skips if not provided.
+    # Phase 7.4A.6.1: breakout_type captured on SetupResult so scan_coin can
+    # attach it to the Signal for persistence in signals and signal_outcomes.
+    _breakout_type: str | None = None
     if candles_1h or candles_1d:
         from backend.core.scanner.breakout_intelligence import (  # noqa: PLC0415
             detect_breakout_strength,
@@ -315,6 +317,7 @@ def detect_setup(
         if br.detected:
             score += br.score_bonus
             reasons.append(br.details)
+            _breakout_type = br.breakout_type
             breakout_detections_total.labels(
                 breakout_type=br.breakout_type,
                 strength=br.strength.value,
@@ -332,6 +335,7 @@ def detect_setup(
         has_setup=score >= 60,
         description=". ".join(reasons),
         pre_score=score,
+        breakout_type=_breakout_type,
     )
 
 
@@ -534,6 +538,7 @@ async def scan_coin(
             risk_grade=risk.risk_grade,
             risk_warnings=risk.warnings,
             max_safe_leverage=risk.max_safe_leverage,
+            breakout_type=setup.breakout_type,   # Phase 7.4A.6.1
             position_size_multiplier=risk.position_size_multiplier,
             futures_data=futures_data,
         )

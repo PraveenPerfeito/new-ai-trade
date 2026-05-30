@@ -57,6 +57,13 @@ async def register_signal_outcome(signal: Signal) -> str | None:
         except Exception:
             pass
 
+    # Extract Phase 7.4A.x intelligence fields from futures_data (Phase 7.4A.6.1)
+    fd = signal.futures_data
+    oi_interpretation   = fd.oi_interpretation.value      if fd else None
+    funding_trend       = fd.funding_trend.value          if fd else None
+    positioning_context = fd.positioning_context.value    if fd else None
+    momentum_score      = fd.momentum_score               if fd else None
+
     try:
         row = await pool.fetchrow(
             """
@@ -64,8 +71,14 @@ async def register_signal_outcome(signal: Signal) -> str | None:
                 signal_id, symbol, signal_type, timeframe, scanner_mode,
                 entry_price, target_price, stop_loss, rr_ratio,
                 confidence, ai_validated,
-                volatility_regime, risk_grade, risk_score, quality_score
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+                volatility_regime, risk_grade, risk_score, quality_score,
+                breakout_type, oi_interpretation, funding_trend,
+                positioning_context, momentum_score, trend_score
+            ) VALUES (
+                $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
+                $12,$13,$14,$15,
+                $16,$17,$18,$19,$20,$21
+            )
             ON CONFLICT (signal_id) DO NOTHING
             RETURNING id::text
             """,
@@ -84,6 +97,12 @@ async def register_signal_outcome(signal: Signal) -> str | None:
             signal.risk_grade.value if signal.risk_grade else None,
             signal.risk_score,
             signal.quality_score,
+            signal.breakout_type,      # Phase 7.4A.6.1
+            oi_interpretation,          # Phase 7.4A.6.1
+            funding_trend,              # Phase 7.4A.6.1
+            positioning_context,        # Phase 7.4A.6.1
+            momentum_score,             # Phase 7.4A.6.1
+            signal.trend_score,         # Phase 7.4A.6.1 (NULL until 7.4A.6.2)
         )
         return row["id"] if row else None
     except Exception as exc:

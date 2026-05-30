@@ -277,9 +277,10 @@ class TradeLevels(BaseModel):
 
 
 class SetupResult(BaseModel):
-    has_setup:   bool
-    description: str
-    pre_score:   int
+    has_setup:    bool
+    description:  str
+    pre_score:    int
+    breakout_type: str | None = None  # Phase 7.4A.6.1 — from detect_breakout_strength()
 
 
 class AIExplainability(BaseModel):
@@ -328,6 +329,8 @@ class Signal(BaseModel):
     telegram_sent:           bool = False
     scan_run_id:             str | None = None
     id:                      str | None = None
+    breakout_type:           str | None = None   # Phase 7.4A.6.1 — 20d_high/30d_high/bb_expansion
+    trend_score:             float | None = None  # Phase 7.4A.6.1 — from TrendScore (TRENDING mode)
 
 
 # ── Scan orchestration models ─────────────────────────────────────────────────
