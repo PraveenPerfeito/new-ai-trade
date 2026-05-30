@@ -276,79 +276,89 @@ export default function CacheIntelligencePage() {
 
           {/* Cache Groups */}
           <div>
-            <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Cache Groups</h2>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[9px] text-zinc-500 uppercase tracking-widest">Cache Groups</p>
+              <span className="text-[10px] text-zinc-600 font-mono">
+                {telemetry.groups.filter(g => !g.isStale).length}/{telemetry.groups.length} fresh
+              </span>
+            </div>
             <div className="space-y-2">
               {telemetry.groups.map((group) => (
                 <div
                   key={group.name}
-                  className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex items-center gap-4"
+                  className={`bg-zinc-900 border rounded-xl px-4 py-3 transition-colors ${
+                    group.isStale ? 'border-orange-500/25' : 'border-zinc-800'
+                  }`}
                 >
-                  <div className="text-zinc-400">{GROUP_ICONS[group.name]}</div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-white">{group.label}</span>
-                      <span className={`text-xs px-1.5 py-0.5 rounded ${
-                        group.isStale
-                          ? 'bg-orange-900/40 text-orange-400 border border-orange-800'
-                          : 'bg-green-900/40 text-green-400 border border-green-800'
-                      }`}>
-                        {group.isStale ? 'STALE' : 'FRESH'}
-                      </span>
+                  <div className="flex items-center gap-3">
+                    {/* Icon + name */}
+                    <div className={`shrink-0 ${group.isStale ? 'text-orange-400' : 'text-zinc-400'}`}>
+                      {GROUP_ICONS[group.name]}
                     </div>
-                    <div className="text-xs text-zinc-500 mt-0.5">
-                      TTL {formatTtl(group.ttlMs)} · Age {formatAge(group.ageSeconds)} · Last {formatTs(group.lastRefreshedAt)}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-medium text-white">{group.label}</span>
+                        <span className={`text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded border ${
+                          group.isStale
+                            ? 'text-orange-400 bg-orange-900/30 border-orange-700/40'
+                            : 'text-green-400 bg-green-900/30 border-green-700/40'
+                        }`}>
+                          {group.isStale ? 'STALE' : 'FRESH'}
+                        </span>
+                        <span className="text-[9px] text-zinc-600 hidden sm:inline font-mono">
+                          Age {formatAge(group.ageSeconds)} · TTL {formatTtl(group.ttlMs)}
+                        </span>
+                      </div>
+                      {/* Hit rate bar */}
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1 rounded-full bg-zinc-800 overflow-hidden max-w-[120px]">
+                          <div className="h-full rounded-full" style={{
+                            width: `${group.hitRate}%`,
+                            backgroundColor: group.hitRate >= 80 ? '#22c55e' : group.hitRate >= 50 ? '#f59e0b' : '#ef4444',
+                          }} />
+                        </div>
+                        <span className={`text-[10px] font-mono font-semibold ${
+                          group.hitRate >= 80 ? 'text-green-400' : group.hitRate >= 50 ? 'text-amber-400' : 'text-red-400'
+                        }`}>{group.hitRate}%</span>
+                        <span className="text-[9px] text-zinc-600 hidden sm:inline">{group.hitCount}H / {group.missCount}M</span>
+                      </div>
                     </div>
+                    {/* Refresh button */}
+                    <button
+                      onClick={() => refreshGroup(group.name)}
+                      disabled={refreshingGroup === group.name}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-[10px] text-zinc-400 transition-colors shrink-0 font-mono"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${refreshingGroup === group.name ? 'animate-spin' : ''}`} />
+                      <span className="hidden sm:inline">Refresh</span>
+                    </button>
                   </div>
-
-                  <div className="text-right shrink-0">
-                    <div className="text-sm text-white font-medium">{group.hitRate}%</div>
-                    <div className="text-xs text-zinc-500">{group.hitCount}H / {group.missCount}M</div>
-                  </div>
-
-                  <button
-                    onClick={() => refreshGroup(group.name)}
-                    disabled={refreshingGroup === group.name}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-xs text-zinc-300 transition-colors shrink-0"
-                  >
-                    <RefreshCw className={`w-3 h-3 ${refreshingGroup === group.name ? 'animate-spin' : ''}`} />
-                    Refresh
-                  </button>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Workers */}
+          {/* Workers — compact, shown only if errors present or space permits */}
           {telemetry.workers.length > 0 && (
             <div>
-              <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Background Workers</h2>
-              <div className="bg-zinc-900 border border-zinc-800 rounded-xl divide-y divide-zinc-800">
+              <p className="text-[9px] text-zinc-600 uppercase tracking-widest mb-2">Background Workers</p>
+              <div className="space-y-1.5">
                 {telemetry.workers.map((w) => (
-                  <div key={w.name} className="flex items-center gap-4 p-3">
-                    <Activity className={`w-4 h-4 shrink-0 ${workerStateColor(w.state)}`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-zinc-200 font-mono">{w.name}</span>
-                        <span className={`text-xs capitalize ${workerStateColor(w.state)}`}>{w.state}</span>
-                      </div>
-                      {w.lastError && (
-                        <div className="text-xs text-red-400 truncate mt-0.5">{w.lastError}</div>
-                      )}
-                    </div>
-                    <div className="text-right text-xs text-zinc-500 shrink-0">
-                      <div>Every {formatTtl(w.intervalMs)} · {w.tickCount} ticks</div>
-                      <div className="flex items-center gap-1 justify-end mt-0.5">
-                        <Clock className="w-3 h-3" />
-                        Next {formatTs(w.nextTickAt)}
-                      </div>
-                    </div>
+                  <div key={w.name} className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 flex items-center gap-3">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                      w.state === 'running' ? 'bg-blue-400 animate-pulse' :
+                      w.state === 'error'   ? 'bg-red-400 animate-pulse' :
+                      w.state === 'stopped' ? 'bg-zinc-600' : 'bg-green-400'
+                    }`} />
+                    <span className="text-xs font-mono text-zinc-300 flex-1 min-w-0 truncate">{w.name}</span>
+                    <span className={`text-[10px] hidden sm:block ${workerStateColor(w.state)}`}>{w.state}</span>
+                    <span className="text-[9px] text-zinc-600 font-mono hidden sm:block">
+                      {w.tickCount} ticks · next {formatTs(w.nextTickAt)}
+                    </span>
                     {w.errorCount > 0 && (
-                      <div className="shrink-0">
-                        <span className="text-xs text-red-400 bg-red-900/30 border border-red-800 px-2 py-0.5 rounded">
-                          {w.errorCount} err{w.errorCount > 1 ? 's' : ''}
-                        </span>
-                      </div>
+                      <span className="text-[10px] text-red-400 bg-red-900/20 border border-red-800/40 px-1.5 py-0.5 rounded shrink-0">
+                        {w.errorCount} err
+                      </span>
                     )}
                   </div>
                 ))}

@@ -46,23 +46,28 @@ export default function SystemPage() {
         <p className="text-terminal-muted text-sm mt-1">Service status · Database · Redis · API connectivity</p>
       </div>
 
-      {/* Overall status banner */}
+      {/* Overall status banner — primary health, above fold */}
       {!hl && health && (
-        <div className={`rounded-lg px-5 py-3 border flex items-center gap-3 ${
+        <div className={`rounded-xl px-5 py-4 border flex items-center gap-4 ${
           health.status === 'ready'
             ? 'bg-bull-default/5 border-bull-default/20'
             : 'bg-bear-default/5 border-bear-default/20'
         }`}>
-          <span className={`w-2 h-2 rounded-full ${health.status === 'ready' ? 'bg-bull-default animate-pulse-slow' : 'bg-bear-default animate-pulse'}`} />
-          <span className={`font-mono font-bold text-sm uppercase ${health.status === 'ready' ? 'text-bull-default' : 'text-bear-default'}`}>
-            System {health.status}
-          </span>
+          <span className={`w-3 h-3 rounded-full shrink-0 ${health.status === 'ready' ? 'bg-bull-default animate-pulse-slow' : 'bg-bear-default animate-pulse'}`} />
+          <div>
+            <span className={`font-mono font-bold text-base uppercase ${health.status === 'ready' ? 'text-bull-default' : 'text-bear-default'}`}>
+              System {health.status}
+            </span>
+            <p className="text-xs text-terminal-muted/60 mt-0.5">
+              {health.status === 'ready' ? 'All services operating normally' : 'One or more services degraded — check below'}
+            </p>
+          </div>
         </div>
       )}
 
-      {/* Service grid */}
+      {/* Primary: Service grid */}
       <div>
-        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Service Status</p>
+        <p className="text-[9px] text-terminal-muted/50 uppercase tracking-widest mb-2.5">Service Status</p>
         {hl ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-12 rounded-lg" />)}
@@ -82,9 +87,9 @@ export default function SystemPage() {
         )}
       </div>
 
-      {/* Operational metrics */}
+      {/* Secondary: Operational metrics */}
       <div>
-        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Operational Metrics (24h)</p>
+        <p className="text-[9px] text-terminal-muted/50 uppercase tracking-widest mb-2.5">Operational Metrics · 24h</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <MetricCard
             label="Total Scans"
@@ -121,32 +126,10 @@ export default function SystemPage() {
         </div>
       </div>
 
-      {/* Stack reference */}
-      <div>
-        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">System Stack</p>
-        <div className="glass-card rounded-lg overflow-hidden">
-          <table className="w-full text-xs">
-            <tbody>
-              {[
-                ['Backend',   'Python 3.12 + FastAPI + asyncpg'],
-                ['Database',  'PostgreSQL via asyncpg connection pool'],
-                ['Cache',     'Redis (ioredis + aioredis)'],
-                ['Queue',     'Celery + Redis broker'],
-                ['Scheduler', 'Celery Beat (cron-based)'],
-                ['Frontend',  'Next.js 14 App Router + Tailwind CSS'],
-                ['AI',        'Anthropic Claude Haiku (haiku-4-5)'],
-                ['Exchange',  'Binance REST API (spot + futures)'],
-                ['Monitoring','Prometheus + alertmanager'],
-              ].map(([layer, detail]) => (
-                <tr key={layer} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
-                  <td className="py-2.5 px-4 text-terminal-muted text-xs uppercase tracking-wider w-28">{layer}</td>
-                  <td className="py-2.5 px-4 font-mono text-terminal-text text-xs">{detail}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* Diagnostics section label */}
+      <p className="text-[9px] text-terminal-muted/40 uppercase tracking-widest flex items-center gap-2">
+        <span className="h-px flex-1 bg-terminal-border/30" />Diagnostics<span className="h-px flex-1 bg-terminal-border/30" />
+      </p>
     </div>
   )
 }
