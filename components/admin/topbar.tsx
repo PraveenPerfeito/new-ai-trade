@@ -5,6 +5,7 @@ import { AlertOctagon, AlertTriangle, CheckCircle, RefreshCw, Clock } from 'luci
 import { adminApi, BurninStatus } from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
 import { SessionBadge } from './session-badge'
+import Link from 'next/link'
 
 interface Props {
   email:      string
@@ -45,20 +46,22 @@ export function AdminTopbar({ email, lastSignIn }: Props) {
 
       <div className="h-4 w-px bg-terminal-border shrink-0" />
 
-      {/* Anomaly status */}
+      {/* Anomaly status — clickable, links to Anomaly Action Center */}
       {critical > 0 ? (
-        <div className="flex items-center gap-1.5 text-bear-default">
-          <AlertOctagon size={13} />
-          <span>{critical} CRITICAL</span>
-        </div>
+        <Link href="/admin/anomalies"
+          className="flex items-center gap-1.5 text-bear-default hover:text-bear-default/80 px-2 py-0.5 rounded border border-bear-default/30 bg-bear-default/5 transition-colors">
+          <AlertOctagon size={12} className="animate-pulse" />
+          <span className="font-semibold">{critical} CRITICAL</span>
+        </Link>
       ) : warnings > 0 ? (
-        <div className="flex items-center gap-1.5 text-signal-high">
-          <AlertTriangle size={13} />
+        <Link href="/admin/anomalies"
+          className="flex items-center gap-1.5 text-signal-high hover:text-signal-high/80 px-2 py-0.5 rounded border border-signal-high/30 bg-signal-high/5 transition-colors">
+          <AlertTriangle size={12} />
           <span>{warnings} WARN</span>
-        </div>
+        </Link>
       ) : (
-        <div className="flex items-center gap-1.5 text-terminal-muted/60">
-          <CheckCircle size={13} />
+        <div className="flex items-center gap-1.5 text-terminal-muted/50">
+          <CheckCircle size={12} />
           <span>CLEAN</span>
         </div>
       )}

@@ -156,8 +156,32 @@ function SignalCard({ sig }: { sig: TacticalSignalRow }) {
           <p className="text-[10px] font-mono text-red-400">-{slPct}%</p>
         </div>
 
+        {/* Intelligence mini-strip — fills gap on lg+ */}
+        <div className="hidden lg:flex items-center gap-1 flex-1 min-w-0 overflow-hidden mx-1">
+          {(sig as any).breakoutStrength && (
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-emerald-500/20 bg-emerald-500/5 text-emerald-400/70 whitespace-nowrap shrink-0">
+              ⚡ {((sig as any).breakoutStrength as string).replace('_BREAKOUT','').replace('HIGH_MOMENTUM','HI-MOM')}
+            </span>
+          )}
+          {(sig as any).oiInterpretation && (sig as any).oiInterpretation !== 'NEUTRAL' && (
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-zinc-700/50 text-zinc-600 whitespace-nowrap shrink-0">
+              {((sig as any).oiInterpretation as string).replace(/_/g,' ')}
+            </span>
+          )}
+          {(sig as any).sectorStatus && !['NEUTRAL','BALANCED'].includes((sig as any).sectorStatus) && (
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-zinc-700/50 text-zinc-600 whitespace-nowrap shrink-0">
+              🏛 {(sig as any).sectorStatus}
+            </span>
+          )}
+          {(sig as any).trendScore != null && (
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border border-zinc-700/40 text-zinc-700 whitespace-nowrap shrink-0">
+              TS {((sig as any).trendScore as number).toFixed(0)}
+            </span>
+          )}
+        </div>
+
         {/* Age + expand */}
-        <div className="ml-auto flex items-center gap-1.5 shrink-0">
+        <div className="ml-auto lg:ml-0 flex items-center gap-1.5 shrink-0">
           <span className="text-[10px] text-zinc-600 tabular-nums">{timeAgo(sig.createdAt)}</span>
           {open
             ? <ChevronUp className="w-3.5 h-3.5 text-zinc-600" />
