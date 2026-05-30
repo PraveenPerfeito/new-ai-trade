@@ -116,6 +116,69 @@ AI-powered crypto trading signal scanner (public brand: **SignalEdge AI**) built
 - Color-coded: Elite/Strong/Good/Weak tiers for TrendScore
 - Mobile: flex-wrap chips, readable on all screen sizes
 
+---
+
+## Phase 7.2B — Founder Settings & Operations Simplification (May 2026)
+
+Complete redesign of admin dashboard for founder operational clarity and workflow efficiency.
+
+### Phase 7.2B.1 — Founder Settings Simplification
+- `/admin/settings` redesigned as "Founder Control Center"
+- 3 primary modes: Conservative / Balanced / Aggressive
+- Advanced Presets accordion: Institutional / Sniper / Futures Tactical / Rotation Hunter
+- FounderSummaryCard: signals/day, quality, risk, min R:R
+- 4 key controls: Signal Quality, Signal Frequency, Risk Level, Min RR
+- Advanced Settings accordion for remaining controls
+- ActiveSettingsSummary panel
+
+### Phase 7.2B.2 — Provider Operations Simplification
+- `/admin/providers` redesigned as "Operations Dashboard"
+- ProviderStatusBoard: 3 compact cards (CMC/Binance/CoinGecko)
+- OperationsSummary: 5 cells (Primary/Execution/Fallback/Quota/Failovers)
+- QuotaBurnForecast: Safe/Moderate/High + days remaining
+- CompactProviderCard: collapsed by default (~56px), Details expands
+
+### Phase 7.2B.3 — Regime Workflow Automation
+- `/admin/regime`: Apply Regime Settings button added
+- Preview modal shows current → new values before applying
+- 6 regime mappings: BULL_TREND→Aggressive, BEAR_TREND→Conservative, etc.
+- Regime vs Applied Profile mismatch indicator
+- Last Applied timestamp (localStorage)
+- applyMode() calls adminApi.settings.patch()
+
+### Phase 7.2B.4 — Anomalies Action Center
+- `/admin/anomalies` redesigned as "Anomaly Action Center"
+- 4 action buttons per anomaly: Acknowledge, Mute (15m/1h/24h), Resolve, Detail
+- State machine: NEW → ACKNOWLEDGED → MUTED → RESOLVED
+- Detail drawer: source, provider, suggested action
+- 4-tile Active Issues summary (Critical/Warning/Info/Muted)
+- State persisted in localStorage
+
+### Phase 7.2B.5 — Founder Navigation Cleanup
+- Sidebar restructured into 4 groups:
+  - TRADING DESK: Overview, Signals, Tactical, Settings
+  - MARKET: Intelligence, Regime, Sectors
+  - OPERATIONS: Scanner, Anomalies, Providers, Cache, System
+  - REVIEW: Analytics, Calibration
+- Brand renamed to "SignalEdge"
+- Quick Actions footer: Signals, Scanner links
+
+### Phase 7.2B.6 — Dashboard UX Updates
+- **Overview (6.1)**: Scanner + Regime as hero row (3:2 split); Metric tiles: Sent Today, TP Hit, SL Hit, Providers Up
+- **Signals (6.2)**: Expanded card: Trade / Technical / AI / Intelligence / Futures sections
+- **Tactical (6.3)**: Table replaced with card-based rows; colored left accent bar per stage; preset buttons with live counts
+- **Market (6.4)**: Hero regime card, compact breadth bar, 6 trending coins
+- **Sectors (6.4)**: Category cards with STRONGEST/ACCELERATING/WEAKENING/OVERCROWDED badges
+- **Analytics & Calibration (6.5)**: 3 section dividers (Current State/Performance/Historical); Confidence tiers as 2×2 cards; Confidence bands as progress bar rows
+- **Cache & System (6.6)**: Hit-rate progress bars, fresh/stale count, compact workers; larger status banner, System Stack table removed
+
+### Phase 7.2B.7 — Production Readiness Audit
+- Overall score: 7.4/10
+- 2 BLOCKERS: .env.local git exposure risk, ADMIN_SECRET optional
+- 5 HIGH PRIORITY: console.log, Celery timeout, beat expiry, infra_collector exception loop, no per-minute Anthropic rate limit
+- 6 MEDIUM PRIORITY: setup/AI threshold mismatch, fire-and-forget logging, hardcoded refresh intervals, ATR floor, rejection persistence, score clamp
+- CONDITIONAL GO for production (see `docs/PRODUCTION_READINESS_AUDIT.md`)
+
 **Current scanner config (tuned for production):**
 - **Spot:** min_mcap=$200M, min_vol=$20M, confidence≥80, max_coins=80
 - **Futures:** min_mcap=$1B, min_vol=$200M, confidence≥82, max_coins=50

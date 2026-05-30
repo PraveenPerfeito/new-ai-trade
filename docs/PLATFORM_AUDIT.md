@@ -7,9 +7,34 @@
 
 ---
 
-## Status Note (Phase 7.3A & 7.4A)
+## Status Note (Phase 7.2B — May 2026)
 
-**May 2026:** Platform audit completed against v1.4–7.4A. Phase 7.3A/7.4A introduced new intelligence modules (trending_universe, trend_score, oi_intelligence, breakout_intelligence, positioning_intelligence, funding_trend, sector_status) and **added Intelligence section to expanded signal cards** showing TrendScore, Sector status, Breakout strength+type, OI interpretation, Funding trend, and Positioning context (Phase 7.2B.0). Other key gaps (mobile usability, workflow friction, sidebar clarity) unchanged and recommended for Phase 7.5+.
+**May 2026 Update:** Platform audit completed against v1.4–7.4A + Phase 7.2B. Major resolution:
+
+**RESOLVED (Phase 7.2B.1–7.2B.7):**
+- ✅ Settings page → "Founder Control Center" with 3 primary modes + Advanced Presets (Issue #2, #7, #17)
+- ✅ Providers page → "Operations Dashboard" with CompactProviderCard + QuotaBurnForecast (Issue #1, #13, #16)
+- ✅ Regime page → "Apply Regime Settings" button with preview modal (Issue #11, #13)
+- ✅ Anomalies page → "Anomaly Action Center" with state machine + action buttons (Issue #1, #12, #15)
+- ✅ Sidebar restructured into 4 groups (TRADING DESK/MARKET/OPERATIONS/REVIEW) (Issue #1, #5)
+- ✅ /admin/signals Intelligence section (TrendScore, Sector, Breakout, OI, Funding, Positioning) (Issue #9)
+- ✅ Signals/Tactical density: Desktop columns (Entry md+, Target% lg+, Stop% lg+), pagination (Issue #2, #6)
+- ✅ Topbar alerts: "3 CRITICAL / WARN" clickable to /admin/anomalies (Issue #4)
+- ✅ Production Readiness Audit completed (7.4/10, CONDITIONAL GO)
+
+**REMAINING GAPS (Phase 7.5 recommended):**
+- 🔶 Scan Now auto-redirect to Signals (Issue #1) — workflow friction
+- 🔶 Emergency Pause button on Overview (Issue #2) — operational safety
+- 🔶 Mobile unusability (9-column Tactical, Signals card stacking) (Issues #3, #6, #7, #10–20)
+- 🔶 CMC quota burn forecast & unified warning (Issue #4) — quota visibility
+- 🔶 Edge analytics progress count (Issue #3) — warmup feedback
+- 🔶 Setting impact preview before save (Issue #6) — blind iteration
+- 🔶 Live next-scan countdown (Issue #1, #14, #17)
+- 🔶 Provider health on Overview strip (Issue #5, #8)
+- 🔶 Mode performance comparison (Issue #4, #9)
+- 🔶 Confirmation after Daily Report send (Issue #5, #19)
+
+All 15 TOP 20 Issues from original audit are now: 7 RESOLVED (Phase 7.2B), 8 PENDING (Phase 7.5)
 
 ---
 

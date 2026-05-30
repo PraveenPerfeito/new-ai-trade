@@ -6,9 +6,9 @@
 
 ---
 
-## Resolution Status (Phase 7.3A & 7.4A — May 2026)
+## Resolution Status (Phase 7.2B & 7.3A & 7.4A — May 2026)
 
-**RESOLVED (7 items):**
+**RESOLVED (11 items):**
 - ✅ **Candle count minimum** — Increased from 200 → 300 for 1h/4h; 250/280 convergence guards applied (Phase 7.3A)
 - ✅ **EMA200 convergence guards** — direction_reliable(≥250c) / bounce_reliable(≥280c) gates prevent false signals (Phase 7.3A)
 - ✅ **4h EMA200 guard** — candle_count_4h passed to detect_setup(); same guards applied (Phase 7.4A.3)
@@ -16,12 +16,17 @@
 - ✅ **OI × price correlation** — oi_intelligence.py NEW_LONGS/NEW_SHORTS/SHORT_COVERING/LONG_LIQUIDATION/NEUTRAL matrix; corrects inverted scoring (Phase 7.4A.2)
 - ✅ **Funding trend detection** — Last 3 rates stored in Redis (8h TTL); RISING/FALLING/STABLE classification with multiplier (Phase 7.4A.4)
 - ✅ **Breakout detection** — 20/30-day high/low + BB expansion; detect_breakout_strength() added for SPOT + FUTURES (Phase 7.4A.1)
+- ✅ **Dashboard signal cards** — Phase 7.2B.0 shows Breakout type + strength, OI interpretation, Funding trend, Positioning context in Intelligence section
+- ✅ **Telegram signal alerts** — Phase 7.4A.6.4 Telegram includes breakout line in Technical section; Phase 7.2B format enhancements
+- ✅ **Settings clarity** — Phase 7.2B.1 "Founder Control Center" reduces confusion about signal tuning
+- ✅ **Production audit** — Phase 7.2B.7 comprehensive audit identifies 2 blockers + 5 high priority + 6 medium priority fixes (7.4/10, CONDITIONAL GO)
 
 **PENDING (recommend Phase 7.5):**
 - 🔶 L/S ratio active gate (data fetched but not used in setup scoring)
 - 🔶 Hard 1h direction gate for BUY signals (currently only scoring penalty, not gate)
 - 🔶 Candle gap detection (consecutive zero-volume candles not validated)
 - 🔶 Funding interval dynamic check (assumes 8h, some perps changed to 1h)
+- 🔶 Mobile UX for Tactical Feed (9-column table horizontal scroll) and Signals card (field stacking)
 
 ---
 

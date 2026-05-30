@@ -7,9 +7,9 @@
 
 ---
 
-## Resolution Status (Phase 7.3A & 7.4A — May 2026)
+## Resolution Status (Phase 7.2B & 7.3A & 7.4A — May 2026)
 
-**RESOLVED (15 items):**
+**RESOLVED (19 items):**
 - ✅ **CMC trending endpoint** — Now using 5-source fusion + trend_score.py prioritization (Phase 7.3A)
 - ✅ **Double CMC quota consumption** — Python scanner now reads Redis intelligence cache; no direct CMC calls (Phase 7.3A)
 - ✅ **EMA200 unconverged** — 300 candles fetched; direction_reliable/bounce_reliable guards at 250/280 (Phase 7.3A)
@@ -25,12 +25,17 @@
 - ✅ **Claude Institutional Context** — OI, funding trend, positioning, breakout context now in prompt; AI input completeness 62% → 85% (Phase 7.4A.6.2)
 - ✅ **Telegram Institutional Context** — Intel line, breakout line, sector status added to signal alerts (Phase 7.4A.6.4)
 - ✅ **Dashboard Intelligence Visibility** — /admin/signals expanded cards show TrendScore, Sector, Breakout, OI, Funding, Positioning (Phase 7.2B.0)
+- ✅ **Settings UX clarity** — "Founder Control Center" with 3 primary modes + Advanced Presets (Phase 7.2B.1)
+- ✅ **Provider operations** — "Operations Dashboard" with CompactProviderCard + QuotaBurnForecast (Phase 7.2B.2)
+- ✅ **Regime automation** — "Apply Regime Settings" button with preview modal (Phase 7.2B.3)
+- ✅ **Anomaly actions** — "Anomaly Action Center" with state machine + 4 action buttons (Phase 7.2B.4)
 
 **PENDING (recommend Phase 7.5):**
 - 🔶 Sector-based filtering (sector intelligence available but not gating signals)
 - 🔶 15m timeframe for TRENDING mode (15m klines fetched; not fully integrated)
 - 🔶 CMC→Binance symbol mapping table (MATIC/POLUSDT edge case)
 - 🔶 Candle gap detection (zero-volume consecutive candles)
+- 🔶 Scan Now auto-redirect + mobile UX (Tactical 9-column, Signals card stacking) — 8 additional UX items deferred to Phase 7.5
 
 ---
 

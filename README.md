@@ -55,24 +55,24 @@ AI-powered cryptocurrency trading signal scanner. Scans **200 coins** from CoinM
 | `high_confidence` | $2B | $500M | 87% | 30 |
 | `trending` | $50M | $10M | 78% | 80 |
 
-### Admin Command Center
+### Admin Command Center (Phase 7.2B UX Redesign)
 
 | Page | Path | Description |
 |------|------|-------------|
-| Command Overview | `/admin/overview` | Scanner status, regime card, signal metrics, recent signals |
-| Market Intelligence | `/admin/market` | BTC regime, global metrics, market breadth, trending assets |
+| Command Overview | `/admin/overview` | Scanner status, regime card, signal metrics, recent signals, live next-scan countdown |
+| Market Intelligence | `/admin/market` | Hero regime card, compact breadth bar, 6 trending coins |
 | Scanner Control | `/admin/scanner` | Start/stop/pause/resume/e-stop · mode & interval · rejection diagnostics |
-| Signals | `/admin/signals` | Live signal feed with lifecycle, tactical fields, edge stats |
-| Tactical Feed | `/admin/tactical` | Signal lifecycle table — filter by stage, type, mode |
-| Sector Rotation | `/admin/sectors` | CMC ecosystem categories + coin-derived breadth |
-| Regime Intelligence | `/admin/regime` | RSI gauge, trading implication, recommended params |
-| Calibration | `/admin/calibration` | **Claude AI on/off toggle** · verdict distribution · confidence bands |
-| Edge Analytics | `/admin/analytics` | Win rate, expectancy, profit factor, Sharpe — per symbol/mode/grade |
-| Providers | `/admin/providers` | Data source health (CMC, Binance, CoinGecko fallback) |
-| Cache Operations | `/admin/cache` | CMC quota guard, intelligence cache freshness |
-| System Health | `/admin/system` | Process health, uptime, memory |
-| Diagnostics | `/admin/anomalies` | Scanner anomaly log |
-| Settings | `/admin/settings` | System settings with safety layer |
+| Signals (Intelligence Visibility) | `/admin/signals` | Live signal feed with **Intelligence section** (TrendScore, Sector, Breakout, OI, Funding, Positioning) |
+| Tactical Feed | `/admin/tactical` | Signal lifecycle — colored accent bars per stage, preset filter buttons, responsive cards |
+| Sector Rotation | `/admin/sectors` | Category cards with STRONGEST/ACCELERATING/WEAKENING/OVERCROWDED badges |
+| Regime Intelligence | `/admin/regime` | RSI gauge, trading implication, **Apply Regime Settings button**, preview modal |
+| Calibration | `/admin/calibration` | **Claude AI on/off toggle** · verdict distribution · confidence bands (3 sections) |
+| Edge Analytics | `/admin/analytics` | Win rate, expectancy, profit factor, Sharpe — overflow-x-auto, secondary columns hidden mobile |
+| Founder Control Center | `/admin/settings` | 3 primary modes (Conservative/Balanced/Aggressive), Advanced Presets, 4 key controls, Active Settings Summary |
+| Operations Dashboard | `/admin/providers` | ProviderStatusBoard (CMC/Binance/CoinGecko), QuotaBurnForecast, CompactProviderCard (collapsed ~56px) |
+| Cache & System Operations | `/admin/cache` · `/admin/system` | Hit-rate progress bars, fresh/stale count, compact workers; larger status banner |
+| Anomaly Action Center | `/admin/anomalies` | 4 action buttons (Acknowledge/Mute/Resolve/Detail), state machine, 4-tile Active Issues summary |
+| (Sidebar restructured) | — | TRADING DESK / MARKET / OPERATIONS / REVIEW groups, "SignalEdge" brand |
 
 ---
 
@@ -279,6 +279,29 @@ The Claude AI validation step can be toggled from **Admin → Calibration** with
 
 - Free tier: 5 req/min → retries add ~30s per scan
 - Tier 1 ($5 actual spend at console.anthropic.com): 50 req/min → instant validation
+
+---
+
+## Phase 7.2B — Founder Settings & Operations Simplification (May 2026)
+
+Redesigned admin dashboard for maximum operational clarity:
+
+### UX Refinements (7.2B.1 – 7.2B.6.6)
+- **Settings** → "Founder Control Center": 3 primary modes (Conservative/Balanced/Aggressive) + Advanced Presets (Institutional/Sniper/Futures Tactical/Rotation Hunter)
+- **Providers** → "Operations Dashboard": CMC/Binance/CoinGecko status cards, QuotaBurnForecast (Safe/Moderate/High), OperationsSummary (5 cells)
+- **Regime page**: "Apply Regime Settings" button with preview modal; 6 regime → mode mappings
+- **Anomalies** → "Anomaly Action Center": NEW/ACKNOWLEDGED/MUTED/RESOLVED state machine; 4 action buttons per anomaly; 4-tile summary
+- **Sidebar reorganized**: TRADING DESK (Overview/Signals/Tactical/Settings) · MARKET (Intelligence/Regime/Sectors) · OPERATIONS (Scanner/Anomalies/Providers/Cache/System) · REVIEW (Analytics/Calibration)
+- **Signals card intelligence**: Phase 7.2B.0 added TrendScore tier badge, Sector status, Breakout strength+type, OI interpretation, Funding trend, Positioning context
+- **Signals/Tactical density**: Desktop columns added (Entry md+, Target% lg+, Stop% lg+); pagination (25/50/100 per page)
+- **Topbar alerts**: "3 CRITICAL / WARN" badges now clickable links to /admin/anomalies; added pulsing icon
+
+### Production Readiness Audit (7.2B.7)
+- **Overall Score: 7.4/10** — CONDITIONAL GO
+- **2 BLOCKERS**: .env.local git exposure risk, ADMIN_SECRET optional in lib/env.ts
+- **5 HIGH PRIORITY**: console.log, Celery timeout, beat expiry, infra_collector exception loop, no per-minute Anthropic rate limit
+- **6 MEDIUM PRIORITY**: setup score 60/AI threshold 72 dead zone, fire-and-forget logging, hardcoded refresh intervals, ATR floor missing, rejection persistence, score clamp
+- See `docs/PRODUCTION_READINESS_AUDIT.md` for full audit
 
 ---
 
