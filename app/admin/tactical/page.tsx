@@ -15,7 +15,7 @@ const STAGE_META: Record<SignalLifecycleStage, {
   label: string; color: string; icon: React.ElementType; accentCls: string
 }> = {
   VALIDATED:     { label: 'Validated',   color: 'text-zinc-400    bg-zinc-500/10    border-zinc-500/20',    accentCls: 'bg-zinc-500/50',     icon: CheckCircle2   },
-  AI_APPROVED:   { label: 'AI Approved', color: 'text-blue-400    bg-blue-500/10    border-blue-500/20',    accentCls: 'bg-blue-500',         icon: Zap            },
+  AI_APPROVED:   { label: 'Approved',    color: 'text-blue-400    bg-blue-500/10    border-blue-500/20',    accentCls: 'bg-blue-500',         icon: Zap            },
   TELEGRAM_SENT: { label: 'Sent',        color: 'text-purple-400  bg-purple-500/10  border-purple-500/20',  accentCls: 'bg-purple-500',       icon: Send           },
   ACTIVE:        { label: 'Active',      color: 'text-green-400   bg-green-500/10   border-green-500/20',   accentCls: 'bg-green-500',        icon: TrendingUp     },
   STALE:         { label: 'Stale',       color: 'text-amber-400   bg-amber-500/10   border-amber-500/20',   accentCls: 'bg-amber-500/60',     icon: Clock          },

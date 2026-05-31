@@ -47,7 +47,7 @@ export interface LifecycleConfig {
 
 export const LIFECYCLE_CONFIG: Record<SignalLifecycleStage, LifecycleConfig> = {
   VALIDATED:     { label: 'Validated',     color: 'text-terminal-muted',  badge: 'text-terminal-muted border-terminal-border bg-transparent',               order: 1 },
-  AI_APPROVED:   { label: 'AI Approved',   color: 'text-purple-400',      badge: 'text-purple-400 border-purple-500/30 bg-purple-500/5',                    order: 2 },
+  AI_APPROVED:   { label: 'Approved',      color: 'text-purple-400',      badge: 'text-purple-400 border-purple-500/30 bg-purple-500/5',                    order: 2 },
   TELEGRAM_SENT: { label: 'Telegram Sent', color: 'text-signal-high',     badge: 'text-signal-high border-signal-high/30 bg-signal-high/5',                 order: 3 },
   ACTIVE:        { label: 'Active',        color: 'text-bull-default',    badge: 'text-bull-default border-bull-default/30 bg-bull-default/5',               order: 4 },
   STALE:         { label: 'Stale',         color: 'text-terminal-muted/60', badge: 'text-terminal-muted border-terminal-border bg-transparent',             order: 5 },
