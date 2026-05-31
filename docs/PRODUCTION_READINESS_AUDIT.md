@@ -262,6 +262,39 @@ See: [docs/PHASE8_PRODUCTION_READINESS.md](PHASE8_PRODUCTION_READINESS.md)
 - Verdict: **YES WITH MINOR RISKS — Deploy Now**
 - Remaining: 3 LOW/MEDIUM risks (CORS wildcard, Redis TLS accepted, Railway URL)
 
+### Phase MONITOR.1 — Post-Launch Monitoring Baseline (`d8f503e`)
+- 14 daily Redis counters: signals, scans, coins_scanned, telegram_sends, binance_errors
+- Reads Claude/heuristic from ai_call_log, CMC credits from intel:quota:used, win/SL from signal_outcomes (7d)
+- Threshold bands: Healthy / Warning / Critical per metric
+- Anomaly detection: zero-signal day, Claude fallback spike >50%, Binance errors >15, slow scan >900s
+- `GET /api/analytics/monitor` endpoint + System page Operational Monitoring section
+
+### Phase DEPLOY.1 — Live Production Smoke Test (2026-06-01)
+- All 13 scenarios verified: scanner ON/OFF, Claude ON/OFF, Telegram ON/OFF, emergency stop,
+  maintenance mode, manual scan, scheduled scan, Redis/Claude/Binance available/unavailable
+- **Result: PASS — all operational controls and failure modes behave correctly**
+- 22/22 operational control unit tests passing
+
+### Phase 8.1A — Regime Persistence Verification (2026-06-01)
+- 11/11 post-deployment signals have `market_regime` populated — deployment confirmed active
+- BEAR_TREND (10 signals) + SIDEWAYS (1 signal) — correct values for May 31 market conditions
+- BUY in BEAR_TREND required +10 confidence (soft gate working correctly)
+- Telegram alert confirmed: shows `Regime: 🔴 BEAR TREND` ✅
+- **Verdict: WORKING**
+
+### Telegram Bug Fix (`dcedc3c`)
+- Root cause: signal INSERTed to DB before `send_signal_alert()` called — no UPDATE after send
+- `telegram_sent` was permanently `false` in DB even when alerts delivered
+- Fix: `mark_signal_telegram_sent()` UPDATE runs after confirmed send — `dcedc3c`
+- 10 historical May 31 signals backfilled to `telegram_sent = true` via SQL
+
+### Phase PERFORMANCE.1 — Post-Regime Validation (2026-06-01)
+- **Too early to validate** — regime gate deployed 2026-05-31, outcomes resolve in 72h
+- Pre-regime (May 27-30): 9% win rate, 272 SELL / 52 BUY, market_regime=NULL on all
+- Post-regime: 11 signals, all BEAR_TREND, BUY in BEAR_TREND required 90+ confidence
+- NIGHT/USDT BUY at 95% passed (required ≥90) — gate logic confirmed correct
+- **Next checkpoint: June 3** (first 72h batch resolves) · **Full baseline: June 14**
+
 ---
 
 *Last updated: 2026-06-01*  

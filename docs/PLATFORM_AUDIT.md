@@ -196,6 +196,33 @@
 - ✅ Top 10 remaining risks documented — all LOW or MEDIUM, none CRITICAL
 - ✅ Recommended next: 14-day monitoring on `by_market_regime` breakdown
 
+**COMPLETED (Phase MONITOR.1 — Post-Launch Monitoring, 2026-06-01):**
+- ✅ 14 daily Redis metric counters wired into scanner + Telegram paths (`d8f503e`)
+- ✅ Threshold bands (Healthy/Warning/Critical) for all metrics
+- ✅ Anomaly detection: zero-signal day, Claude fallback spike, Binance errors, slow scan
+- ✅ `GET /api/analytics/monitor` endpoint + System page Operational Monitoring section
+
+**COMPLETED (Phase DEPLOY.1 — Live Production Smoke Test, 2026-06-01):**
+- ✅ All 13 scenarios verified — scanner, Claude, Telegram, emergency stop, maintenance mode
+- ✅ All infrastructure failure modes (Redis/Binance/Claude unavailable) trace verified
+- ✅ Verdict: **PASS — deploy confirmed**
+
+**COMPLETED (Phase 8.1A — Regime Persistence Verification, 2026-06-01):**
+- ✅ 11/11 post-deployment signals have `market_regime` populated (BEAR_TREND/SIDEWAYS)
+- ✅ Telegram alert shows `Regime: 🔴 BEAR TREND` — end-to-end confirmed
+- ✅ BUY in BEAR_TREND required +10 confidence — soft gate working correctly
+- ✅ Verdict: **WORKING**
+
+**COMPLETED (Telegram `telegram_sent` Bug Fix, 2026-06-01):**
+- ✅ Root cause: signal INSERTed before send, no UPDATE after — DB always showed `false`
+- ✅ Fix: `mark_signal_telegram_sent()` UPDATE runs after confirmed send — `dcedc3c`
+- ✅ 10 historical May 31 signals backfilled to `telegram_sent = true`
+
+**COMPLETED (Phase PERFORMANCE.1 — Post-Regime Validation, 2026-06-01):**
+- ✅ Audit only — insufficient data (11 signals, 72h resolution lag)
+- ✅ Pre-regime: 9% win rate, market_regime=NULL · Post-regime: BEAR_TREND, gate correct
+- ✅ Next checkpoint: June 3 (first outcomes resolve) · Full baseline: June 14
+
 **PENDING (Phase 8.2 — if needed after 14-day monitoring):**
 - 🔶 Hard regime gate (block counter-trend entirely) if win rate <12% after 14 days with soft gate
 - 🔶  30-day clean dataset for full calibration (~June 30)
