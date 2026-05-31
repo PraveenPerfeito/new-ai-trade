@@ -243,10 +243,20 @@ async def send_signal_alert(signal: Signal) -> bool:
     pct_to_tp = abs(signal.target_price - signal.entry_price) / signal.entry_price * 100
     pct_to_sl = abs(signal.entry_price - signal.stop_loss) / signal.entry_price * 100
 
+    _regime_icons = {
+        "BULL_TREND": "🟢", "BEAR_TREND": "🔴",
+        "SIDEWAYS": "🟡", "HIGH_VOLATILITY": "🟠",
+        "EUPHORIA": "🟣", "CAPITULATION": "⚫",
+    }
+    _regime      = getattr(signal, "market_regime", None) or "SIDEWAYS"
+    _regime_icon = _regime_icons.get(_regime, "⚪")
+    _regime_disp = _regime.replace("_", " ")
+
     lines = [
         f"<b>{direction} — {signal.symbol}/USDT</b>",
         f"Mode: <b>{mode.upper()}</b>  |  Confidence: <b>{signal.confidence}% {conf_label}</b>",
         f"Grade: {grade_icon} <b>{signal.risk_grade.value}</b>  |  R:R: <b>1:{signal.rr_ratio:.1f}</b>",
+        f"Regime: {_regime_icon} <b>{_regime_disp}</b>",
         "",
         "📊 <b>Trade Levels</b>",
         f"  Entry:  <code>${signal.entry_price:.4f}</code>",

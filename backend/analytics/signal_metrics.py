@@ -89,14 +89,16 @@ async def register_signal_outcome(signal: Signal) -> str | None:
                 breakout_type, breakout_strength,
                 oi_interpretation, funding_trend,
                 positioning_context, momentum_score, trend_score,
-                sector_status
+                sector_status,
+                market_regime
             ) VALUES (
                 $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
                 $12,$13,$14,$15,
                 $16,$17,
                 $18,$19,
                 $20,$21,$22,
-                $23
+                $23,
+                $24
             )
             ON CONFLICT (signal_id) DO NOTHING
             RETURNING id::text
@@ -124,6 +126,7 @@ async def register_signal_outcome(signal: Signal) -> str | None:
             momentum_score,              # Phase 7.4A.6.1
             signal.trend_score,          # Phase 7.4A.6.1
             signal.sector_status,        # Phase 7.4A.7.2
+            signal.market_regime,        # Phase 8.1B
         )
         return row["id"] if row else None
     except Exception as exc:
@@ -283,7 +286,8 @@ async def get_outcomes(window_hours: int = 168) -> list[dict]:
                    ai_validated, volatility_regime, risk_grade, risk_score, quality_score,
                    outcome, rr_achieved, pnl_pct, duration_hours,
                    trend_score, sector_status, breakout_type, breakout_strength,
-                   oi_interpretation, funding_trend, positioning_context
+                   oi_interpretation, funding_trend, positioning_context,
+                   market_regime
             FROM signal_outcomes
             WHERE outcome != 'PENDING' AND created_at > $1
             ORDER BY created_at DESC
@@ -331,6 +335,7 @@ async def get_analytics(window_hours: int = 168) -> dict:
         "by_risk_grade":              breakdown("risk_grade"),
         "ai_accuracy_by_confidence":  ai_accuracy,
         # ── Intelligence breakdowns (Phase 8.0.1 GAP-2) ──────────────────
+        "by_market_regime":           breakdown("market_regime"),   # Phase 8.1B
         "by_trend_score_tier":        breakdown_by_trend_tier(),
         "by_sector_status":           breakdown("sector_status"),
         "by_breakout_type":           breakdown("breakout_type"),

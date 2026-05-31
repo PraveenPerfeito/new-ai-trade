@@ -340,6 +340,8 @@ class Signal(BaseModel):
     positioning_context:     str | None = None   # EXTREME_LONG | LONG_HEAVY | BALANCED | SHORT_HEAVY | EXTREME_SHORT
     # Phase 7.4A.7.2 — sector intelligence from SectorIntelligenceReport (TRENDING mode)
     sector_status:           str | None = None   # STRONGEST | ACCELERATING | NEUTRAL | WEAKENING | OVERCROWDED
+    # Phase 8.1B — BTC macro regime (Python port of lib/market-regime.ts)
+    market_regime:           str | None = None   # BULL_TREND | BEAR_TREND | SIDEWAYS | HIGH_VOLATILITY | EUPHORIA | CAPITULATION
 
 
 # ── Scan orchestration models ─────────────────────────────────────────────────

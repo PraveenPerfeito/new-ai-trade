@@ -384,6 +384,7 @@ async def scan_coin(
     btc_change_24h: float = 0.0,
     trend_score:   float | None = None,  # Phase 7.4A.7.1 — from TrendingMeta (TRENDING mode)
     sector_status: str   | None = None,  # Phase 7.4A.7.2 — from SectorIntelligenceReport (TRENDING mode)
+    btc_regime:    str          = "SIDEWAYS",  # Phase 8.1B — BTC macro regime for soft confidence gate
 ) -> Signal | None:
     """
     Full 10-step pipeline for one coin.
@@ -550,6 +551,7 @@ async def scan_coin(
             breakout_strength=setup.breakout_strength, # Phase 7.4A.6.3
             trend_score=trend_score,                   # Phase 7.4A.7.1
             sector_status=sector_status,               # Phase 7.4A.7.2
+            market_regime=btc_regime,                  # Phase 8.1B
             # Phase 7.4A.6.3 — promote FuturesData intelligence to top-level Signal fields
             oi_interpretation=(futures_data.oi_interpretation.value if futures_data else None),
             funding_trend=(futures_data.funding_trend.value if futures_data else None),
@@ -560,8 +562,32 @@ async def scan_coin(
 
         effective_score = setup.pre_score + funding_score_adj   # Phase 7.3A.6 funding adjustment
         ai = await validate_signal(draft, coin, ind4h, s1h * 0.4 + s4h * 0.6, volatility, setup_score=effective_score)
-        if not ai.validated or ai.confidence < config.min_confidence:
-            gate_rejections_total.labels(gate="ai").inc()
+
+        # Phase 8.1B — Soft regime gate: counter-trend signals require higher confidence.
+        # BULL_TREND/EUPHORIA blocks SELL with +10; BEAR_TREND/CAPITULATION blocks BUY with +10;
+        # HIGH_VOLATILITY adds +5 to both directions. SIDEWAYS: no adjustment.
+        _BULL_CONTEXTS = {"BULL_TREND", "EUPHORIA"}
+        _BEAR_CONTEXTS = {"BEAR_TREND", "CAPITULATION"}
+        regime_adj = 0
+        if signal_type == SignalType.SELL and btc_regime in _BULL_CONTEXTS:
+            regime_adj = 10
+        elif signal_type == SignalType.BUY and btc_regime in _BEAR_CONTEXTS:
+            regime_adj = 10
+        elif btc_regime == "HIGH_VOLATILITY":
+            regime_adj = 5
+
+        required_confidence = config.min_confidence + regime_adj
+        if not ai.validated or ai.confidence < required_confidence:
+            gate_rejections_total.labels(gate="ai" if regime_adj == 0 else "regime").inc()
+            if regime_adj > 0:
+                log.info(
+                    "rejected_regime_gate",
+                    symbol=coin.symbol,
+                    regime=btc_regime,
+                    signal_type=signal_type.value,
+                    confidence=ai.confidence,
+                    required=required_confidence,
+                )
             return None
 
         signals_generated_total.labels(mode=mode.value, signal_type=signal_type.value).inc()

@@ -28,7 +28,7 @@ from backend.core.scanner.db import (
     save_signal,
     upsert_coins,
 )
-from backend.core.scanner.market_fetcher import fetch_top100, fetch_futures_symbols, fetch_btc_4h_change
+from backend.core.scanner.market_fetcher import fetch_top100, fetch_futures_symbols, fetch_btc_4h_change, get_btc_regime
 from backend.core.scanner.models import (
     CoinData, Signal, ScannerMode, ScannerConfig,
     ScanProgress, ScanResult,
@@ -182,6 +182,7 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
     t0_wall    = datetime.now(timezone.utc)
 
     log.info("scan_start", mode=mode.value, scan_id=scan_id)
+    btc_regime = "SIDEWAYS"   # resolved after fetches; placeholder for pre-fetch log
 
     progress = ScanProgress(
         scan_id=scan_id,
@@ -201,10 +202,14 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
         async def _btc_4h() -> float:
             return await fetch_btc_4h_change() if mode == ScannerMode.TRENDING else 0.0
 
-        coin_result, futures_syms, btc_4h_change = await asyncio.gather(
+        async def _regime() -> str:
+            return await get_btc_regime()
+
+        coin_result, futures_syms, btc_4h_change, btc_regime = await asyncio.gather(
             fetch_top100(),
             fetch_futures_symbols() if mode in (ScannerMode.FUTURES, ScannerMode.HIGH_CONFIDENCE) else _no_futures(),
             _btc_4h(),
+            _regime(),
         )
         all_coins = coin_result.coins
 
@@ -288,6 +293,8 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
         signals: list[Signal] = []
         errors = 0
 
+        log.info("btc_regime_for_scan", regime=btc_regime, mode=mode.value)
+
         async def _scan_one(coin: CoinData) -> Signal | None:
             # Phase 7.4A.7.1 / 7.4A.7.2: pass per-coin intelligence (None for non-TRENDING)
             ts = trend_score_map.get(coin.symbol)
@@ -297,6 +304,7 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                 btc_change_24h=btc_change_24h,
                 trend_score=ts,
                 sector_status=ss,
+                btc_regime=btc_regime,   # Phase 8.1B — soft regime gate
             )
 
         results = await gather_with_concurrency(
@@ -314,6 +322,7 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
             if err is not None:
                 errors += 1
             elif signal is not None:
+                signal.market_regime = btc_regime   # Phase 8.1B — store macro regime on signal
                 signal.scan_run_id = scan_run_id
                 sig_id = await save_signal(signal)
                 if sig_id:

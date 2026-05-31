@@ -174,7 +174,51 @@ _FALLBACK_FUTURES = {
 }
 
 
-_btc_4h_cache = RedisCache("btc-4h-change", ttl_seconds=5 * 60)   # 5-min TTL
+_btc_4h_cache    = RedisCache("btc-4h-change", ttl_seconds=5 * 60)
+_btc_regime_cache = RedisCache("btc-regime",    ttl_seconds=5 * 60)
+
+
+def _classify_regime(
+    rsi: float, trend_value: str, btc24h: float, strength: float, vol_value: str,
+) -> str:
+    """Port of lib/market-regime.ts:classifyRegime(). 6-condition decision tree."""
+    if rsi > 78 and btc24h > 8:                               return "EUPHORIA"
+    if rsi < 22 and btc24h < -8:                              return "CAPITULATION"
+    if vol_value in ("HIGH", "EXTREME") and abs(btc24h) > 5:  return "HIGH_VOLATILITY"
+    if trend_value == "BULLISH" and strength >= 50:           return "BULL_TREND"
+    if trend_value == "BEARISH" and strength >= 50:           return "BEAR_TREND"
+    return "SIDEWAYS"
+
+
+async def get_btc_regime() -> str:
+    """
+    BTC 4h market regime (Phase 8.1B).
+    Returns: BULL_TREND | BEAR_TREND | SIDEWAYS | HIGH_VOLATILITY | EUPHORIA | CAPITULATION
+    Cached 5 min. Falls back to SIDEWAYS on any error.
+    Python port of lib/market-regime.ts:classifyRegime().
+    """
+    cached = await _btc_regime_cache.get("regime")
+    if cached is not None:
+        return str(cached)
+    try:
+        from backend.core.scanner.indicators import (   # noqa: PLC0415
+            calculate_all_indicators, calc_trend_strength, calc_volatility_rating,
+        )
+        candles = await fetch_spot_klines("BTCUSDT", "4h", 100)
+        if len(candles) < 60:
+            return "SIDEWAYS"
+        ind      = calculate_all_indicators(candles)
+        strength = calc_trend_strength(ind)
+        vol      = calc_volatility_rating(ind.atr, ind.current_price)
+        tail     = candles[-7:]
+        btc24h   = ((tail[-1].close - tail[0].open) / tail[0].open * 100) if len(tail) >= 7 else 0.0
+        regime   = _classify_regime(ind.rsi, ind.trend.value, btc24h, strength, vol.value)
+        await _btc_regime_cache.set("regime", regime)
+        log.info("btc_regime_computed", regime=regime, rsi=round(ind.rsi, 1), btc24h=round(btc24h, 2))
+        return regime
+    except Exception as exc:
+        log.warning("btc_regime_failed_defaulting_sideways", error=str(exc))
+        return "SIDEWAYS"
 
 
 async def fetch_btc_4h_change() -> float:
