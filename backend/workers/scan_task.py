@@ -120,7 +120,7 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
         celery_tasks_total.labels(task_name=task_label, status="skipped").inc()
         return {"skipped": True, "reason": block_reason, "mode": mode}
 
-    lock_acquired = coordinator.acquire_scan_lock(mode, ttl_seconds=11 * 60)
+    lock_acquired = coordinator.acquire_scan_lock(mode, ttl_seconds=20 * 60)  # Fix 1: 20 min > soft_time_limit (17 min) prevents overlap
 
     if not lock_acquired:
         logger.info(f"scan_lock_held_skipping mode={mode}")
@@ -169,7 +169,11 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
 
         elapsed = time.monotonic() - start
         scheduler_last_scan_timestamp.set(time.time())
-        coordinator.record_scan_complete()   # writes scheduler:last_scan_ts to Redis → dashboard "Last scan" timestamp
+        try:
+            coordinator.record_scan_complete()   # writes scheduler:last_scan_ts → dashboard "Last scan" timestamp
+        except Exception as ts_exc:
+            # Fix 2: never fail a successful scan due to Redis timestamp write
+            logger.warning(f"record_scan_complete_failed error={ts_exc} — scan succeeded, timestamp not updated")
         celery_task_duration_seconds.labels(task_name=task_label).observe(elapsed)
         celery_tasks_total.labels(task_name=task_label, status="success").inc()
 
@@ -201,7 +205,11 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
 
     finally:
         scheduler_scanning.set(0)
-        coordinator.release_scan_lock(mode)
+        try:
+            coordinator.release_scan_lock(mode)
+        except Exception as lock_exc:
+            # Fix 3: never let lock release failure mask the original scan exception
+            logger.warning(f"release_scan_lock_failed mode={mode} error={lock_exc} — lock will expire via Redis TTL")
 
 
 @shared_task(
