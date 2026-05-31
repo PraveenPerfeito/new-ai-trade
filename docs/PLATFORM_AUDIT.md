@@ -11,7 +11,7 @@
 
 **May 2026 Update:** Platform audit completed against v1.4–7.4A + Phase 7.2B. Major resolution:
 
-**RESOLVED (Phase 7.2B.1–7.2B.7):**
+**RESOLVED (Phase 7.2B.1–7.2B.6):**
 - ✅ Settings page → "Founder Control Center" with 3 primary modes + Advanced Presets (Issue #2, #7, #17)
 - ✅ Providers page → "Operations Dashboard" with CompactProviderCard + QuotaBurnForecast (Issue #1, #13, #16)
 - ✅ Regime page → "Apply Regime Settings" button with preview modal (Issue #11, #13)
@@ -20,7 +20,18 @@
 - ✅ /admin/signals Intelligence section (TrendScore, Sector, Breakout, OI, Funding, Positioning) (Issue #9)
 - ✅ Signals/Tactical density: Desktop columns (Entry md+, Target% lg+, Stop% lg+), pagination (Issue #2, #6)
 - ✅ Topbar alerts: "3 CRITICAL / WARN" clickable to /admin/anomalies (Issue #4)
-- ✅ Production Readiness Audit completed (7.4/10, CONDITIONAL GO)
+
+**RESOLVED (Phase 7.2B.7 — Production Hardening, 2026-05-30):**
+- ✅ B1: .env.local confirmed never committed — no credential rotation required (`478fc54`)
+- ✅ B2: ADMIN_SECRET enforced as `z.string().min(32)` in `lib/env.ts` (`478fc54`)
+- ✅ H1: 18× `console.log` in `lib/scheduler.ts` + 2× in `lib/backtest.ts` → structured pino logger (`d37cba6`)
+- ✅ H2: Celery `soft_time_limit` 840s→1020s, `time_limit` 960s→1140s — scan no longer killed on completion (`74672c1`)
+- ✅ H3: Beat schedule `expires` 780s→1020s for all scan tasks — queued scans no longer dropped (`74672c1`)
+- ✅ H4: `infra_collector._run_loop` wrapped in try/except — Prometheus metrics no longer die silently (`74672c1`)
+- ✅ H5: `_SlidingWindowRateLimiter` (12 RPM) + 3-attempt 429 retry added to `ai_validator.py` (`1a471c2`)
+- ✅ M1: Setup gate raised 60→72 to eliminate 60-72 dead zone (`fe99495`)
+- ✅ M6: `pre_score` clamped to 100 in `detect_setup()` (`fe99495`)
+- ✅ Production Readiness score: **7.4/10 CONDITIONAL GO → 8.7/10 ✅ GO**
 
 **REMAINING GAPS (Phase 7.5 recommended):**
 - 🔶 Scan Now auto-redirect to Signals (Issue #1) — workflow friction
@@ -33,8 +44,12 @@
 - 🔶 Provider health on Overview strip (Issue #5, #8)
 - 🔶 Mode performance comparison (Issue #4, #9)
 - 🔶 Confirmation after Daily Report send (Issue #5, #19)
+- 🔶 M2: `_register_analytics()` fire-and-forget done-callback reliability
+- 🔶 M3: Frontend refresh interval jitter + centralized config
+- 🔶 M4: ATR minimum relative floor
+- 🔶 M5: Signal rejection reasons not persisted to DB
 
-All 15 TOP 20 Issues from original audit are now: 7 RESOLVED (Phase 7.2B), 8 PENDING (Phase 7.5)
+All 15 TOP 20 Issues from original audit are now: 7 RESOLVED (Phase 7.2B.1–6), 8 PENDING (Phase 7.5)
 
 ---
 
