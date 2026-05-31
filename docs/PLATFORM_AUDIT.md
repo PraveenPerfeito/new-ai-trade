@@ -66,9 +66,40 @@
 
 **COMPLETED (Phase 7.2B.10 — Redis Optimization Audit, 2026-05-31):**
 - ✅ Top 20 Redis consumers identified and ranked
-- ✅ 6 QUICK WIN fixes found (615K → ~240K/month, >51% reduction, zero architecture change)
+- ✅ 6 QUICK WIN fixes (615K → ~240K/month, >51% reduction, zero architecture change) — `e0d3543`
 - ✅ Safe vs unsafe optimization table produced
 - ✅ See: [docs/REDIS_OPTIMIZATION_AUDIT.md](REDIS_OPTIMIZATION_AUDIT.md)
+
+**COMPLETED (Phase 7.2B.10.3 — Provider Dashboard Accuracy, 2026-05-31):**
+- ✅ CMC 0% root cause: wrong quota metric source (`providers:metrics:*` vs `intel:quota:used`) — `1ba74ff`
+- ✅ Binance RED root cause: stale top-coins errors from geo-blocked fallback path — `1ba74ff`
+- ✅ Both fixed in `backend/api/providers.py` (25 lines)
+
+**COMPLETED (Phase 8.0 — Outcome Analytics Readiness Audit, 2026-05-31):**
+- ✅ All 7 intelligence fields confirmed persisted to signals + signal_outcomes tables
+- ✅ Root cause of 9% win rate identified: missing BTC macro regime gate
+- ✅ May 29 incident traced: 99 SELL signals at 0% win rate during bull reversal
+- ✅ See: [docs/PHASE8_ANALYTICS_AUDIT.md](PHASE8_ANALYTICS_AUDIT.md)
+
+**COMPLETED (Phase 8.0.1 — Analytics Intelligence Wiring, 2026-05-31):**
+- ✅ GAP-1: `get_outcomes()` SQL now returns all 7 intelligence fields — `270368e`
+- ✅ GAP-2: 7 new breakdowns in `get_analytics()` (TrendScore tier, Sector, Breakout, OI, Funding, Positioning) — `270368e`
+- ✅ GAP-3: `_fetch_outcomes()` in edge_validation.py includes all 7 fields — `270368e`
+- ✅ GAP-4: `trend_score_tier()` helper (ELITE/STRONG/GOOD/WEAK) — `270368e`
+- ✅ GAP-5: `GET /analytics/intelligence` endpoint returns best tier per dimension — `270368e`
+- ✅ GAP-6: Intelligence Performance section on Analytics page — `270368e`
+
+**COMPLETED (Phase 8.1A — BTC Regime Architecture Audit, 2026-05-31):**
+- ✅ Option B (port to Python) selected over Option A (TypeScript→Redis→Python)
+- ✅ Implementation plan defined: 4 files, ~80 lines, no new infrastructure
+- ✅ Expected improvement: 9% → ~24% win rate, −30% signal volume
+- ✅ See: [docs/PHASE8_REGIME_AUDIT.md](PHASE8_REGIME_AUDIT.md)
+
+**PENDING (Phase 8.1B — BTC Regime Gate Implementation):**
+- 🔶 `get_btc_regime()` in market_fetcher.py
+- 🔶 Regime gate in signal_pipeline.py (BULL blocks SELL, BEAR blocks BUY)
+- 🔶 `market_regime` stored on all signals
+- 🔶 30-day clean dataset accumulation
 
 All 15 TOP 20 Issues from original audit are now: 7 RESOLVED (Phase 7.2B.1–6), 8 PENDING (Phase 7.5)
 

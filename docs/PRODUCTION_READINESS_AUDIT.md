@@ -1,9 +1,9 @@
 # Production Readiness Audit
 
 **Date:** 2026-05-30  
-**Last Updated:** 2026-05-30 (Engineering Validation + H1 complete)  
+**Last Updated:** 2026-05-31 (Phase 8.x work ongoing)  
 **Overall Score:** 9.0 / 10  
-**Verdict:** ✅ GO
+**Verdict:** ✅ GO (production hardening complete; Phase 8 calibration in progress)
 
 ---
 
@@ -151,5 +151,33 @@ Remaining: `lib/auth-audit.ts` 1× `console.warn` — P2 (non-fatal catch block,
 
 ---
 
-*Last updated: 2026-05-30*  
-*Engineering validation complete. All P0 and P1 items resolved. Platform at 9.0/10 GO.*
+## Phase 8 Work Log (2026-05-31)
+
+### Phase 7.2B.10.1 — Redis Quick Wins (`e0d3543`)
+6 interval/batch optimizations. Redis commands: ~615K → ~240K/month (61% reduction).
+
+### Phase 7.2B.10.3 — Provider Dashboard Accuracy (`1ba74ff`)
+- CMC 0% fixed: providers page now reads `intel:quota:used` (real API credits)
+- Binance RED fixed: `requestsToday=0` → healthy (stale top-coins errors suppressed)
+
+### Phase 8.0 — Outcome Analytics Audit
+- 324 resolved outcomes (4-day sample): 9% win rate
+- Root cause: no BTC macro regime gate → 272 counter-trend SELL signals in 4 days
+- May 29: 99 SELL at 0% win rate during bull reversal; 35 BUY at 40% win rate same day
+- See: [docs/PHASE8_ANALYTICS_AUDIT.md](PHASE8_ANALYTICS_AUDIT.md)
+
+### Phase 8.0.1 — Analytics Intelligence Wiring (`270368e`)
+All 7 intelligence fields (TrendScore, Sector, Breakout, OI, Funding, Positioning) now surfaced in analytics queries, breakdowns, edge validation, calibration API, and dashboard.
+
+### Phase 8.1A — BTC Regime Architecture Audit
+Option B (port to Python) approved. Implementation plan defined.  
+See: [docs/PHASE8_REGIME_AUDIT.md](PHASE8_REGIME_AUDIT.md)
+
+### Phase 8.1B — BTC Regime Gate (PENDING)
+Port `classifyRegime()` to Python; add regime gate to signal pipeline; store `market_regime` on signals.  
+Expected: 9% → ~24% win rate, −30% signal volume.
+
+---
+
+*Last updated: 2026-05-31*  
+*Production hardening complete. Phase 8 analytics infrastructure wired. Regime gate pending.*
