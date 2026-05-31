@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import { useCallback } from 'react'
-import { adminApi, HealthReady, ScanSummaryResponse, AiSummaryResponse } from '@/lib/admin-api'
+import { adminApi, HealthReady, ScanSummaryResponse, AiSummaryResponse, MonitorSnapshot, MonitorLevel } from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
 import { MetricCard } from '@/components/admin/metric-card'
 import { Server, Database, Cpu, Activity } from 'lucide-react'
@@ -30,14 +30,40 @@ function ServiceCard({ name, status, detail }: { name: string; status: string; d
   )
 }
 
-export default function SystemPage() {
-  const healthFetcher = useCallback(() => adminApi.health.ready(), [])
-  const scanFetcher   = useCallback(() => adminApi.analytics.scans(24), [])
-  const aiFetcher     = useCallback(() => adminApi.analytics.ai(24), [])
+// ── Monitoring helpers ────────────────────────────────────────────────────────
 
-  const { data: health, loading: hl } = useAutoRefresh<HealthReady>(healthFetcher, 30_000)
-  const { data: scans }               = useAutoRefresh<ScanSummaryResponse>(scanFetcher, 30_000)
-  const { data: ai }                  = useAutoRefresh<AiSummaryResponse>(aiFetcher, 30_000)
+const LEVEL_CLS: Record<MonitorLevel, string> = {
+  healthy:  'text-emerald-400',
+  warning:  'text-amber-400',
+  critical: 'text-red-400',
+}
+const LEVEL_DOT: Record<MonitorLevel, string> = {
+  healthy:  'bg-emerald-400',
+  warning:  'bg-amber-400 animate-pulse',
+  critical: 'bg-red-400 animate-pulse',
+}
+
+function MonitorRow({ label, metric }: { label: string; metric: { value: number; unit: string; level: MonitorLevel } }) {
+  return (
+    <div className="flex items-center justify-between py-1.5 border-b border-terminal-border/15 last:border-0">
+      <span className="text-terminal-muted text-xs">{label}</span>
+      <span className={`font-mono text-xs font-semibold ${LEVEL_CLS[metric.level]}`}>
+        {metric.value.toLocaleString()}{metric.unit && ` ${metric.unit}`}
+      </span>
+    </div>
+  )
+}
+
+export default function SystemPage() {
+  const healthFetcher  = useCallback(() => adminApi.health.ready(), [])
+  const scanFetcher    = useCallback(() => adminApi.analytics.scans(24), [])
+  const aiFetcher      = useCallback(() => adminApi.analytics.ai(24), [])
+  const monitorFetcher = useCallback(() => adminApi.analytics.monitor(), [])
+
+  const { data: health,  loading: hl } = useAutoRefresh<HealthReady>(healthFetcher, 30_000)
+  const { data: scans }                = useAutoRefresh<ScanSummaryResponse>(scanFetcher, 30_000)
+  const { data: ai }                   = useAutoRefresh<AiSummaryResponse>(aiFetcher, 30_000)
+  const { data: monitor }              = useAutoRefresh<MonitorSnapshot>(monitorFetcher, 60_000)
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -125,6 +151,66 @@ export default function SystemPage() {
           />
         </div>
       </div>
+
+      {/* ── Operational Monitoring ─────────────────────────────────────────── */}
+      {monitor && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className={`w-2 h-2 rounded-full shrink-0 ${LEVEL_DOT[monitor.overall_level]}`} />
+            <p className="text-terminal-muted text-xs uppercase tracking-wider font-semibold">
+              Operational Monitoring — Today
+            </p>
+            <span className={`ml-auto text-[10px] font-mono font-bold uppercase ${LEVEL_CLS[monitor.overall_level]}`}>
+              {monitor.overall_level}
+            </span>
+          </div>
+
+          {/* Anomalies */}
+          {monitor.anomalies.length > 0 && (
+            <div className="space-y-1.5 mb-3">
+              {monitor.anomalies.map((a, i) => (
+                <div key={i} className={`rounded-lg px-3 py-2 border text-xs flex items-start gap-2 ${
+                  a.severity === 'critical' ? 'bg-red-900/15 border-red-500/30 text-red-300'
+                  : 'bg-amber-900/15 border-amber-500/30 text-amber-300'
+                }`}>
+                  <span className="shrink-0 mt-0.5">{a.severity === 'critical' ? '🔴' : '🟠'}</span>
+                  <span>{a.message}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Metrics grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="glass-card rounded-xl p-4">
+              <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-2">Signals & Outcomes</p>
+              <MonitorRow label="Signals today"        metric={monitor.metrics.signals_per_day} />
+              <MonitorRow label="Win rate (7d)"        metric={monitor.metrics.win_rate_pct} />
+              <MonitorRow label="SL rate (7d)"         metric={monitor.metrics.sl_rate_pct} />
+              <MonitorRow label="Resolved outcomes (7d)" metric={monitor.metrics.resolved_7d} />
+              <MonitorRow label="Telegram sends"       metric={monitor.metrics.telegram_sends_per_day} />
+            </div>
+            <div className="glass-card rounded-xl p-4">
+              <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-2">Scanner</p>
+              <MonitorRow label="Scans today"          metric={monitor.metrics.scans_today} />
+              <MonitorRow label="Coins/run"            metric={monitor.metrics.coins_scanned_per_run} />
+              <MonitorRow label="Last scan duration"   metric={monitor.metrics.scan_duration_s} />
+              <MonitorRow label="Binance errors"       metric={monitor.metrics.binance_errors_per_day} />
+              <MonitorRow label="CMC credits/day"      metric={monitor.metrics.cmc_credits_per_day} />
+            </div>
+            <div className="glass-card rounded-xl p-4">
+              <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-2">Claude / AI</p>
+              <MonitorRow label="Claude calls"         metric={monitor.metrics.claude_calls_per_day} />
+              <MonitorRow label="Heuristic calls"      metric={monitor.metrics.heuristic_calls_per_day} />
+              <MonitorRow label="Fallback rate"        metric={monitor.metrics.claude_fallback_pct} />
+              <MonitorRow label="Est. cost today"      metric={monitor.metrics.estimated_cost_usd} />
+            </div>
+          </div>
+          <p className="text-terminal-muted/30 text-[10px] font-mono mt-2">
+            Generated {new Date(monitor.generated_at).toLocaleTimeString()} · counters reset midnight UTC
+          </p>
+        </div>
+      )}
 
       {/* Diagnostics section label */}
       <p className="text-[9px] text-terminal-muted/40 uppercase tracking-widest flex items-center gap-2">

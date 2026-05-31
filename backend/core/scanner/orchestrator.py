@@ -327,6 +327,13 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                 sig_id = await save_signal(signal)
                 if sig_id:
                     signal.id = sig_id
+                    # Monitoring counter (fire-and-forget)
+                    try:
+                        from backend.analytics.monitoring import record_signal as _mon_signal  # noqa: PLC0415
+                        t = asyncio.create_task(_mon_signal())
+                        t.add_done_callback(lambda t: _on_task_done(t, "monitor_signal"))
+                    except Exception:
+                        pass
 
                 if signal.confidence >= alert_thr:
                     sent = await send_signal_alert(signal)
@@ -375,6 +382,14 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
             send_scan_summary(progress.scanned, len(signals), high_conf, duration_ms, mode.value)
         )
         t.add_done_callback(lambda t: _on_task_done(t, "send_scan_summary"))
+
+        # Monitoring: record scan duration + coins (fire-and-forget)
+        try:
+            from backend.analytics.monitoring import record_scan as _mon_scan  # noqa: PLC0415
+            t2 = asyncio.create_task(_mon_scan(progress.scanned, duration_ms))
+            t2.add_done_callback(lambda t: _on_task_done(t, "monitor_scan"))
+        except Exception:
+            pass
 
         scan_runs_total.labels(mode=mode.value, status="completed").inc()
         scan_duration_seconds.labels(mode=mode.value).observe(duration_ms / 1000)

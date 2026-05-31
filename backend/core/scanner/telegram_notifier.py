@@ -336,6 +336,12 @@ async def send_signal_alert(signal: Signal) -> bool:
     ]
 
     _enqueue("\n".join(lines))
+    # Monitoring counter (fire-and-forget)
+    try:
+        from backend.analytics.monitoring import record_telegram_send as _mon_tg  # noqa: PLC0415
+        asyncio.create_task(_mon_tg())
+    except Exception:
+        pass
     return True
 
 

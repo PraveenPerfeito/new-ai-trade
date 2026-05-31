@@ -383,6 +383,46 @@ export interface PatchExperimentBody {
   expires_at?:     string | null
 }
 
+// ── Monitoring types ──────────────────────────────────────────────────────────
+
+export type MonitorLevel = 'healthy' | 'warning' | 'critical'
+
+export interface MonitorMetric {
+  value: number
+  unit:  string
+  level: MonitorLevel
+}
+
+export interface MonitorAnomaly {
+  type:     string
+  severity: MonitorLevel
+  message:  string
+}
+
+export interface MonitorSnapshot {
+  date:          string
+  overall_level: MonitorLevel
+  generated_at:  string
+  metrics: {
+    signals_per_day:          MonitorMetric
+    win_rate_pct:             MonitorMetric
+    sl_rate_pct:              MonitorMetric
+    scans_today:              MonitorMetric
+    coins_scanned_per_run:    MonitorMetric
+    scan_duration_s:          MonitorMetric
+    claude_calls_per_day:     MonitorMetric
+    heuristic_calls_per_day:  MonitorMetric
+    claude_fallback_pct:      MonitorMetric
+    estimated_cost_usd:       MonitorMetric
+    cmc_credits_per_day:      MonitorMetric
+    telegram_sends_per_day:   MonitorMetric
+    binance_errors_per_day:   MonitorMetric
+    resolved_7d:              MonitorMetric
+  }
+  anomalies:  MonitorAnomaly[]
+  thresholds: Record<string, Record<string, number | boolean>>
+}
+
 // ── Typed API surface ─────────────────────────────────────────────────────────
 
 export const adminApi = {
@@ -397,6 +437,7 @@ export const adminApi = {
     summary:   (window_hours = 168) => get<Record<string, unknown>>('/analytics/summary', { window_hours }),
     ai:        (window_hours = 24)  => get<AiSummaryResponse>('/analytics/ai', { window_hours }),
     scans:     (window_hours = 24)  => get<ScanSummaryResponse>('/analytics/scans', { window_hours }),
+    monitor:   ()                   => get<MonitorSnapshot>('/analytics/monitor'),
     edgeReport:    (hours = 720)  => get<EdgeReport>('/analytics/edge/report', { window_hours: hours }),
     calibration:   (hours = 720)  => get<Record<string, unknown>>('/analytics/edge/calibration', { window_hours: hours }),
     claude:        (hours = 720)  => get<Record<string, unknown>>('/analytics/edge/claude', { window_hours: hours }),

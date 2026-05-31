@@ -21,6 +21,7 @@ from backend.analytics.edge_validation import (
 )
 from backend.analytics.performance_engine import get_dashboard_summary
 from backend.analytics.realtime_metrics import sse_metrics_stream
+from backend.analytics.monitoring import get_monitoring_snapshot
 from backend.analytics.scan_metrics import get_scan_summary
 from backend.analytics.signal_metrics import get_analytics, get_intelligence_summary
 from backend.analytics.signal_validation import (
@@ -42,6 +43,12 @@ async def dashboard_summary(
 ) -> dict[str, Any]:
     """All analytics in one call — signal performance, AI, scans, paper trading."""
     return await get_dashboard_summary(window_hours)
+
+
+@router.get("/monitor")
+async def operational_monitor() -> dict[str, Any]:
+    """Daily operational monitoring snapshot: metrics, thresholds, anomalies."""
+    return await get_monitoring_snapshot()
 
 
 @router.get("/performance")
