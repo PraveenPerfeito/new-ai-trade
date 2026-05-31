@@ -6,7 +6,7 @@ import {
   Clock, ArrowRight, Zap, Bot, Send, ShieldAlert, Wrench,
 } from 'lucide-react'
 import { ScannerMode, RejectionStats } from '@/types'
-import { adminApi } from '@/lib/admin-api'
+import { adminApi, SettingsGroupResponse } from '@/lib/admin-api'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 
@@ -143,19 +143,16 @@ export default function AdminScannerPage() {
         adminApi.settings.group('features'),
         adminApi.settings.group('ai'),
       ])
-      if (featRes.success && featRes.data?.data) {
-        const d = featRes.data.data as Record<string, unknown>
-        setFlags({
-          emergency_stop:   Boolean(d.emergency_stop),
-          maintenance_mode: Boolean(d.maintenance_mode),
-          telegram:         Boolean(d.telegram),
-          ai_validation:    Boolean(d.ai_validation),
-        })
-      }
-      if (aiRes.success && aiRes.data?.data) {
-        const d = aiRes.data.data as Record<string, unknown>
-        setAiEnabled(Boolean(d.enabled))
-      }
+      // SettingsGroupResponse = { meta, fields: SettingEntry[] }
+      const field = (res: SettingsGroupResponse, key: string) =>
+        res.fields.find(f => f.key === key)?.value
+      setFlags({
+        emergency_stop:   Boolean(field(featRes, 'emergency_stop')),
+        maintenance_mode: Boolean(field(featRes, 'maintenance_mode')),
+        telegram:         Boolean(field(featRes, 'telegram')),
+        ai_validation:    Boolean(field(featRes, 'ai_validation')),
+      })
+      setAiEnabled(Boolean(field(aiRes, 'enabled')))
     } catch { /* silent */ }
   }, [])
 
