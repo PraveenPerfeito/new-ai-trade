@@ -145,6 +145,31 @@ async def list_providers() -> dict:
             metrics["status"] = "offline"
             metrics["healthScore"] = 0
 
+        # ── CMC: replace MarketDataService quota counter with actual intelligence credits ──
+        # providers:metrics:coinmarketcap:quota tracks fetchTopCoins() calls (reads from cache).
+        # The real CMC API credit usage lives in intel:quota:used (written by intelligence workers).
+        # dailyLimit was never set → pct always 0 → misleading "0% used" display.
+        if name == "coinmarketcap":
+            intel_used  = int((await redis.get("intel:quota:used")) or 0)
+            intel_reset = await redis.get("intel:quota:reset_at")
+            monthly_budget = 300_000
+            metrics["quota"] = {
+                "dailyLimit": monthly_budget,
+                "used":       intel_used,
+                "remaining":  max(0, monthly_budget - intel_used),
+                "pct":        round(min(intel_used / monthly_budget * 100, 100.0), 1),
+                "resetAt":    intel_reset or None,
+            }
+
+        # ── Binance: never-used-for-top-coins today = healthy ───────────────────────────
+        # BinanceProvider.fetchTopCoins() is a 3rd-fallback that rarely runs and may fail
+        # (geo-block 451, large payload). Scanner uses Binance for klines via Python backend
+        # — that path is never reflected in providers:metrics:binance. If requestsToday == 0
+        # the stored errors are stale; report healthy so the card reflects klines reality.
+        if name == "binance" and enabled and metrics["requestsToday"] == 0:
+            metrics["healthScore"] = 100
+            metrics["status"] = "healthy"
+
         providers.append({"name": name, "enabled": enabled, "priority": priority, **metrics})
 
     providers.sort(key=lambda p: p["priority"])
