@@ -196,6 +196,30 @@ See: [docs/PHASE8_PRODUCTION_READINESS.md](PHASE8_PRODUCTION_READINESS.md)
 - `providers:metrics:*` tracks TypeScript ProviderManager only — misleading for production scanner usage.
 - Two separate health endpoints: `/api/health/providers` (live pings, accurate) vs `/api/providers` (Redis metrics, misleading).
 
+### Phase 7.2B.9 — Monitoring Truth Fixes (2026-06-01)
+- `validation_source` ("CLAUDE" | "HEURISTIC") added to Signal model, DB, and all analytics — `8a41de7`
+- Calibration page: "Claude Validated Today" + "Heuristic Validated Today" stat cards — `8a41de7`
+- "AI Approved" lifecycle label renamed to "Approved" (accurate for both Claude and heuristic) — `c0f5f6f`
+- DB migration confirmed: `validation_source TEXT` column added to signals table
+
+### Phase 7.2B.10 — Redis Command Forensics (2026-06-01)
+- Actual: 721K/month vs estimated 240K/month — gap of +481K/month explained
+- Root cause 1: Futures cache TTL misalignment (OPT-6 not done) = 576K/month
+- Root cause 2: Telegram settings gate (Phase 7.2B.8) added 4 get_group() per scan cycle
+- Root cause 3: Quota guard canConsume() reads 3 keys per tick — undercounted
+- OPT-6 (futures TTL 32min) = highest-leverage fix: saves ~360K/month alone
+
+### Phase 7.2B.7.1 — Security Audit (2026-06-01)
+- Score: 7.8/10 — 1 HIGH, 3 MEDIUM, 4 LOW — no CRITICAL findings
+- HIGH: `/metrics` publicly accessible without auth
+- MEDIUM: `/openapi.json` accessible, Railway direct URL exposure, Redis TLS cert verification disabled
+- LOW: ADMIN_SECRET non-constant-time compare, email PII in logs, CORS wildcard methods, health endpoint config disclosure
+
+### Phase 7.2B.7.1A — Security Remediation Validation (2026-06-01)
+- **0 of 8 findings remediated** — all findings from 7.2B.7.1 remain open
+- Verdict: ✅ **GO WITH MINOR FIXES**
+- Quick-fix list (4 files, 5 lines): `openapi_url=None`, remove `/metrics` from `_PUBLIC_PATHS`, `hmac.compare_digest()`, remove email from `console.warn`
+
 ---
 
 *Last updated: 2026-05-31*  

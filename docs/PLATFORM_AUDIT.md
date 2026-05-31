@@ -127,6 +127,32 @@
 - ✅ Two `GET /api/health/providers` health checks (live pings) vs `GET /api/providers` (stale metrics) — different systems
 - ✅ See: [docs/PHASE8_PRODUCTION_READINESS.md](PHASE8_PRODUCTION_READINESS.md)
 
+**COMPLETED (Phase 7.2B.9 — Monitoring Truth Fixes, 2026-06-01):**
+- ✅ Fix 1: `coordinator.record_scan_complete()` added to `scan_task.py` — "Last: —" / "Next: —" dashboard bug resolved (`26ea348`)
+- ✅ Fix 2+4: `validation_source` field added to Signal model, `ai_validator.py`, `signal_pipeline.py`, `db.py`, `types/index.ts`, `lib/supabase.ts` (`8a41de7`)
+- ✅ Fix 5: `claude_calls` + `heuristic_calls` added to `get_ai_summary()` + Calibration dashboard cards (`8a41de7`)
+- ✅ Fix UI: "AI Approved" lifecycle label renamed to "Approved" in `signal-lifecycle.ts` + `tactical/page.tsx` (`c0f5f6f`)
+- ✅ DB migration confirmed: `validation_source TEXT` column added to `signals` table
+
+**COMPLETED (Phase 7.2B.10 — Redis Command Forensics, 2026-06-01):**
+- ✅ Root cause identified: 721K actual vs 240K estimated — 3 compounding factors
+- ✅ Factor 1: Futures cache TTL misalignment (OPT-6 not done) = 576K/month alone
+- ✅ Factor 2: Telegram settings gate (Phase 7.2B.8 fix) added 4 `get_group()` calls per scan cycle = +103K/month
+- ✅ Factor 3: Quota guard `canConsume()` reads 3 keys per tick — undercounted by ~95K/month
+- ✅ OPT-6 (futures TTL 32min) identified as highest-leverage single fix: saves ~360K/month
+
+**COMPLETED (Phase 7.2B.7.1 — Security Audit, 2026-06-01):**
+- ✅ Full security audit: auth, admin endpoints, secrets, Redis, CORS, TLS, health endpoint
+- ✅ Score: 7.8/10 — no CRITICAL findings, 1 HIGH (metrics public), 3 MEDIUM, 4 LOW
+- ✅ See: [docs/PHASE8_PRODUCTION_READINESS.md](PHASE8_PRODUCTION_READINESS.md)
+
+**COMPLETED (Phase 7.2B.7.1A — Security Remediation Validation, 2026-06-01):**
+- ✅ All 8 findings re-verified — 0 of 8 remediated since original audit
+- ✅ `/metrics` still public (HIGH), `/openapi.json` still accessible (MEDIUM)
+- ✅ `hmac.compare_digest()` not yet applied, email still logged, CORS still wildcard
+- ✅ Verdict: **GO WITH MINOR FIXES** — 4 files, 5 lines would close 4 of 8 findings
+- ✅ Quick-fix list: `openapi_url=None`, remove `/metrics` from PUBLIC_PATHS, `hmac.compare_digest`, remove email from `console.warn`
+
 **PENDING (Phase 8.2 — if needed after 14-day monitoring):**
 - 🔶 Hard regime gate (block counter-trend entirely) if win rate <12% after 14 days with soft gate
 - 🔶  30-day clean dataset for full calibration (~June 30)
