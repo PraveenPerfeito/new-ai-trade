@@ -159,7 +159,7 @@ export default function AdminScannerPage() {
   useEffect(() => {
     fetchStatus()
     fetchFlags()
-    const t1 = setInterval(fetchStatus, 8_000)
+    const t1 = setInterval(fetchStatus, 30_000)  // OPT-4: was 8_000 — scheduler runs on 15-30min cycles
     const t2 = setInterval(fetchFlags, 15_000)
     return () => { clearInterval(t1); clearInterval(t2) }
   }, [fetchStatus, fetchFlags])

@@ -22,7 +22,7 @@ from backend.metrics.prometheus import (
 
 log = get_logger(__name__)
 
-_INTERVAL = 30       # seconds between scrapes
+_INTERVAL = 300      # seconds between scrapes (OPT-2: was 30 — Redis memory/queue depth change slowly)
 _QUEUES   = ("scanner", "celery")
 
 

@@ -99,7 +99,7 @@ export default function CommandOverviewPage() {
     setUpdatedAt(new Date().toLocaleTimeString())
   }, [])
 
-  useEffect(() => { fetchAll(); const t = setInterval(fetchAll, 15_000); return () => clearInterval(t) }, [fetchAll])
+  useEffect(() => { fetchAll(); const t = setInterval(fetchAll, 30_000); return () => clearInterval(t) }, [fetchAll])  // OPT-10: was 15_000
 
   useEffect(() => {
     const tick = () => {

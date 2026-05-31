@@ -338,7 +338,10 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                     rr=signal.rr_ratio,
                 )
 
-            await _set_progress(progress)
+            # OPT-1: update Redis only at start, every 10 coins, and completion
+            # (was: every coin — 2 setex × 80 coins = 160 ops/scan)
+            if progress.scanned % 10 == 0 or progress.scanned == progress.total:
+                await _set_progress(progress)
 
         # 6. Finalise
         duration_ms = int((time.monotonic() - t0) * 1000)
