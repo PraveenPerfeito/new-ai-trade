@@ -327,6 +327,13 @@ function SignalCard({ sig }: { sig: TradingSignal }) {
           {(sig.aiReasoning || (sig.strengths && sig.strengths.length > 0) || (sig.risks && sig.risks.length > 0)) && (
             <div className="px-4 py-3">
               <SectionLabel label="AI" />
+              {/* Validation source badge — Phase 7.2B.9 */}
+              <div className="mb-2">
+                {sig.validationSource === 'CLAUDE'
+                  ? <span className="text-[9px] font-mono font-semibold px-2 py-0.5 rounded border border-blue-400/30 bg-blue-400/10 text-blue-400">🤖 Claude Approved</span>
+                  : <span className="text-[9px] font-mono font-semibold px-2 py-0.5 rounded border border-zinc-600/40 bg-zinc-800/50 text-zinc-400">⚡ Heuristic Approved</span>
+                }
+              </div>
               {sig.aiReasoning && (
                 <p className="text-terminal-text text-xs leading-relaxed mb-2">{sig.aiReasoning}</p>
               )}

@@ -189,6 +189,7 @@ export interface TradingSignal {
   positioningContext?:     string;   // EXTREME_LONG | LONG_HEAVY | BALANCED | SHORT_HEAVY | EXTREME_SHORT
   trendScore?:             number;   // 0-100 TrendScore (TRENDING mode only)
   sectorStatus?:           string;   // STRONGEST | ACCELERATING | NEUTRAL | WEAKENING | OVERCROWDED
+  validationSource?:       'CLAUDE' | 'HEURISTIC';  // Phase 7.2B.9 — which validator approved
 }
 
 export interface ScanRun {

@@ -200,6 +200,7 @@ async def validate_signal(
             risks=[str(r) for r in (parsed.get("risks") or [])],
             strengths=[str(s) for s in (parsed.get("strengths") or [])],
             explainability=expl,
+            validation_source="CLAUDE",   # Phase 7.2B.9
         )
 
     except json.JSONDecodeError:
@@ -459,4 +460,5 @@ def _heuristic(
         risks=risks,
         strengths=strengths,
         explainability=expl,
+        validation_source="HEURISTIC",   # Phase 7.2B.9
     )

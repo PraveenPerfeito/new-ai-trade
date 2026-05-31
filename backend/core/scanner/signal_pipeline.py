@@ -596,13 +596,15 @@ async def scan_coin(
 
         return Signal(
             **draft.model_dump(exclude={"confidence", "ai_validated", "ai_reasoning",
-                                        "ai_explainability", "risks", "strengths"}),
+                                        "ai_explainability", "risks", "strengths",
+                                        "validation_source"}),
             confidence=ai.confidence,
             ai_validated=ai.validated,
             ai_reasoning=ai.reasoning,
             ai_explainability=ai.explainability,
             risks=ai.risks,
             strengths=ai.strengths,
+            validation_source=ai.validation_source,   # Phase 7.2B.9 "CLAUDE"|"HEURISTIC"
         )
 
     except Exception as exc:

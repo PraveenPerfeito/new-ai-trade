@@ -459,5 +459,6 @@ function rowToSignal(row: Record<string, unknown>): TradingSignal {
     positioningContext: row.positioning_context  as string | undefined ?? undefined,
     trendScore:         row.trend_score  != null ? Number(row.trend_score) : undefined,
     sectorStatus:       row.sector_status        as string | undefined ?? undefined,
+    validationSource:   row.validation_source    as 'CLAUDE' | 'HEURISTIC' | undefined ?? undefined,
   };
 }

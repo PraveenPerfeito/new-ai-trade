@@ -143,14 +143,17 @@ export interface AnomalyRecord {
 }
 
 export interface AiSummaryResponse {
-  total_calls: number
-  success_rate: number
-  error_rate: number
-  fallback_rate: number
-  avg_latency_ms: number | null
-  verdicts?: Record<string, number>
+  total_calls:     number
+  success_rate:    number
+  error_rate:      number
+  fallback_rate:   number
+  avg_latency_ms:  number | null
+  verdicts?:       Record<string, number>
   verdict_distribution?: Record<string, number>
-  window_hours: number
+  window_hours:    number
+  // Phase 7.2B.9 — validation source breakdown
+  claude_calls?:    number
+  heuristic_calls?: number
 }
 
 export interface ScanSummaryResponse {

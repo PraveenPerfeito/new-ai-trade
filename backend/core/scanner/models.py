@@ -293,12 +293,13 @@ class AIExplainability(BaseModel):
 
 
 class AIValidationResult(BaseModel):
-    confidence:     int
-    validated:      bool
-    reasoning:      str
-    risks:          list[str]
-    strengths:      list[str]
-    explainability: AIExplainability | None = None
+    confidence:        int
+    validated:         bool
+    reasoning:         str
+    risks:             list[str]
+    strengths:         list[str]
+    explainability:    AIExplainability | None = None
+    validation_source: str = "HEURISTIC"  # "CLAUDE" | "HEURISTIC" — Phase 7.2B.9
 
 
 class Signal(BaseModel):
@@ -342,6 +343,8 @@ class Signal(BaseModel):
     sector_status:           str | None = None   # STRONGEST | ACCELERATING | NEUTRAL | WEAKENING | OVERCROWDED
     # Phase 8.1B — BTC macro regime (Python port of lib/market-regime.ts)
     market_regime:           str | None = None   # BULL_TREND | BEAR_TREND | SIDEWAYS | HIGH_VOLATILITY | EUPHORIA | CAPITULATION
+    # Phase 7.2B.9 — validation method
+    validation_source:       str | None = None   # "CLAUDE" | "HEURISTIC"
 
 
 # ── Scan orchestration models ─────────────────────────────────────────────────

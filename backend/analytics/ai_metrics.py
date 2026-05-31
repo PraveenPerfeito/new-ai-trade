@@ -86,18 +86,24 @@ async def get_ai_summary(window_hours: int = 24) -> dict:
     real_latencies = [r["latency_ms"] for r in rows if not r["used_fallback"] and r["latency_ms"] > 0]
     confidences    = [r["confidence"] for r in rows if r["confidence"] > 0]
 
+    claude_calls    = total - fallbacks
+    heuristic_calls = fallbacks
+
     return {
-        "window_hours":    window_hours,
-        "total_calls":     total,
-        "approved":        approved,
-        "rejected":        total - approved - fallbacks,
-        "approval_rate":   round(approved / total, 4),
-        "rejection_rate":  round(max(0, total - approved - fallbacks) / total, 4),
-        "fallback_rate":   round(fallbacks / total, 4),
-        "error_rate":      round(errors / total, 4),
-        "avg_latency_ms":  round(sum(real_latencies) / len(real_latencies), 1) if real_latencies else 0,
-        "p95_latency_ms":  _percentile(real_latencies, 95) if real_latencies else 0,
-        "avg_confidence":  round(sum(confidences) / len(confidences), 1) if confidences else 0.0,
+        "window_hours":      window_hours,
+        "total_calls":       total,
+        "approved":          approved,
+        "rejected":          total - approved - fallbacks,
+        "approval_rate":     round(approved / total, 4),
+        "rejection_rate":    round(max(0, total - approved - fallbacks) / total, 4),
+        "fallback_rate":     round(fallbacks / total, 4),
+        "error_rate":        round(errors / total, 4),
+        "avg_latency_ms":    round(sum(real_latencies) / len(real_latencies), 1) if real_latencies else 0,
+        "p95_latency_ms":    _percentile(real_latencies, 95) if real_latencies else 0,
+        "avg_confidence":    round(sum(confidences) / len(confidences), 1) if confidences else 0.0,
+        # Phase 7.2B.9 — validation source breakdown
+        "claude_calls":      claude_calls,
+        "heuristic_calls":   heuristic_calls,
     }
 
 

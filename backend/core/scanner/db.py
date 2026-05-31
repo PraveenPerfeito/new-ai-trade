@@ -109,7 +109,8 @@ async def save_signal(signal: Signal) -> str | None:
                 breakout_strength, oi_interpretation, funding_trend,
                 positioning_context, trend_score,
                 sector_status,
-                market_regime
+                market_regime,
+                validation_source
             ) VALUES (
                 $1::uuid, $2, $3, $4, $5, $6,
                 $7, $8, $9, $10, $11,
@@ -120,7 +121,8 @@ async def save_signal(signal: Signal) -> str | None:
                 $25, $26, $27,
                 $28, $29,
                 $30,
-                $31
+                $31,
+                $32
             )
             RETURNING id::text
             """,
@@ -155,6 +157,7 @@ async def save_signal(signal: Signal) -> str | None:
             signal.trend_score,          # Phase 7.4A.6.3
             signal.sector_status,        # Phase 7.4A.7.2
             signal.market_regime,        # Phase 8.1B
+            signal.validation_source,    # Phase 7.2B.9
         )
         return row["id"] if row else None
     except Exception as exc:

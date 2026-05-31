@@ -179,6 +179,24 @@ export default function CalibrationPage() {
         />
       </div>
 
+      {/* Validation source breakdown — Phase 7.2B.9 */}
+      {hasAiData && (
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard
+            label="🤖 Claude Validated"
+            value={ai?.claude_calls ?? 0}
+            sub="Anthropic API calls"
+            accent="good"
+          />
+          <StatCard
+            label="⚡ Heuristic Validated"
+            value={ai?.heuristic_calls ?? 0}
+            sub="Claude OFF or low score"
+            accent={(ai?.fallback_rate ?? 0) > 0.5 ? 'warn' : 'default'}
+          />
+        </div>
+      )}
+
       {/* ── SECTION: PERFORMANCE ── */}
       <p className="text-[9px] text-zinc-600 uppercase tracking-widest flex items-center gap-2 pt-1">
         <span className="h-px flex-1 bg-zinc-800" />Performance<span className="h-px flex-1 bg-zinc-800" />

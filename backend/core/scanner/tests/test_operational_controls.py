@@ -293,3 +293,38 @@ class TestTelegramOperationalGate:
 
         assert result is False
         mock_enqueue.assert_not_called()
+
+
+# ── Unit Tests: validation_source field ──────────────────────────────────────
+
+class TestValidationSource:
+    """AIValidationResult must carry validation_source on all paths."""
+
+    def test_heuristic_result_has_heuristic_source(self):
+        from backend.core.scanner.models import AIValidationResult
+        result = AIValidationResult(
+            confidence=80, validated=True, reasoning="heuristic",
+            risks=[], strengths=[], validation_source="HEURISTIC",
+        )
+        assert result.validation_source == "HEURISTIC"
+
+    def test_claude_result_has_claude_source(self):
+        from backend.core.scanner.models import AIValidationResult
+        result = AIValidationResult(
+            confidence=88, validated=True, reasoning="claude approved",
+            risks=[], strengths=[], validation_source="CLAUDE",
+        )
+        assert result.validation_source == "CLAUDE"
+
+    def test_default_validation_source_is_heuristic(self):
+        from backend.core.scanner.models import AIValidationResult
+        result = AIValidationResult(
+            confidence=75, validated=False, reasoning="test",
+            risks=[], strengths=[],
+        )
+        assert result.validation_source == "HEURISTIC"
+
+    def test_signal_has_validation_source_field(self):
+        from backend.core.scanner.models import Signal
+        assert "validation_source" in Signal.model_fields
+        assert Signal.model_fields["validation_source"].default is None
