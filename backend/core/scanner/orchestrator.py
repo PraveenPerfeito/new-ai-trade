@@ -26,6 +26,7 @@ from backend.core.scanner.db import (
     create_scan_run,
     update_scan_run,
     save_signal,
+    mark_signal_telegram_sent,
     upsert_coins,
 )
 from backend.core.scanner.market_fetcher import fetch_top100, fetch_futures_symbols, fetch_btc_4h_change, get_btc_regime
@@ -338,6 +339,12 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                 if signal.confidence >= alert_thr:
                     sent = await send_signal_alert(signal)
                     signal.telegram_sent = sent
+                    # Update DB to reflect actual send status (INSERT happens before send)
+                    if sent and signal.id:
+                        try:
+                            await mark_signal_telegram_sent(signal.id)
+                        except Exception:
+                            pass
 
                 # Analytics: register outcome tracker + paper trade (best-effort)
                 if signal.id:

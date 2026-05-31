@@ -165,6 +165,20 @@ async def save_signal(signal: Signal) -> str | None:
         return None
 
 
+async def mark_signal_telegram_sent(signal_id: str) -> None:
+    """Set telegram_sent=true after a successful Telegram dispatch."""
+    pool = await _pool()
+    if not pool:
+        return
+    try:
+        await pool.execute(
+            "UPDATE signals SET telegram_sent = true WHERE id = $1::uuid",
+            signal_id,
+        )
+    except Exception as exc:
+        log.warning("db_mark_telegram_sent_failed", signal_id=signal_id, error=str(exc))
+
+
 # ── Coins ─────────────────────────────────────────────────────────────────────
 
 async def upsert_coins(coins: list[CoinData]) -> None:
