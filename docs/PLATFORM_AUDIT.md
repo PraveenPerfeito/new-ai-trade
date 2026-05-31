@@ -95,11 +95,25 @@
 - ✅ Expected improvement: 9% → ~24% win rate, −30% signal volume
 - ✅ See: [docs/PHASE8_REGIME_AUDIT.md](PHASE8_REGIME_AUDIT.md)
 
-**PENDING (Phase 8.1B — BTC Regime Gate Implementation):**
-- 🔶 `get_btc_regime()` in market_fetcher.py
-- 🔶 Regime gate in signal_pipeline.py (BULL blocks SELL, BEAR blocks BUY)
-- 🔶 `market_regime` stored on all signals
-- 🔶 30-day clean dataset accumulation
+**COMPLETED (Phase 8.1B — BTC Regime Gate Implementation, 2026-05-31):**
+- ✅ `get_btc_regime()` + `_classify_regime()` added to `market_fetcher.py` — `3bc018c`
+- ✅ Soft regime gate in `signal_pipeline.py`: BULL+SELL requires +10 confidence; BEAR+BUY requires +10; HIGH_VOLATILITY +5 — `3bc018c`
+- ✅ `market_regime` field on Signal model, persisted to signals ($31) and signal_outcomes ($24) — `3bc018c`
+- ✅ `by_market_regime` breakdown in analytics + `market_regime` in edge_validation — `3bc018c`
+- ✅ Telegram alerts now show regime emoji: 🟢 BULL / 🔴 BEAR / 🟡 SIDEWAYS / 🟠 VOLATILE — `3bc018c`
+- ✅ 414/414 tests passing
+
+**COMPLETED (Phase 8.1D — Production Readiness Audit, 2026-05-31):**
+- ✅ Full system audit across all 11 pipeline gates, 7 intelligence dimensions, 5 operational controls
+- ✅ All data flow paths verified (Provider → Cache → Scanner → Signal → DB → Analytics → Dashboard)
+- ✅ **Score: 8.9/10 — ✅ GO — Deploy Now**
+- ✅ Top 10 remaining risks documented (no CRITICAL risks)
+- ✅ 14-day post-deploy monitoring plan defined
+- ✅ See: [docs/PHASE8_PRODUCTION_READINESS.md](PHASE8_PRODUCTION_READINESS.md)
+
+**PENDING (Phase 8.2 — if needed after 14-day monitoring):**
+- 🔶 Hard regime gate (block counter-trend entirely) if win rate <12% after 14 days with soft gate
+- 🔶  30-day clean dataset for full calibration (~June 30)
 
 All 15 TOP 20 Issues from original audit are now: 7 RESOLVED (Phase 7.2B.1–6), 8 PENDING (Phase 7.5)
 

@@ -1,9 +1,9 @@
 # Production Readiness Audit
 
 **Date:** 2026-05-30  
-**Last Updated:** 2026-05-31 (Phase 8.x work ongoing)  
-**Overall Score:** 9.0 / 10  
-**Verdict:** ✅ GO (production hardening complete; Phase 8 calibration in progress)
+**Last Updated:** 2026-05-31 (Phase 8.1D audit complete)  
+**Overall Score:** 8.9 / 10  
+**Verdict:** ✅ GO — Deploy now (see [PHASE8_PRODUCTION_READINESS.md](PHASE8_PRODUCTION_READINESS.md) for full audit)
 
 ---
 
@@ -173,9 +173,16 @@ All 7 intelligence fields (TrendScore, Sector, Breakout, OI, Funding, Positionin
 Option B (port to Python) approved. Implementation plan defined.  
 See: [docs/PHASE8_REGIME_AUDIT.md](PHASE8_REGIME_AUDIT.md)
 
-### Phase 8.1B — BTC Regime Gate (PENDING)
-Port `classifyRegime()` to Python; add regime gate to signal pipeline; store `market_regime` on signals.  
-Expected: 9% → ~24% win rate, −30% signal volume.
+### Phase 8.1B — BTC Regime Gate (`3bc018c`)
+- `get_btc_regime()` + `_classify_regime()` in `market_fetcher.py`
+- Soft gate: BULL+SELL/BEAR+BUY requires +10 confidence; HIGH_VOLATILITY +5
+- `market_regime` on Signal, persisted to both tables, in all analytics queries
+- Telegram regime emoji on every alert
+- 414/414 tests passing
+
+### Phase 8.1D — Production Readiness Audit
+Full system audit — score 8.9/10, verdict ✅ GO.  
+See: [docs/PHASE8_PRODUCTION_READINESS.md](PHASE8_PRODUCTION_READINESS.md)
 
 ---
 
