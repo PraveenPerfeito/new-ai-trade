@@ -175,7 +175,7 @@ _FALLBACK_FUTURES = {
 
 
 _btc_4h_cache    = RedisCache("btc-4h-change", ttl_seconds=5 * 60)
-_btc_regime_cache = RedisCache("btc-regime",    ttl_seconds=5 * 60)
+_btc_regime_cache = RedisCache("btc-regime",    ttl_seconds=20 * 60)   # OPT-6: was 5 min; 20 min > 15-min standard scan cadence → alternating hit
 
 
 def _classify_regime(

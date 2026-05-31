@@ -142,6 +142,10 @@ class RedisCache:
 
 coins_cache    = RedisCache("coins",         ttl_seconds=5 * 60)
 signals_cache  = RedisCache("signals",       ttl_seconds=30)
-oi_cache       = RedisCache("open-interest", ttl_seconds=2 * 60)
-funding_cache  = RedisCache("funding-rate",  ttl_seconds=5 * 60)
-ls_cache       = RedisCache("long-short",    ttl_seconds=5 * 60)
+# OPT-6: TTLs aligned to futures scan cadence (30 min) + 2-min buffer.
+# Previous TTLs (2–5 min) always expired before the next scan fired, causing
+# 100% cache miss rate and ~300 extra Redis ops per futures scan.
+# Funding rate changes every 8h, OI/L/S trend over hours — 32-min data is valid.
+oi_cache       = RedisCache("open-interest", ttl_seconds=32 * 60)   # was 2 min
+funding_cache  = RedisCache("funding-rate",  ttl_seconds=32 * 60)   # was 5 min
+ls_cache       = RedisCache("long-short",    ttl_seconds=32 * 60)   # was 5 min
