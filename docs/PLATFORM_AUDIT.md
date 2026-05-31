@@ -111,6 +111,22 @@
 - ✅ 14-day post-deploy monitoring plan defined
 - ✅ See: [docs/PHASE8_PRODUCTION_READINESS.md](PHASE8_PRODUCTION_READINESS.md)
 
+**COMPLETED (Dashboard vs Backend Truth Audit, 2026-06-01):**
+- ✅ Check 1 (UI CLARITY BUG): `ai_validated=True` with Claude OFF = heuristic passed, not Claude. Label misleads founder. Deferred UI fix.
+- ✅ Check 2 (REAL BUG — FIXED): `coordinator.record_scan_complete()` never called → `scheduler:last_scan_ts` never set → "Last: —" / "Next: —" on dashboard. Fixed `26ea348`.
+- ✅ Check 3 (NOT A BUG): CMC 0% = `intel:quota:used` is 0 after Redis reset; self-corrects within 15min via quota-sync worker.
+- ✅ Check 4 (NOT A BUG): Tactical counts computed correctly from DB via `computeLifecycleStage()`.
+- ✅ Check 5 (NOT A BUG): All three pages (Overview, Signals, Tactical) read same `signals` table via `getRecentSignals()`.
+
+**COMPLETED (Phase 7.2B.8 — Provider Truth Validation, 2026-06-01):**
+- ✅ CMC: 628 real API calls/day via TS workers (tracked in `intel:quota:used`, not `providers:metrics`)
+- ✅ CoinGecko: 0 calls normally, active fallback on cold cache — ping accurate, metrics undercount
+- ✅ Binance: ~30,456 klines/day via Python (NOT tracked in `providers:metrics` at all)
+- ✅ Binance top-coins metrics = fake (tracks 3rd-fallback path that never fires in normal operation)
+- ✅ `providers:metrics:*` tracks TypeScript ProviderManager path only — misleading for Python scanner usage
+- ✅ Two `GET /api/health/providers` health checks (live pings) vs `GET /api/providers` (stale metrics) — different systems
+- ✅ See: [docs/PHASE8_PRODUCTION_READINESS.md](PHASE8_PRODUCTION_READINESS.md)
+
 **PENDING (Phase 8.2 — if needed after 14-day monitoring):**
 - 🔶 Hard regime gate (block counter-trend entirely) if win rate <12% after 14 days with soft gate
 - 🔶  30-day clean dataset for full calibration (~June 30)

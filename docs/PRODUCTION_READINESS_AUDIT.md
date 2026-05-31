@@ -184,6 +184,18 @@ See: [docs/PHASE8_REGIME_AUDIT.md](PHASE8_REGIME_AUDIT.md)
 Full system audit — score 8.9/10, verdict ✅ GO.  
 See: [docs/PHASE8_PRODUCTION_READINESS.md](PHASE8_PRODUCTION_READINESS.md)
 
+### Dashboard vs Backend Truth Audit (2026-06-01)
+- **REAL BUG (FIXED)**: `coordinator.record_scan_complete()` never called in `scan_task.py` — `scheduler:last_scan_ts` Redis key never set — dashboard showed "Last: —" / "Next: —" despite scans running. Fixed `26ea348`.
+- UI CLARITY BUG (deferred): `ai_validated=True` when Claude OFF = heuristic passed. Label misleads. Fix: show "Heuristic" badge when `aiReasoning == ""`.
+- CMC 0%: not a bug — `intel:quota:used = 0` after Redis reset; self-corrects in ≤15 min via quota-sync.
+- Binance RED: `providers:metrics:binance` tracks wrong path (top-coins fallback, never fires). Real klines health always healthy.
+
+### Phase 7.2B.8 — Provider Truth Validation (2026-06-01)
+- CMC: 628 real API calls/day via TypeScript workers → `intel:quota:used`. Not in `providers:metrics`.
+- Binance: ~30,456 klines/day via Python `market_fetcher.py`. Invisible to `providers:metrics`.
+- `providers:metrics:*` tracks TypeScript ProviderManager only — misleading for production scanner usage.
+- Two separate health endpoints: `/api/health/providers` (live pings, accurate) vs `/api/providers` (Redis metrics, misleading).
+
 ---
 
 *Last updated: 2026-05-31*  
