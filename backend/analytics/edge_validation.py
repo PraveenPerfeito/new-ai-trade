@@ -66,7 +66,9 @@ async def _fetch_outcomes(pool, window_hours: int) -> list[dict]:
             SELECT
                 outcome, rr_achieved, duration_hours, confidence,
                 scanner_mode, signal_type, volatility_regime,
-                risk_grade, quality_score, symbol, ai_validated
+                risk_grade, quality_score, symbol, ai_validated,
+                trend_score, sector_status, breakout_type, breakout_strength,
+                oi_interpretation, funding_trend, positioning_context
             FROM signal_outcomes
             WHERE outcome != 'PENDING'
               AND created_at >= NOW() - ($1 || ' hours')::interval

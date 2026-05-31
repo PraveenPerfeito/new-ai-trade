@@ -171,6 +171,29 @@ export interface EdgeBand {
   insufficient_data: boolean
 }
 
+export interface IntelligencePerfRow {
+  label:              string
+  n:                  number
+  win_rate:           number | null
+  expectancy:         number | null
+  avg_rr:             number | null
+  avg_pnl_pct:        number | null
+  insufficient_data:  boolean
+}
+
+export interface IntelligenceSummary {
+  total:                    number
+  window_hours:             number
+  insufficient_data?:       boolean
+  best_trend_score_tier:    IntelligencePerfRow | null
+  best_sector_status:       IntelligencePerfRow | null
+  best_breakout_type:       IntelligencePerfRow | null
+  best_breakout_strength:   IntelligencePerfRow | null
+  best_oi_interpretation:   IntelligencePerfRow | null
+  best_funding_trend:       IntelligencePerfRow | null
+  best_positioning_context: IntelligencePerfRow | null
+}
+
 export interface EdgeReport {
   overall: {
     total: number
@@ -368,12 +391,13 @@ export const adminApi = {
     summary:   (window_hours = 168) => get<Record<string, unknown>>('/analytics/summary', { window_hours }),
     ai:        (window_hours = 24)  => get<AiSummaryResponse>('/analytics/ai', { window_hours }),
     scans:     (window_hours = 24)  => get<ScanSummaryResponse>('/analytics/scans', { window_hours }),
-    edgeReport: (hours = 720)       => get<EdgeReport>('/analytics/edge/report', { window_hours: hours }),
-    calibration: (hours = 720)      => get<Record<string, unknown>>('/analytics/edge/calibration', { window_hours: hours }),
-    claude:    (hours = 720)        => get<Record<string, unknown>>('/analytics/edge/claude', { window_hours: hours }),
-    modes:     (hours = 720)        => get<Record<string, unknown>>('/analytics/edge/modes', { window_hours: hours }),
-    regime:    (hours = 720)        => get<Record<string, unknown>>('/analytics/edge/regime', { window_hours: hours }),
-    coins:     (hours = 720)        => get<Record<string, unknown>>('/analytics/edge/coins', { window_hours: hours }),
+    edgeReport:    (hours = 720)  => get<EdgeReport>('/analytics/edge/report', { window_hours: hours }),
+    calibration:   (hours = 720)  => get<Record<string, unknown>>('/analytics/edge/calibration', { window_hours: hours }),
+    claude:        (hours = 720)  => get<Record<string, unknown>>('/analytics/edge/claude', { window_hours: hours }),
+    modes:         (hours = 720)  => get<Record<string, unknown>>('/analytics/edge/modes', { window_hours: hours }),
+    regime:        (hours = 720)  => get<Record<string, unknown>>('/analytics/edge/regime', { window_hours: hours }),
+    coins:         (hours = 720)  => get<Record<string, unknown>>('/analytics/edge/coins', { window_hours: hours }),
+    intelligence:  (hours = 720)  => get<IntelligenceSummary>('/analytics/intelligence', { window_hours: hours }),
   },
   health: {
     liveness: () => get<{ status: string }>('/health'),

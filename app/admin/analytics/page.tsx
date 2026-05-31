@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { adminApi, EdgeReport } from '@/lib/admin-api'
+import { adminApi, EdgeReport, IntelligenceSummary, IntelligencePerfRow } from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
 import { formatTs } from '@/lib/utils'
 import type { AttributionReport, AttributionDimension, EdgePattern, ThresholdRecommendation } from '@/types'
@@ -78,7 +78,79 @@ function CalibrationTable({ bands }: { bands: EdgeReport['confidence_calibration
   )
 }
 
-function EdgeValidationTab({ edge, loading }: { edge: EdgeReport | null; loading: boolean }) {
+// ─── Intelligence Performance section ────────────────────────────────────────
+
+function IntelRow({ label, row }: { label: string; row: IntelligencePerfRow | null }) {
+  if (!row) return (
+    <div className="flex items-center justify-between py-2 border-b border-terminal-border/20 last:border-0">
+      <span className="text-terminal-muted text-xs w-44 shrink-0">{label}</span>
+      <span className="text-terminal-muted/40 text-xs font-mono">no data</span>
+    </div>
+  )
+  const wr = row.win_rate
+  return (
+    <div className="flex items-center justify-between py-2 border-b border-terminal-border/20 last:border-0 gap-2 flex-wrap">
+      <span className="text-terminal-muted text-xs w-44 shrink-0">{label}</span>
+      <span className="text-terminal-text text-xs font-medium flex-1 min-w-0 truncate">{row.label}</span>
+      <div className="flex items-center gap-4 shrink-0">
+        <span className={`font-mono text-xs font-bold ${wr != null && wr >= 0.4 ? 'text-bull-default' : wr != null && wr >= 0.3 ? 'text-signal-high' : 'text-bear-default'}`}>
+          {wr != null ? `${(wr * 100).toFixed(1)}%` : '—'}
+        </span>
+        <span className="text-terminal-muted text-xs font-mono">
+          {row.avg_rr != null ? `${row.avg_rr.toFixed(2)}R` : '—'}
+        </span>
+        <span className="text-terminal-muted/50 text-xs font-mono">n={row.n}</span>
+      </div>
+    </div>
+  )
+}
+
+function IntelligenceSection({ data, loading }: { data: IntelligenceSummary | null; loading: boolean }) {
+  if (loading) return (
+    <div className="glass-card rounded-lg p-5">
+      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Intelligence Performance</p>
+      <div className="space-y-2">{Array.from({ length: 7 }).map((_, i) => <div key={i} className="skeleton h-7 rounded" />)}</div>
+    </div>
+  )
+  if (!data || data.insufficient_data) return (
+    <div className="glass-card rounded-lg p-5">
+      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-2">Intelligence Performance</p>
+      <p className="text-terminal-muted/60 text-xs leading-relaxed">
+        Intelligence breakdowns require at least 5 resolved outcomes per tier. Warming up — data populates as signals resolve.
+        {data && ` Total resolved: ${data.total}.`}
+      </p>
+    </div>
+  )
+  return (
+    <div>
+      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Intelligence Performance — Best Tier per Dimension</p>
+      <div className="glass-card rounded-lg p-5">
+        <div className="flex items-center gap-4 mb-4 text-terminal-muted/50 text-[10px] font-mono uppercase tracking-wider">
+          <span className="w-44 shrink-0">Dimension</span>
+          <span className="flex-1">Best Value</span>
+          <span className="w-12 text-right">Win Rate</span>
+          <span className="w-12 text-right">Avg RR</span>
+          <span className="w-12 text-right">n</span>
+        </div>
+        <IntelRow label="TrendScore Tier"     row={data.best_trend_score_tier} />
+        <IntelRow label="Sector Status"        row={data.best_sector_status} />
+        <IntelRow label="Breakout Type"        row={data.best_breakout_type} />
+        <IntelRow label="Breakout Strength"    row={data.best_breakout_strength} />
+        <IntelRow label="OI Interpretation"    row={data.best_oi_interpretation} />
+        <IntelRow label="Funding Trend"        row={data.best_funding_trend} />
+        <IntelRow label="Positioning Context"  row={data.best_positioning_context} />
+        <p className="text-terminal-muted/30 text-xs font-mono mt-4 pt-3 border-t border-terminal-border/20">
+          {data.total} resolved · {data.window_hours}h window · min 5 signals/tier
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
+  edge: EdgeReport | null; loading: boolean
+  intel: IntelligenceSummary | null; intelLoading: boolean
+}) {
   const overall = edge?.overall
   const verdict = edge?.edge_verdict
   const cal     = edge?.confidence_calibration
@@ -205,6 +277,9 @@ function EdgeValidationTab({ edge, loading }: { edge: EdgeReport | null; loading
           </div>
         </div>
       )}
+
+      {/* Intelligence Performance */}
+      <IntelligenceSection data={intel} loading={intelLoading} />
 
       {edge && (
         <p className="text-terminal-muted/40 text-xs font-mono">
@@ -499,8 +574,11 @@ type Tab = 'edge' | 'attribution'
 export default function AnalyticsPage() {
   const [tab, setTab] = useState<Tab>('edge')
 
-  const edgeFetcher = useCallback(() => adminApi.analytics.edgeReport(), [])
-  const { data: edge, loading: edgeLoading } = useAutoRefresh<EdgeReport>(edgeFetcher, 120_000)
+  const edgeFetcher  = useCallback(() => adminApi.analytics.edgeReport(), [])
+  const intelFetcher = useCallback(() => adminApi.analytics.intelligence(), [])
+
+  const { data: edge,  loading: edgeLoading  } = useAutoRefresh<EdgeReport>(edgeFetcher, 120_000)
+  const { data: intel, loading: intelLoading } = useAutoRefresh<IntelligenceSummary>(intelFetcher, 120_000)
 
   const attrFetcher = useCallback(() =>
     fetch('/api/analytics/attribution?hours=720', { cache: 'no-store' })
@@ -539,7 +617,7 @@ export default function AnalyticsPage() {
         ))}
       </div>
 
-      {tab === 'edge'        && <EdgeValidationTab edge={edge ?? null} loading={edgeLoading} />}
+      {tab === 'edge'        && <EdgeValidationTab edge={edge ?? null} loading={edgeLoading} intel={intel ?? null} intelLoading={intelLoading} />}
       {tab === 'attribution' && <AttributionTab data={attribution ?? null} loading={attrLoading} />}
     </div>
   )

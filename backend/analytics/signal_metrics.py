@@ -27,6 +27,20 @@ CONFIDENCE_BANDS: list[tuple[int, int]] = [
     (70, 75), (75, 80), (80, 85), (85, 90), (90, 95), (95, 101),
 ]
 
+# ── TrendScore tier buckets (GAP-4) ──────────────────────────────────────────
+
+def trend_score_tier(score: float | None) -> str:
+    """Classify a 0-100 TrendScore into a named tier for analytics grouping."""
+    if score is None:
+        return "N/A"
+    if score >= 85:
+        return "ELITE"
+    if score >= 70:
+        return "STRONG"
+    if score >= 50:
+        return "GOOD"
+    return "WEAK"
+
 
 async def _pool():
     try:
@@ -267,7 +281,9 @@ async def get_outcomes(window_hours: int = 168) -> list[dict]:
             """
             SELECT symbol, signal_type, timeframe, scanner_mode, confidence,
                    ai_validated, volatility_regime, risk_grade, risk_score, quality_score,
-                   outcome, rr_achieved, pnl_pct, duration_hours
+                   outcome, rr_achieved, pnl_pct, duration_hours,
+                   trend_score, sector_status, breakout_type, breakout_strength,
+                   oi_interpretation, funding_trend, positioning_context
             FROM signal_outcomes
             WHERE outcome != 'PENDING' AND created_at > $1
             ORDER BY created_at DESC
@@ -298,6 +314,13 @@ async def get_analytics(window_hours: int = 168) -> dict:
         if len(band) >= 3:
             ai_accuracy.append({"band": f"{lo}-{hi}", **compute_stats(band)})
 
+    def breakdown_by_trend_tier() -> dict:
+        groups: dict[str, list] = {}
+        for o in outcomes:
+            tier = trend_score_tier(o.get("trend_score"))
+            groups.setdefault(tier, []).append(o)
+        return {k: compute_stats(v) for k, v in groups.items()}
+
     return {
         "window_hours":               window_hours,
         "total_outcomes":             len(outcomes),
@@ -307,4 +330,71 @@ async def get_analytics(window_hours: int = 168) -> dict:
         "by_volatility":              breakdown("volatility_regime"),
         "by_risk_grade":              breakdown("risk_grade"),
         "ai_accuracy_by_confidence":  ai_accuracy,
+        # ── Intelligence breakdowns (Phase 8.0.1 GAP-2) ──────────────────
+        "by_trend_score_tier":        breakdown_by_trend_tier(),
+        "by_sector_status":           breakdown("sector_status"),
+        "by_breakout_type":           breakdown("breakout_type"),
+        "by_breakout_strength":       breakdown("breakout_strength"),
+        "by_oi_interpretation":       breakdown("oi_interpretation"),
+        "by_funding_trend":           breakdown("funding_trend"),
+        "by_positioning_context":     breakdown("positioning_context"),
+    }
+
+
+# ── Intelligence calibration summary (GAP-5) ─────────────────────────────────
+
+async def get_intelligence_summary(window_hours: int = 720) -> dict:
+    """Best-performing intelligence tier per dimension from resolved outcomes."""
+    outcomes = await get_outcomes(window_hours)
+    if not outcomes:
+        return {"insufficient_data": True, "total": 0, "window_hours": window_hours}
+
+    def _best(key: str) -> dict | None:
+        groups: dict[str, list] = {}
+        for o in outcomes:
+            val = o.get(key)
+            if val is not None:
+                groups.setdefault(str(val), []).append(o)
+        best: dict | None = None
+        best_wr = -1.0
+        for name, rows in groups.items():
+            if len(rows) < 5:
+                continue
+            stats = compute_stats(rows)
+            wr = stats.get("win_rate") or 0.0
+            if wr > best_wr:
+                best_wr = wr
+                best = {"label": name, "n": len(rows), **stats}
+        return best
+
+    def _best_trend_tier() -> dict | None:
+        groups: dict[str, list] = {}
+        for o in outcomes:
+            tier = trend_score_tier(o.get("trend_score"))
+            if tier == "N/A":
+                continue
+            groups.setdefault(tier, []).append(o)
+        best: dict | None = None
+        best_wr = -1.0
+        for name, rows in groups.items():
+            if len(rows) < 5:
+                continue
+            stats = compute_stats(rows)
+            wr = stats.get("win_rate") or 0.0
+            if wr > best_wr:
+                best_wr = wr
+                best = {"label": name, "n": len(rows), **stats}
+        return best
+
+    return {
+        "total":                      len(outcomes),
+        "window_hours":               window_hours,
+        "insufficient_data":          False,
+        "best_trend_score_tier":      _best_trend_tier(),
+        "best_sector_status":         _best("sector_status"),
+        "best_breakout_type":         _best("breakout_type"),
+        "best_breakout_strength":     _best("breakout_strength"),
+        "best_oi_interpretation":     _best("oi_interpretation"),
+        "best_funding_trend":         _best("funding_trend"),
+        "best_positioning_context":   _best("positioning_context"),
     }

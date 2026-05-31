@@ -22,7 +22,7 @@ from backend.analytics.edge_validation import (
 from backend.analytics.performance_engine import get_dashboard_summary
 from backend.analytics.realtime_metrics import sse_metrics_stream
 from backend.analytics.scan_metrics import get_scan_summary
-from backend.analytics.signal_metrics import get_analytics
+from backend.analytics.signal_metrics import get_analytics, get_intelligence_summary
 from backend.analytics.signal_validation import (
     confidence_vs_outcome,
     setup_score_analysis,
@@ -50,6 +50,14 @@ async def signal_performance(
 ) -> dict[str, Any]:
     """Signal outcome analytics with breakdowns by mode, grade, volatility, confidence."""
     return await get_analytics(window_hours)
+
+
+@router.get("/intelligence")
+async def intelligence_breakdown(
+    window_hours: int = Query(default=720, ge=1, le=2160),
+) -> dict[str, Any]:
+    """Best-performing intelligence tier per dimension (TrendScore, Sector, Breakout, OI, Funding, Positioning)."""
+    return await get_intelligence_summary(window_hours)
 
 
 @router.get("/ai")
