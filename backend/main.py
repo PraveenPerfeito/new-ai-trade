@@ -66,8 +66,9 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Crypto Scanner API",
         version="1.0.0",
-        docs_url="/docs" if not settings.is_production else None,
+        docs_url="/docs"       if not settings.is_production else None,
         redoc_url=None,
+        openapi_url="/openapi.json" if not settings.is_production else None,  # Fix 1: close schema in prod
         lifespan=lifespan,
     )
 

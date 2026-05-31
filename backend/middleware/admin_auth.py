@@ -12,6 +12,8 @@ In production, ADMIN_SECRET must be set and match the value in Next.js.
 """
 from __future__ import annotations
 
+import hmac
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -21,14 +23,14 @@ from backend.logging.setup import get_logger
 
 log = get_logger(__name__)
 
-# Paths that bypass the secret check
+# Paths that bypass the secret check.
+# NOTE: /metrics and /openapi.json intentionally removed — they now require
+# ADMIN_SECRET authentication in production to prevent operational data leakage.
 _PUBLIC_PATHS = frozenset({
     "/health",
     "/health/ready",
     "/docs",
     "/redoc",
-    "/openapi.json",
-    "/metrics",
 })
 
 
@@ -48,7 +50,7 @@ class AdminAuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         provided = request.headers.get("X-Admin-Secret", "")
-        if provided != secret:
+        if not hmac.compare_digest(provided, secret):  # Fix 3: constant-time comparison
             log.warning(
                 "admin_secret_rejected",
                 path=path,

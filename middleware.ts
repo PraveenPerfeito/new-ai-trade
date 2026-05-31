@@ -107,8 +107,8 @@ export async function middleware(req: NextRequest) {
 
     if (!isAllowed) {
       console.warn(
-        `[auth] blocked ${user ? `authenticated non-admin ${email}` : 'unauthenticated'} → ${pathname}`,
-      )
+        `[auth] blocked ${user ? 'authenticated non-admin user' : 'unauthenticated'} → ${pathname}`,
+      )  // Fix 4: email address removed from logs (PII)
 
       if (pathname.startsWith('/api/')) {
         return NextResponse.json(

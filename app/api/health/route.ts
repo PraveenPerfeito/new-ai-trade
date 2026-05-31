@@ -61,6 +61,8 @@ export async function GET() {
 
   const [supabase] = await Promise.all([checkSupabase()]);
 
+  // Fix 5: omit per-service check details from public response to reduce
+  // configuration disclosure. Only overall status is returned externally.
   const checks: Record<string, HealthCheck> = {
     supabase,
     anthropic:  checkAnthropicConfig(),
@@ -80,7 +82,8 @@ export async function GET() {
     uptimeHuman: formatUptime(process.uptime()),
     timestamp:   new Date().toISOString(),
     responseMs:  Date.now() - t0,
-    checks,
+    // Individual check details intentionally omitted from public response
+    // to avoid exposing which external services are configured/absent.
   };
 
   return NextResponse.json(body, {
