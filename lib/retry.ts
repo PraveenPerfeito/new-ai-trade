@@ -1,3 +1,7 @@
+import { createLogger } from './logger';
+
+const log = createLogger('lib/retry');
+
 export interface RetryOptions {
   maxRetries?:  number;                        // default 3
   baseDelayMs?: number;                        // default 500ms
@@ -69,7 +73,7 @@ export function withApiRetry<T>(
     maxDelayMs:  8_000,
     onRetry: (attempt, err, delayMs) => {
       const status = (err as { response?: { status?: number } }).response?.status ?? 'network';
-      console.warn(`[retry] ${label ?? 'api'} attempt ${attempt} after ${delayMs}ms (${status})`);
+      log.warn({ label: label ?? 'api', attempt, delayMs, status }, 'api retry');
     },
   });
 }

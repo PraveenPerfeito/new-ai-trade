@@ -1,6 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { TradingSignal, AIExplainability, CoinData, BacktestTrade, BacktestMetrics, BacktestConfig, BacktestRun, AttributionRow, SignalType, Timeframe, ScannerMode, RiskGrade, MarketRegime, SignalState, ExtensionRisk, McapTier, SectorName } from '@/types';
 import { createSupabaseAdminClient } from './supabase/admin';
+import { createLogger } from './logger';
+
+const log = createLogger('lib/supabase');
 
 let _client: ReturnType<typeof createClient> | null = null;
 
@@ -27,7 +30,7 @@ export async function createScanRun(mode: string): Promise<string | null> {
     .select('id')
     .single();
 
-  if (error) { console.error('[DB] createScanRun:', error.message); return null; }
+  if (error) { log.error({ error: error.message }, 'db createScanRun failed'); return null; }
   return data.id as string;
 }
 
@@ -42,7 +45,7 @@ export async function updateScanRun(
   },
 ): Promise<void> {
   const { error } = await db().from('scan_runs').update(patch).eq('id', id);
-  if (error) console.error('[DB] updateScanRun:', error.message);
+  if (error) log.error({ error: error.message }, 'db updateScanRun failed');
 }
 
 // --- Signals ---
@@ -87,7 +90,7 @@ export async function saveSignal(signal: TradingSignal): Promise<string | null> 
     .select('id')
     .single();
 
-  if (error) { console.error('[DB] saveSignal:', error.message); return null; }
+  if (error) { log.error({ error: error.message }, 'db saveSignal failed'); return null; }
   return data.id as string;
 }
 
@@ -106,7 +109,7 @@ export async function getRecentSignals(
     .order('confidence', { ascending: false })   // then by quality
     .limit(limit);
 
-  if (error) { console.error('[DB] getRecentSignals:', error.message); return []; }
+  if (error) { log.error({ error: error.message }, 'db getRecentSignals failed'); return []; }
   return (data ?? []).map(rowToSignal);
 }
 
@@ -128,7 +131,7 @@ export async function upsertCoins(coins: CoinData[]): Promise<void> {
   }));
 
   const { error } = await db().from('coins').upsert(rows, { onConflict: 'symbol' });
-  if (error) console.error('[DB] upsertCoins:', error.message);
+  if (error) log.error({ error: error.message }, 'db upsertCoins failed');
 }
 
 // --- Coins cache read ---
@@ -162,7 +165,7 @@ export async function createBacktestRun(
     })
     .select('id')
     .single();
-  if (error) { console.error('[DB] createBacktestRun:', error.message); return null; }
+  if (error) { log.error({ error: error.message }, 'db createBacktestRun failed'); return null; }
   return data.id as string;
 }
 
@@ -194,7 +197,7 @@ export async function completeBacktestRun(
       volume_spike:     t.volumeSpikeAtEntry ?? null,
     }));
     const { error } = await db().from('backtest_trades').insert(chunk);
-    if (error) console.error('[DB] insertBacktestTrades:', error.message);
+    if (error) log.error({ error: error.message }, 'db insertBacktestTrades failed');
   }
 
   // Update run summary
@@ -221,7 +224,7 @@ export async function completeBacktestRun(
       equity_curve:        metrics.equityCurve,
     })
     .eq('id', id);
-  if (error) console.error('[DB] completeBacktestRun:', error.message);
+  if (error) log.error({ error: error.message }, 'db completeBacktestRun failed');
 }
 
 export async function failBacktestRun(id: string, message: string): Promise<void> {
@@ -229,7 +232,7 @@ export async function failBacktestRun(id: string, message: string): Promise<void
     .from('backtest_runs')
     .update({ status: 'failed', error: message, completed_at: new Date().toISOString() })
     .eq('id', id);
-  if (error) console.error('[DB] failBacktestRun:', error.message);
+  if (error) log.error({ error: error.message }, 'db failBacktestRun failed');
 }
 
 export async function getBacktestRuns(limit = 20): Promise<BacktestRun[]> {
@@ -238,7 +241,7 @@ export async function getBacktestRuns(limit = 20): Promise<BacktestRun[]> {
     .select('*')
     .order('started_at', { ascending: false })
     .limit(limit);
-  if (error) { console.error('[DB] getBacktestRuns:', error.message); return []; }
+  if (error) { log.error({ error: error.message }, 'db getBacktestRuns failed'); return []; }
   return (data ?? []).map(rowToBacktestRun);
 }
 
@@ -251,7 +254,7 @@ export async function getBacktestRun(id: string): Promise<{
     db().from('backtest_trades').select('*').eq('backtest_run_id', id)
       .order('entry_time', { ascending: true }),
   ]);
-  if (runRes.error) { console.error('[DB] getBacktestRun:', runRes.error.message); return { run: null, trades: [] }; }
+  if (runRes.error) { log.error({ error: runRes.error.message }, 'db getBacktestRun failed'); return { run: null, trades: [] }; }
   return {
     run:    rowToBacktestRun(runRes.data),
     trades: (tradesRes.data ?? []).map(rowToBacktestTrade),
@@ -278,7 +281,7 @@ export async function getAttributionRows(hours = 720): Promise<AttributionRow[]>
     .limit(2000);
 
   if (outErr || !outcomes?.length) {
-    if (outErr) console.error('[DB] getAttributionRows outcomes:', outErr.message);
+    if (outErr) log.error({ error: outErr.message }, 'db getAttributionRows outcomes failed');
     return [];
   }
 
@@ -290,7 +293,7 @@ export async function getAttributionRows(hours = 720): Promise<AttributionRow[]>
     .select('id, market_regime, institutional_score, signal_state, extension_risk, mcap_tier, sector_name, continuation_probability, regime_alignment_score')
     .in('id', signalIds);
 
-  if (sigErr) console.error('[DB] getAttributionRows signals:', sigErr.message);
+  if (sigErr) log.error({ error: sigErr.message }, 'db getAttributionRows signals failed');
 
   const sigMap = new Map<string, Record<string, unknown>>();
   for (const s of (signals ?? []) as Record<string, unknown>[]) {
