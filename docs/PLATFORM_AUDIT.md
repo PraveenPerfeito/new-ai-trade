@@ -21,6 +21,13 @@
 - ✅ Signals/Tactical density: Desktop columns (Entry md+, Target% lg+, Stop% lg+), pagination (Issue #2, #6)
 - ✅ Topbar alerts: "3 CRITICAL / WARN" clickable to /admin/anomalies (Issue #4)
 
+**RESOLVED (Phase 7.2B.8 — Operational Control Incident, 2026-05-31):**
+- ✅ BUG-1: Scanner toggle (`scheduler:enabled`) never read before task execution — fixed in `scan_task.py` + `api/scanner.py` (`0a7306e`)
+- ✅ BUG-2: `TelegramSettings.alerts_enabled` and `FeatureFlags.telegram` never checked before sending — fixed in `telegram_notifier.py` (`0a7306e`)
+- ✅ BUG-3/4: `emergency_stop` and `maintenance_mode` fields added to `FeatureFlags`; enforced in all scan and Telegram paths (`0a7306e`)
+- ✅ Operations Control page rebuilt — Scanner, Claude AI, Telegram, Emergency Stop, Maintenance Mode unified (`0a7306e`)
+- ✅ 18 unit tests added for all operational gates — 414/414 suite passing (`0a7306e`)
+
 **RESOLVED (Phase 7.2B.7 — Production Hardening, 2026-05-30):**
 - ✅ B1: .env.local confirmed never committed — no credential rotation required (`478fc54`)
 - ✅ B2: ADMIN_SECRET enforced as `z.string().min(32)` in `lib/env.ts` (`478fc54`)
@@ -50,6 +57,12 @@
 - 🔶 M3: Frontend refresh interval jitter + centralized config
 - 🔶 M4: ATR minimum relative floor
 - 🔶 M5: Signal rejection reasons not persisted to DB
+
+**COMPLETED (Phase 7.2B.9 — Provider & Architecture Audit, 2026-05-31):**
+- ✅ Full provider utilization traced: CMC · CoinGecko · Binance · Redis
+- ✅ All dashboard anomalies explained (Binance red, CMC 0%, Redis 500K, 41.9% hit rate)
+- ✅ Architecture confirmed HEALTHY — no unsafe removals identified
+- ✅ See: [docs/PROVIDER_ARCHITECTURE_AUDIT.md](PROVIDER_ARCHITECTURE_AUDIT.md)
 
 All 15 TOP 20 Issues from original audit are now: 7 RESOLVED (Phase 7.2B.1–6), 8 PENDING (Phase 7.5)
 
