@@ -277,6 +277,11 @@ class AISettings(BaseSettingsGroup):
         title='Max Retries',
         description='Number of retry attempts on transient API errors',
     )
+    daily_call_limit: int = Field(
+        0, ge=0, le=10_000,
+        title='Daily Call Limit',
+        description='Max Claude API calls per day (0 = unlimited). When exceeded, falls back to heuristic — scanner never stops.',
+    )
 
 
 # ── 4. Telegram ───────────────────────────────────────────────────────────────

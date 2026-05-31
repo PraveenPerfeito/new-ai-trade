@@ -82,6 +82,13 @@ async def get_ai_summary(window_hours: int = 24) -> dict:
     fallbacks = sum(1 for r in rows if r["used_fallback"])
     errors    = sum(1 for r in rows if r["error"])
 
+    # Enhancement 6: cost estimate (Haiku pricing: $0.25/M input, $1.25/M output)
+    claude_rows = [r for r in rows if not r["used_fallback"]]
+    input_tokens  = sum(r["prompt_tokens"]     or 0 for r in claude_rows)
+    output_tokens = sum(r["completion_tokens"] or 0 for r in claude_rows)
+    est_cost_usd  = round((input_tokens / 1_000_000) * 0.25 + (output_tokens / 1_000_000) * 1.25, 6)
+    last_error = next((r["error"] for r in rows if r["error"]), None)
+
     # Exclude fallback calls from latency (they don't hit the API)
     real_latencies = [r["latency_ms"] for r in rows if not r["used_fallback"] and r["latency_ms"] > 0]
     confidences    = [r["confidence"] for r in rows if r["confidence"] > 0]
@@ -104,6 +111,9 @@ async def get_ai_summary(window_hours: int = 24) -> dict:
         # Phase 7.2B.9 — validation source breakdown
         "claude_calls":      claude_calls,
         "heuristic_calls":   heuristic_calls,
+        # Enhancement 6 — cost visibility
+        "estimated_cost_usd": est_cost_usd,
+        "last_error":         last_error,
     }
 
 
@@ -120,4 +130,6 @@ def _empty_ai_summary(window_hours: int = 24) -> dict:
         "window_hours": window_hours, "total_calls": 0, "approved": 0, "rejected": 0,
         "approval_rate": 0.0, "rejection_rate": 0.0, "fallback_rate": 0.0,
         "error_rate": 0.0, "avg_latency_ms": 0, "p95_latency_ms": 0, "avg_confidence": 0.0,
+        "claude_calls": 0, "heuristic_calls": 0,
+        "estimated_cost_usd": 0.0, "last_error": None,
     }

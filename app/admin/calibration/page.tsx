@@ -179,7 +179,7 @@ export default function CalibrationPage() {
         />
       </div>
 
-      {/* Validation source breakdown — Phase 7.2B.9 */}
+      {/* Validation source + cost breakdown — Phase 7.2B.9 + 7.2B.7.4A */}
       {hasAiData && (
         <div className="grid grid-cols-2 gap-3">
           <StatCard
@@ -193,6 +193,18 @@ export default function CalibrationPage() {
             value={ai?.heuristic_calls ?? 0}
             sub="Claude OFF or low score"
             accent={(ai?.fallback_rate ?? 0) > 0.5 ? 'warn' : 'default'}
+          />
+          <StatCard
+            label="💰 Est. Cost Today"
+            value={ai?.estimated_cost_usd != null ? `$${ai.estimated_cost_usd.toFixed(4)}` : '—'}
+            sub="Haiku: $0.25/M in + $1.25/M out"
+            accent="default"
+          />
+          <StatCard
+            label="⚠ Last Error"
+            value={ai?.last_error ? 'See logs' : 'None'}
+            sub={ai?.last_error ? ai.last_error.slice(0, 40) : 'All calls clean'}
+            accent={ai?.last_error ? 'bad' : 'good'}
           />
         </div>
       )}

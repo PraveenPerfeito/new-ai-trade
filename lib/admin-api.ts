@@ -152,8 +152,11 @@ export interface AiSummaryResponse {
   verdict_distribution?: Record<string, number>
   window_hours:    number
   // Phase 7.2B.9 — validation source breakdown
-  claude_calls?:    number
-  heuristic_calls?: number
+  claude_calls?:      number
+  heuristic_calls?:   number
+  // Phase 7.2B.7.4A — cost visibility
+  estimated_cost_usd?: number
+  last_error?:          string | null
 }
 
 export interface ScanSummaryResponse {

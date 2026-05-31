@@ -6,7 +6,10 @@ Falls back to heuristic scoring when the API key is absent or the call fails.
 from __future__ import annotations
 
 import asyncio
+import collections
+import datetime as _dt
 import json
+import math as _math
 import re
 import time
 
@@ -38,6 +41,67 @@ _REQUESTS_PER_MINUTE = 12
 # On a 429, retry with exponential back-off before falling back to heuristic.
 _MAX_429_RETRIES  = 2        # up to 3 total attempts (attempt 0, 1, 2)
 _429_BASE_DELAY_S = 5.0      # delays: 5s, 10s
+
+# ── Enhancement 3 note: Rate limiter persistence ──────────────────────────────
+# The _SlidingWindowRateLimiter is in-process only — it resets on worker
+# restart. A Redis-backed counter would survive restarts but adds a Redis
+# round-trip on every Claude call (adds ~2ms latency each time).
+# Decision: keep in-process. The Semaphore(3) caps burst regardless of
+# limiter state, and worker restarts are rare. Revisit if multiple concurrent
+# Railway services are ever deployed.
+
+# ── Enhancement 1: Daily call counter (in-process, resets on midnight or restart)
+_daily_date:  str = ""
+_daily_calls: int = 0
+
+def _check_and_increment_daily(limit: int) -> bool:
+    """Returns True (exceeded) if daily limit is set and reached. Always increments."""
+    global _daily_date, _daily_calls
+    today = _dt.date.today().isoformat()
+    if today != _daily_date:          # midnight rollover
+        _daily_date  = today
+        _daily_calls = 0
+    _daily_calls += 1
+    if limit > 0 and _daily_calls > limit:
+        log.warning("ai_daily_call_limit_exceeded", calls=_daily_calls, limit=limit)
+        return True
+    return False
+
+# ── Enhancement 2: Degradation alerting (rolling 15-min window) ──────────────
+_DEGRADATION_WINDOW_S   = 15 * 60   # 15-minute window
+_DEGRADATION_THRESHOLD  = 0.5       # 50% fallback rate
+_degradation_window: collections.deque = collections.deque()  # timestamps of fallback events
+_all_calls_window:   collections.deque = collections.deque()   # timestamps of all calls
+_degradation_alerted_at: float = 0.0
+
+def _record_call_outcome(is_fallback: bool) -> None:
+    """Track call outcomes and emit degradation warning when threshold exceeded."""
+    global _degradation_alerted_at
+    now = time.monotonic()
+    cutoff = now - _DEGRADATION_WINDOW_S
+    _all_calls_window.append(now)
+    if is_fallback:
+        _degradation_window.append(now)
+    # Evict old entries
+    while _all_calls_window and _all_calls_window[0] < cutoff:
+        _all_calls_window.popleft()
+    while _degradation_window and _degradation_window[0] < cutoff:
+        _degradation_window.popleft()
+    # Check degradation
+    total_recent    = len(_all_calls_window)
+    fallback_recent = len(_degradation_window)
+    if total_recent >= 5 and fallback_recent / total_recent >= _DEGRADATION_THRESHOLD:
+        # Only log once per 15-min window to avoid spam
+        if now - _degradation_alerted_at > _DEGRADATION_WINDOW_S:
+            _degradation_alerted_at = now
+            log.warning(
+                "ai_validation_degraded",
+                fallback_rate=round(fallback_recent / total_recent, 2),
+                fallbacks=fallback_recent,
+                total=total_recent,
+                window_minutes=15,
+                note="Claude fallback rate >50% — check Anthropic API key and quota",
+            )
 
 
 class _SlidingWindowRateLimiter:
@@ -92,6 +156,33 @@ def _clamp(value: float, lo: float, hi: float) -> int:
     return int(max(lo, min(hi, value)))
 
 
+# ── Enhancement 4: JSON extraction hardening ──────────────────────────────────
+
+def _extract_json_block(text: str) -> str:
+    """Safely extract the first JSON object from Claude's response.
+    Uses str.find/rfind instead of greedy regex to avoid over-matching."""
+    text = text.strip()
+    if text.startswith("{"):
+        return text               # most common case — direct JSON
+    start = text.find("{")
+    end   = text.rfind("}")
+    if start != -1 and end > start:
+        return text[start:end + 1]
+    return text                   # return as-is; json.loads raises JSONDecodeError
+
+
+# ── Enhancement 5: Indicator sanitization ────────────────────────────────────
+
+def _sf(value: float, decimals: int = 4) -> str:
+    """Safe float formatter — replaces NaN/Inf with '?' to prevent malformed prompts."""
+    try:
+        if not _math.isfinite(value):
+            return "?"
+        return f"{value:.{decimals}f}"
+    except (TypeError, ValueError):
+        return "?"
+
+
 # ── Claude validation ─────────────────────────────────────────────────────────
 
 AI_MIN_SETUP_SCORE = 72  # only call Claude for setup scores ≥ this; lower = heuristic (was 70)
@@ -112,7 +203,8 @@ async def validate_signal(
         _record(signal.id, "heuristic", 0, result.confidence, result.validated, used_fallback=True)
         return result
 
-    # Check admin toggle — if AI is disabled from the dashboard, skip Claude entirely
+    # Check admin toggle and daily call limit
+    ai_cfg_daily_limit = 0
     try:
         from backend.system_settings.service import get_settings_service
         from backend.system_settings.groups import AISettings
@@ -121,14 +213,24 @@ async def validate_signal(
             log.info("ai_validation_disabled_by_settings", symbol=signal.symbol)
             result = _heuristic(signal, ind4h, trend_strength, volatility)
             _record(signal.id, "heuristic", 0, result.confidence, result.validated, used_fallback=True)
+            _record_call_outcome(is_fallback=True)
             return result
+        ai_cfg_daily_limit = getattr(ai_cfg, "daily_call_limit", 0)
     except Exception as exc:
         log.warning("ai_settings_check_failed", error=str(exc))
+
+    # Enhancement 1: daily call limit guard — falls back to heuristic, never stops scanner
+    if _check_and_increment_daily(ai_cfg_daily_limit):
+        result = _heuristic(signal, ind4h, trend_strength, volatility)
+        _record(signal.id, "heuristic", 0, result.confidence, result.validated, used_fallback=True)
+        _record_call_outcome(is_fallback=True)
+        return result
 
     client = _get_client()
     if not client:
         result = _heuristic(signal, ind4h, trend_strength, volatility)
         _record(signal.id, "heuristic", 0, result.confidence, result.validated, used_fallback=True)
+        _record_call_outcome(is_fallback=True)
         return result
 
     prompt = _build_prompt(signal, coin, ind4h, trend_strength, volatility)
@@ -163,12 +265,9 @@ async def validate_signal(
         ai_validation_duration_seconds.observe(elapsed)
 
         text = msg.content[0].text.strip() if msg.content[0].type == "text" else ""
-        # Claude sometimes wraps JSON in markdown fences (```json ... ```)
-        # despite the prompt instruction — strip them before parsing.
-        if text.startswith("```"):
-            m = re.search(r'\{.*\}', text, re.DOTALL)
-            text = m.group() if m else text
-        parsed     = json.loads(text)
+        # Enhancement 4: safer JSON extraction — find/rfind instead of greedy regex
+        text   = _extract_json_block(text)
+        parsed = json.loads(text)
         confidence = _clamp(float(parsed.get("confidence") or 0), 0, 100)
 
         expl: AIExplainability | None = None
@@ -193,6 +292,7 @@ async def validate_signal(
             completion_tokens=msg.usage.output_tokens if msg.usage else None,
         )
 
+        _record_call_outcome(is_fallback=False)   # Enhancement 2: track success
         return AIValidationResult(
             confidence=confidence,
             validated=validated,
@@ -209,6 +309,7 @@ async def validate_signal(
         result = _heuristic(signal, ind4h, trend_strength, volatility)
         _record(signal.id, "claude-haiku-4-5", int((time.perf_counter() - t0) * 1000),
                 result.confidence, result.validated, error="json_parse_failed")
+        _record_call_outcome(is_fallback=True)   # Enhancement 2
         return result
     except Exception as exc:
         log.warning("ai_api_failed", error=str(exc))
@@ -216,6 +317,7 @@ async def validate_signal(
         result = _heuristic(signal, ind4h, trend_strength, volatility)
         _record(signal.id, "claude-haiku-4-5", int((time.perf_counter() - t0) * 1000),
                 result.confidence, result.validated, used_fallback=True, error=str(exc))
+        _record_call_outcome(is_fallback=True)   # Enhancement 2
         return result
 
 
@@ -261,19 +363,19 @@ Direction: {signal.type}  |  Mode: {signal.scanner_mode}
 Rank: #{coin.rank}  |  Vol 24h: ${coin.volume_24h / 1e6:.0f}M  |  MCap: ${coin.market_cap / 1e9:.1f}B
 
 ═══ 1H INDICATORS (entry timeframe) ═══
-Price:      ${i1h.current_price}
+Price:      ${_sf(i1h.current_price)}
 Trend:      {i1h.trend}
-RSI(14):    {i1h.rsi:.1f}
-MACD hist:  {i1h.macd.histogram:.6f} ({'positive ▲' if i1h.macd.histogram > 0 else 'negative ▼'})
-EMA20:      ${i1h.ema20:.4f}  |  EMA50: ${i1h.ema50:.4f}
-ATR(14):    ${i1h.atr:.4f}
-Vol spike:  {i1h.volume_spike:.2f}×
+RSI(14):    {_sf(i1h.rsi, 1)}
+MACD hist:  {_sf(i1h.macd.histogram, 6)} ({'positive ▲' if i1h.macd.histogram > 0 else 'negative ▼'})
+EMA20:      ${_sf(i1h.ema20)}  |  EMA50: ${_sf(i1h.ema50)}
+ATR(14):    ${_sf(i1h.atr)}
+Vol spike:  {_sf(i1h.volume_spike, 2)}×
 
 ═══ 4H INDICATORS (trend filter) ════
 Trend:      {ind4h.trend}
-RSI(14):    {ind4h.rsi:.1f}
-MACD hist:  {ind4h.macd.histogram:.6f} ({'positive ▲' if ind4h.macd.histogram > 0 else 'negative ▼'})
-EMA20:      ${ind4h.ema20:.4f}  |  EMA50: ${ind4h.ema50:.4f}
+RSI(14):    {_sf(ind4h.rsi, 1)}
+MACD hist:  {_sf(ind4h.macd.histogram, 6)} ({'positive ▲' if ind4h.macd.histogram > 0 else 'negative ▼'})
+EMA20:      ${_sf(ind4h.ema20)}  |  EMA50: ${_sf(ind4h.ema50)}
 {futures_section}
 ═══ TRADE LEVELS ════════════════════
 Entry:   ${signal.entry_price}
