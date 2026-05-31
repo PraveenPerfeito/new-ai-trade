@@ -203,6 +203,28 @@ def _leverage_text(max_lev: int, mode: str) -> str:
 
 async def send_signal_alert(signal: Signal) -> bool:
     """Format and enqueue a detailed signal alert. Skips if same symbol+direction was alerted within 4h."""
+    # ── Operational gate: check all Telegram / emergency switches ────────────
+    try:
+        from backend.system_settings.service import get_settings_service
+        from backend.system_settings.groups import TelegramSettings, FeatureFlags
+        tg_cfg   = await get_settings_service().get_group(TelegramSettings)
+        flags    = await get_settings_service().get_group(FeatureFlags)
+        if not tg_cfg.alerts_enabled:
+            log.info("telegram_alert_blocked_disabled", symbol=signal.symbol)
+            return False
+        if not flags.telegram:
+            log.info("telegram_alert_blocked_feature_flag", symbol=signal.symbol)
+            return False
+        if flags.emergency_stop:
+            log.info("telegram_alert_blocked_emergency_stop", symbol=signal.symbol)
+            return False
+        if flags.maintenance_mode:
+            log.info("telegram_alert_blocked_maintenance_mode", symbol=signal.symbol)
+            return False
+    except Exception as exc:
+        log.warning("telegram_settings_check_failed", error=str(exc))
+        # fail open — send if settings service is unavailable to avoid silent loss
+
     # Deduplication check — prevents spam for the same coin
     direction_key = "LONG" if signal.type.value == "BUY" else "SHORT"
     if await _is_duplicate_alert(signal.symbol, direction_key):
@@ -314,6 +336,16 @@ async def send_scan_summary(
     duration_ms: int,
     mode: str,
 ) -> bool:
+    try:
+        from backend.system_settings.service import get_settings_service
+        from backend.system_settings.groups import TelegramSettings, FeatureFlags
+        tg_cfg = await get_settings_service().get_group(TelegramSettings)
+        flags  = await get_settings_service().get_group(FeatureFlags)
+        if not tg_cfg.alerts_enabled or not flags.telegram or flags.emergency_stop or flags.maintenance_mode:
+            return False
+    except Exception:
+        pass  # fail open for scan summaries
+
     text = (
         f"<b>Scan Complete — {mode.upper()}</b>\n"
         f"Coins scanned: {coins_scanned}\n"

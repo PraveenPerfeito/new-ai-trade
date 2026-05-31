@@ -22,6 +22,9 @@ from backend.core.scanner.orchestrator import (
     get_latest_progress,
 )
 from backend.logging.setup import get_logger
+from backend.scheduler.coordinator import SchedulerCoordinator
+from backend.system_settings.service import get_settings_service
+from backend.system_settings.groups import FeatureFlags
 
 log = get_logger(__name__)
 
@@ -57,6 +60,22 @@ async def trigger_scan(request: Request, body: Annotated[TriggerRequest, Body()]
     except ValueError:
         valid = [m.value for m in ScannerMode]
         raise HTTPException(status_code=422, detail=f"Invalid mode. Choose from: {valid}")
+
+    # ── Operational gate: honour scheduler toggle and emergency/maintenance flags ──
+    coord = SchedulerCoordinator()
+    if not coord.is_enabled():
+        raise HTTPException(status_code=503, detail="Scanner is disabled. Enable it from the Operations dashboard first.")
+
+    try:
+        flags = await get_settings_service().get_group(FeatureFlags)
+        if flags.emergency_stop:
+            raise HTTPException(status_code=503, detail="Emergency stop is active. All scans are blocked.")
+        if flags.maintenance_mode:
+            raise HTTPException(status_code=503, detail="System is in maintenance mode. Scans are read-only blocked.")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log.warning("operational_flag_check_failed", error=str(exc))
 
     # Check if a scan for this mode is already running
     for task_key, task in list(_active_tasks.items()):

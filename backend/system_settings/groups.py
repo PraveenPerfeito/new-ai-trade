@@ -467,6 +467,9 @@ class FeatureFlags(BaseSettingsGroup):
     daily_analytics_snapshot:bool = Field(True,  title='Daily Analytics Snapshot', description='Compute and persist the nightly edge report snapshot')
     ai_validation:           bool = Field(True,  title='AI Validation',            description='Enable the Claude validation step (also controlled by AISettings.enabled)')
     rate_limiting:           bool = Field(True,  title='Rate Limiting',            description='Apply API rate limits via slowapi middleware')
+    # ── Operational overrides (highest precedence) ────────────────────────────
+    emergency_stop:          bool = Field(False, title='Emergency Stop',           description='Immediately halt all scans, signal generation, and Telegram output. Overrides every other switch.')
+    maintenance_mode:        bool = Field(False, title='Maintenance Mode',         description='Allow read-only API calls; block all writes, scans, and Telegram sends.')
 
 
 # ── 9. Infrastructure ─────────────────────────────────────────────────────────

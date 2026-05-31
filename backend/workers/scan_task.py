@@ -69,6 +69,26 @@ def _send_failure_alert(mode: str, error: str, attempt: int) -> None:
         logger.warning(f"telegram_failure_alert_failed error={exc}")
 
 
+def _check_operational_flags() -> str | None:
+    """
+    Synchronously check emergency_stop and maintenance_mode feature flags.
+    Returns a non-empty reason string if the scan should be blocked, else None.
+    Called before acquiring the scan lock so queued tasks respect operator toggles.
+    """
+    try:
+        import asyncio as _asyncio
+        from backend.system_settings.service import get_settings_service
+        from backend.system_settings.groups import FeatureFlags
+        flags = _asyncio.run(get_settings_service().get_group(FeatureFlags))
+        if flags.emergency_stop:
+            return "emergency_stop"
+        if flags.maintenance_mode:
+            return "maintenance_mode"
+    except Exception as exc:
+        logger.warning(f"operational_flag_check_failed error={exc} — proceeding")
+    return None
+
+
 @shared_task(
     bind=True,
     name="backend.workers.scan_task.run_scheduled_scan",
@@ -86,6 +106,20 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
     task_label = f"scan_{mode}"
 
     coordinator = SchedulerCoordinator()
+
+    # ── Operational gate: check enable flag and emergency stop BEFORE acquiring lock ──
+    # This prevents queued tasks from executing after the operator disables the scheduler.
+    if not coordinator.is_enabled():
+        logger.info(f"scan_skipped_scheduler_disabled mode={mode}")
+        celery_tasks_total.labels(task_name=task_label, status="skipped").inc()
+        return {"skipped": True, "reason": "scheduler_disabled", "mode": mode}
+
+    block_reason = _check_operational_flags()
+    if block_reason:
+        logger.warning(f"scan_blocked reason={block_reason} mode={mode}")
+        celery_tasks_total.labels(task_name=task_label, status="skipped").inc()
+        return {"skipped": True, "reason": block_reason, "mode": mode}
+
     lock_acquired = coordinator.acquire_scan_lock(mode, ttl_seconds=11 * 60)
 
     if not lock_acquired:
