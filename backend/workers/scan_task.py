@@ -169,6 +169,7 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
 
         elapsed = time.monotonic() - start
         scheduler_last_scan_timestamp.set(time.time())
+        coordinator.record_scan_complete()   # writes scheduler:last_scan_ts to Redis → dashboard "Last scan" timestamp
         celery_task_duration_seconds.labels(task_name=task_label).observe(elapsed)
         celery_tasks_total.labels(task_name=task_label, status="success").inc()
 
