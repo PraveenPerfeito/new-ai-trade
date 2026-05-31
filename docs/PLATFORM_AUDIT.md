@@ -31,7 +31,9 @@
 - ✅ H5: `_SlidingWindowRateLimiter` (12 RPM) + 3-attempt 429 retry added to `ai_validator.py` (`1a471c2`)
 - ✅ M1: Setup gate raised 60→72 to eliminate 60-72 dead zone (`fe99495`)
 - ✅ M6: `pre_score` clamped to 100 in `detect_setup()` (`fe99495`)
-- ✅ Production Readiness score: **7.4/10 CONDITIONAL GO → 8.7/10 ✅ GO**
+- ✅ H1 complete — supabase.ts (13×) + retry.ts (1×) → structured pino (`f5a7169`); 34 total console.* resolved
+- ✅ M3 reclassified FALSE POSITIVE — single-founder scale, internal APIs only
+- ✅ Production Readiness score: **7.4/10 CONDITIONAL GO → 9.0/10 ✅ GO**
 
 **REMAINING GAPS (Phase 7.5 recommended):**
 - 🔶 Scan Now auto-redirect to Signals (Issue #1) — workflow friction
