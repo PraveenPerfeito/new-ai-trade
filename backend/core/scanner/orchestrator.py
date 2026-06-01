@@ -385,10 +385,12 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                 completed_at=datetime.now(timezone.utc),
             )
 
-        t = asyncio.create_task(
-            send_scan_summary(progress.scanned, len(signals), high_conf, duration_ms, mode.value)
-        )
-        t.add_done_callback(lambda t: _on_task_done(t, "send_scan_summary"))
+        # Scan summary only for spot mode — futures/high_confidence summaries are noise
+        if mode == ScannerMode.SPOT:
+            t = asyncio.create_task(
+                send_scan_summary(progress.scanned, len(signals), high_conf, duration_ms, mode.value)
+            )
+            t.add_done_callback(lambda t: _on_task_done(t, "send_scan_summary"))
 
         # Monitoring: record scan duration + coins (fire-and-forget)
         try:
