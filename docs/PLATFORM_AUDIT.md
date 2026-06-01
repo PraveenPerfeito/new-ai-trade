@@ -42,21 +42,33 @@
 - ✅ M3 reclassified FALSE POSITIVE — single-founder scale, internal APIs only
 - ✅ Production Readiness score: **7.4/10 CONDITIONAL GO → 9.0/10 ✅ GO**
 
+**COMPLETED (Phase 7.2A — Dashboard Workflow, Mobile & UX, 2026-05-30):**
+- ✅ Scan Now → View Signals button appears after scan queued (auto-hides 30s) — `88f0e42`
+- ✅ Emergency Pause button on Overview page (Pause/Resume Scanner) — `88f0e42` / `664ae09`
+- ✅ Mobile: Tactical table hides Entry/RR/Mode columns; expandable rows on phone — `88f0e42`
+- ✅ Mobile: Signals expanded card grouped into sections (Trade / Futures / AI Analysis) — `88f0e42`
+- ✅ Mobile: Settings mode cards 2-col on phone → 7-col on wide screen — `664ae09`
+- ✅ Mobile: Providers API metrics + coverage chips hidden on phone — `664ae09`
+- ✅ Live next-scan countdown (ticks every second, shows Xm XXs) — `88f0e42`
+- ✅ Provider health strip on Overview (CMC/Binance/CoinGecko pills with latency) — `664ae09`
+- ✅ Signals lifecycle distribution pills above filter bar — `88f0e42`
+- ✅ Edge analytics warmup progress bar (X/30 signals, colour-coded) — `88f0e42`
+- ✅ Tactical 17-filter overload → 3 presets (Active/Won/Lost) + 2 dropdowns + stage distribution pills — `88f0e42`
+- ✅ Scanner schedule reference section removed → compact 1-line text — `88f0e42`
+- ✅ Sidebar: OPERATIONS → SIGNAL PIPELINE; Diagnostics → Anomalies — `88f0e42`
+- ✅ Futures fields in signal cards hidden for spot/trending signals — `88f0e42`
+
 **REMAINING GAPS (Phase 7.5 recommended):**
-- 🔶 Scan Now auto-redirect to Signals (Issue #1) — workflow friction
-- 🔶 Emergency Pause button on Overview (Issue #2) — operational safety
-- 🔶 Mobile unusability (9-column Tactical, Signals card stacking) (Issues #3, #6, #7, #10–20)
-- 🔶 CMC quota burn forecast & unified warning (Issue #4) — quota visibility
-- 🔶 Edge analytics progress count (Issue #3) — warmup feedback
-- 🔶 Setting impact preview before save (Issue #6) — blind iteration
-- 🔶 Live next-scan countdown (Issue #1, #14, #17)
-- 🔶 Provider health on Overview strip (Issue #5, #8)
-- 🔶 Mode performance comparison (Issue #4, #9)
-- 🔶 Confirmation after Daily Report send (Issue #5, #19)
+- 🔶 CMC quota burn forecast — unified warning banner (Overview/Providers/Cache synced)
+- 🔶 Setting impact preview before save — blind iteration
+- 🔶 Mode performance comparison (Spot vs Futures win rates)
+- 🔶 Confirmation after Daily Report send
 - 🔶 M2: `_register_analytics()` fire-and-forget done-callback reliability
 - 🔶 M3: Frontend refresh interval jitter + centralized config
 - 🔶 M4: ATR minimum relative floor
 - 🔶 M5: Signal rejection reasons not persisted to DB
+- 🔶 Regime-to-settings 1-click apply from Regime page
+- 🔶 Anomaly trend sparkline on Anomalies page
 
 **COMPLETED (Phase 7.2B.9 — Provider & Architecture Audit, 2026-05-31):**
 - ✅ Full provider utilization traced: CMC · CoinGecko · Binance · Redis

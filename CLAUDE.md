@@ -33,6 +33,11 @@ AI-powered crypto trading signal scanner (public brand: **SignalEdge AI**) built
 19. **Admin users see all signals** — `getAccessContext()` in `lib/access-control.ts` reads Supabase session cookie; admin email → enterprise plan → no confidence floor/daily cap.
 20. **Settings API uses class not string** — `get_settings_service().get_group(AISettings)` must pass model class. Passing string `"ai"` causes silent TypeError → setting never read.
 21. **Telegram alert deduplication** — Redis key `tg:alert:{SYMBOL}:{LONG|SHORT}` with 1-hour TTL prevents duplicate alerts for the same coin+direction. Direction flip (BUY→SELL) fires immediately. `ALERT_COOLDOWN_HOURS = 1` in `telegram_notifier.py`.
+22. **BTC regime native Python gate** — `get_btc_regime()` in `market_fetcher.py` fetches BTC 4h klines, classifies BULL/BEAR/SIDEWAYS/HIGH_VOLATILITY. Soft gate in `signal_pipeline.py`: contra-regime signals require +10 confidence. `market_regime` field persisted to `signals` + `signal_outcomes`.
+23. **Operational control gates** — Scanner, Telegram, emergency stop, maintenance mode all enforced in `scan_task.py` + `telegram_notifier.py`. Toggle from Operations Control page. 18 unit tests verify all gate paths.
+24. **Analytics intelligence wiring** — All 7 intelligence fields (TrendScore, Sector, Breakout, OI, Funding, Positioning, Regime) flow through: Scanner → Signal → DB → `get_analytics()` → Edge validation → Attribution → Dashboard.
+25. **MONITOR.1 operational metrics** — 14 Redis counters track daily scans, signals, Claude rate, fallback rate, Telegram delivery, Binance errors, scan duration. Threshold bands (Healthy/Warning/Critical). `GET /api/analytics/monitor`.
+26. **Production readiness: 9.1/10** — All 2 blockers + 5 high-priority items resolved. Full smoke test passed May 2026. Deployed.
 
 ---
 

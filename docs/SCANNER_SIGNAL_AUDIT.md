@@ -7,35 +7,111 @@
 
 ---
 
-## Resolution Status (Phase 7.2B & 7.3A & 7.4A — May 2026)
+## Resolution Status (Phase 7.2A–8.x & MONITOR.1 — May 2026)
 
-**RESOLVED (19 items):**
-- ✅ **CMC trending endpoint** — Now using 5-source fusion + trend_score.py prioritization (Phase 7.3A)
-- ✅ **Double CMC quota consumption** — Python scanner now reads Redis intelligence cache; no direct CMC calls (Phase 7.3A)
-- ✅ **EMA200 unconverged** — 300 candles fetched; direction_reliable/bounce_reliable guards at 250/280 (Phase 7.3A)
-- ✅ **Funding rate rejection** — Threshold raised to directional adverse > 0.007 (EXTREME only) (Phase 7.3A)
-- ✅ **Relative strength** — Now using 4h change vs BTC 4h (was 24h) (Phase 7.3A)
-- ✅ **Breakout detection** — breakout_intelligence.py added (20/30-day high/low detection, all modes) (Phase 7.4A.1)
-- ✅ **OI × price direction** — oi_intelligence.py replaces raw OI change (NEW_LONGS/NEW_SHORTS/SHORT_COVERING/LONG_LIQUIDATION/NEUTRAL matrix) (Phase 7.4A.2)
-- ✅ **Funding trend** — Last 3 readings stored; RISING/FALLING/STABLE classification with multiplier (Phase 7.4A.4)
-- ✅ **Positioning intelligence** — positioning_intelligence.py for L/S crowd context (EXTREME_LONG/LONG_HEAVY/BALANCED/SHORT_HEAVY/EXTREME_SHORT) (Phase 7.4A.5)
-- ✅ **4h EMA200 guard** — candle_count_4h passed to detect_setup(); same convergence guards applied (Phase 7.4A.3)
-- ✅ **AI_MIN_SETUP_SCORE** — Raised to 72 (was 70) (Phase 7.4A)
-- ✅ **Signal Intelligence Persistence** — signals + signal_outcomes: +breakout_type, +breakout_strength, +oi_interpretation, +funding_trend, +positioning_context, +momentum_score, +trend_score, +sector_status (Phase 7.4A.6, 7.4A.7)
-- ✅ **Claude Institutional Context** — OI, funding trend, positioning, breakout context now in prompt; AI input completeness 62% → 85% (Phase 7.4A.6.2)
-- ✅ **Telegram Institutional Context** — Intel line, breakout line, sector status added to signal alerts (Phase 7.4A.6.4)
-- ✅ **Dashboard Intelligence Visibility** — /admin/signals expanded cards show TrendScore, Sector, Breakout, OI, Funding, Positioning (Phase 7.2B.0)
-- ✅ **Settings UX clarity** — "Founder Control Center" with 3 primary modes + Advanced Presets (Phase 7.2B.1)
-- ✅ **Provider operations** — "Operations Dashboard" with CompactProviderCard + QuotaBurnForecast (Phase 7.2B.2)
-- ✅ **Regime automation** — "Apply Regime Settings" button with preview modal (Phase 7.2B.3)
-- ✅ **Anomaly actions** — "Anomaly Action Center" with state machine + 4 action buttons (Phase 7.2B.4)
+**Last updated:** 2026-05-30 · All items cross-verified against source code and git log (104 commits)
 
-**PENDING (recommend Phase 7.5):**
-- 🔶 Sector-based filtering (sector intelligence available but not gating signals)
-- 🔶 15m timeframe for TRENDING mode (15m klines fetched; not fully integrated)
-- 🔶 CMC→Binance symbol mapping table (MATIC/POLUSDT edge case)
-- 🔶 Candle gap detection (zero-volume consecutive candles)
-- 🔶 Scan Now auto-redirect + mobile UX (Tactical 9-column, Signals card stacking) — 8 additional UX items deferred to Phase 7.5
+---
+
+### ✅ RESOLVED — Scanner & Signal Engine (Phase 7.3A, 7.4A)
+
+| Item | Resolution | Phase |
+|------|-----------|-------|
+| CMC trending endpoint not used | 5-source fusion (CMC Trending, Rising Sectors, Top Movers, Listings, Watchlist) + TrendScore engine | 7.3A.2/3 |
+| Double CMC quota consumption | Python scanner reads Redis intelligence cache; TS workers own all CMC calls | 7.3A.1 |
+| EMA200 unconverged at 200 candles | 300 candles fetched; direction_reliable(≥250c) / bounce_reliable(≥280c) guards | 7.3A.7 |
+| Funding rate rejection too aggressive | Directional adverse > 0.007 threshold; FAVORABLE/NORMAL/ELEVATED/EXTREME tiers | 7.3A.6 |
+| Relative strength uses 24h (noisy) | 4h coin close / 4h BTC close; BTC 4h fetched once per scan, Redis-cached 5 min | 7.3A.4 |
+| No breakout detection | breakout_intelligence.py: 20/30-day high/low, BB expansion after squeeze, EARLY/CONFIRMED/HIGH_MOMENTUM | 7.4A.1 |
+| OI interpretation inverted/missing | oi_intelligence.py: NEW_LONGS/NEW_SHORTS/SHORT_COVERING/LONG_LIQUIDATION/NEUTRAL matrix | 7.4A.2 |
+| 4h EMA200 unconverged | candle_count_4h passed to detect_setup(); same direction_reliable/bounce_reliable guards | 7.4A.3 |
+| No funding trend tracking | Last 3 funding readings in Redis (8h TTL); RISING/FALLING/STABLE + adverse multiplier | 7.4A.4 |
+| L/S ratio unused in signals | positioning_intelligence.py: EXTREME_LONG/LONG_HEAVY/BALANCED/SHORT_HEAVY/EXTREME_SHORT + contrarian scoring | 7.4A.5 |
+| AI_MIN_SETUP_SCORE too low | Raised 70 → 72; reduces credits ~40%; heuristic for 60-71 | 7.4A |
+| Signal fields missing intelligence | DB: +breakout_type, +breakout_strength, +oi_interpretation, +funding_trend, +positioning_context, +momentum_score, +trend_score, +sector_status | 7.4A.6/7 |
+| Claude prompt incomplete (62%) | OI, funding trend, positioning, breakout type now in prompt; completeness 62% → 85% | 7.4A.6.2 |
+| Telegram missing intelligence context | Intel line: "OI: NEW LONGS · Pos: SHORT HEAVY · Fund: RISING ↗"; breakout line added | 7.4A.6.4 |
+| Dashboard hides intelligence data | /admin/signals expanded cards: TrendScore tier, Sector, Breakout, OI, Funding, Positioning chips | 7.2B.0 |
+
+---
+
+### ✅ RESOLVED — Production Hardening (Phase 7.2B.7)
+
+| Item | Resolution | Phase |
+|------|-----------|-------|
+| Admin secret optional in production | `ADMIN_SECRET` now REQUIRED in prod; startup check enforced | 7.2B.7.1 |
+| console.log throughout codebase | All console.* replaced with structured pino logger | 7.2B.7.3 / H1 |
+| Celery Beat lock TTL gap | Lock TTL 660s → extended to cover full scan + buffer; exception safety in scan_task | 7.2B.7.2 / H2/H3 |
+| No per-minute Anthropic rate limit | Token bucket in ai_validator.py; max 4 req/min enforced; 429 retry with backoff | 7.2B.7.4 / H5 |
+| Scanner calibration issues | Setup score threshold cleaned; ATR floor corrected | 7.2B.7.5 / M1/M6 |
+| Security hardening (4 fixes) | X-Frame-Options, HSTS, input validation, rate limit hardening | 7.2B.7.1B |
+| Scheduler lock TTL gap | Distributed lock TTL aligned with beat schedule expires | 7.2B.7.2A |
+| Anthropic hardening (6 items) | Circuit breaker, retry logic, model fallback, cost tracking | 7.2B.7.4A |
+
+---
+
+### ✅ RESOLVED — Provider & Redis (Phase 7.2B.9, 7.2B.10)
+
+| Item | Resolution | Phase |
+|------|-----------|-------|
+| CMC shows 0% usage in dashboard | Fixed calculation; reads from actual Redis quota-guard counter | 7.2B.10.3 |
+| Binance shows RED when healthy | Fixed status mapping in provider dashboard | 7.2B.10.3 |
+| scheduler:last_scan_ts not written | SchedulerCoordinator.record_scan_complete() now called after each scan | 7.2B.9 |
+| Validation source shown incorrectly | Fixed: shows "Claude" vs "Heuristic" based on ai_call_log.used_fallback | 7.2B.9 |
+| Redis pipeline not used in hot paths | Batch pipelining added for cache group refresh; TTL alignment for futures cache | 7.2B.10.1/10.6 |
+
+---
+
+### ✅ RESOLVED — Analytics & Regime (Phase 8.0.1, 8.1B)
+
+| Item | Resolution | Phase |
+|------|-----------|-------|
+| Analytics gaps (GAP-1 to GAP-6) | scan_id stored in signals; analytics API uses correct join; attribution dimensions fixed | 8.0.1 |
+| BTC regime from TypeScript only | Native Python BTC regime: fetch_klines(BTCUSDT, 4h, 100) in scanner; classify_regime() in Python | 8.1B |
+| Regime not gating scan | BTC regime available as signal context; regime-aligned scoring in detect_setup() | 8.1B |
+
+---
+
+### ✅ RESOLVED — Monitoring (Phase MONITOR.1)
+
+| Item | Resolution | Phase |
+|------|-----------|-------|
+| No post-launch monitoring | MONITOR.1 baseline: Prometheus scrape, Railway log alerts, Upstash quota alerts, signal rate tracking | MONITOR.1 |
+| telegram_sent not persisted | DB update after successful Telegram send; dashboard shows accurate sent count | MONITOR.1 / dcedc3c |
+
+---
+
+### ✅ RESOLVED — Dashboard UX (Phase 7.2A, 7.2B)
+
+| Item | Resolution | Phase |
+|------|-----------|-------|
+| Scanner page shows wrong status | Rewired to Celery coordinator status; live countdown; View Signals button | 7.2A |
+| Signals page table too small | Card-based layout; filters; sort; lifecycle distribution; edge warmup progress bar | 7.2A/7.2B.6 |
+| Tactical 17-filter overload | 3 presets (Active/Won/Lost) + 2 dropdowns; stage distribution pills; mobile expandable rows | 7.2A |
+| No provider health on overview | Provider health strip added: CMC/Binance/CoinGecko pills with latency | 7.2A |
+| No emergency pause on overview | Pause/Resume Scanner button on Overview page | 7.2A |
+| Navigation confusing | OPERATIONS → SIGNAL PIPELINE; Diagnostics → Anomalies | 7.2A |
+| Settings 7 modes overwhelming | Responsive grid: 2-col mobile → 7-col wide screen | 7.2A |
+| Providers 500px+ cards on mobile | API metrics + coverage chips hidden on mobile (`hidden sm:grid`) | 7.2A |
+| Settings cluttered | "Founder Control Center": 3 primary modes + Advanced Presets accordion | 7.2B.1 |
+| Provider ops complex | "Operations Dashboard": CompactProviderCard + QuotaBurnForecast | 7.2B.2 |
+| No regime-to-settings link | "Apply Regime Settings" button with preview modal (6 regime mappings) | 7.2B.3 |
+| Anomalies passive | "Anomaly Action Center": state machine (NEW→ACKNOWLEDGED→MUTED→RESOLVED) + 4 buttons | 7.2B.4 |
+| Navigation cluttered | Sidebar restructured: TRADING DESK / MARKET / OPERATIONS / REVIEW | 7.2B.5 |
+| All 14 admin pages audited | UX fixes across overview, market, scanner, signals, tactical, analytics, regime, sectors, calibration, providers, cache, system, anomalies, settings | 7.2B.6 |
+
+---
+
+### 🔶 PENDING (Phase 7.5 candidates)
+
+| Item | Notes |
+|------|-------|
+| Sector-based signal filtering | Sector intelligence available (sector_status on signals) but not yet used as a hard gate |
+| 15m timeframe for TRENDING mode | Infrastructure in place; integration deferred |
+| CMC→Binance symbol mapping table | MATIC/POLUSDT edge case still uses manual map |
+| Candle gap detection | Zero-volume consecutive candles not flagged |
+| Binance API key for higher rate limits | Public endpoints used; API key would unlock 1200 weight/min |
+| Stablecoin prefix filter dynamic | `_SKIP_SYMBOLS` is still a hardcoded frozenset; new tokens require code deploy |
 
 ---
 

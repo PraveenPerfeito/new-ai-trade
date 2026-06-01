@@ -303,6 +303,73 @@ Redesigned admin dashboard for maximum operational clarity:
 - **6 MEDIUM PRIORITY**: setup score 60/AI threshold 72 dead zone, fire-and-forget logging, hardcoded refresh intervals, ATR floor missing, rejection persistence, score clamp
 - See `docs/PRODUCTION_READINESS_AUDIT.md` for full audit
 
+### Production Hardening (7.2B.7 — 7.2B.7.4A)
+
+After the audit, all blockers and high-priority items resolved:
+
+| Fix | Commit | Result |
+|-----|--------|--------|
+| ADMIN_SECRET enforced as `z.string().min(32)` | `478fc54` | Blocks deploy without secret |
+| All `console.*` → structured pino logger (34 instances) | `d37cba6` / `f5a7169` | Structured logging throughout |
+| Celery `soft_time_limit` 840s → 1020s; `time_limit` 960s → 1140s | `74672c1` | Scans complete without kill |
+| Beat `expires` 780s → 1020s | `74672c1` | No queued scans dropped |
+| `infra_collector._run_loop` wrapped in try/except | `74672c1` | Prometheus no longer dies silently |
+| Per-minute Anthropic rate limiter (12 RPM sliding window) | `1a471c2` | No more 429 burst errors |
+| Setup gate raised 60 → 72 (dead zone eliminated) | `fe99495` | Cleaner signal threshold |
+| Scheduler lock TTL 11 → 20 min; exception safety | `3e9fde2` | No scan overlaps |
+| OpenAPI endpoint disabled in production | `216e74f` | No schema exposure |
+| `/metrics` requires X-Admin-Secret in production | `216e74f` | No public metrics |
+| Anthropic daily call limit + degradation alerting | `8fe5df3` | Credit ceiling enforced |
+| **Final production readiness: 9.1/10 — ✅ GO** | — | Deployed May 2026 |
+
+---
+
+## Phase 8.0 — Analytics Intelligence Wiring (May 2026)
+
+Wired all 7 intelligence fields (TrendScore, Sector, Breakout, OI, Funding, Positioning, Regime) through the full analytics pipeline:
+
+- **GAP-1/2**: `get_outcomes()` and `get_analytics()` return all 7 intelligence fields in group-by breakdowns
+- **GAP-3**: `_fetch_outcomes()` in edge validation includes all 7 fields for attribution analysis
+- **GAP-4**: `trend_score_tier()` helper (ELITE ≥ 80 / STRONG ≥ 60 / GOOD ≥ 40 / WEAK < 40)
+- **GAP-5**: `GET /api/analytics/intelligence` endpoint — best-performing tier per dimension
+- **GAP-6**: Intelligence Performance section on Analytics page
+
+---
+
+## Phase 8.1B — Native Python BTC Regime Gate (May 2026)
+
+**Problem:** BTC regime was computed in TypeScript (`lib/market-regime.ts`) and not available to the Python scanner. The May 2026 incident showed 99 SELL signals at 0% win rate during a bull market reversal — the scanner had no macro context.
+
+**Solution:** Native Python regime classification directly in the scanner:
+
+- `get_btc_regime()` + `_classify_regime()` in `market_fetcher.py` — fetches BTC 4h klines, classifies regime
+- **Soft gate** in `signal_pipeline.py`: BULL + SELL requires +10 confidence; BEAR + BUY requires +10; HIGH_VOLATILITY +5
+- `market_regime` field persisted to `signals` table and `signal_outcomes`
+- `by_market_regime` breakdown added to analytics
+- Telegram alerts show regime emoji: 🟢 BULL / 🔴 BEAR / 🟡 SIDEWAYS / 🟠 VOLATILE
+
+**Expected impact:** 9% → ~24% win rate; −30% signal volume (regime-misaligned setups filtered)
+
+---
+
+## Phase MONITOR.1 — Post-Launch Operational Monitoring (May 2026)
+
+14 daily Redis metric counters wired into scanner, Telegram, and analytics paths:
+
+| Metric | Threshold (Healthy/Warning/Critical) |
+|--------|-------------------------------------|
+| Scans per day | ≥ 95 / 70–95 / < 70 |
+| Signals per day | 1–30 / 0 or > 30 / 0 for 24h |
+| Claude validation rate | ≥ 60% / 30–60% / < 30% |
+| Claude fallback rate | < 20% / 20–50% / > 50% |
+| Telegram delivery rate | ≥ 95% / 80–95% / < 80% |
+| Binance error rate | < 2% / 2–10% / > 10% |
+| Scan duration | < 10 min / 10–15 min / > 15 min |
+
+- **Anomaly detection**: zero-signal day, Claude fallback spike, Binance errors, slow scan
+- **Endpoint**: `GET /api/analytics/monitor` + System page Operational Monitoring section
+- **Smoke test**: All 13 deploy scenarios verified — scanner, Claude, Telegram, emergency stop, maintenance mode
+
 ---
 
 ## License
