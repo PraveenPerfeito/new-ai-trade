@@ -858,55 +858,84 @@ export default function SettingsPage() {
       {/* Active Settings Summary */}
       <ActiveSettingsSummary settings={settings} dirty={dirty} activeMode={activeMode} />
 
-      {/* ── Layer 3: Advanced Infrastructure (accordion) ─────────────────── */}
-      <div className="border border-terminal-border/50 rounded-xl overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setAdvancedOpen(v => !v)}
-          className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-terminal-bright/5 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-[9px] text-terminal-muted/40 uppercase tracking-widest font-mono">Layer 3</span>
-            <span className="text-xs font-semibold text-terminal-text">Advanced Infrastructure</span>
-            <span className="text-[9px] text-terminal-muted/35 font-mono hidden sm:block">raw configuration groups + audit log</span>
+      {/* ── All Settings Groups ──────────────────────────────────────────── */}
+      <div className="glass-card rounded-xl overflow-hidden border border-terminal-border/50">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-terminal-border/40">
+          <div className="flex items-center gap-2">
+            <Database size={14} className="text-terminal-muted/60" />
+            <span className="text-sm font-semibold text-terminal-text">All Settings</span>
+            <span className="text-[10px] text-terminal-muted/40 font-mono hidden sm:block">
+              · auto-save · toggles instant · numbers 0.8s
+            </span>
           </div>
-          <ChevronDown size={14} className={`text-terminal-muted/50 transition-transform ${advancedOpen ? 'rotate-180' : ''}`} />
-        </button>
+          {Object.values(dirty).length > 0 && (
+            <span className="text-xs text-signal-medium font-semibold">
+              {Object.keys(dirty).length} unsaved
+            </span>
+          )}
+        </div>
 
-        {advancedOpen && (
-          <div className="border-t border-terminal-border/40 p-5 space-y-5">
+        {/* Two-column layout: left nav + right content */}
+        <div className="flex min-h-[400px]">
 
-            <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-signal-medium/5 border border-signal-medium/20 text-signal-medium text-xs">
-              <Database size={12} />
-              <span>
-                Toggles and dropdowns save immediately. Numbers auto-save 0.8 s after you stop typing.
-                Settings marked <span className="text-signal-high font-medium">↻ restart</span> take effect after a process restart.
-              </span>
-            </div>
+          {/* ── Left sidebar navigation ── */}
+          <div className="w-44 sm:w-52 shrink-0 border-r border-terminal-border/40 py-2">
+            {[...tabs.filter(t => t !== 'audit'), 'audit'].map(tab => {
+              const isActive = activeTab === tab
+              const count    = tab !== 'audit' ? dirtyKeys(tab) : 0
+              const label    = tab === 'audit' ? 'Audit Log' : (GROUP_LABELS[tab] ?? tab)
+              const desc     = tab === 'audit' ? 'Change history' : (GROUP_DESCRIPTIONS[tab] ?? '')
 
-            {/* Tab bar */}
-            <div className="flex gap-0.5 flex-wrap border-b border-terminal-border">
-              {tabs.map(tab => {
-                const label    = tab === 'audit' ? 'Audit Log' : (GROUP_LABELS[tab] ?? tab)
-                const count    = tab !== 'audit' ? dirtyKeys(tab) : 0
-                const grpMeta  = settings[tab]?.meta
-                const isActive = activeTab === tab
-                return (
-                  <button key={tab} onClick={() => { setActiveTab(tab); setResetConfirm(null) }}
-                    className={`px-3 py-1.5 text-xs font-mono rounded-t transition-colors relative -mb-px border-b ${
-                      isActive
-                        ? 'bg-terminal-surface border-x border-t border-terminal-border border-b-terminal-surface text-terminal-text'
-                        : 'border-transparent text-terminal-muted hover:text-terminal-text'
-                    }`}>
-                    {label}
-                    {grpMeta && <VersionBadge version={grpMeta.data_version} />}
-                    {count > 0 && (
-                      <span className="ml-1 text-xs px-1 py-0.5 rounded bg-signal-medium/20 text-signal-medium font-bold">{count}</span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
+              // Group color dots
+              const dotColor: Record<string, string> = {
+                scanner:  '#3b82f6', signals: '#00d084', ai: '#a855f7',
+                telegram: '#06b6d4', risk: '#f59e0b', anomaly: '#f97316',
+                features: '#6366f1', infra: '#6b7280', audit: '#374151',
+              }
+
+              return (
+                <button
+                  key={tab}
+                  onClick={() => { setActiveTab(tab); setResetConfirm(null) }}
+                  className={`w-full text-left px-3 py-2.5 transition-colors relative ${
+                    isActive
+                      ? 'bg-terminal-bright/15 text-terminal-text'
+                      : 'text-terminal-muted hover:bg-terminal-bright/5 hover:text-terminal-text'
+                  }`}
+                >
+                  {/* Active indicator bar */}
+                  {isActive && (
+                    <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full bg-bull-default/70" />
+                  )}
+                  <div className="flex items-center gap-2 pl-1.5">
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0 opacity-70"
+                      style={{ backgroundColor: dotColor[tab] ?? '#6b7280' }}
+                    />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-xs font-semibold truncate ${isActive ? 'text-terminal-text' : ''}`}>
+                          {label}
+                        </span>
+                        {count > 0 && (
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-signal-medium/20 text-signal-medium font-bold shrink-0">
+                            {count}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-terminal-muted/45 truncate leading-tight mt-0.5 hidden sm:block">
+                        {desc.split('·')[0].trim()}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* ── Right content panel ── */}
+          <div className="flex-1 min-w-0 p-4 sm:p-5 space-y-4">
 
             {/* Settings panel */}
             {activeTab !== 'audit' && (
@@ -1104,8 +1133,8 @@ export default function SettingsPage() {
               </>
             )}
           </div>
-        )}
-      </div>
+        </div>{/* end two-column flex */}
+      </div>{/* end glass-card */}
     </div>
   )
 }
