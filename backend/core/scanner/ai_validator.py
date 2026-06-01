@@ -185,7 +185,8 @@ def _sf(value: float, decimals: int = 4) -> str:
 
 # ── Claude validation ─────────────────────────────────────────────────────────
 
-AI_MIN_SETUP_SCORE = 72  # only call Claude for setup scores ≥ this; lower = heuristic (was 70)
+AI_MIN_SETUP_SCORE = 78  # only call Claude for setup scores ≥ this; lower = heuristic
+                          # 78 = strong setups only; cuts ~50% of calls vs 72; saves ~$0.03/day
 
 
 async def validate_signal(
