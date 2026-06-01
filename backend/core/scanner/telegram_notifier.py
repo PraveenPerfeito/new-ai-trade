@@ -225,30 +225,32 @@ async def send_signal_alert(signal: Signal) -> bool:
         log.warning("telegram_settings_check_failed", error=str(exc))
         # fail open — send if settings service is unavailable to avoid silent loss
 
-    # Hourly rate cap — enforces TelegramSettings.max_alerts_per_hour
+    # Deduplication FIRST — must check before rate counter so duplicates
+    # do NOT waste hourly quota slots (the previous bug: counter incremented
+    # on every duplicate attempt, exhausting 20/hr in minutes)
+    direction_key = "LONG" if signal.type.value == "BUY" else "SHORT"
+    if await _is_duplicate_alert(signal.symbol, direction_key):
+        log.info("telegram_alert_skipped_duplicate", symbol=signal.symbol, direction=direction_key,
+                 cooldown_hours=ALERT_COOLDOWN_HOURS)
+        return False
+
+    # Hourly rate cap — only counted AFTER dedup passes (unique alerts only)
     try:
         from backend.cache.redis_cache import get_redis
         import time as _time
         redis_ratelimit = await get_redis()
-        max_per_hr = getattr(tg_cfg, "max_alerts_per_hour", 10)
+        max_per_hr = getattr(tg_cfg, "max_alerts_per_hour", 20)
         current_hour = int(_time.time() / 3600)
         hour_key = f"tg:hourly_count:{current_hour}"
         count = await redis_ratelimit.incr(hour_key)
         if count == 1:
-            await redis_ratelimit.expire(hour_key, 3700)  # slightly over 1h to prevent boundary issues
+            await redis_ratelimit.expire(hour_key, 3700)
         if count > max_per_hr:
             log.info("telegram_rate_limited", symbol=signal.symbol, count=count, max=max_per_hr)
             return False
     except Exception as exc:
         log.warning("telegram_rate_limit_check_failed", error=str(exc))
         # fail open — send if Redis is unavailable
-
-    # Deduplication check — prevents spam for the same coin
-    direction_key = "LONG" if signal.type.value == "BUY" else "SHORT"
-    if await _is_duplicate_alert(signal.symbol, direction_key):
-        log.info("telegram_alert_skipped_duplicate", symbol=signal.symbol, direction=direction_key,
-                 cooldown_hours=ALERT_COOLDOWN_HOURS)
-        return False
 
     is_long    = signal.type.value == "BUY"
     direction  = "📈 LONG" if is_long else "📉 SHORT"
