@@ -338,49 +338,78 @@ export default function TacticalPage() {
         </div>
       )}
 
-      {/* Stage distribution pills (clickable shortcuts) */}
+      {/* Stage distribution — visual bar + stats row */}
       {allSignals.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {Object.entries(stageCounts)
-            .filter(([, c]) => c > 0)
-            .sort(([a], [b]) => {
-              const order = ['ACTIVE','AI_APPROVED','TELEGRAM_SENT','TP_HIT','SL_HIT','STALE','CLOSED','VALIDATED','ANALYZED']
-              return order.indexOf(a) - order.indexOf(b)
-            })
-            .map(([stage, count]) => {
-              const m = STAGE_META[stage as SignalLifecycleStage]
-              if (!m) return null
-              return (
-                <button key={stage}
-                  onClick={() => {
-                    if (['ACTIVE','AI_APPROVED','TELEGRAM_SENT'].includes(stage)) setPreset('active')
-                    else if (['TP_HIT','ANALYZED'].includes(stage)) setPreset('won')
-                    else if (stage === 'SL_HIT') setPreset('lost')
-                    else setPreset('all')
-                  }}
-                  className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border hover:opacity-80 transition-opacity ${m.color}`}
-                >
-                  {count} {m.label}
-                </button>
-              )
-            })}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-2.5">
+          {/* Stacked bar chart */}
+          <div className="flex w-full h-1.5 rounded-full overflow-hidden gap-px">
+            {Object.entries(stageCounts)
+              .filter(([, c]) => c > 0)
+              .sort(([a], [b]) => {
+                const order = ['ACTIVE','AI_APPROVED','TELEGRAM_SENT','TP_HIT','SL_HIT','STALE','CLOSED','VALIDATED','ANALYZED']
+                return order.indexOf(a) - order.indexOf(b)
+              })
+              .map(([stage, count]) => {
+                const m = STAGE_META[stage as SignalLifecycleStage]
+                if (!m) return null
+                const barColor = m.accentCls.replace('bg-', 'bg-').replace('/60', '/80')
+                return (
+                  <div
+                    key={stage}
+                    className={`h-full ${barColor} transition-all`}
+                    style={{ width: `${(count / allSignals.length) * 100}%` }}
+                    title={`${m.label}: ${count}`}
+                  />
+                )
+              })}
+          </div>
+
+          {/* Pill row */}
+          <div className="flex flex-wrap gap-1.5">
+            {Object.entries(stageCounts)
+              .filter(([, c]) => c > 0)
+              .sort(([a], [b]) => {
+                const order = ['ACTIVE','AI_APPROVED','TELEGRAM_SENT','TP_HIT','SL_HIT','STALE','CLOSED','VALIDATED','ANALYZED']
+                return order.indexOf(a) - order.indexOf(b)
+              })
+              .map(([stage, count]) => {
+                const m = STAGE_META[stage as SignalLifecycleStage]
+                if (!m) return null
+                const Icon = m.icon
+                return (
+                  <button key={stage}
+                    onClick={() => {
+                      if (['ACTIVE','AI_APPROVED','TELEGRAM_SENT'].includes(stage)) setPreset('active')
+                      else if (['TP_HIT','ANALYZED'].includes(stage)) setPreset('won')
+                      else if (stage === 'SL_HIT') setPreset('lost')
+                      else setPreset('all')
+                    }}
+                    className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border hover:opacity-80 transition-opacity ${m.color}`}
+                  >
+                    <Icon className="w-2.5 h-2.5" />
+                    <span className="font-bold">{count}</span>
+                    <span className="hidden sm:inline">{m.label}</span>
+                  </button>
+                )
+              })}
+          </div>
         </div>
       )}
 
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* Preset buttons with counts */}
-        <div className="flex gap-1">
+        {/* Preset buttons — larger and cleaner */}
+        <div className="flex gap-1.5 flex-wrap">
           <button onClick={() => setPreset('all')}
-            className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 ${preset === 'all' ? 'bg-zinc-700 border-zinc-600 text-white' : 'border-zinc-700 text-zinc-500 hover:text-zinc-300'}`}>
+            className={`text-xs px-3 py-1.5 rounded-lg border transition-all font-semibold flex items-center gap-2 ${preset === 'all' ? 'bg-zinc-700 border-zinc-500 text-white shadow-sm' : 'border-zinc-700 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600'}`}>
             All
-            <span className="text-[9px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono">{presetCounts.all}</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold font-mono ${preset === 'all' ? 'bg-zinc-600 text-zinc-200' : 'bg-zinc-800 text-zinc-500'}`}>{presetCounts.all}</span>
           </button>
           {PRESETS.map(p => (
             <button key={p.id} onClick={() => setPreset(p.id as PresetId)}
-              className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 ${preset === p.id ? p.cls : 'border-zinc-700 text-zinc-500 hover:text-zinc-300'}`}>
+              className={`text-xs px-3 py-1.5 rounded-lg border transition-all font-semibold flex items-center gap-2 ${preset === p.id ? p.cls + ' shadow-sm' : 'border-zinc-700 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600'}`}>
               {p.label}
-              <span className="text-[9px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono">{presetCounts[p.id as keyof typeof presetCounts]}</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold font-mono ${preset === p.id ? 'bg-white/10' : 'bg-zinc-800 text-zinc-500'}`}>{presetCounts[p.id as keyof typeof presetCounts]}</span>
             </button>
           ))}
         </div>

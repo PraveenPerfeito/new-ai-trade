@@ -111,11 +111,17 @@ function SignalCard({ sig }: { sig: TradingSignal }) {
     sig.oiInterpretation || sig.fundingTrend || sig.positioningContext
 
   return (
-    <div className="glass-card rounded-xl border border-terminal-border/50 overflow-hidden">
+    <div className={`relative glass-card rounded-xl border overflow-hidden ${
+      isBuy ? 'border-emerald-400/20' : 'border-red-400/20'
+    }`}>
+      {/* ── Left accent bar (direction colour) ── */}
+      <div className={`absolute left-0 top-0 bottom-0 w-0.5 rounded-l-xl ${
+        isBuy ? 'bg-emerald-400/70' : 'bg-red-400/70'
+      }`} />
 
       {/* ── Collapsed header row ─────────────────────────────────────────────── */}
       <div
-        className="px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-terminal-bright/5 transition-colors"
+        className="pl-4 pr-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-terminal-bright/5 transition-colors"
         onClick={() => setExpanded(e => !e)}
       >
         {/* Direction icon */}
