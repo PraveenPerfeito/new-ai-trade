@@ -50,22 +50,32 @@ _429_BASE_DELAY_S = 5.0      # delays: 5s, 10s
 # limiter state, and worker restarts are rare. Revisit if multiple concurrent
 # Railway services are ever deployed.
 
-# ── Enhancement 1: Daily call counter (in-process, resets on midnight or restart)
-_daily_date:  str = ""
-_daily_calls: int = 0
+# ── Enhancement 1: Daily call counter — Redis-backed so it survives worker restarts ──
+# Key: ai:daily_calls:{YYYY-MM-DD}  TTL: 25h (survives midnight by 1h)
 
-def _check_and_increment_daily(limit: int) -> bool:
-    """Returns True (exceeded) if daily limit is set and reached. Always increments."""
-    global _daily_date, _daily_calls
-    today = _dt.date.today().isoformat()
-    if today != _daily_date:          # midnight rollover
-        _daily_date  = today
-        _daily_calls = 0
-    _daily_calls += 1
-    if limit > 0 and _daily_calls > limit:
-        log.warning("ai_daily_call_limit_exceeded", calls=_daily_calls, limit=limit)
-        return True
-    return False
+async def _check_and_increment_daily_redis(limit: int) -> bool:
+    """
+    Returns True (exceeded) if daily limit is set and reached.
+    Uses Redis so the counter survives Celery worker restarts.
+    Falls back to allow (False) if Redis is unavailable.
+    """
+    if limit <= 0:
+        return False  # no limit configured
+    try:
+        from backend.cache.redis_cache import get_redis
+        redis = await get_redis()
+        today = _dt.date.today().isoformat()
+        key   = f"ai:daily_calls:{today}"
+        count = await redis.incr(key)
+        if count == 1:
+            await redis.expire(key, 25 * 3600)  # expires next day + 1h buffer
+        if count > limit:
+            log.warning("ai_daily_call_limit_exceeded", calls=count, limit=limit, key=key)
+            return True
+        return False
+    except Exception as exc:
+        log.warning("ai_daily_counter_redis_failed", error=str(exc))
+        return False  # fail open — send if Redis unavailable
 
 # ── Enhancement 2: Degradation alerting (rolling 15-min window) ──────────────
 _DEGRADATION_WINDOW_S   = 15 * 60   # 15-minute window
@@ -220,8 +230,8 @@ async def validate_signal(
     except Exception as exc:
         log.warning("ai_settings_check_failed", error=str(exc))
 
-    # Enhancement 1: daily call limit guard — falls back to heuristic, never stops scanner
-    if _check_and_increment_daily(ai_cfg_daily_limit):
+    # Enhancement 1: daily call limit guard (Redis-backed — survives worker restarts)
+    if await _check_and_increment_daily_redis(ai_cfg_daily_limit):
         result = _heuristic(signal, ind4h, trend_strength, volatility)
         _record(signal.id, "heuristic", 0, result.confidence, result.validated, used_fallback=True)
         _record_call_outcome(is_fallback=True)
