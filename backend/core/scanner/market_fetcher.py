@@ -120,6 +120,16 @@ def _parse_klines(raw: list) -> list[Candle]:
     return candles
 
 
+def _drop_open_candle(candles: list[Candle], now_ms: int | None = None) -> list[Candle]:
+    """Binance klines include the currently open candle; scanner signals need closed candles."""
+    if not candles:
+        return candles
+    current_ms = now_ms if now_ms is not None else int(time.time() * 1000)
+    if candles[-1].close_time and candles[-1].close_time >= current_ms:
+        return candles[:-1]
+    return candles
+
+
 async def fetch_spot_klines(symbol: str, interval: str = "1h", limit: int = 100) -> list[Candle]:
     for base in (SPOT_BASE, SPOT_BASE_US):
         try:
@@ -128,7 +138,7 @@ async def fetch_spot_klines(symbol: str, interval: str = "1h", limit: int = 100)
                 params={"symbol": symbol, "interval": interval, "limit": limit},
                 service="binance",
             )
-            return _parse_klines(data) if data else []
+            return _drop_open_candle(_parse_klines(data)) if data else []
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 451 and base == SPOT_BASE:
                 log.warning("binance_geo_blocked_trying_us", symbol=symbol)
@@ -148,7 +158,7 @@ async def fetch_futures_klines(symbol: str, interval: str = "1h", limit: int = 1
             params={"symbol": symbol, "interval": interval, "limit": limit},
             service="binance",
         )
-        return _parse_klines(data) if data else []
+        return _drop_open_candle(_parse_klines(data)) if data else []
     except Exception as exc:
         log.warning("futures_klines_failed", symbol=symbol, error=str(exc))
         return []

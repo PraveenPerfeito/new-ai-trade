@@ -26,6 +26,7 @@ from backend.core.scanner.db import (
     create_scan_run,
     update_scan_run,
     save_signal,
+    has_recent_signal,
     mark_signal_telegram_sent,
     upsert_coins,
 )
@@ -325,6 +326,17 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
             elif signal is not None:
                 signal.market_regime = btc_regime   # Phase 8.1B — store macro regime on signal
                 signal.scan_run_id = scan_run_id
+
+                if await has_recent_signal(signal.symbol, signal.type.value, signal.timeframe):
+                    log.info(
+                        "signal_duplicate_suppressed",
+                        symbol=signal.symbol,
+                        type=signal.type.value,
+                        timeframe=signal.timeframe,
+                        cooldown_minutes=60,
+                    )
+                    continue
+
                 sig_id = await save_signal(signal)
                 if sig_id:
                     signal.id = sig_id

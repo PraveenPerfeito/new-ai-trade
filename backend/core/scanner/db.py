@@ -165,6 +165,39 @@ async def save_signal(signal: Signal) -> str | None:
         return None
 
 
+async def has_recent_signal(
+    symbol: str,
+    signal_type: str,
+    timeframe: str,
+    cooldown_minutes: int = 60,
+) -> bool:
+    """Return True when the same symbol/direction/timeframe was already persisted."""
+    pool = await _pool()
+    if not pool:
+        return False
+    try:
+        return bool(await pool.fetchval(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM signals
+                WHERE upper(symbol) = upper($1)
+                  AND type = $2
+                  AND timeframe = $3
+                  AND created_at >= now() - ($4::int * interval '1 minute')
+                LIMIT 1
+            )
+            """,
+            symbol,
+            signal_type,
+            timeframe,
+            cooldown_minutes,
+        ))
+    except Exception as exc:
+        log.warning("db_recent_signal_check_failed", symbol=symbol, error=str(exc))
+        return False
+
+
 async def mark_signal_telegram_sent(signal_id: str) -> None:
     """Set telegram_sent=true after a successful Telegram dispatch."""
     pool = await _pool()

@@ -20,7 +20,6 @@ log = get_logger(__name__)
 TIMEOUT_HOURS      = 72
 CANDLE_LIMIT       = 200
 CHECK_BATCH        = 50
-MAX_OUTCOME_CHECKS = 10  # abandon an outcome after this many unsuccessful check attempts
 STALE_DAYS         = 7
 
 CONFIDENCE_BANDS: list[tuple[int, int]] = [
@@ -154,11 +153,10 @@ async def check_pending_outcomes() -> dict:
             FROM signal_outcomes
             WHERE outcome = 'PENDING'
               AND created_at > $1
-              AND check_count < $2
             ORDER BY created_at ASC
-            LIMIT $3
+            LIMIT $2
             """,
-            cutoff, MAX_OUTCOME_CHECKS, CHECK_BATCH,
+            cutoff, CHECK_BATCH,
         )
     except Exception as exc:
         log.error("fetch_pending_outcomes_failed", error=str(exc))
@@ -205,8 +203,8 @@ async def _try_resolve(row: dict) -> dict | None:
         return None
 
     for candle in candles:
-        candle_time = datetime.fromtimestamp(candle.open_time / 1000, tz=timezone.utc)
-        if candle_time <= created:
+        candle_close_time = datetime.fromtimestamp(candle.close_time / 1000, tz=timezone.utc)
+        if candle_close_time <= created:
             continue
 
         high = candle.high
@@ -215,14 +213,14 @@ async def _try_resolve(row: dict) -> dict | None:
         # Conservative: check SL first within the same candle
         if is_buy:
             if low <= sl:
-                return _build_resolution(row, "SL_HIT", sl, candle_time)
+                return _build_resolution(row, "SL_HIT", sl, candle_close_time)
             if high >= tp:
-                return _build_resolution(row, "TP_HIT", tp, candle_time)
+                return _build_resolution(row, "TP_HIT", tp, candle_close_time)
         else:
             if high >= sl:
-                return _build_resolution(row, "SL_HIT", sl, candle_time)
+                return _build_resolution(row, "SL_HIT", sl, candle_close_time)
             if low <= tp:
-                return _build_resolution(row, "TP_HIT", tp, candle_time)
+                return _build_resolution(row, "TP_HIT", tp, candle_close_time)
 
     # Check timeout
     hours_elapsed = (datetime.now(timezone.utc) - created).total_seconds() / 3600
