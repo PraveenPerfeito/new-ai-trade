@@ -1,4 +1,4 @@
-# API Reference & Local URLs
+﻿# API Reference & Local URLs
 
 Complete reference for all endpoints, local URLs, and usage instructions.
 
@@ -18,23 +18,25 @@ Complete reference for all endpoints, local URLs, and usage instructions.
 | FastAPI health | http://localhost:8000/health | Liveness probe |
 | Swagger UI | http://localhost:8000/docs | Interactive API explorer |
 
-> Celery worker has no HTTP URL — verify it's running by checking terminal for `celery@HOST ready`.
+> Celery worker has no HTTP URL â€” verify it's running by checking terminal for `celery@HOST ready`.
 > The worker also starts a health HTTP server on `$PORT` for Railway health checks.
 
 ---
 
 ## Starting All Services
 
+Current runtime note: scanner signals use closed Binance candles only, and duplicate same-direction 1h signals are suppressed before persistence, Telegram delivery, and outcome registration.
+
 ```bash
-# Terminal 1 — Next.js frontend
+# Terminal 1 â€” Next.js frontend
 npm run dev
 
-# Terminal 2 — FastAPI backend
+# Terminal 2 â€” FastAPI backend
 .venv\Scripts\Activate.ps1   # PowerShell
 # source .venv/Scripts/activate  # Git Bash
 uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 
-# Terminal 3 — Celery worker + Beat
+# Terminal 3 â€” Celery worker + Beat
 .venv\Scripts\Activate.ps1
 celery -A backend.workers.celery_app.celery_app worker --beat --loglevel=info --concurrency=1 -Q celery,scanner
 ```
@@ -47,14 +49,14 @@ celery -A backend.workers.celery_app.celery_app worker --beat --loglevel=info --
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/health` | Public | Liveness — Supabase, Anthropic, Telegram, CMC |
+| GET | `/api/health` | Public | Liveness â€” Supabase, Anthropic, Telegram, CMC |
 | GET | `/api/health/providers` | Public | Live latency check for all data providers |
 
 ### Scanner
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/api/scanner/run` | Session | Trigger scan — proxies to Python backend `/api/scanner/trigger` |
+| POST | `/api/scanner/run` | Session | Trigger scan â€” proxies to Python backend `/api/scanner/trigger` |
 | GET/POST | `/api/scanner/control` | Session | Legacy Next.js scheduler state (used by scanner page for rejection stats) |
 
 ```bash
@@ -69,20 +71,20 @@ curl -X POST http://localhost:3000/api/scanner/run \
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/signals` | Session | Recent signals — last 7 days, newest first |
+| GET | `/api/signals` | Session | Recent signals â€” last 7 days, newest first |
 
 ```bash
 curl "http://localhost:3000/api/signals?limit=100&minConfidence=0"
 ```
 
 > Admin users (email in ADMIN_EMAILS) see **all signals** with no confidence floor or daily cap.
-> Non-admin users see free-plan filtered results (confidence ≥ 85, max 10/day).
+> Non-admin users see free-plan filtered results (confidence â‰¥ 85, max 10/day).
 
 ### Coins
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/coins/top100` | Session | Top 200 coins from CMC via MarketDataService |
+| GET | `/api/coins/top100` | Session | Top 100 coins from the frontend CoinGecko cache helper |
 
 ### Analytics
 
@@ -103,7 +105,7 @@ curl "http://localhost:3000/api/signals?limit=100&minConfidence=0"
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `*` | `/api/admin/[...path]` | Session + Admin email | Proxy to FastAPI — injects `X-Admin-Secret` automatically |
+| `*` | `/api/admin/[...path]` | Session + Admin email | Proxy to FastAPI â€” injects `X-Admin-Secret` automatically |
 
 ---
 
@@ -146,7 +148,7 @@ curl -X POST http://localhost:8000/api/scanner/trigger \
 | PATCH | `/api/settings/{group}` | Update fields (merge) |
 | POST | `/api/settings/{group}/reset` | Reset to defaults |
 
-**Available groups:** `scanner` · `ai` · `risk` · `providers` · `failover` · `market_cache` · `quota` · `telegram`
+**Available groups:** `scanner` Â· `ai` Â· `risk` Â· `providers` Â· `failover` Â· `market_cache` Â· `quota` Â· `telegram`
 
 ```bash
 # Toggle Claude AI on/off
@@ -163,10 +165,10 @@ curl -X PATCH http://localhost:8000/api/settings/ai \
 | GET | `/api/providers` | All providers with health metrics |
 | POST | `/api/providers/{name}/enable` | Enable provider |
 | POST | `/api/providers/{name}/disable` | Disable provider |
-| POST | `/api/providers/{name}/priority` | Set priority (1–6) |
+| POST | `/api/providers/{name}/priority` | Set priority (1â€“6) |
 | POST | `/api/providers/clear-cache` | Clear market-data cache |
 
-**Provider names:** `coinmarketcap` (primary) · `coingecko` (fallback) · `binance` · `dexscreener` · `coinpaprika` · `geckoterm`
+**Provider names:** `coinmarketcap` (primary) Â· `coingecko` (fallback) Â· `binance` Â· `dexscreener` Â· `coinpaprika` Â· `geckoterm`
 
 ### Analytics
 
@@ -188,7 +190,7 @@ curl -X PATCH http://localhost:8000/api/settings/ai \
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/burnin/status` | Burn-in progress and anomaly summary |
-| GET | `/api/burnin/readiness` | Production readiness score (0–100) |
+| GET | `/api/burnin/readiness` | Production readiness score (0â€“100) |
 | GET | `/api/burnin/anomalies` | Recent anomaly records |
 
 ---
@@ -211,21 +213,24 @@ These run automatically via Celery Beat. No manual invocation needed.
 
 ## Environment Variables Quick Reference
 
+Current runtime note: `COINMARKETCAP_API_KEY` is optional for the stabilized Python signal path. The live scanner currently falls back to CoinGecko listings until CMC-derived signal attribution is measurable again.
+
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `NEXT_PUBLIC_SUPABASE_URL` | ✅ | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | Supabase anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Supabase service role (server only) |
-| `DATABASE_URL` | ✅ | Transaction Pooler URL (port 6543) |
-| `REDIS_URL` | ✅ | Upstash `rediss://` URL |
-| `ADMIN_EMAILS` | ✅ | Comma-separated admin email(s) |
-| `ADMIN_SECRET` | ✅ | 32-byte hex — `openssl rand -hex 32` |
-| `BACKEND_URL` | ✅ | Railway FastAPI URL (or `http://localhost:8000`) |
-| `ANTHROPIC_API_KEY` | ⚠ | Claude Haiku — toggleable from Admin → Calibration |
-| `COINMARKETCAP_API_KEY` | ⚠ | Primary coin data (200 coins per scan) |
-| `COINGECKO_API_KEY` | ✗ | CoinGecko fallback key |
-| `TELEGRAM_BOT_TOKEN` | ✗ | Telegram alert bot token |
-| `TELEGRAM_CHAT_ID` | ✗ | Telegram channel/chat ID |
-| `SCANNER_MIN_CONFIDENCE_ALERT` | ✗ | Min confidence for Telegram (default 85) |
-| `ENVIRONMENT` | ✗ | `development` or `production` |
-| `LOG_LEVEL` | ✗ | `info` / `debug` / `warning` / `error` |
+| `NEXT_PUBLIC_SUPABASE_URL` | âœ… | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | âœ… | Supabase anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | âœ… | Supabase service role (server only) |
+| `DATABASE_URL` | âœ… | Transaction Pooler URL (port 6543) |
+| `REDIS_URL` | âœ… | Upstash `rediss://` URL |
+| `ADMIN_EMAILS` | âœ… | Comma-separated admin email(s) |
+| `ADMIN_SECRET` | âœ… | 32-byte hex â€” `openssl rand -hex 32` |
+| `BACKEND_URL` | âœ… | Railway FastAPI URL (or `http://localhost:8000`) |
+| `ANTHROPIC_API_KEY` | âš  | Claude Haiku â€” toggleable from Admin â†’ Calibration |
+| `COINMARKETCAP_API_KEY` | optional | Optional for the stabilized Python signal path; mainly used by TypeScript intelligence workers/provider health |
+| `COINGECKO_API_KEY` | âœ— | CoinGecko fallback key |
+| `TELEGRAM_BOT_TOKEN` | âœ— | Telegram alert bot token |
+| `TELEGRAM_CHAT_ID` | âœ— | Telegram channel/chat ID |
+| `SCANNER_MIN_CONFIDENCE_ALERT` | âœ— | Min confidence for Telegram (default 85) |
+| `ENVIRONMENT` | âœ— | `development` or `production` |
+| `LOG_LEVEL` | âœ— | `info` / `debug` / `warning` / `error` |
+

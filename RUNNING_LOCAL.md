@@ -43,6 +43,8 @@ cd simulation-engine/new-ai-trade
 | `ADMIN_SECRET` | Run `openssl rand -hex 32` |
 | `BACKEND_URL` | `http://localhost:8000` for local dev |
 
+Current runtime note: the stabilized Python scanner does not require `COINMARKETCAP_API_KEY` for signal generation. The live scan path currently falls back to CoinGecko listings until CMC-derived attribution is measurable again.
+
 ### 3. Install Node.js dependencies
 
 ```bash

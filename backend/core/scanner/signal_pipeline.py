@@ -7,6 +7,7 @@ orchestrator which calls this function concurrently.
 """
 from __future__ import annotations
 
+import re
 import time
 
 from backend.core.scanner.ai_validator import validate_signal
@@ -78,6 +79,162 @@ _TARGET_MULT: dict[ScannerMode, float] = {
     ScannerMode.SPOT: 2.0,
     ScannerMode.TRENDING: 2.0,
 }
+
+_SETUP_PASS_SCORE = 72
+_SETUP_NUM_RE = re.compile(r"\b\d+(?:\.\d+)?\b")
+_SETUP_ADX_RE = re.compile(r"\s*\|\s*ADX:.*$", re.IGNORECASE)
+_SETUP_BTC_CONTEXT_RE = re.compile(
+    r"vs BTC (?P<btc_change>[+-]?\d+(?:\.\d+)?)%\)",
+    re.IGNORECASE,
+)
+
+# Exact normalized templates from the resolved-outcome toxic-setup audit.
+_TOXIC_SETUP_DENYLIST: dict[str, str] = {
+    "bear_below_ema200_daily_bearish_strong": (
+        "4h bearish (EMA20 < EMA50). 1h bearish trend confirmed. "
+        "RSI # in bearish zone (#-#). 1h MACD histogram negative. "
+        "Strong trend score: #/#. Price below EMA200 — long-term bearish. "
+        "Daily trend bearish — all # timeframes aligned"
+    ),
+    "bear_below_ema200_daily_bearish": (
+        "4h bearish (EMA20 < EMA50). 1h bearish trend confirmed. "
+        "RSI # in bearish zone (#-#). 1h MACD histogram negative. "
+        "Price below EMA200 — long-term bearish. "
+        "Daily trend bearish — all # timeframes aligned"
+    ),
+    "bear_bb_squeeze_below_ema200_daily_bearish": (
+        "4h bearish (EMA20 < EMA50). 1h bearish trend confirmed. "
+        "RSI # in bearish zone (#-#). 1h MACD histogram negative. "
+        "Price below EMA200 — long-term bearish. "
+        "BB squeeze detected (width #) — breakout imminent. "
+        "Daily trend bearish — all # timeframes aligned"
+    ),
+    "bear_below_ema200_fresh_4h_death_cross": (
+        "4h bearish (EMA20 < EMA50). 1h bearish trend confirmed. "
+        "RSI # in bearish zone (#-#). 1h MACD histogram negative. "
+        "Price below EMA200 — long-term bearish. "
+        "Fresh 4h death cross — EMA20 just crossed below EMA50"
+    ),
+    "bear_daily_bearish_underperforming_btc_strong": (
+        "4h bearish (EMA20 < EMA50). 1h bearish trend confirmed. "
+        "RSI # in bearish zone (#-#). 1h MACD histogram negative. "
+        "Strong trend score: #/#. Price below EMA200 — long-term bearish. "
+        "Daily trend bearish — all # timeframes aligned. "
+        "Underperforming BTC by #% — relative weakness on SELL"
+    ),
+    "bear_daily_bearish_underperforming_btc": (
+        "4h bearish (EMA20 < EMA50). 1h bearish trend confirmed. "
+        "RSI # in bearish zone (#-#). 1h MACD histogram negative. "
+        "Price below EMA200 — long-term bearish. "
+        "Daily trend bearish — all # timeframes aligned. "
+        "Underperforming BTC by #% — relative weakness on SELL"
+    ),
+    "bear_underperforming_btc": (
+        "4h bearish (EMA20 < EMA50). 1h bearish trend confirmed. "
+        "RSI # in bearish zone (#-#). 1h MACD histogram negative. "
+        "Price below EMA200 — long-term bearish. "
+        "Underperforming BTC by #% — relative weakness on SELL"
+    ),
+    "bear_4h_bias_early_20d_low_break": (
+        "4h bearish (EMA20 < EMA50). 1h bearish trend confirmed. "
+        "RSI # in bearish zone (#-#). 1h MACD histogram negative. "
+        "Price below EMA200 — long-term bearish. "
+        "4h price below EMA200 — higher-TF bearish bias. "
+        "Early 20d low break — volume not yet confirming"
+    ),
+    "bear_4h_bias_daily_bearish_underperforming_btc": (
+        "4h bearish (EMA20 < EMA50). 1h bearish trend confirmed. "
+        "RSI # in bearish zone (#-#). 1h MACD histogram negative. "
+        "Price below EMA200 — long-term bearish. "
+        "4h price below EMA200 — higher-TF bearish bias. "
+        "Daily trend bearish — all # timeframes aligned. "
+        "Underperforming BTC by #% — relative weakness on SELL"
+    ),
+    "bull_ema200_bounce_leading_btc": (
+        "4h bullish (EMA20 > EMA50). 1h bullish trend confirmed. "
+        "RSI # in bullish zone (#-#). 1h MACD histogram positive. "
+        "Price above EMA200 — long-term bullish. "
+        "4h price bouncing off EMA200 (#% above). "
+        "Leading BTC by #% (coin +#% vs BTC -#%)"
+    ),
+}
+
+_NULL_CONFIDENCE_PENALTIES = {
+    "sell": 4,
+    "spot": 2,
+    "low_volatility": 4,
+    "range_expansion": 5,
+    "ema_alignment": 4,
+}
+_NULL_RANGE_MARKERS = ("bb squeeze detected", "bb expansion")
+_NULL_EMA_ALIGNMENT_MARKERS = (
+    "fresh 4h golden cross",
+    "fresh 4h death cross",
+    "fresh 1h golden cross",
+    "fresh 1h death cross",
+)
+
+
+def _normalize_setup_description(description: str) -> str:
+    base = _SETUP_ADX_RE.sub("", description or "").strip()
+    return _SETUP_NUM_RE.sub("#", base)
+
+
+def _btc_context_from_setup_description(description: str) -> str | None:
+    match = _SETUP_BTC_CONTEXT_RE.search(description or "")
+    if match is None:
+        return None
+
+    btc_change = float(match.group("btc_change"))
+    if btc_change > 0:
+        return "UP"
+    if btc_change < 0:
+        return "DOWN"
+    return "FLAT"
+
+
+def _should_block_buy_for_btc_context(signal_type: SignalType, description: str) -> bool:
+    return signal_type == SignalType.BUY and _btc_context_from_setup_description(description) == "DOWN"
+
+
+def _match_toxic_setup(description: str) -> str | None:
+    normalized = _normalize_setup_description(description)
+    for label, template in _TOXIC_SETUP_DENYLIST.items():
+        if normalized == template:
+            return label
+    return None
+
+
+def _null_setup_confidence_penalty(
+    setup: SetupResult,
+    signal_type: SignalType,
+    mode: ScannerMode,
+    volatility: VolatilityRating,
+) -> tuple[int, list[str]]:
+    if setup.breakout_type is not None:
+        return 0, []
+
+    normalized = _normalize_setup_description(setup.description).lower()
+    penalty = 0
+    reasons: list[str] = []
+
+    if signal_type == SignalType.SELL:
+        penalty += _NULL_CONFIDENCE_PENALTIES["sell"]
+        reasons.append("null_sell")
+    if mode == ScannerMode.SPOT:
+        penalty += _NULL_CONFIDENCE_PENALTIES["spot"]
+        reasons.append("null_spot")
+    if volatility == VolatilityRating.LOW:
+        penalty += _NULL_CONFIDENCE_PENALTIES["low_volatility"]
+        reasons.append("null_low_volatility")
+    if any(marker in normalized for marker in _NULL_RANGE_MARKERS):
+        penalty += _NULL_CONFIDENCE_PENALTIES["range_expansion"]
+        reasons.append("null_range_expansion")
+    if any(marker in normalized for marker in _NULL_EMA_ALIGNMENT_MARKERS):
+        penalty += _NULL_CONFIDENCE_PENALTIES["ema_alignment"]
+        reasons.append("null_ema_alignment")
+
+    return penalty, reasons
 
 
 # ── Setup quality scoring ─────────────────────────────────────────────────────
@@ -337,7 +494,7 @@ def detect_setup(
 
     score = min(score, 100)   # M6: clamp — each bonus component is valid but they can sum above 100
     return SetupResult(
-        has_setup=score >= 72,   # M1: raised from 60 to match AI_MIN_SETUP_SCORE — eliminates dead zone
+        has_setup=score >= _SETUP_PASS_SCORE,   # M1: raised from 60 to match AI_MIN_SETUP_SCORE — eliminates dead zone
         description=". ".join(reasons),
         pre_score=score,
         breakout_type=_breakout_type,
@@ -458,6 +615,27 @@ async def scan_coin(
             candles_1h=candles_1h,
             candles_1d=candles_1d,
         )
+        if _should_block_buy_for_btc_context(signal_type, setup.description):
+            gate_rejections_total.labels(gate="btc_context").inc()
+            log.info(
+                "rejected_btc_down_buy",
+                symbol=coin.symbol,
+                mode=mode.value,
+                signal_type=signal_type.value,
+                btc_context="DOWN",
+            )
+            return None
+        toxic_pattern = _match_toxic_setup(setup.description)
+        if toxic_pattern is not None:
+            gate_rejections_total.labels(gate="toxic_setup").inc()
+            log.info(
+                "rejected_toxic_setup",
+                symbol=coin.symbol,
+                pattern=toxic_pattern,
+                signal_type=signal_type.value,
+                mode=mode.value,
+            )
+            return None
         if not setup.has_setup:
             gate_rejections_total.labels(gate="setup_score").inc()
             return None
@@ -577,7 +755,23 @@ async def scan_coin(
             regime_adj = 5
 
         required_confidence = config.min_confidence + regime_adj
-        if not ai.validated or ai.confidence < required_confidence:
+        confidence_penalty, penalty_reasons = _null_setup_confidence_penalty(
+            setup, signal_type, mode, volatility
+        )
+        adjusted_confidence = max(ai.confidence - confidence_penalty, 0)
+        if confidence_penalty > 0:
+            log.info(
+                "null_setup_confidence_penalty",
+                symbol=coin.symbol,
+                signal_type=signal_type.value,
+                mode=mode.value,
+                breakout_type=setup.breakout_type,
+                penalty=confidence_penalty,
+                penalty_reasons=penalty_reasons,
+                raw_confidence=ai.confidence,
+                adjusted_confidence=adjusted_confidence,
+            )
+        if not ai.validated or adjusted_confidence < required_confidence:
             gate_rejections_total.labels(gate="ai" if regime_adj == 0 else "regime").inc()
             if regime_adj > 0:
                 log.info(
@@ -585,7 +779,7 @@ async def scan_coin(
                     symbol=coin.symbol,
                     regime=btc_regime,
                     signal_type=signal_type.value,
-                    confidence=ai.confidence,
+                    confidence=adjusted_confidence,
                     required=required_confidence,
                 )
             return None
@@ -598,7 +792,7 @@ async def scan_coin(
             **draft.model_dump(exclude={"confidence", "ai_validated", "ai_reasoning",
                                         "ai_explainability", "risks", "strengths",
                                         "validation_source"}),
-            confidence=ai.confidence,
+            confidence=adjusted_confidence,
             ai_validated=ai.validated,
             ai_reasoning=ai.reasoning,
             ai_explainability=ai.explainability,

@@ -252,33 +252,41 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
 
         # 1b. TRENDING mode: expand universe with multi-source CMC intelligence
         if mode == ScannerMode.TRENDING:
-            from backend.core.scanner.trending_universe import build_trending_universe  # noqa: PLC0415
-            tr = await build_trending_universe(
-                base_coins=all_coins,
-                btc_change_24h=btc_change_24h,
-                btc_4h_change=btc_4h_change,      # Phase 7.3A.4: precise 4h RS reference
-            )
-            all_coins = tr.coins
-            # Build per-symbol lookups for Signal propagation (Phase 7.4A.7.1 / 7.4A.7.2)
-            trend_score_map = {
-                sym: round(meta.trend_score, 2)
-                for sym, meta in tr.meta.items()
-                if meta.trend_score is not None
-            }
-            if tr.sector_report:
-                for sym, meta in tr.meta.items():
-                    if meta.sector:
-                        analysis = tr.sector_report.get(meta.sector)
-                        if analysis:
-                            sector_status_map[sym] = analysis.status.value
-            log.info(
-                "trending_universe_applied",
-                total_candidates=tr.total_unique,
-                new_from_cmc_trending=tr.new_from_trending,
-                rising_sectors=tr.rising_sectors,
-                source_counts=tr.source_counts,
-                btc_4h_change=round(btc_4h_change, 2),
-            )
+            from backend.core.scanner.intelligence_cache import CMC_INTELLIGENCE_ENABLED  # noqa: PLC0415
+            if not CMC_INTELLIGENCE_ENABLED:
+                log.warning(
+                    "cmc_trending_intelligence_disabled",
+                    reason="trend_score_sector_not_measurable",
+                    mode=mode.value,
+                )
+            else:
+                from backend.core.scanner.trending_universe import build_trending_universe  # noqa: PLC0415
+                tr = await build_trending_universe(
+                    base_coins=all_coins,
+                    btc_change_24h=btc_change_24h,
+                    btc_4h_change=btc_4h_change,      # Phase 7.3A.4: precise 4h RS reference
+                )
+                all_coins = tr.coins
+                # Build per-symbol lookups for Signal propagation (Phase 7.4A.7.1 / 7.4A.7.2)
+                trend_score_map = {
+                    sym: round(meta.trend_score, 2)
+                    for sym, meta in tr.meta.items()
+                    if meta.trend_score is not None
+                }
+                if tr.sector_report:
+                    for sym, meta in tr.meta.items():
+                        if meta.sector:
+                            analysis = tr.sector_report.get(meta.sector)
+                            if analysis:
+                                sector_status_map[sym] = analysis.status.value
+                log.info(
+                    "trending_universe_applied",
+                    total_candidates=tr.total_unique,
+                    new_from_cmc_trending=tr.new_from_trending,
+                    rising_sectors=tr.rising_sectors,
+                    source_counts=tr.source_counts,
+                    btc_4h_change=round(btc_4h_change, 2),
+                )
 
         # 2. Filter + prioritize
         filtered = _filter_coins(all_coins, config, futures_syms, mode)

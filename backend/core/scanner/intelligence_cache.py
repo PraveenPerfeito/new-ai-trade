@@ -47,6 +47,10 @@ INTEL_MISSES_KEY = "cache:intel:misses:listings"
 # Listings freshness threshold (mirrors CACHE_GROUPS.listings.ttlMs / 1000)
 INTEL_TTL_SECONDS = 5 * 60   # 5 minutes
 
+# Runtime stabilization: live signals have no persisted TrendScore/Sector
+# attribution, so CMC-derived influence is disabled until it is measurable.
+CMC_INTELLIGENCE_ENABLED = False
+
 
 @dataclass
 class IntelligenceCacheResult:
@@ -98,6 +102,9 @@ async def read_intelligence_listings(limit: int = 200) -> IntelligenceCacheResul
 
     Always returns an IntelligenceCacheResult; never raises.
     """
+    if not CMC_INTELLIGENCE_ENABLED:
+        return await _fallback_coingecko(limit, reason="cmc_disabled_unmeasurable")
+
     try:
         redis = await get_redis()
         raw   = await redis.get(INTEL_LISTINGS_KEY)
@@ -219,7 +226,7 @@ FALLBACK_ALERT_TTL     = 15 * 60   # 15 min — minimum gap between Telegram ale
 FALLBACK_COUNTER_KEY   = "intel:fallback:count_24h"   # daily fallback counter
 
 
-async def _record_fallback_event(coin_count: int) -> bool:
+async def _record_fallback_event(coin_count: int, reason: str = "cache_cold") -> bool:
     """
     Persist fallback status in Redis for admin visibility and determine whether
     a Telegram alert should be sent (throttled to once per 15 minutes).
@@ -236,7 +243,7 @@ async def _record_fallback_event(coin_count: int) -> bool:
             "active":           True,
             "fallback_provider": "coingecko",
             "primary_provider":  "coinmarketcap",
-            "reason":           "cache_cold",
+            "reason":           reason,
             "detected_at":      datetime.now(timezone.utc).isoformat(),
             "coin_count":       coin_count,
         })
@@ -258,7 +265,7 @@ async def _record_fallback_event(coin_count: int) -> bool:
     return should_alert
 
 
-async def _fallback_coingecko(limit: int) -> IntelligenceCacheResult:
+async def _fallback_coingecko(limit: int, reason: str = "cache_cold") -> IntelligenceCacheResult:
     """
     CoinGecko fallback when the Redis intelligence cache is cold or unreadable.
 
@@ -282,7 +289,7 @@ async def _fallback_coingecko(limit: int) -> IntelligenceCacheResult:
         "intel_cache_miss_falling_back_to_coingecko",
         primary="coinmarketcap",
         fallback="coingecko",
-        reason="cache_cold",
+        reason=reason,
     )
 
     try:
@@ -295,13 +302,13 @@ async def _fallback_coingecko(limit: int) -> IntelligenceCacheResult:
             intelligence_fallback_total.labels(
                 primary="coinmarketcap",
                 fallback="coingecko",
-                reason="cache_cold",
+                reason=reason,
             ).inc()
         except Exception:
             pass
 
         # Redis status + alert throttle check
-        should_alert = await _record_fallback_event(coin_count)
+        should_alert = await _record_fallback_event(coin_count, reason=reason)
 
         # Fire-and-forget Telegram operational alert (throttled)
         if should_alert:
@@ -314,7 +321,7 @@ async def _fallback_coingecko(limit: int) -> IntelligenceCacheResult:
                     primary    = "CoinMarketCap",
                     fallback   = "CoinGecko",
                     coin_count = coin_count,
-                    reason     = "cache_cold",
+                    reason     = reason,
                 )
             )
             t.add_done_callback(

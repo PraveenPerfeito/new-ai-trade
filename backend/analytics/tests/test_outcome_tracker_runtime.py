@@ -83,3 +83,59 @@ async def test_ignores_only_candles_closed_before_signal(monkeypatch):
     result = await signal_metrics._try_resolve(row)
 
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_register_signal_outcome_suppresses_recent_duplicate(monkeypatch):
+    class FakePool:
+        def __init__(self):
+            self.fetchrow_called = False
+
+        async def fetchval(self, query, *args):
+            return True
+
+        async def fetchrow(self, query, *args):
+            self.fetchrow_called = True
+
+    class Value:
+        value = "SELL"
+
+    signal = type("SignalStub", (), {
+        "id": "signal-id",
+        "symbol": "SOL",
+        "type": Value(),
+        "timeframe": "1h",
+    })()
+    pool = FakePool()
+
+    async def fake_pool():
+        return pool
+
+    monkeypatch.setattr(signal_metrics, "_pool", fake_pool)
+
+    result = await signal_metrics.register_signal_outcome(signal)
+
+    assert result is None
+    assert pool.fetchrow_called is False
+
+
+@pytest.mark.asyncio
+async def test_pending_outcome_query_rotates_by_checked_at(monkeypatch):
+    class FakePool:
+        def __init__(self):
+            self.query = ""
+
+        async def fetch(self, query, *args):
+            self.query = query
+            return []
+
+    pool = FakePool()
+
+    async def fake_pool():
+        return pool
+
+    monkeypatch.setattr(signal_metrics, "_pool", fake_pool)
+
+    await signal_metrics.check_pending_outcomes()
+
+    assert "ORDER BY checked_at ASC NULLS FIRST, created_at ASC" in pool.query

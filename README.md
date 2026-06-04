@@ -1,8 +1,18 @@
-# SignalEdge AI
+﻿# SignalEdge AI
 
-AI-powered cryptocurrency trading signal scanner. Scans **200 coins** from CoinMarketCap, applies an 11-gate quality pipeline with advanced technical analysis, and surfaces high-probability setups via a glassmorphism admin dashboard and Telegram alerts.
+AI-powered cryptocurrency trading signal scanner. Scans a cached large-cap and mid-cap universe, applies an 11-gate quality pipeline with advanced technical analysis, and surfaces high-probability setups via a glassmorphism admin dashboard and Telegram alerts.
 
-**Stack:** Next.js 14 · TypeScript · FastAPI (Python 3.12) · Supabase · Upstash Redis · Claude Haiku · Binance API · CoinMarketCap · Railway
+**Stack:** Next.js 14 Â· TypeScript Â· FastAPI (Python 3.12) Â· Supabase Â· Upstash Redis Â· Claude Haiku Â· Binance API Â· CoinMarketCap Â· Railway
+
+---
+
+## Current Runtime Notes (2026-06-03)
+
+- Scanner signals use closed Binance candles only. The currently open spot/futures candle is dropped before indicators and setup scoring run.
+- Duplicate same-direction 1h signals are suppressed before DB save, Telegram send, and outcome registration.
+- CMC-derived signal influence is currently disabled in the Python scanner until `trend_score` and `sector_status` attribution is measurable again in resolved outcomes. The live scanner falls back to CoinGecko listings for its runtime universe.
+- Pure `bb_expansion` is not accepted as a standalone breakout path. BB context only boosts a structural breakout.
+- A narrow denylist now rejects proven toxic `breakout_type=NULL` setup templates, while surviving NULL setups receive confidence penalties instead of a blanket family removal.
 
 ---
 
@@ -10,35 +20,36 @@ AI-powered cryptocurrency trading signal scanner. Scans **200 coins** from CoinM
 
 ### Signal Pipeline (11 Gates)
 
-1. **Multi-timeframe confirmation** — 1h + 4h + 1d candles must align
-2. **Volatility gate** — ATR-based filter rejects extreme volatility
-3. **Trend strength** — EMA/MACD composite score (0–100)
-4. **Market structure** — 7 false-positive filters (doji, engulfing, fake breakout, wash trade, RSI divergence, overextension, S/R rejection)
-5. **Setup scoring** — multi-factor quality score including:
-   - EMA200 bounce detection (+15 pts, 4h/1h convergence guard with ≥250 candles)
-   - Bollinger Band squeeze detection (+15 pts) with expansion confirmation
+1. **Multi-timeframe confirmation** â€” 1h + 4h + 1d candles must align
+2. **Volatility gate** â€” ATR-based filter rejects extreme volatility
+3. **Trend strength** â€” EMA/MACD composite score (0â€“100)
+4. **Market structure** â€” 7 false-positive filters (doji, engulfing, fake breakout, wash trade, RSI divergence, overextension, S/R rejection)
+5. **Setup scoring** â€” multi-factor quality score including:
+   - EMA200 bounce detection (+15 pts, 4h/1h convergence guard with â‰¥250 candles)
+   - Bollinger Band squeeze detection (+15 pts); pure BB expansion is not treated as a standalone breakout
    - Daily timeframe alignment (+12 pts)
    - 10 candlestick patterns: Hammer, Shooting Star, Morning/Evening Star, Three White Soldiers/Black Crows, Marubozu, Inverted Hammer, Hanging Man
    - Fresh EMA crossover (Golden/Death Cross within 5 candles) (+12 pts)
    - Relative strength vs BTC 4h (+10 pts)
-   - Breakout intelligence — 20/30-day high/low detection with BB expansion, EARLY_BREAKOUT/CONFIRMED/HIGH_MOMENTUM scoring (+5 to +12 pts)
-6. **R:R ratio** — minimum 2:1 reward-to-risk
-7. **Risk engine** — grade A–F, quality score, safe leverage tiers
-8. **Futures intelligence** — directional funding rate with FAVORABLE/NORMAL/ELEVATED/EXTREME tiers, OI intelligence (NEW_LONGS/NEW_SHORTS/SHORT_COVERING/LONG_LIQUIDATION/NEUTRAL matrix), L/S positioning (EXTREME_LONG/LONG_HEAVY/BALANCED/SHORT_HEAVY/EXTREME_SHORT with contrarian scoring), funding trend (RISING/FALLING/STABLE with trend multiplier), liquidation zones (futures/high_confidence modes)
-9. **Continuation gate** — probability score (10–95), rejects low-momentum setups
-10. **Signal lifecycle** — DEVELOPING/CONFIRMED/EXTENDED/COOLING/CORRECTING/INVALIDATED/EXPIRED
-11. **Claude AI validation** — Haiku validates final signal with full context (can be disabled from dashboard to conserve credits)
+   - Toxic non-breakout templates are hard-rejected; surviving `breakout_type=NULL` setups are penalized by direction, mode, volatility, and context
+   - Breakout intelligence â€” 20/30-day high/low detection with BB expansion, EARLY_BREAKOUT/CONFIRMED/HIGH_MOMENTUM scoring (+5 to +12 pts)
+6. **R:R ratio** â€” minimum 2:1 reward-to-risk
+7. **Risk engine** â€” grade Aâ€“F, quality score, safe leverage tiers
+8. **Futures intelligence** â€” directional funding rate with FAVORABLE/NORMAL/ELEVATED/EXTREME tiers, OI intelligence (NEW_LONGS/NEW_SHORTS/SHORT_COVERING/LONG_LIQUIDATION/NEUTRAL matrix), L/S positioning (EXTREME_LONG/LONG_HEAVY/BALANCED/SHORT_HEAVY/EXTREME_SHORT with contrarian scoring), funding trend (RISING/FALLING/STABLE with trend multiplier), liquidation zones (futures/high_confidence modes)
+9. **Continuation gate** â€” probability score (10â€“95), rejects low-momentum setups
+10. **Signal lifecycle** â€” DEVELOPING/CONFIRMED/EXTENDED/COOLING/CORRECTING/INVALIDATED/EXPIRED
+11. **Claude AI validation** â€” Haiku validates final signal with full context (can be disabled from dashboard to conserve credits)
 
-### Indicators (Pure Python — TradingView-matched)
+### Indicators (Pure Python â€” TradingView-matched)
 
-- RSI(14) — Wilder EWM smoothing
-- MACD — EMA(12) − EMA(26), signal EMA(9)
-- EMA 20 / 50 / 200 (with convergence guards at ≥250 candles)
-- ATR(14) — Wilder True Range
-- Volume Spike — current vs 20-candle rolling avg (time-weighted)
-- ADX — Wilder DI+/DI- (sideways market detection)
-- Bollinger Bands (20, 2σ) — with squeeze & expansion detection
-- Trend Strength Score (0–100 composite)
+- RSI(14) â€” Wilder EWM smoothing
+- MACD â€” EMA(12) âˆ’ EMA(26), signal EMA(9)
+- EMA 20 / 50 / 200 (with convergence guards at â‰¥250 candles)
+- ATR(14) â€” Wilder True Range
+- Volume Spike â€” current vs 20-candle rolling avg (time-weighted)
+- ADX â€” Wilder DI+/DI- (sideways market detection)
+- Bollinger Bands (20, 2Ïƒ) â€” with squeeze & expansion detection
+- Trend Strength Score (0â€“100 composite)
 - EMA Crossover Freshness (within 5 candles)
 - Candlestick Pattern Detection (10 patterns, TradingView-validated body ratios)
 - Relative Strength Engine (4h coin change / 4h BTC change)
@@ -61,18 +72,18 @@ AI-powered cryptocurrency trading signal scanner. Scans **200 coins** from CoinM
 |------|------|-------------|
 | Command Overview | `/admin/overview` | Scanner status, regime card, signal metrics, recent signals, live next-scan countdown |
 | Market Intelligence | `/admin/market` | Hero regime card, compact breadth bar, 6 trending coins |
-| Scanner Control | `/admin/scanner` | Start/stop/pause/resume/e-stop · mode & interval · rejection diagnostics |
+| Scanner Control | `/admin/scanner` | Start/stop/pause/resume/e-stop Â· mode & interval Â· rejection diagnostics |
 | Signals (Intelligence Visibility) | `/admin/signals` | Live signal feed with **Intelligence section** (TrendScore, Sector, Breakout, OI, Funding, Positioning) |
-| Tactical Feed | `/admin/tactical` | Signal lifecycle — colored accent bars per stage, preset filter buttons, responsive cards |
+| Tactical Feed | `/admin/tactical` | Signal lifecycle â€” colored accent bars per stage, preset filter buttons, responsive cards |
 | Sector Rotation | `/admin/sectors` | Category cards with STRONGEST/ACCELERATING/WEAKENING/OVERCROWDED badges |
 | Regime Intelligence | `/admin/regime` | RSI gauge, trading implication, **Apply Regime Settings button**, preview modal |
-| Calibration | `/admin/calibration` | **Claude AI on/off toggle** · verdict distribution · confidence bands (3 sections) |
-| Edge Analytics | `/admin/analytics` | Win rate, expectancy, profit factor, Sharpe — overflow-x-auto, secondary columns hidden mobile |
+| Calibration | `/admin/calibration` | **Claude AI on/off toggle** Â· verdict distribution Â· confidence bands (3 sections) |
+| Edge Analytics | `/admin/analytics` | Win rate, expectancy, profit factor, Sharpe â€” overflow-x-auto, secondary columns hidden mobile |
 | Founder Control Center | `/admin/settings` | 3 primary modes (Conservative/Balanced/Aggressive), Advanced Presets, 4 key controls, Active Settings Summary |
 | Operations Dashboard | `/admin/providers` | ProviderStatusBoard (CMC/Binance/CoinGecko), QuotaBurnForecast, CompactProviderCard (collapsed ~56px) |
-| Cache & System Operations | `/admin/cache` · `/admin/system` | Hit-rate progress bars, fresh/stale count, compact workers; larger status banner |
+| Cache & System Operations | `/admin/cache` Â· `/admin/system` | Hit-rate progress bars, fresh/stale count, compact workers; larger status banner |
 | Anomaly Action Center | `/admin/anomalies` | 4 action buttons (Acknowledge/Mute/Resolve/Detail), state machine, 4-tile Active Issues summary |
-| (Sidebar restructured) | — | TRADING DESK / MARKET / OPERATIONS / REVIEW groups, "SignalEdge" brand |
+| (Sidebar restructured) | â€” | TRADING DESK / MARKET / OPERATIONS / REVIEW groups, "SignalEdge" brand |
 
 ---
 
@@ -80,22 +91,24 @@ AI-powered cryptocurrency trading signal scanner. Scans **200 coins** from CoinM
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | Next.js 14 (App Router) · TypeScript 5 · React 18 · Tailwind CSS |
-| Backend | FastAPI + Uvicorn · Python 3.12 · asyncio · Pydantic v2 |
+| Frontend | Next.js 14 (App Router) Â· TypeScript 5 Â· React 18 Â· Tailwind CSS |
+| Backend | FastAPI + Uvicorn Â· Python 3.12 Â· asyncio Â· Pydantic v2 |
 | Task queue | Celery 5 + Celery Beat |
 | Cache / broker | Upstash Redis (`rediss://`) |
-| Database | Supabase PostgreSQL · asyncpg |
+| Database | Supabase PostgreSQL Â· asyncpg |
 | Auth | Supabase Auth + `@supabase/ssr` |
 | AI validation | Anthropic Claude Haiku 4.5 (toggleable from dashboard) |
 | Market data | Binance REST (spot + futures klines) |
-| Coin data | CoinMarketCap Pro (primary, 200 coins) · CoinGecko (fallback) |
+| Coin data | Redis intelligence cache (optional CMC worker path) and CoinGecko runtime fallback |
 | Notifications | Telegram Bot API |
 | Indicators | pandas + numpy (TradingView-compatible Wilder EWM) |
-| Hosting | Vercel (Next.js) · Railway (FastAPI + Celery worker) |
+| Hosting | Vercel (Next.js) Â· Railway (FastAPI + Celery worker) |
 
 ---
 
 ## Deployment (Railway + Vercel)
+
+Current runtime note: the stabilized Python scanner does not currently consume CMC-derived signal influence. It reads the Redis intelligence cache only when that path is re-enabled; otherwise it falls back to CoinGecko listings.
 
 ### Services
 
@@ -117,7 +130,7 @@ AI-powered cryptocurrency trading signal scanner. Scans **200 coins** from CoinM
 | Standard scan | Every 15 min | `spot` |
 | High-confidence | Every 30 min (offset :05) | `high_confidence` |
 | Futures scan | Every 30 min (offset :10) | `futures` |
-| Outcome tracker | Every 10 min | — |
+| Outcome tracker | Every 10 min | â€” |
 
 ---
 
@@ -125,24 +138,26 @@ AI-powered cryptocurrency trading signal scanner. Scans **200 coins** from CoinM
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `NEXT_PUBLIC_SUPABASE_URL` | ✅ | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | Supabase anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Supabase service role key (server-side only) |
-| `DATABASE_URL` | ✅ | PostgreSQL DSN — use Supabase Transaction Pooler (port 6543) |
-| `REDIS_URL` | ✅ | Upstash `rediss://` URL |
-| `ADMIN_EMAILS` | ✅ | Comma-separated allowed admin emails |
-| `ADMIN_SECRET` | ✅ | 32-byte hex — `openssl rand -hex 32` |
-| `BACKEND_URL` | ✅ | Railway API service URL |
-| `COINMARKETCAP_API_KEY` | ✅ | CMC Startup Plan key (primary coin data source) |
-| `ANTHROPIC_API_KEY` | ⚠ | Claude Haiku key — heuristic fallback if absent or disabled |
-| `BINANCE_API_KEY` | ✗ | Unlocks higher Binance rate limits |
-| `COINGECKO_API_KEY` | ✗ | CoinGecko fallback key |
-| `TELEGRAM_BOT_TOKEN` | ✗ | Bot token for signal alerts |
-| `TELEGRAM_CHAT_ID` | ✗ | Channel ID for signal alerts |
+| `NEXT_PUBLIC_SUPABASE_URL` | âœ… | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | âœ… | Supabase anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | âœ… | Supabase service role key (server-side only) |
+| `DATABASE_URL` | âœ… | PostgreSQL DSN â€” use Supabase Transaction Pooler (port 6543) |
+| `REDIS_URL` | âœ… | Upstash `rediss://` URL |
+| `ADMIN_EMAILS` | âœ… | Comma-separated allowed admin emails |
+| `ADMIN_SECRET` | âœ… | 32-byte hex â€” `openssl rand -hex 32` |
+| `BACKEND_URL` | âœ… | Railway API service URL |
+| `COINMARKETCAP_API_KEY` | optional | Optional for current runtime; used by TypeScript intelligence workers/provider health, not by the stabilized Python signal path |
+| `ANTHROPIC_API_KEY` | âš  | Claude Haiku key â€” heuristic fallback if absent or disabled |
+| `BINANCE_API_KEY` | âœ— | Unlocks higher Binance rate limits |
+| `COINGECKO_API_KEY` | âœ— | CoinGecko fallback key |
+| `TELEGRAM_BOT_TOKEN` | âœ— | Bot token for signal alerts |
+| `TELEGRAM_CHAT_ID` | âœ— | Channel ID for signal alerts |
 
 ---
 
 ## Local Development
+
+Current runtime note: `COINMARKETCAP_API_KEY` is optional for the stabilized Python signal path. It is only needed if you want the TypeScript intelligence workers and provider-health surfaces to use CMC.
 
 ```bash
 # 1. Install dependencies
@@ -177,8 +192,8 @@ celery -A backend.workers.celery_app.celery_app worker --beat -Q celery,scanner 
 | `scan_runs` | Audit log of every scan |
 | `coins` | Top-200 coin metadata |
 | `signal_outcomes` | TP/SL/timeout outcome tracking (populated by outcome tracker every 10 min) |
-| `ai_call_log` | Every Claude API call — latency, tokens, validated/rejected |
-| `scan_metrics_log` | Per-scan stats — coins scanned, signals found, duration |
+| `ai_call_log` | Every Claude API call â€” latency, tokens, validated/rejected |
+| `scan_metrics_log` | Per-scan stats â€” coins scanned, signals found, duration |
 | `analytics_snapshots` | Cached computed analytics (edge report, calibration) |
 | `backtest_runs` | Backtest job metadata |
 | `backtest_trades` | Individual simulated trades |
@@ -197,7 +212,7 @@ celery -A backend.workers.celery_app.celery_app worker --beat -Q celery,scanner 
 |--------|------|-------------|
 | `POST` | `/api/scanner/run` | Trigger scan (proxies to Python backend) |
 | `GET` | `/api/signals` | Fetch recent signals (last 7 days, newest first) |
-| `GET` | `/api/coins/top100` | Top 200 coins from CMC via market-data service |
+| `GET` | `/api/coins/top100` | Top 100 coins from the frontend CoinGecko cache helper |
 | `GET/POST` | `/api/scanner/control` | Scheduler status, start/stop/pause/resume |
 | `GET` | `/api/health` | Liveness probe |
 | `POST` | `/api/backtest/run` | Run backtest |
@@ -220,158 +235,164 @@ celery -A backend.workers.celery_app.celery_app worker --beat -Q celery,scanner 
 Every signal that passes all 11 gates is sent to Telegram with full trade detail:
 
 ```
-📈 LONG — TON/USDT
-Mode: FUTURES  |  Confidence: 95% 🔥 VERY HIGH
-Grade: 🟢 A  |  R:R: 1:2.5
+ðŸ“ˆ LONG â€” TON/USDT
+Mode: FUTURES  |  Confidence: 95% ðŸ”¥ VERY HIGH
+Grade: ðŸŸ¢ A  |  R:R: 1:2.5
 
-📊 Trade Levels
+ðŸ“Š Trade Levels
   Entry:  $3.2100
   Target: $3.6200  (+12.77%)
   Stop:   $2.9800  (-7.17%)
 
-⚡ Leverage: Up to 10× (max safe: 15×)
+âš¡ Leverage: Up to 10Ã— (max safe: 15Ã—)
 
-📡 Futures Intelligence
-  Funding: 0.0120% 🔴 (LONG_HEAVY)
+ðŸ“¡ Futures Intelligence
+  Funding: 0.0120% ðŸ”´ (LONG_HEAVY)
   OI Trend: RISING  |  L/S: 1.34
   Momentum: 78/100
 
-🔬 Technical
+ðŸ”¬ Technical
   EMA Cross: GOLDEN_CROSS
   Pattern: Hammer
 
-RSI: 62  |  Vol: 2.3×  |  EMA200: above ✅
+RSI: 62  |  Vol: 2.3Ã—  |  EMA200: above âœ…
 
-🤖 Strong 4h bullish alignment with BB squeeze breakout
+ðŸ¤– Strong 4h bullish alignment with BB squeeze breakout
 
-🕐 2026-05-28 09:10 UTC  |  Next alert in 1h
+ðŸ• 2026-05-28 09:10 UTC  |  Next alert in 1h
 ```
 
 ### Deduplication
 
-`ALERT_COOLDOWN_HOURS = 1` in `telegram_notifier.py` — the same coin+direction (e.g. TON LONG) cannot alert again for 1 hour. If the direction flips (LONG → SHORT), it fires immediately regardless. Cooldown stored as a Redis key `tg:alert:{SYMBOL}:{LONG|SHORT}`.
+Current runtime note: duplicate same-direction 1h signals are suppressed for 60 minutes before DB save, Telegram send, and outcome registration. Telegram also keeps its own 1-hour alert cooldown.
+
+The same coin+direction+timeframe is suppressed for 60 minutes before persistence and outcome registration, and Telegram still enforces its own 1-hour cooldown. If direction flips, it can fire immediately.
 
 ---
 
 ## Claude AI Credit Management
 
-The Claude AI validation step can be toggled from **Admin → Calibration** without redeploying:
+The Claude AI validation step can be toggled from **Admin â†’ Calibration** without redeploying:
 
-- **Disable**: scans use heuristic scoring only — zero API credits consumed
+- **Disable**: scans use heuristic scoring only â€” zero API credits consumed
 - **Enable**: Claude validates each signal that passes all 11 prior gates
 - Setting persists through worker restarts (stored in PostgreSQL via settings service)
 
 ### Credit-saving mode (built-in)
 
-`AI_MIN_SETUP_SCORE = 72` in `ai_validator.py` — signals with setup score < 72 (borderline setups) automatically use heuristic instead of Claude. Only high-quality setups (score ≥ 72) spend API credits. This reduces Claude calls by ~40% with no loss in signal quality.
+Current runtime note: `AI_MIN_SETUP_SCORE` is `78` in `ai_validator.py`. Signals below `78` automatically use heuristic validation instead of Claude.
+
+`AI_MIN_SETUP_SCORE = 78` in `ai_validator.py` - signals with setup score < 78 automatically use heuristic instead of Claude. Only stronger setups (score >= 78) spend API credits.
 
 | Setup Score | AI Validation | Credits Used |
 |-------------|---------------|-------------|
-| ≥ 72 | Claude Haiku | Yes |
-| < 72 | Heuristic | No |
+| >= 78 | Claude Haiku | Yes |
+| < 78 | Heuristic | No |
 
 ### Cost estimate (free $5 credits)
 
-- With threshold: ~$0.23/day → **$5 lasts ~22 days**
-- Without threshold: ~$0.38/day → $5 lasts ~13 days
+- With threshold: ~$0.23/day â†’ **$5 lasts ~22 days**
+- Without threshold: ~$0.38/day â†’ $5 lasts ~13 days
 
 ### Anthropic rate limits
 
-- Free tier: 5 req/min → retries add ~30s per scan
-- Tier 1 ($5 actual spend at console.anthropic.com): 50 req/min → instant validation
+- Free tier: 5 req/min â†’ retries add ~30s per scan
+- Tier 1 ($5 actual spend at console.anthropic.com): 50 req/min â†’ instant validation
 
 ---
 
-## Phase 7.2B — Founder Settings & Operations Simplification (May 2026)
+## Phase 7.2B â€” Founder Settings & Operations Simplification (May 2026)
 
 Redesigned admin dashboard for maximum operational clarity:
 
-### UX Refinements (7.2B.1 – 7.2B.6.6)
-- **Settings** → "Founder Control Center": 3 primary modes (Conservative/Balanced/Aggressive) + Advanced Presets (Institutional/Sniper/Futures Tactical/Rotation Hunter)
-- **Providers** → "Operations Dashboard": CMC/Binance/CoinGecko status cards, QuotaBurnForecast (Safe/Moderate/High), OperationsSummary (5 cells)
-- **Regime page**: "Apply Regime Settings" button with preview modal; 6 regime → mode mappings
-- **Anomalies** → "Anomaly Action Center": NEW/ACKNOWLEDGED/MUTED/RESOLVED state machine; 4 action buttons per anomaly; 4-tile summary
-- **Sidebar reorganized**: TRADING DESK (Overview/Signals/Tactical/Settings) · MARKET (Intelligence/Regime/Sectors) · OPERATIONS (Scanner/Anomalies/Providers/Cache/System) · REVIEW (Analytics/Calibration)
+### UX Refinements (7.2B.1 â€“ 7.2B.6.6)
+- **Settings** â†’ "Founder Control Center": 3 primary modes (Conservative/Balanced/Aggressive) + Advanced Presets (Institutional/Sniper/Futures Tactical/Rotation Hunter)
+- **Providers** â†’ "Operations Dashboard": CMC/Binance/CoinGecko status cards, QuotaBurnForecast (Safe/Moderate/High), OperationsSummary (5 cells)
+- **Regime page**: "Apply Regime Settings" button with preview modal; 6 regime â†’ mode mappings
+- **Anomalies** â†’ "Anomaly Action Center": NEW/ACKNOWLEDGED/MUTED/RESOLVED state machine; 4 action buttons per anomaly; 4-tile summary
+- **Sidebar reorganized**: TRADING DESK (Overview/Signals/Tactical/Settings) Â· MARKET (Intelligence/Regime/Sectors) Â· OPERATIONS (Scanner/Anomalies/Providers/Cache/System) Â· REVIEW (Analytics/Calibration)
 - **Signals card intelligence**: Phase 7.2B.0 added TrendScore tier badge, Sector status, Breakout strength+type, OI interpretation, Funding trend, Positioning context
 - **Signals/Tactical density**: Desktop columns added (Entry md+, Target% lg+, Stop% lg+); pagination (25/50/100 per page)
 - **Topbar alerts**: "3 CRITICAL / WARN" badges now clickable links to /admin/anomalies; added pulsing icon
 
 ### Production Readiness Audit (7.2B.7)
-- **Overall Score: 7.4/10** — CONDITIONAL GO
+- **Overall Score: 7.4/10** â€” CONDITIONAL GO
 - **2 BLOCKERS**: .env.local git exposure risk, ADMIN_SECRET optional in lib/env.ts
 - **5 HIGH PRIORITY**: console.log, Celery timeout, beat expiry, infra_collector exception loop, no per-minute Anthropic rate limit
 - **6 MEDIUM PRIORITY**: setup score 60/AI threshold 72 dead zone, fire-and-forget logging, hardcoded refresh intervals, ATR floor missing, rejection persistence, score clamp
 - See `docs/PRODUCTION_READINESS_AUDIT.md` for full audit
 
-### Production Hardening (7.2B.7 — 7.2B.7.4A)
+### Production Hardening (7.2B.7 â€” 7.2B.7.4A)
 
 After the audit, all blockers and high-priority items resolved:
 
 | Fix | Commit | Result |
 |-----|--------|--------|
 | ADMIN_SECRET enforced as `z.string().min(32)` | `478fc54` | Blocks deploy without secret |
-| All `console.*` → structured pino logger (34 instances) | `d37cba6` / `f5a7169` | Structured logging throughout |
-| Celery `soft_time_limit` 840s → 1020s; `time_limit` 960s → 1140s | `74672c1` | Scans complete without kill |
-| Beat `expires` 780s → 1020s | `74672c1` | No queued scans dropped |
+| All `console.*` â†’ structured pino logger (34 instances) | `d37cba6` / `f5a7169` | Structured logging throughout |
+| Celery `soft_time_limit` 840s â†’ 1020s; `time_limit` 960s â†’ 1140s | `74672c1` | Scans complete without kill |
+| Beat `expires` 780s â†’ 1020s | `74672c1` | No queued scans dropped |
 | `infra_collector._run_loop` wrapped in try/except | `74672c1` | Prometheus no longer dies silently |
 | Per-minute Anthropic rate limiter (12 RPM sliding window) | `1a471c2` | No more 429 burst errors |
-| Setup gate raised 60 → 72 (dead zone eliminated) | `fe99495` | Cleaner signal threshold |
-| Scheduler lock TTL 11 → 20 min; exception safety | `3e9fde2` | No scan overlaps |
+| Setup gate raised 60 â†’ 72 (dead zone eliminated) | `fe99495` | Cleaner signal threshold |
+| Scheduler lock TTL 11 â†’ 20 min; exception safety | `3e9fde2` | No scan overlaps |
 | OpenAPI endpoint disabled in production | `216e74f` | No schema exposure |
 | `/metrics` requires X-Admin-Secret in production | `216e74f` | No public metrics |
 | Anthropic daily call limit + degradation alerting | `8fe5df3` | Credit ceiling enforced |
-| **Final production readiness: 9.1/10 — ✅ GO** | — | Deployed May 2026 |
+| **Final production readiness: 9.1/10 â€” âœ… GO** | â€” | Deployed May 2026 |
 
 ---
 
-## Phase 8.0 — Analytics Intelligence Wiring (May 2026)
+## Phase 8.0 â€” Analytics Intelligence Wiring (May 2026)
 
 Wired all 7 intelligence fields (TrendScore, Sector, Breakout, OI, Funding, Positioning, Regime) through the full analytics pipeline:
 
 - **GAP-1/2**: `get_outcomes()` and `get_analytics()` return all 7 intelligence fields in group-by breakdowns
 - **GAP-3**: `_fetch_outcomes()` in edge validation includes all 7 fields for attribution analysis
-- **GAP-4**: `trend_score_tier()` helper (ELITE ≥ 80 / STRONG ≥ 60 / GOOD ≥ 40 / WEAK < 40)
-- **GAP-5**: `GET /api/analytics/intelligence` endpoint — best-performing tier per dimension
+- **GAP-4**: `trend_score_tier()` helper (ELITE â‰¥ 80 / STRONG â‰¥ 60 / GOOD â‰¥ 40 / WEAK < 40)
+- **GAP-5**: `GET /api/analytics/intelligence` endpoint â€” best-performing tier per dimension
 - **GAP-6**: Intelligence Performance section on Analytics page
 
 ---
 
-## Phase 8.1B — Native Python BTC Regime Gate (May 2026)
+## Phase 8.1B â€” Native Python BTC Regime Gate (May 2026)
 
-**Problem:** BTC regime was computed in TypeScript (`lib/market-regime.ts`) and not available to the Python scanner. The May 2026 incident showed 99 SELL signals at 0% win rate during a bull market reversal — the scanner had no macro context.
+**Problem:** BTC regime was computed in TypeScript (`lib/market-regime.ts`) and not available to the Python scanner. The May 2026 incident showed 99 SELL signals at 0% win rate during a bull market reversal â€” the scanner had no macro context.
 
 **Solution:** Native Python regime classification directly in the scanner:
 
-- `get_btc_regime()` + `_classify_regime()` in `market_fetcher.py` — fetches BTC 4h klines, classifies regime
+- `get_btc_regime()` + `_classify_regime()` in `market_fetcher.py` â€” fetches BTC 4h klines, classifies regime
 - **Soft gate** in `signal_pipeline.py`: BULL + SELL requires +10 confidence; BEAR + BUY requires +10; HIGH_VOLATILITY +5
 - `market_regime` field persisted to `signals` table and `signal_outcomes`
 - `by_market_regime` breakdown added to analytics
-- Telegram alerts show regime emoji: 🟢 BULL / 🔴 BEAR / 🟡 SIDEWAYS / 🟠 VOLATILE
+- Telegram alerts show regime emoji: ðŸŸ¢ BULL / ðŸ”´ BEAR / ðŸŸ¡ SIDEWAYS / ðŸŸ  VOLATILE
 
-**Expected impact:** 9% → ~24% win rate; −30% signal volume (regime-misaligned setups filtered)
+**Expected impact:** 9% â†’ ~24% win rate; âˆ’30% signal volume (regime-misaligned setups filtered)
 
 ---
 
-## Phase MONITOR.1 — Post-Launch Operational Monitoring (May 2026)
+## Phase MONITOR.1 â€” Post-Launch Operational Monitoring (May 2026)
 
 14 daily Redis metric counters wired into scanner, Telegram, and analytics paths:
 
 | Metric | Threshold (Healthy/Warning/Critical) |
 |--------|-------------------------------------|
-| Scans per day | ≥ 95 / 70–95 / < 70 |
-| Signals per day | 1–30 / 0 or > 30 / 0 for 24h |
-| Claude validation rate | ≥ 60% / 30–60% / < 30% |
-| Claude fallback rate | < 20% / 20–50% / > 50% |
-| Telegram delivery rate | ≥ 95% / 80–95% / < 80% |
-| Binance error rate | < 2% / 2–10% / > 10% |
-| Scan duration | < 10 min / 10–15 min / > 15 min |
+| Scans per day | â‰¥ 95 / 70â€“95 / < 70 |
+| Signals per day | 1â€“30 / 0 or > 30 / 0 for 24h |
+| Claude validation rate | â‰¥ 60% / 30â€“60% / < 30% |
+| Claude fallback rate | < 20% / 20â€“50% / > 50% |
+| Telegram delivery rate | â‰¥ 95% / 80â€“95% / < 80% |
+| Binance error rate | < 2% / 2â€“10% / > 10% |
+| Scan duration | < 10 min / 10â€“15 min / > 15 min |
 
 - **Anomaly detection**: zero-signal day, Claude fallback spike, Binance errors, slow scan
 - **Endpoint**: `GET /api/analytics/monitor` + System page Operational Monitoring section
-- **Smoke test**: All 13 deploy scenarios verified — scanner, Claude, Telegram, emergency stop, maintenance mode
+- **Smoke test**: All 13 deploy scenarios verified â€” scanner, Claude, Telegram, emergency stop, maintenance mode
 
 ---
 
 ## License
 
-Private — all rights reserved.
+Private â€” all rights reserved.
+
+

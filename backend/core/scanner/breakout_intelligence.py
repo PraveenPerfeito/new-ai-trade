@@ -287,15 +287,17 @@ def detect_breakout_strength(
             ),
         )
 
-    if above_20d or (bb_expanding and had_squeeze):
-        btype = breakout_label if above_20d else "bb_expansion"
+    # Pure BB expansion has negative expectancy in restored live outcomes; keep
+    # BB only as confirmation on a structure break.
+    if above_20d:
+        btype = breakout_label
         return BreakoutResult(
             strength      = BreakoutStrength.EARLY_BREAKOUT,
             score_bonus   = SCORE_EARLY,
             breakout_type = btype,
             volume_ratio  = vol_ratio,
             details       = (
-                f"Early {'20d ' + ('high' if is_buy else 'low') + ' break' if above_20d else 'BB expansion after squeeze'}"
+                f"Early 20d {'high' if is_buy else 'low'} break"
                 + (" — volume not yet confirming" if not vol_confirmed else "")
             ),
         )

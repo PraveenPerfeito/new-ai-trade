@@ -4,6 +4,13 @@
 **Scope:** Full Phase 7.3A + 7.4A + 7.2B pipeline — all propagation phases complete
 **Type:** Validation only. No code changes.
 
+> Update 2026-06-03: this document is a historical validation snapshot. Current runtime differs in a few important ways:
+> - Python live-signal CMC influence is disabled until `trend_score` / `sector_status` attribution is measurable again.
+> - Spot and futures scanners drop the currently open Binance candle before indicator calculation.
+> - Duplicate same-direction 1h signals are suppressed before DB save, Telegram send, and outcome registration.
+> - Pure `bb_expansion` is no longer accepted as a standalone breakout path.
+> - Proven toxic `breakout_type=NULL` templates are now hard-rejected, and surviving NULL setups receive confidence penalties.
+
 ---
 
 ## Overall Scanner Score: 9.2 / 10

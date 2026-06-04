@@ -62,6 +62,34 @@ async def register_signal_outcome(signal: Signal) -> str | None:
     if pool is None:
         return None
 
+    try:
+        duplicate = await pool.fetchval(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM signal_outcomes
+                WHERE upper(symbol) = upper($1)
+                  AND signal_type = $2
+                  AND timeframe = $3
+                  AND created_at >= now() - interval '60 minutes'
+                LIMIT 1
+            )
+            """,
+            signal.symbol,
+            signal.type.value,
+            signal.timeframe,
+        )
+        if duplicate:
+            log.info(
+                "duplicate_outcome_suppressed",
+                symbol=signal.symbol,
+                signal_type=signal.type.value,
+                timeframe=signal.timeframe,
+            )
+            return None
+    except Exception as exc:
+        log.warning("duplicate_outcome_check_failed", symbol=signal.symbol, error=str(exc))
+
     volatility_regime = None
     if signal.indicators:
         try:
@@ -153,7 +181,7 @@ async def check_pending_outcomes() -> dict:
             FROM signal_outcomes
             WHERE outcome = 'PENDING'
               AND created_at > $1
-            ORDER BY created_at ASC
+            ORDER BY checked_at ASC NULLS FIRST, created_at ASC
             LIMIT $2
             """,
             cutoff, CHECK_BATCH,

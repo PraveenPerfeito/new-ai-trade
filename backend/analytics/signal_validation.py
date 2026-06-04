@@ -161,7 +161,9 @@ async def setup_score_analysis(window_hours: int = 168) -> dict:
 
 async def ai_vs_heuristic(window_hours: int = 168) -> dict:
     """
-    Compare Claude-validated signals vs heuristic-fallback signals via ai_call_log JOIN.
+    Compare Claude-approved signals vs heuristic-approved signals using accepted
+    signal attribution. ai_call_log is call telemetry, not reliable outcome
+    attribution, because validation happens before signal.id exists.
     """
     pool = await _pool()
     if pool is None:
@@ -170,9 +172,11 @@ async def ai_vs_heuristic(window_hours: int = 168) -> dict:
     try:
         rows = await pool.fetch(
             """
-            SELECT a.used_fallback, a.confidence, o.outcome
+            SELECT COALESCE(s.validation_source, 'HEURISTIC') AS validation_source,
+                   o.confidence,
+                   o.outcome
             FROM signal_outcomes o
-            JOIN ai_call_log a ON a.signal_id = o.signal_id
+            LEFT JOIN signals s ON s.id = o.signal_id
             WHERE o.outcome != 'PENDING'
               AND o.created_at >= NOW() - ($1 || ' hours')::interval
             """,
@@ -186,7 +190,7 @@ async def ai_vs_heuristic(window_hours: int = 168) -> dict:
     her_g = {"total": 0, "tp_hits": 0, "confidences": []}
 
     for row in rows:
-        g = her_g if row["used_fallback"] else ai_g
+        g = ai_g if row["validation_source"] == "CLAUDE" else her_g
         g["total"] += 1
         if row["outcome"] == "TP_HIT":
             g["tp_hits"] += 1

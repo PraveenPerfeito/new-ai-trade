@@ -1,7 +1,7 @@
 """
 Phase 4.7 — Signal Edge Validation and Quantitative Analysis.
 
-Produces seven analyses from signal_outcomes + ai_call_log:
+Produces seven analyses from signal_outcomes + accepted signal attribution:
 
   1. confidence_calibration   — actual win rate vs expected (confidence) per 5-pt band
   2. claude_effectiveness     — Claude vs heuristic-fallback signal outcomes
@@ -84,16 +84,19 @@ async def _fetch_outcomes(pool, window_hours: int) -> list[dict]:
 
 
 async def _fetch_ai_join(pool, window_hours: int) -> list[dict]:
-    """Fetch outcomes joined to ai_call_log for Claude vs heuristic split."""
+    """Fetch outcomes joined to accepted signals for Claude vs heuristic split."""
     try:
         rows = await pool.fetch(
             """
             SELECT
                 o.outcome, o.rr_achieved, o.duration_hours,
-                a.used_fallback, a.validated, a.confidence AS ai_confidence,
-                a.latency_ms
+                CASE WHEN COALESCE(s.validation_source, 'HEURISTIC') = 'CLAUDE'
+                     THEN false ELSE true END AS used_fallback,
+                COALESCE(s.validation_source, 'HEURISTIC') = 'CLAUDE' AS validated,
+                o.confidence AS ai_confidence,
+                NULL::int AS latency_ms
             FROM signal_outcomes o
-            JOIN ai_call_log a ON a.signal_id = o.signal_id
+            LEFT JOIN signals s ON s.id = o.signal_id
             WHERE o.outcome != 'PENDING'
               AND o.created_at >= NOW() - ($1 || ' hours')::interval
             """,
@@ -248,7 +251,7 @@ async def claude_effectiveness(window_hours: int = 720) -> dict:
     else:
         verdict = "unclear"
 
-    # Average AI latency
+    # Average Claude latency is tracked in ai_call_log, not this outcome-attribution join.
     latencies = [r["latency_ms"] for r in claude_rows if r.get("latency_ms") is not None]
     avg_latency = round(sum(latencies) / len(latencies)) if latencies else None
 
