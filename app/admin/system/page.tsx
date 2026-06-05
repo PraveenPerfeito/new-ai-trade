@@ -89,9 +89,9 @@ export default function SystemPage() {
   const aiFetcher      = useCallback(() => adminApi.analytics.ai(24), [])
   const monitorFetcher = useCallback(() => adminApi.analytics.monitor(), [])
 
-  const { data: health,  loading: hl } = useAutoRefresh<HealthReady>(healthFetcher, 30_000)
-  const { data: scans }                = useAutoRefresh<ScanSummaryResponse>(scanFetcher, 30_000)
-  const { data: ai }                   = useAutoRefresh<AiSummaryResponse>(aiFetcher, 30_000)
+  const { data: health,  loading: hl } = useAutoRefresh<HealthReady>(healthFetcher, 120_000)
+  const { data: scans }                = useAutoRefresh<ScanSummaryResponse>(scanFetcher, 120_000)
+  const { data: ai }                   = useAutoRefresh<AiSummaryResponse>(aiFetcher, 120_000)
   const { data: monitor }              = useAutoRefresh<MonitorSnapshot>(monitorFetcher, 60_000)
 
   return (

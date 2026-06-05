@@ -60,7 +60,7 @@ export default function CalibrationPage() {
   const aiFetcher   = useCallback(() => adminApi.analytics.ai(24), [])
   const edgeFetcher = useCallback(() => adminApi.analytics.edgeReport(), [])
 
-  const { data: ai, loading: ail }  = useAutoRefresh<AiSummaryResponse>(aiFetcher, 30_000)
+  const { data: ai, loading: ail }  = useAutoRefresh<AiSummaryResponse>(aiFetcher, 120_000)
   const { data: edge, loading: el } = useAutoRefresh<EdgeReport>(edgeFetcher, 120_000)
 
   const claude    = edge?.claude_effectiveness

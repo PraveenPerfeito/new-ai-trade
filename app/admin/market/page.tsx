@@ -86,7 +86,7 @@ export default function MarketIntelligencePage() {
     } catch (err) { setError(err instanceof Error ? err.message : String(err)) }
   }, [])
 
-  useAutoRefresh(fetch_, 30_000)
+  useAutoRefresh(fetch_, 120_000)
 
   const regime = data?.regime
   const meta   = regime ? REGIME_META[regime.regime] : null

@@ -99,7 +99,7 @@ export default function CommandOverviewPage() {
     setUpdatedAt(new Date().toLocaleTimeString())
   }, [])
 
-  useEffect(() => { fetchAll(); const t = setInterval(fetchAll, 30_000); return () => clearInterval(t) }, [fetchAll])  // OPT-10: was 15_000
+  useEffect(() => { fetchAll(); const t = setInterval(fetchAll, 60_000); return () => clearInterval(t) }, [fetchAll])  // OPT-11: was 30_000 — scanner cycles are 15-30 min
 
   useEffect(() => {
     const tick = () => {

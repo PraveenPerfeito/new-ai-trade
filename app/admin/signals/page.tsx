@@ -475,7 +475,7 @@ export default function SignalsPage() {
     if (!res.ok) throw new Error('signals fetch failed')
     return res.json() as Promise<{ signals: TradingSignal[] }>
   }, [])
-  const { data: signalsData, loading: sl } = useAutoRefresh<{ signals: TradingSignal[] }>(signalsFetcher, 30_000)
+  const { data: signalsData, loading: sl } = useAutoRefresh<{ signals: TradingSignal[] }>(signalsFetcher, 60_000)
 
   const rawSignals = signalsData?.signals ?? []
 

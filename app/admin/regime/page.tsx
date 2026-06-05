@@ -345,7 +345,7 @@ export default function RegimePage() {
     }
   }, [])
 
-  useAutoRefresh(fetch_, 30_000)
+  useAutoRefresh(fetch_, 120_000)
 
   const regime       = data?.regime
   const meta         = regime ? REGIME_META[regime.regime] : null

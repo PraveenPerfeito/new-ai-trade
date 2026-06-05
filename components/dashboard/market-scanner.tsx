@@ -16,9 +16,9 @@ import { BacktestPanel }         from './backtest-panel';
 import { PerformanceAnalytics } from './performance-analytics';
 import { ScanCommandCenter }    from './scan-command-center';
 
-const POLL_SIGNALS_MS   = 30_000;
+const POLL_SIGNALS_MS   = 60_000;
 const POLL_COINS_MS     = 5 * 60_000;
-const POLL_SCHEDULER_MS = 10_000;
+const POLL_SCHEDULER_MS = 30_000;
 
 export function MarketScanner() {
   const [activeTab, setActiveTab]                 = useState<'command' | 'scanner' | 'backtest' | 'analytics'>('command');

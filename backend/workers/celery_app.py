@@ -52,11 +52,13 @@ def create_celery() -> Celery:
 
     # Upstash (and any other rediss:// provider) requires explicit SSL options.
     # CERT_NONE skips certificate verification — correct for managed cloud Redis.
+    # Broker and result backend are checked independently so switching the broker
+    # to AMQP (REDIS.FIX.2) still correctly enables SSL for the Redis result backend.
     if settings.broker_url.startswith("rediss://"):
         # ssl.CERT_NONE is the integer constant (0); the string "CERT_NONE" is rejected by redis-py ≥ 5.x
-        _ssl = {"ssl_cert_reqs": ssl.CERT_NONE}
-        conf["broker_use_ssl"]        = _ssl
-        conf["redis_backend_use_ssl"] = _ssl
+        conf["broker_use_ssl"] = {"ssl_cert_reqs": ssl.CERT_NONE}
+    if settings.result_backend and settings.result_backend.startswith("rediss://"):
+        conf["redis_backend_use_ssl"] = {"ssl_cert_reqs": ssl.CERT_NONE}
 
     app.conf.update(conf)
 

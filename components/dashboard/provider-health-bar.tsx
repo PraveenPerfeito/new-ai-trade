@@ -25,7 +25,7 @@ export function ProviderHealthBar() {
 
   useEffect(() => {
     void check();
-    const t = setInterval(check, 30_000);
+    const t = setInterval(check, 60_000);
     return () => clearInterval(t);
   }, [check]);
 

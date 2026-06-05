@@ -1149,7 +1149,7 @@ export default function ProvidersPage() {
     return { providers: pRes.providers, events: eRes.events }
   }, [])
 
-  const { data, loading, error, lastUpdated, refresh } = useAutoRefresh<PageData>(fetcher, 30_000)
+  const { data, loading, error, lastUpdated, refresh } = useAutoRefresh<PageData>(fetcher, 60_000)
 
   const allProviders = useMemo(
     () => [...(data?.providers ?? [])].sort((a, b) => a.priority - b.priority),
