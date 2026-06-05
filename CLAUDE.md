@@ -39,6 +39,9 @@ AI-powered crypto trading signal scanner (public brand: **SignalEdge AI**) built
 25. **MONITOR.1 operational metrics** — 14 Redis counters track daily scans, signals, Claude rate, fallback rate, Telegram delivery, Binance errors, scan duration. Threshold bands (Healthy/Warning/Critical). `GET /api/analytics/monitor`. `signals_per_day` is now DB-authoritative (queries `signals` table for rolling 24h count; Redis counter is fallback only).
 26. **Gate rejection tracking** — `gate_rejections: dict[str, int]` collected per scan in `orchestrator.py`, persisted to `scan_metrics_log` via `record_scan()`. 6 canonical gate keys: `BTC_DOWN_BUY`, `TOXIC_DENYLIST`, `DUPLICATE_SIGNAL`, `CONFIDENCE_REJECTION`, `CMC_REJECTION`, `REGIME_REJECTION`. Visible in System page `GateRejectionGrid`. `normalize_gate_rejections()` in `scan_metrics.py` maps aliases (e.g. `btc_context` → `BTC_DOWN_BUY`).
 27. **Production readiness: 9.2/10** — Dashboard truth audit complete (June 2026): DB-authoritative signal counts, gate rejection tracking end-to-end, honest window labels. All 2 blockers + 5 high-priority items resolved. Full smoke test passed May 2026. Deployed.
+28. **Celery broker — CloudAMQP (AMQP), not Redis** — `CELERY_BROKER_URL=amqps://...@cloudamqp.com` set in Railway. Eliminates ~34,560 Redis BLPOP ops/day (the dominant consumer). `celery_app.py` checks `broker_use_ssl` and `redis_backend_use_ssl` independently so switching broker to AMQP doesn't break Upstash result backend SSL. `SchedulerCoordinator` uses `redis_url` directly (not `broker_url`) — distributed locks, enable/disable state, and scan timestamps are unaffected by broker change.
+29. **Celery result backend — `rpc://`** — `CELERY_RESULT_BACKEND=rpc://` set in Railway. Stores task results in CloudAMQP instead of Upstash. Zero Redis ops for result storage. Safe: no code calls `AsyncResult.get()` on scheduled task results.
+30. **SchedulerCoordinator fail-open** — `is_enabled()` and `acquire_scan_lock()` in `backend/scheduler/coordinator.py` catch all Redis exceptions and return `True` (enabled / lock-acquired). Scans continue during Redis quota exhaustion or outages. Emergency stop still propagates via settings pub/sub (independent path). Dashboard polling reduced to 60–120s (was 30s) across all admin pages — saves ~22,000 Redis ops/day.
 
 ---
 
@@ -239,10 +242,13 @@ backend/core/scanner/   ← PRIMARY scanner (Python) — all new features here
   positioning_intelligence.py← L/S crowd context (EXTREME_LONG/LONG_HEAVY/BALANCED/SHORT_HEAVY/EXTREME_SHORT); contrarian scoring: EXTREME_SHORT on BUY = +8 pts
 
 backend/workers/
-  celery_app.py         ← Celery factory + worker_ready signal starts health server
+  celery_app.py         ← Celery factory; broker SSL and result-backend SSL checked independently (REDIS.FIX.2 prep)
   health_server.py      ← HTTP server on $PORT — Railway health check target
-  scan_task.py          ← @shared_task run_scheduled_scan + check_signal_outcomes
+  scan_task.py          ← @shared_task run_scheduled_scan + check_signal_outcomes; acquire_scan_lock wrapped in try/except
   beat_schedule.py      ← standard/high_confidence/futures + outcome tracker schedules
+
+backend/scheduler/
+  coordinator.py        ← SchedulerCoordinator; is_enabled() + acquire_scan_lock() fail-open on Redis errors
 
 backend/system_settings/
   groups.py             ← Pydantic v2 models; AISettings.enabled toggles Claude calls
