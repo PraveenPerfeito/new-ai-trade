@@ -24,10 +24,19 @@ Two complementary mechanisms guarantee freshness:
     Latency: ≤ 5 s.
 
 Together:
-  FastAPI processes:  < 1 s  (pub/sub)
+  FastAPI processes:  < 2 s  (pub/sub + 1 s poll guard)
   Celery workers:     < 1 s  (watcher thread)
   Fallback (any):     ≤ 5 s  (generation counter)
   Stale config:       impossible beyond 5 s
+
+Poll-guard note:
+  get_message(timeout=30.0) blocks for up to 30 s on the asyncio socket,
+  so the inner loop is NOT a tight spin under normal conditions.  The 1 s
+  sleep in the None branch is a defensive guard for edge cases where the
+  method can return None quickly (e.g. subscribe-confirmation filtering,
+  health-check PING/PONG cycles if health_check_interval is ever enabled,
+  or any future redis-py version change).  Propagation latency stays well
+  below the 5 s generation-counter fallback window.
 """
 from __future__ import annotations
 
@@ -89,6 +98,11 @@ async def _async_listener_loop(service) -> None:
                     timeout=30.0,
                 )
                 if message is None:
+                    # get_message(timeout=30) normally blocks ~30 s via async_timeout.
+                    # This sleep guards against edge cases that return None quickly:
+                    # subscribe-confirmation filtering, PING/PONG health-check cycles,
+                    # or future redis-py behavior changes.
+                    await asyncio.sleep(1.0)
                     continue
                 if message["type"] != "message":
                     continue
