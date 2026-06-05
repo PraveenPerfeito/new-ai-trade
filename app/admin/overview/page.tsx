@@ -310,9 +310,9 @@ export default function CommandOverviewPage() {
 
       {/* ── Metric tiles row (no duplicates — active already shown in scanner card) ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <MetricTile label="Sent Today"     value={sentCount}  sub="AI approved + alerted"  href="/admin/signals"  accent={sentCount > 0 ? 'blue' : 'default'} />
-        <MetricTile label="TP Hit"         value={tpCount}    sub="take profit reached"     href="/admin/tactical" accent={tpCount > 0 ? 'green' : 'default'} />
-        <MetricTile label="SL Hit"         value={slCount}    sub="stop loss reached"       href="/admin/tactical" accent={slCount > 0 ? 'red' : 'default'} />
+        <MetricTile label="Recent Sent"    value={sentCount}  sub="latest 100 tactical rows" href="/admin/signals"  accent={sentCount > 0 ? 'blue' : 'default'} />
+        <MetricTile label="Recent TP"      value={tpCount}    sub="latest 100 tactical rows" href="/admin/tactical" accent={tpCount > 0 ? 'green' : 'default'} />
+        <MetricTile label="Recent SL"      value={slCount}    sub="latest 100 tactical rows" href="/admin/tactical" accent={slCount > 0 ? 'red' : 'default'} />
         <MetricTile label="Providers Up"   value={providers.length > 0 ? `${healthyProviders}/${providers.length}` : '—'} sub="data feeds healthy" href="/admin/providers" accent={healthyProviders === providers.length && providers.length > 0 ? 'green' : 'amber'} />
       </div>
 

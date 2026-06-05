@@ -63,7 +63,9 @@ async def get_ai_summary(window_hours: int = 24) -> dict:
     try:
         rows = await pool.fetch(
             """
-            SELECT validated, confidence, latency_ms, used_fallback, error
+            SELECT
+              validated, confidence, latency_ms, used_fallback, error,
+              prompt_tokens, completion_tokens
             FROM ai_call_log
             WHERE created_at > $1
             ORDER BY created_at DESC
@@ -78,20 +80,24 @@ async def get_ai_summary(window_hours: int = 24) -> dict:
         return _empty_ai_summary(window_hours)
 
     total     = len(rows)
-    approved  = sum(1 for r in rows if r["validated"])
-    fallbacks = sum(1 for r in rows if r["used_fallback"])
-    errors    = sum(1 for r in rows if r["error"])
+    approved  = sum(1 for r in rows if _row_value(r, "validated", False))
+    fallbacks = sum(1 for r in rows if _row_value(r, "used_fallback", False))
+    errors    = sum(1 for r in rows if _row_value(r, "error"))
 
     # Enhancement 6: cost estimate (Haiku pricing: $0.25/M input, $1.25/M output)
-    claude_rows = [r for r in rows if not r["used_fallback"]]
-    input_tokens  = sum(r["prompt_tokens"]     or 0 for r in claude_rows)
-    output_tokens = sum(r["completion_tokens"] or 0 for r in claude_rows)
+    claude_rows = [r for r in rows if not _row_value(r, "used_fallback", False)]
+    input_tokens  = sum(_row_value(r, "prompt_tokens", 0) or 0 for r in claude_rows)
+    output_tokens = sum(_row_value(r, "completion_tokens", 0) or 0 for r in claude_rows)
     est_cost_usd  = round((input_tokens / 1_000_000) * 0.25 + (output_tokens / 1_000_000) * 1.25, 6)
-    last_error = next((r["error"] for r in rows if r["error"]), None)
+    last_error = next((_row_value(r, "error") for r in rows if _row_value(r, "error")), None)
 
     # Exclude fallback calls from latency (they don't hit the API)
-    real_latencies = [r["latency_ms"] for r in rows if not r["used_fallback"] and r["latency_ms"] > 0]
-    confidences    = [r["confidence"] for r in rows if r["confidence"] > 0]
+    real_latencies = [
+        _row_value(r, "latency_ms", 0)
+        for r in rows
+        if not _row_value(r, "used_fallback", False) and _row_value(r, "latency_ms", 0) > 0
+    ]
+    confidences = [_row_value(r, "confidence", 0) for r in rows if _row_value(r, "confidence", 0) > 0]
 
     claude_calls    = total - fallbacks
     heuristic_calls = fallbacks
@@ -105,6 +111,7 @@ async def get_ai_summary(window_hours: int = 24) -> dict:
         "rejection_rate":    round(max(0, total - approved - fallbacks) / total, 4),
         "fallback_rate":     round(fallbacks / total, 4),
         "error_rate":        round(errors / total, 4),
+        "success_rate":      round((total - errors) / total, 4),
         "avg_latency_ms":    round(sum(real_latencies) / len(real_latencies), 1) if real_latencies else 0,
         "p95_latency_ms":    _percentile(real_latencies, 95) if real_latencies else 0,
         "avg_confidence":    round(sum(confidences) / len(confidences), 1) if confidences else 0.0,
@@ -125,11 +132,18 @@ def _percentile(values: list[int], p: int) -> int:
     return sorted_vals[min(idx, len(sorted_vals) - 1)]
 
 
+def _row_value(row, key: str, default=None):
+    try:
+        return row[key]
+    except (KeyError, IndexError, TypeError):
+        return default
+
+
 def _empty_ai_summary(window_hours: int = 24) -> dict:
     return {
         "window_hours": window_hours, "total_calls": 0, "approved": 0, "rejected": 0,
         "approval_rate": 0.0, "rejection_rate": 0.0, "fallback_rate": 0.0,
-        "error_rate": 0.0, "avg_latency_ms": 0, "p95_latency_ms": 0, "avg_confidence": 0.0,
+        "error_rate": 0.0, "success_rate": 0.0, "avg_latency_ms": 0, "p95_latency_ms": 0, "avg_confidence": 0.0,
         "claude_calls": 0, "heuristic_calls": 0,
         "estimated_cost_usd": 0.0, "last_error": None,
     }

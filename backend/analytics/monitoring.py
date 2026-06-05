@@ -11,7 +11,7 @@ Binance failure spikes, zero-signal days, slow scans.
 from __future__ import annotations
 
 import asyncio
-from datetime import date, datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from backend.logging.setup import get_logger
 
@@ -22,7 +22,7 @@ _TTL    = 48 * 3600   # 48h — covers today + yesterday
 
 
 def _today() -> str:
-    return date.today().isoformat()
+    return datetime.now(timezone.utc).date().isoformat()
 
 
 def _key(metric: str, day: str | None = None) -> str:
@@ -54,6 +54,25 @@ async def _read(metric: str, day: str | None = None) -> int:
 
 
 # ── Public increment API (fire-and-forget safe) ───────────────────────────────
+
+async def _read_db_generated_signals_24h(now: datetime) -> int | None:
+    """Database truth for generated signal count; Redis is only a fallback."""
+    try:
+        from backend.database.session import get_pool
+        pool = await get_pool()
+        value = await pool.fetchval(
+            """
+            SELECT COUNT(*)
+            FROM signals
+            WHERE created_at > $1
+            """,
+            now - timedelta(hours=24),
+        )
+        return int(value or 0)
+    except Exception as exc:
+        log.warning("monitor_db_signal_count_failed", error=str(exc))
+        return None
+
 
 async def record_signal() -> None:
     await _incr("signals")
@@ -123,8 +142,11 @@ async def get_monitoring_snapshot() -> dict:
     today = _today()
     now   = datetime.now(timezone.utc)
 
-    # Daily counters
-    signals      = await _read("signals")
+    # Daily counters. Generated signals are DB-authoritative; Redis is a fallback only.
+    redis_signals  = await _read("signals")
+    db_signals     = await _read_db_generated_signals_24h(now)
+    signals        = db_signals if db_signals is not None else redis_signals
+    signals_source = "database" if db_signals is not None else "redis_fallback"
     scans        = await _read("scans")
     coins_total  = await _read("coins_scanned")
     tg_sends     = await _read("telegram_sends")
@@ -188,7 +210,11 @@ async def get_monitoring_snapshot() -> dict:
         pass
 
     metrics = {
-        "signals_per_day":        _entry("signals_per_day",        signals,          "signals"),
+        "signals_per_day": {
+            **_entry("signals_per_day", signals, "signals"),
+            "source": signals_source,
+            "window_hours": 24,
+        },
         "win_rate_pct":           _entry("win_rate_pct",           win_rate_pct,     "%"),
         "sl_rate_pct":            _entry("sl_rate_pct",            sl_rate_pct,      "%"),
         "scans_today":            {"value": scans,            "unit": "scans",   "level": "healthy"},
@@ -217,6 +243,11 @@ async def get_monitoring_snapshot() -> dict:
         "anomalies":     anomalies,
         "thresholds":    THRESHOLDS,
         "generated_at":  now.isoformat(),
+        "data_windows": {
+            "signals_per_day": "rolling_24h_database_truth",
+            "outcomes": "rolling_7d_database_truth",
+            "redis_counters": "utc_day_fallback",
+        },
     }
 
 

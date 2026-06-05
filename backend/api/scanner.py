@@ -117,7 +117,7 @@ async def _run_scan_task(mode: ScannerMode) -> None:
                 signals_found=result.signals_found,
                 duration_ms=result.duration_ms,
                 errors=result.errors,
-                gate_rejections={},
+                gate_rejections=result.gate_rejections,
             )
         except Exception as exc:
             log.warning("record_scan_failed", mode=mode.value, error=str(exc))

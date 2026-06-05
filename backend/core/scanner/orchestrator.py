@@ -43,6 +43,7 @@ from backend.metrics.prometheus import (
     scan_runs_total,
     scan_duration_seconds,
     coins_scanned_total,
+    gate_rejections_total,
 )
 
 log = get_logger(__name__)
@@ -73,6 +74,23 @@ _SKIP_SYMBOLS = frozenset({
     # Other known non-Binance-spot tokens
     "FF", "GENIUS",
 })
+
+_PERSISTED_GATE_KEYS = (
+    "BTC_DOWN_BUY",
+    "TOXIC_DENYLIST",
+    "DUPLICATE_SIGNAL",
+    "CONFIDENCE_REJECTION",
+    "CMC_REJECTION",
+    "REGIME_REJECTION",
+)
+
+
+def _new_gate_rejections() -> dict[str, int]:
+    return {key: 0 for key in _PERSISTED_GATE_KEYS}
+
+
+def _record_persisted_gate(gate_rejections: dict[str, int], gate: str) -> None:
+    gate_rejections[gate] = int(gate_rejections.get(gate, 0)) + 1
 
 
 # ── Progress helpers ──────────────────────────────────────────────────────────
@@ -302,6 +320,7 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
         # 4. Concurrent scan
         signals: list[Signal] = []
         errors = 0
+        gate_rejections = _new_gate_rejections()
 
         log.info("btc_regime_for_scan", regime=btc_regime, mode=mode.value)
 
@@ -314,6 +333,7 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                 btc_change_24h=btc_change_24h,
                 trend_score=ts,
                 sector_status=ss,
+                gate_rejections=gate_rejections,
                 btc_regime=btc_regime,   # Phase 8.1B — soft regime gate
             )
 
@@ -336,6 +356,8 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                 signal.scan_run_id = scan_run_id
 
                 if await has_recent_signal(signal.symbol, signal.type.value, signal.timeframe):
+                    _record_persisted_gate(gate_rejections, "DUPLICATE_SIGNAL")
+                    gate_rejections_total.labels(gate="duplicate").inc()
                     log.info(
                         "signal_duplicate_suppressed",
                         symbol=signal.symbol,
@@ -431,6 +453,8 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
             duration_ms=duration_ms,
         )
 
+        log.info("scan_gate_rejections", mode=mode.value, gate_rejections=gate_rejections)
+
         return ScanResult(
             scan_run_id=scan_run_id,
             mode=mode,
@@ -439,6 +463,7 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
             duration_ms=duration_ms,
             signals_found=len(signals),
             errors=errors,
+            gate_rejections=gate_rejections,
         )
 
     except Exception as exc:

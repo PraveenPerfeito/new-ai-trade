@@ -29,15 +29,16 @@ AI-powered crypto trading signal scanner (public brand: **SignalEdge AI**) built
 15. **Signal lifecycle** — `computeSignalState()` → DEVELOPING/CONFIRMED/EXTENDED/COOLING/CORRECTING/INVALIDATED/EXPIRED.
 16. **Health server in Celery worker** — `backend/workers/health_server.py` starts HTTP server on `$PORT` at `worker_ready` signal so Railway health checks pass.
 17. **Scan Now routes to Python backend** — `app/api/scanner/run/route.ts` proxies to `${BACKEND_URL}/api/scanner/trigger` (not TypeScript scanner).
-18. **AI credit saving** — `AI_MIN_SETUP_SCORE = 72` in `ai_validator.py`. Setup score < 72 → heuristic (no API call). Score ≥ 72 → Claude. Reduces credits ~40%.
+18. **AI credit saving** — `AI_MIN_SETUP_SCORE = 78` in `ai_validator.py`. Setup score < 78 → heuristic (no API call). Score ≥ 78 → Claude. Reduces credits ~50%.
 19. **Admin users see all signals** — `getAccessContext()` in `lib/access-control.ts` reads Supabase session cookie; admin email → enterprise plan → no confidence floor/daily cap.
 20. **Settings API uses class not string** — `get_settings_service().get_group(AISettings)` must pass model class. Passing string `"ai"` causes silent TypeError → setting never read.
 21. **Telegram alert deduplication** — Redis key `tg:alert:{SYMBOL}:{LONG|SHORT}` with 1-hour TTL prevents duplicate alerts for the same coin+direction. Direction flip (BUY→SELL) fires immediately. `ALERT_COOLDOWN_HOURS = 1` in `telegram_notifier.py`.
 22. **BTC regime native Python gate** — `get_btc_regime()` in `market_fetcher.py` fetches BTC 4h klines, classifies BULL/BEAR/SIDEWAYS/HIGH_VOLATILITY. Soft gate in `signal_pipeline.py`: contra-regime signals require +10 confidence. `market_regime` field persisted to `signals` + `signal_outcomes`.
 23. **Operational control gates** — Scanner, Telegram, emergency stop, maintenance mode all enforced in `scan_task.py` + `telegram_notifier.py`. Toggle from Operations Control page. 18 unit tests verify all gate paths.
 24. **Analytics intelligence wiring** — All 7 intelligence fields (TrendScore, Sector, Breakout, OI, Funding, Positioning, Regime) flow through: Scanner → Signal → DB → `get_analytics()` → Edge validation → Attribution → Dashboard.
-25. **MONITOR.1 operational metrics** — 14 Redis counters track daily scans, signals, Claude rate, fallback rate, Telegram delivery, Binance errors, scan duration. Threshold bands (Healthy/Warning/Critical). `GET /api/analytics/monitor`.
-26. **Production readiness: 9.1/10** — All 2 blockers + 5 high-priority items resolved. Full smoke test passed May 2026. Deployed.
+25. **MONITOR.1 operational metrics** — 14 Redis counters track daily scans, signals, Claude rate, fallback rate, Telegram delivery, Binance errors, scan duration. Threshold bands (Healthy/Warning/Critical). `GET /api/analytics/monitor`. `signals_per_day` is now DB-authoritative (queries `signals` table for rolling 24h count; Redis counter is fallback only).
+26. **Gate rejection tracking** — `gate_rejections: dict[str, int]` collected per scan in `orchestrator.py`, persisted to `scan_metrics_log` via `record_scan()`. 6 canonical gate keys: `BTC_DOWN_BUY`, `TOXIC_DENYLIST`, `DUPLICATE_SIGNAL`, `CONFIDENCE_REJECTION`, `CMC_REJECTION`, `REGIME_REJECTION`. Visible in System page `GateRejectionGrid`. `normalize_gate_rejections()` in `scan_metrics.py` maps aliases (e.g. `btc_context` → `BTC_DOWN_BUY`).
+27. **Production readiness: 9.2/10** — Dashboard truth audit complete (June 2026): DB-authoritative signal counts, gate rejection tracking end-to-end, honest window labels. All 2 blockers + 5 high-priority items resolved. Full smoke test passed May 2026. Deployed.
 
 ---
 
@@ -213,15 +214,16 @@ lib/
   binance.ts            ← spot + futures klines, funding, OI, L/S; withApiRetry wrapped
   supabase.ts           ← DB ops; getRecentSignals() orders by created_at DESC (last 7 days)
   admin-api.ts          ← typed fetch client for the Python backend (/api/admin/* proxy)
+  window-label.ts       ← analyticsWindowLabel(hours) + explicitWindowNote(hours) — consistent window labels across dashboard
 
 backend/core/scanner/   ← PRIMARY scanner (Python) — all new features here
   models.py             ← Pydantic models; TechnicalIndicators has ema200, bb, candle_pattern, ema_cross
   indicators.py         ← RSI·MACD·EMA20/50/200·ATR·BB·volume·ADX·candlestick·EMA crossover
   market_structure.py   ← 7-filter market quality gate
   signal_pipeline.py    ← detect_setup() scores EMA200/BB/daily/patterns/crossover/rel-strength/breakout
-  orchestrator.py       ← run_scan(); CMC 200 coins; 3 timeframes (1h+4h+1d); btc_change_24h; Redis intel cache reader
+  orchestrator.py       ← run_scan(); CMC 200 coins; 3 timeframes (1h+4h+1d); btc_change_24h; Redis intel cache reader; gate_rejections dict per scan
   market_fetcher.py     ← reads Redis intelligence cache (populated by TS layer); CMC fallback via TS
-  ai_validator.py       ← checks AISettings.enabled + setup_score < 72 → heuristic; semaphore(3)
+  ai_validator.py       ← checks AISettings.enabled + setup_score < 78 → heuristic; semaphore(3)
   risk.py               ← grade A–F; quality score; leverage tiers
   futures_intelligence.py← directional funding rate, OI×price intelligence, L/S positioning, funding trend
   telegram_notifier.py  ← detailed signal format with leverage/% targets; 1-hour dedup cooldown per symbol+direction
@@ -256,9 +258,10 @@ app/api/
 app/admin/
   calibration/page.tsx  ← Claude AI on/off toggle + verdict distribution + confidence bands
   signals/page.tsx      ← card-based signal feed with filters/sort/expand; admin sees ALL signals
-  scanner/page.tsx      ← Celery status + enable/disable auto-scan + manual scan trigger
+  scanner/page.tsx      ← Celery status + enable/disable auto-scan + manual scan trigger; OpsToggles for emergency stop/maintenance/telegram/AI
   analytics/page.tsx    ← edge validation + attribution tabs
   settings/page.tsx     ← system settings; paper_trading group hidden (feature removed)
+  system/page.tsx       ← System Health; GateRejectionGrid shows 6 gate counters; signals_per_day DB-authoritative
 
 lib/
   access-control.ts     ← getAccessContext() checks Supabase session — admin email → enterprise plan
@@ -266,6 +269,9 @@ lib/
 Dockerfile              ← python:3.12-slim + gcc + pip --prefer-binary (prevents 1hr numpy compile)
 database/
   analytics-schema.sql  ← signal_outcomes with partial index for PENDING resolution query
+
+backend/analytics/
+  tests/test_dashboard_truth.py ← AI summary null-token column handling + monitoring DB signal count tests
 ```
 
 ---

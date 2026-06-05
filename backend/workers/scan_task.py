@@ -153,6 +153,7 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
                     signals_found=result.signals_found,
                     duration_ms=result.duration_ms,
                     errors=result.errors,
+                    gate_rejections=result.gate_rejections,
                 )
             except Exception:
                 pass

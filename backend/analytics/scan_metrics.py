@@ -11,6 +11,31 @@ from backend.logging.setup import get_logger
 
 log = get_logger(__name__)
 
+GATE_REJECTION_KEYS: tuple[str, ...] = (
+    "BTC_DOWN_BUY",
+    "TOXIC_DENYLIST",
+    "DUPLICATE_SIGNAL",
+    "CONFIDENCE_REJECTION",
+    "CMC_REJECTION",
+    "REGIME_REJECTION",
+)
+
+_GATE_ALIASES = {
+    "btc_context": "BTC_DOWN_BUY",
+    "btc_down_buy": "BTC_DOWN_BUY",
+    "toxic_setup": "TOXIC_DENYLIST",
+    "toxic_denylist": "TOXIC_DENYLIST",
+    "duplicate": "DUPLICATE_SIGNAL",
+    "duplicate_signal": "DUPLICATE_SIGNAL",
+    "ai": "CONFIDENCE_REJECTION",
+    "confidence": "CONFIDENCE_REJECTION",
+    "confidence_rejection": "CONFIDENCE_REJECTION",
+    "cmc": "CMC_REJECTION",
+    "cmc_rejection": "CMC_REJECTION",
+    "regime": "REGIME_REJECTION",
+    "regime_rejection": "REGIME_REJECTION",
+}
+
 
 async def _pool():
     try:
@@ -37,6 +62,7 @@ async def record_scan(
     pool = await _pool()
     if pool is None:
         return
+    normalized_rejections = normalize_gate_rejections(gate_rejections)
     try:
         await pool.execute(
             """
@@ -47,7 +73,7 @@ async def record_scan(
             """,
             scan_id, mode, coins_scanned, signals_found,
             duration_ms, errors,
-            json.dumps(gate_rejections or {}),
+            json.dumps(normalized_rejections),
         )
     except Exception as exc:
         log.warning("record_scan_failed", scan_id=scan_id, error=str(exc))
@@ -62,7 +88,7 @@ async def get_scan_summary(window_hours: int = 24) -> dict:
     try:
         rows = await pool.fetch(
             """
-            SELECT mode, coins_scanned, signals_found, duration_ms, errors
+            SELECT mode, coins_scanned, signals_found, duration_ms, errors, gate_rejections
             FROM scan_metrics_log
             WHERE created_at > $1
             ORDER BY created_at DESC
@@ -81,20 +107,34 @@ async def get_scan_summary(window_hours: int = 24) -> dict:
     coins       = [r["coins_scanned"] for r in rows]
     signals     = [r["signals_found"] for r in rows]
     error_scans = sum(1 for r in rows if r["errors"] > 0)
+    gate_totals = normalize_gate_rejections(None)
 
     by_mode: dict[str, dict] = {}
     for r in rows:
         m = r["mode"]
-        entry = by_mode.setdefault(m, {"count": 0, "total_signals": 0, "total_ms": 0})
+        entry = by_mode.setdefault(
+            m,
+            {
+                "count": 0,
+                "total_signals": 0,
+                "total_ms": 0,
+                "gate_rejections": normalize_gate_rejections(None),
+            },
+        )
         entry["count"]         += 1
         entry["total_signals"] += r["signals_found"]
         entry["total_ms"]      += r["duration_ms"]
+        row_rejections = parse_gate_rejections(r["gate_rejections"])
+        for gate, count in row_rejections.items():
+            gate_totals[gate] = gate_totals.get(gate, 0) + count
+            entry["gate_rejections"][gate] = entry["gate_rejections"].get(gate, 0) + count
 
     mode_summary = {
         m: {
             "scans":          v["count"],
             "avg_signals":    round(v["total_signals"] / v["count"], 2),
             "avg_duration_s": round(v["total_ms"] / v["count"] / 1000, 2),
+            "gate_rejections": v["gate_rejections"],
         }
         for m, v in sorted(by_mode.items())
     }
@@ -106,13 +146,44 @@ async def get_scan_summary(window_hours: int = 24) -> dict:
         "avg_duration_s":    round(sum(durations) / total / 1000, 2),
         "avg_coins_scanned": round(sum(coins) / total, 1),
         "avg_signals_found": round(sum(signals) / total, 2),
+        "gate_rejections":    gate_totals,
         "by_mode":           mode_summary,
     }
+
+
+def normalize_gate_rejections(gate_rejections: dict | None) -> dict[str, int]:
+    counts = {key: 0 for key in GATE_REJECTION_KEYS}
+    if not gate_rejections:
+        return counts
+
+    for raw_key, raw_count in gate_rejections.items():
+        key = str(raw_key).strip()
+        canonical = _GATE_ALIASES.get(key.lower(), key)
+        try:
+            count = int(raw_count or 0)
+        except (TypeError, ValueError):
+            continue
+        counts[canonical] = counts.get(canonical, 0) + count
+    return counts
+
+
+def parse_gate_rejections(raw) -> dict[str, int]:
+    if raw is None:
+        return normalize_gate_rejections(None)
+    if isinstance(raw, str):
+        try:
+            return normalize_gate_rejections(json.loads(raw))
+        except json.JSONDecodeError:
+            return normalize_gate_rejections(None)
+    if isinstance(raw, dict):
+        return normalize_gate_rejections(raw)
+    return normalize_gate_rejections(None)
 
 
 def _empty_scan_summary(window_hours: int = 24) -> dict:
     return {
         "window_hours": window_hours, "total_scans": 0, "failure_rate": 0.0,
         "avg_duration_s": 0.0, "avg_coins_scanned": 0.0, "avg_signals_found": 0.0,
+        "gate_rejections": normalize_gate_rejections(None),
         "by_mode": {},
     }

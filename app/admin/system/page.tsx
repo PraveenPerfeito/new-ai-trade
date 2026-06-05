@@ -4,6 +4,7 @@ import { useCallback } from 'react'
 import { adminApi, HealthReady, ScanSummaryResponse, AiSummaryResponse, MonitorSnapshot, MonitorLevel } from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
 import { MetricCard } from '@/components/admin/metric-card'
+import { analyticsWindowLabel } from '@/lib/window-label'
 import { Server, Database, Cpu, Activity } from 'lucide-react'
 
 function ServiceCard({ name, status, detail }: { name: string; status: string; detail?: string }) {
@@ -54,6 +55,34 @@ function MonitorRow({ label, metric }: { label: string; metric: { value: number;
   )
 }
 
+const GATE_REJECTION_LABELS: Record<string, string> = {
+  BTC_DOWN_BUY: 'BTC-down BUY',
+  TOXIC_DENYLIST: 'Toxic denylist',
+  DUPLICATE_SIGNAL: 'Duplicate signal',
+  CONFIDENCE_REJECTION: 'Confidence',
+  CMC_REJECTION: 'CMC',
+  REGIME_REJECTION: 'Regime',
+}
+
+function GateRejectionGrid({ counts }: { counts?: Record<string, number> }) {
+  const keys = Object.keys(GATE_REJECTION_LABELS)
+  return (
+    <div className="glass-card rounded-xl p-4">
+      <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-2">
+        Gate Rejections - {analyticsWindowLabel(24)}
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {keys.map((key) => (
+          <div key={key} className="rounded-lg border border-terminal-border/30 px-3 py-2">
+            <p className="text-terminal-muted/70 text-[10px]">{GATE_REJECTION_LABELS[key]}</p>
+            <p className="text-terminal-text font-mono font-semibold text-sm">{counts?.[key] ?? 0}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function SystemPage() {
   const healthFetcher  = useCallback(() => adminApi.health.ready(), [])
   const scanFetcher    = useCallback(() => adminApi.analytics.scans(24), [])
@@ -69,7 +98,7 @@ export default function SystemPage() {
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-terminal-text text-xl font-semibold">System Health</h1>
-        <p className="text-terminal-muted text-sm mt-1">Service status · Database · Redis · API connectivity</p>
+        <p className="text-terminal-muted text-sm mt-1">Service status · database truth · Redis fallback counters</p>
       </div>
 
       {/* Overall status banner — primary health, above fold */}
@@ -115,7 +144,7 @@ export default function SystemPage() {
 
       {/* Secondary: Operational metrics */}
       <div>
-        <p className="text-[9px] text-terminal-muted/50 uppercase tracking-widest mb-2.5">Operational Metrics · 24h</p>
+        <p className="text-[9px] text-terminal-muted/50 uppercase tracking-widest mb-2.5">Operational Metrics · {analyticsWindowLabel(24)}</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <MetricCard
             label="Total Scans"
@@ -136,7 +165,7 @@ export default function SystemPage() {
           <MetricCard
             label="AI Calls"
             value={ai?.total_calls ?? '—'}
-            sub="Claude API"
+            sub="rolling 24h"
             accent="info"
             icon={<Cpu size={13} />}
             loading={!ai}
@@ -158,7 +187,7 @@ export default function SystemPage() {
           <div className="flex items-center gap-2 mb-3">
             <span className={`w-2 h-2 rounded-full shrink-0 ${LEVEL_DOT[monitor.overall_level]}`} />
             <p className="text-terminal-muted text-xs uppercase tracking-wider font-semibold">
-              Operational Monitoring — Today
+              Operational Monitoring - DB Truth / UTC Counters
             </p>
             <span className={`ml-auto text-[10px] font-mono font-bold uppercase ${LEVEL_CLS[monitor.overall_level]}`}>
               {monitor.overall_level}
@@ -184,7 +213,7 @@ export default function SystemPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="glass-card rounded-xl p-4">
               <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-2">Signals & Outcomes</p>
-              <MonitorRow label="Signals today"        metric={monitor.metrics.signals_per_day} />
+              <MonitorRow label={`Signals generated (${analyticsWindowLabel(monitor.metrics.signals_per_day.window_hours)})`} metric={monitor.metrics.signals_per_day} />
               <MonitorRow label="Win rate (7d)"        metric={monitor.metrics.win_rate_pct} />
               <MonitorRow label="SL rate (7d)"         metric={monitor.metrics.sl_rate_pct} />
               <MonitorRow label="Resolved outcomes (7d)" metric={monitor.metrics.resolved_7d} />
@@ -207,10 +236,12 @@ export default function SystemPage() {
             </div>
           </div>
           <p className="text-terminal-muted/30 text-[10px] font-mono mt-2">
-            Generated {new Date(monitor.generated_at).toLocaleTimeString()} · counters reset midnight UTC
+            Generated {new Date(monitor.generated_at).toLocaleTimeString()} · signals source: {monitor.metrics.signals_per_day.source ?? 'unknown'} · Redis counters reset midnight UTC
           </p>
         </div>
       )}
+
+      <GateRejectionGrid counts={scans?.gate_rejections} />
 
       {/* Diagnostics section label */}
       <p className="text-[9px] text-terminal-muted/40 uppercase tracking-widest flex items-center gap-2">

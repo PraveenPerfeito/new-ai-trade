@@ -161,11 +161,22 @@ export interface AiSummaryResponse {
 
 export interface ScanSummaryResponse {
   total_scans: number
-  success_rate: number
+  success_rate?: number
   failure_rate: number
-  avg_duration_ms: number | null
+  avg_duration_ms?: number | null
+  avg_duration_s?: number | null
+  avg_coins_scanned?: number
+  avg_signals_found?: number
   signals_per_scan?: number | null
-  by_mode?: Record<string, { total: number; success_rate: number }>
+  gate_rejections?: Record<string, number>
+  by_mode?: Record<string, {
+    total?: number
+    success_rate?: number
+    scans?: number
+    avg_signals?: number
+    avg_duration_s?: number
+    gate_rejections?: Record<string, number>
+  }>
   window_hours: number
 }
 
@@ -391,6 +402,8 @@ export interface MonitorMetric {
   value: number
   unit:  string
   level: MonitorLevel
+  source?: string
+  window_hours?: number
 }
 
 export interface MonitorAnomaly {
@@ -421,6 +434,7 @@ export interface MonitorSnapshot {
   }
   anomalies:  MonitorAnomaly[]
   thresholds: Record<string, Record<string, number | boolean>>
+  data_windows?: Record<string, string>
 }
 
 // ── Typed API surface ─────────────────────────────────────────────────────────

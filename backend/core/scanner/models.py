@@ -370,3 +370,4 @@ class ScanResult(BaseModel):
     duration_ms:   int
     signals_found: int
     errors:        int = 0
+    gate_rejections: dict[str, int] = Field(default_factory=dict)

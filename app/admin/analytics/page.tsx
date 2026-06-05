@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react'
 import { adminApi, EdgeReport, IntelligenceSummary, IntelligencePerfRow } from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
 import { formatTs } from '@/lib/utils'
+import { analyticsWindowLabel, explicitWindowNote } from '@/lib/window-label'
 import type { AttributionReport, AttributionDimension, EdgePattern, ThresholdRecommendation } from '@/types'
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
@@ -140,7 +141,7 @@ function IntelligenceSection({ data, loading }: { data: IntelligenceSummary | nu
         <IntelRow label="Funding Trend"        row={data.best_funding_trend} />
         <IntelRow label="Positioning Context"  row={data.best_positioning_context} />
         <p className="text-terminal-muted/30 text-xs font-mono mt-4 pt-3 border-t border-terminal-border/20">
-          {data.total} resolved · {data.window_hours}h window · min 5 signals/tier
+          {data.total} resolved - {explicitWindowNote(data.window_hours)} - min 5 signals/tier
         </p>
       </div>
     </div>
@@ -178,7 +179,7 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
             </p>
             {edge && (
               <p className="text-terminal-muted/50 text-xs font-mono mt-1">
-                Window: {edge.window_hours}h · Total signals tracked: {edge.overall?.total ?? 0}
+                {explicitWindowNote(edge.window_hours)} - Total signals tracked: {edge.overall?.total ?? 0}
               </p>
             )}
           </div>
@@ -203,7 +204,9 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
 
       {/* Overall stats */}
       <div>
-        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Overall Statistics (30d)</p>
+        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">
+          Overall Statistics - {analyticsWindowLabel(edge?.window_hours ?? 720)}
+        </p>
         <div className="glass-card rounded-lg p-5">
           {loading ? (
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-4">
@@ -283,7 +286,7 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
 
       {edge && (
         <p className="text-terminal-muted/40 text-xs font-mono">
-          Generated {formatTs(edge.generated_at)} · {edge.window_hours}h window
+          Generated {formatTs(edge.generated_at)} - {explicitWindowNote(edge.window_hours)}
         </p>
       )}
     </div>
@@ -529,7 +532,7 @@ function AttributionTab({ data, loading }: { data: AttributionReport | null; loa
         <div className="glass-card rounded-lg p-5 space-y-2">
           <p className="text-signal-medium text-sm font-semibold">◌ Attribution warming up</p>
           <p className="text-terminal-muted text-xs leading-relaxed">
-            Outcome attribution requires at least 20 resolved signals (TP hit, SL hit, or timeout) in the {windowHours}h window. Currently: {resolvedRows} resolved. Keep running scans — attribution populates automatically as signals resolve.
+            Outcome attribution requires at least 20 resolved signals (TP hit, SL hit, or timeout) in the {explicitWindowNote(windowHours)}. Currently: {resolvedRows} resolved. Keep running scans — attribution populates automatically as signals resolve.
           </p>
         </div>
       ) : (
@@ -561,7 +564,7 @@ function AttributionTab({ data, loading }: { data: AttributionReport | null; loa
       <DailyReportTrigger />
 
       <p className="text-terminal-muted/40 text-xs font-mono">
-        Attribution · {resolvedRows} resolved signals · {windowHours}h window
+        Attribution - {resolvedRows} resolved signals - {explicitWindowNote(windowHours)}
       </p>
     </div>
   )

@@ -174,6 +174,19 @@ _NULL_EMA_ALIGNMENT_MARKERS = (
     "fresh 1h death cross",
 )
 
+_PROMETHEUS_GATE_LABELS = {
+    "BTC_DOWN_BUY": "btc_context",
+    "TOXIC_DENYLIST": "toxic_setup",
+    "CONFIDENCE_REJECTION": "ai",
+    "REGIME_REJECTION": "regime",
+}
+
+
+def _record_gate_rejection(gate: str, gate_rejections: dict[str, int] | None = None) -> None:
+    gate_rejections_total.labels(gate=_PROMETHEUS_GATE_LABELS.get(gate, gate)).inc()
+    if gate_rejections is not None:
+        gate_rejections[gate] = int(gate_rejections.get(gate, 0)) + 1
+
 
 def _normalize_setup_description(description: str) -> str:
     base = _SETUP_ADX_RE.sub("", description or "").strip()
@@ -542,6 +555,7 @@ async def scan_coin(
     trend_score:   float | None = None,  # Phase 7.4A.7.1 — from TrendingMeta (TRENDING mode)
     sector_status: str   | None = None,  # Phase 7.4A.7.2 — from SectorIntelligenceReport (TRENDING mode)
     btc_regime:    str          = "SIDEWAYS",  # Phase 8.1B — BTC macro regime for soft confidence gate
+    gate_rejections: dict[str, int] | None = None,
 ) -> Signal | None:
     """
     Full 10-step pipeline for one coin.
@@ -575,13 +589,13 @@ async def scan_coin(
         # Step 4: MTF confirmation
         mtf = confirm_multi_timeframe(ind1h, ind4h, signal_type)
         if not mtf.confirmed:
-            gate_rejections_total.labels(gate="mtf").inc()
+            _record_gate_rejection("mtf", gate_rejections)
             return None
 
         # Step 5: Volatility gate
         volatility = calc_volatility_rating(ind1h.atr, ind1h.current_price)
         if volatility == VolatilityRating.EXTREME:
-            gate_rejections_total.labels(gate="volatility").inc()
+            _record_gate_rejection("volatility", gate_rejections)
             log.info("rejected_extreme_volatility", symbol=coin.symbol)
             return None
 
@@ -589,7 +603,7 @@ async def scan_coin(
         s1h = calc_trend_strength(ind1h)
         s4h = calc_trend_strength(ind4h)
         if s1h * 0.4 + s4h * 0.6 < 30:
-            gate_rejections_total.labels(gate="trend_strength").inc()
+            _record_gate_rejection("trend_strength", gate_rejections)
             return None
 
         # Step 5b: Market structure (7 filters)
@@ -601,7 +615,7 @@ async def scan_coin(
             signal_type=signal_type,
         )
         if not structure.pass_:
-            gate_rejections_total.labels(gate="market_structure").inc()
+            _record_gate_rejection("market_structure", gate_rejections)
             log.info("rejected_market_structure", symbol=coin.symbol, reason=structure.rejection_reason)
             return None
 
@@ -616,7 +630,7 @@ async def scan_coin(
             candles_1d=candles_1d,
         )
         if _should_block_buy_for_btc_context(signal_type, setup.description):
-            gate_rejections_total.labels(gate="btc_context").inc()
+            _record_gate_rejection("BTC_DOWN_BUY", gate_rejections)
             log.info(
                 "rejected_btc_down_buy",
                 symbol=coin.symbol,
@@ -627,7 +641,7 @@ async def scan_coin(
             return None
         toxic_pattern = _match_toxic_setup(setup.description)
         if toxic_pattern is not None:
-            gate_rejections_total.labels(gate="toxic_setup").inc()
+            _record_gate_rejection("TOXIC_DENYLIST", gate_rejections)
             log.info(
                 "rejected_toxic_setup",
                 symbol=coin.symbol,
@@ -637,7 +651,7 @@ async def scan_coin(
             )
             return None
         if not setup.has_setup:
-            gate_rejections_total.labels(gate="setup_score").inc()
+            _record_gate_rejection("setup_score", gate_rejections)
             return None
 
         # Step 8: Trade levels + RR gate
@@ -645,7 +659,7 @@ async def scan_coin(
             return None
         levels = trade_levels(ind1h.current_price, ind1h.atr, signal_type, mode)
         if levels.rr_ratio < config.min_rr_ratio:
-            gate_rejections_total.labels(gate="rr_ratio").inc()
+            _record_gate_rejection("rr_ratio", gate_rejections)
             return None
 
         # Step 9: Risk engine
@@ -662,7 +676,7 @@ async def scan_coin(
             combined_strength=s1h * 0.4 + s4h * 0.6,
         ))
         if not risk.pass_:
-            gate_rejections_total.labels(gate="risk_engine").inc()
+            _record_gate_rejection("risk_engine", gate_rejections)
             log.info("rejected_risk_engine", symbol=coin.symbol, summary=risk.summary)
             return None
 
@@ -688,7 +702,7 @@ async def scan_coin(
                     funding_trend = futures_data.funding_trend.value,  # Phase 7.4A.4
                 )
                 if fa.should_reject:
-                    gate_rejections_total.labels(gate="futures").inc()
+                    _record_gate_rejection("futures", gate_rejections)
                     log.info("rejected_extreme_funding",
                              symbol=coin.symbol,
                              rate=futures_data.funding_rate,
@@ -772,7 +786,10 @@ async def scan_coin(
                 adjusted_confidence=adjusted_confidence,
             )
         if not ai.validated or adjusted_confidence < required_confidence:
-            gate_rejections_total.labels(gate="ai" if regime_adj == 0 else "regime").inc()
+            _record_gate_rejection(
+                "CONFIDENCE_REJECTION" if regime_adj == 0 else "REGIME_REJECTION",
+                gate_rejections,
+            )
             if regime_adj > 0:
                 log.info(
                     "rejected_regime_gate",

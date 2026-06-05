@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { adminApi, AiSummaryResponse, EdgeReport } from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
+import { analyticsWindowLabel } from '@/lib/window-label'
 import { Brain, Zap, AlertTriangle, CheckCircle, Power } from 'lucide-react'
 
 function pct(v: number | null | undefined, d = 1) {
@@ -100,7 +101,7 @@ export default function CalibrationPage() {
         <Brain className="w-6 h-6 text-blue-400" />
         <div>
           <h1 className="text-xl font-semibold text-white">Calibration</h1>
-          <p className="text-sm text-zinc-400">AI effectiveness · confidence thresholds · edge report</p>
+          <p className="text-sm text-zinc-400">AI effectiveness - rolling 24h · confidence thresholds - historical windows</p>
         </div>
       </div>
 
@@ -149,7 +150,7 @@ export default function CalibrationPage() {
 
       {/* ── SECTION: CURRENT STATE ── */}
       <p className="text-[9px] text-zinc-600 uppercase tracking-widest flex items-center gap-2 pt-1">
-        <span className="h-px flex-1 bg-zinc-800" />Current State<span className="h-px flex-1 bg-zinc-800" />
+        <span className="h-px flex-1 bg-zinc-800" />Current State - {analyticsWindowLabel(24)}<span className="h-px flex-1 bg-zinc-800" />
       </p>
 
       {/* Key metrics */}
@@ -157,7 +158,7 @@ export default function CalibrationPage() {
         <StatCard
           label="Total AI Calls"
           value={ai?.total_calls ?? 0}
-          sub="last 24h"
+          sub="rolling 24h"
         />
         <StatCard
           label="Success Rate"
@@ -229,7 +230,9 @@ export default function CalibrationPage() {
       {/* Claude effectiveness */}
       {claude && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-4">Claude Effectiveness</h2>
+          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-4">
+            Claude Effectiveness - {analyticsWindowLabel(edge?.window_hours ?? 720)}
+          </h2>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {[
               { label: 'Signals Logged', value: claude.total_with_ai_log },
@@ -248,7 +251,7 @@ export default function CalibrationPage() {
       {/* ── SECTION: HISTORICAL PERFORMANCE ── */}
       <div className="pt-2">
         <p className="text-[9px] text-zinc-600 uppercase tracking-widest mb-3 flex items-center gap-2">
-          <span className="h-px flex-1 bg-zinc-800" />Historical Performance<span className="h-px flex-1 bg-zinc-800" />
+          <span className="h-px flex-1 bg-zinc-800" />Historical Performance - {analyticsWindowLabel(edge?.window_hours ?? 720)}<span className="h-px flex-1 bg-zinc-800" />
         </p>
 
         {/* Live confidence bands */}

@@ -5,6 +5,7 @@ import { TradingSignal } from '@/types'
 import { adminApi, EdgeReport } from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
 import { formatTs } from '@/lib/utils'
+import { analyticsWindowLabel } from '@/lib/window-label'
 import { computeLifecycleStage, LIFECYCLE_CONFIG } from '@/lib/signal-lifecycle'
 import { ArrowUpRight, ArrowDownRight, ChevronDown, ChevronUp, Filter } from 'lucide-react'
 
@@ -547,7 +548,7 @@ export default function SignalsPage() {
             </span>
           </div>
           <div>
-            <span className="text-terminal-muted text-xs">SIGNALS (7d) </span>
+            <span className="text-terminal-muted text-xs">SIGNALS ({analyticsWindowLabel(edge.window_hours)}) </span>
             <span className="font-bold text-terminal-text">{edge.overall.total}</span>
           </div>
           <div>
