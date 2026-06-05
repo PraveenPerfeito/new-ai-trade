@@ -51,13 +51,19 @@ class SchedulerCoordinator:
         """
         Attempt to acquire the distributed scan lock for `mode`.
         Returns True if the lock was acquired, False if another worker holds it.
+        Fails open (returns True) if Redis is unavailable — duplicate-scan risk is
+        acceptable vs. complete scan outage when Redis is down or quota-exceeded.
         """
-        key = f"{_LOCK_KEY_PREFIX}{mode}"
-        acquired = self._redis.set(key, "1", nx=True, ex=ttl_seconds)
-        if acquired:
-            scheduler_scanning.set(1)
-            log.debug("scan_lock_acquired", mode=mode)
-        return bool(acquired)
+        try:
+            key = f"{_LOCK_KEY_PREFIX}{mode}"
+            acquired = self._redis.set(key, "1", nx=True, ex=ttl_seconds)
+            if acquired:
+                scheduler_scanning.set(1)
+                log.debug("scan_lock_acquired", mode=mode)
+            return bool(acquired)
+        except Exception as exc:
+            log.warning("acquire_scan_lock_redis_error", error=str(exc))
+            return True  # fail-open: Redis unavailable → allow scan (no duplicate guard)
 
     def release_scan_lock(self, mode: ScanMode) -> None:
         key = f"{_LOCK_KEY_PREFIX}{mode}"
@@ -82,8 +88,12 @@ class SchedulerCoordinator:
         log.info("scheduler_disabled")
 
     def is_enabled(self) -> bool:
-        val = self._redis.get(_ENABLED_KEY)
-        return val != "0"   # enabled by default if key doesn't exist
+        try:
+            val = self._redis.get(_ENABLED_KEY)
+            return val != "0"   # enabled by default if key doesn't exist
+        except Exception as exc:
+            log.warning("coordinator_is_enabled_redis_error", error=str(exc))
+            return True  # fail-open: Redis unavailable → assume enabled
 
     # ── Status snapshot ───────────────────────────────────────────────────────
 

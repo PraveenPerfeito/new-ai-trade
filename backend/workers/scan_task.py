@@ -120,7 +120,11 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
         celery_tasks_total.labels(task_name=task_label, status="skipped").inc()
         return {"skipped": True, "reason": block_reason, "mode": mode}
 
-    lock_acquired = coordinator.acquire_scan_lock(mode, ttl_seconds=20 * 60)  # Fix 1: 20 min > soft_time_limit (17 min) prevents overlap
+    try:
+        lock_acquired = coordinator.acquire_scan_lock(mode, ttl_seconds=20 * 60)  # Fix 1: 20 min > soft_time_limit (17 min) prevents overlap
+    except Exception as lock_exc:
+        logger.warning(f"acquire_scan_lock_failed mode={mode} error={lock_exc} — proceeding without lock")
+        lock_acquired = True
 
     if not lock_acquired:
         logger.info(f"scan_lock_held_skipping mode={mode}")
