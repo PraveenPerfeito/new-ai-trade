@@ -23,7 +23,7 @@ from backend.scheduler.coordinator import SchedulerCoordinator
 
 logger = get_task_logger(__name__)
 
-ScanMode = Literal["standard", "high_confidence", "futures"]
+ScanMode = Literal["standard", "high_confidence", "futures", "trending"]
 
 # ── Transient error classification ───────────────────────────────────────────
 # These error substrings indicate connectivity / resource issues that are safe
@@ -143,6 +143,7 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
             "standard":        ScannerMode.SPOT,
             "high_confidence": ScannerMode.HIGH_CONFIDENCE,
             "futures":         ScannerMode.FUTURES,
+            "trending":        ScannerMode.TRENDING,
         }
         scanner_mode = mode_map.get(mode, ScannerMode.SPOT)
 

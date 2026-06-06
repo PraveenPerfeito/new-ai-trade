@@ -38,6 +38,16 @@ BEAT_SCHEDULE = {
             "queue": "scanner",
         },
     },
+    # Trending scan: every 30 minutes — populates trend_score + sector_status (INTEL.PERSIST.1)
+    "auto-scan-trending": {
+        "task": "backend.workers.scan_task.run_scheduled_scan",
+        "schedule": crontab(minute="20,50"),
+        "kwargs": {"mode": "trending"},
+        "options": {
+            "expires": 17 * 60,
+            "queue": "scanner",
+        },
+    },
     # Signal outcome tracker: every 10 minutes
     "check-signal-outcomes": {
         "task": "backend.workers.scan_task.check_signal_outcomes",

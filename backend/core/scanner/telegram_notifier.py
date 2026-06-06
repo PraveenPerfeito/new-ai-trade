@@ -423,7 +423,7 @@ async def send_provider_fallback_alert(
         f"<i>Scan continued — no signals dropped.</i>"
     )
     try:
-        await _post(text)
+        _enqueue(text)
         log.info("ops_alert_sent", alert="provider_fallback",
                  primary=primary, fallback=fallback)
     except Exception as exc:
