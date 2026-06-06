@@ -191,12 +191,31 @@ _btc_regime_cache = RedisCache("btc-regime",    ttl_seconds=20 * 60)   # OPT-6: 
 def _classify_regime(
     rsi: float, trend_value: str, btc24h: float, strength: float, vol_value: str,
 ) -> str:
-    """Port of lib/market-regime.ts:classifyRegime(). 6-condition decision tree."""
+    """
+    BTC 4h regime classifier. 7-condition decision tree.
+
+    Priority order:
+      1. EUPHORIA        — overbought RSI + extreme up-move
+      2. CAPITULATION    — oversold RSI + extreme down-move
+      3. HIGH_VOLATILITY — high ATR-vol AND abs price swing > 5%
+      4. BULL_TREND      — EMA20 > EMA50 confirmed (lagging but high confidence)
+      5. BEAR_TREND      — EMA20 < EMA50 confirmed
+      6. BULL_TREND      — momentum fallback: early recovery before EMA crossover
+                           btc28h > 3.5%, RSI > 55, some trend coherence
+      7. SIDEWAYS        — default
+
+    Phase REGIME.FIX.1: Added rule 6 so RANGING markets during a genuine
+    bull recovery are labelled BULL_TREND instead of SIDEWAYS. This prevents
+    NULL_SELL misclassification once signals table is regime-tagged.
+    """
     if rsi > 78 and btc24h > 8:                               return "EUPHORIA"
     if rsi < 22 and btc24h < -8:                              return "CAPITULATION"
     if vol_value in ("HIGH", "EXTREME") and abs(btc24h) > 5:  return "HIGH_VOLATILITY"
     if trend_value == "BULLISH" and strength >= 50:           return "BULL_TREND"
     if trend_value == "BEARISH" and strength >= 50:           return "BEAR_TREND"
+    # Momentum fallback — catches V-shaped recoveries before EMA crossover.
+    # btc24h covers last 28h; >3.5% + RSI>55 + minimal coherence = genuine bull move.
+    if btc24h > 3.5 and rsi > 55 and strength >= 20:          return "BULL_TREND"
     return "SIDEWAYS"
 
 
