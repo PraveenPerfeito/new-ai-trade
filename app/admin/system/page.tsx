@@ -58,7 +58,7 @@ function MonitorRow({ label, metric }: { label: string; metric: { value: number;
 const GATE_REJECTION_LABELS: Record<string, string> = {
   BTC_DOWN_BUY: 'BTC-down BUY',
   TOXIC_DENYLIST: 'Toxic denylist',
-  DUPLICATE_SIGNAL: 'Duplicate signal',
+  SIGNAL_COOLDOWN: '4h cooldown',
   CONFIDENCE_REJECTION: 'Confidence',
   CMC_REJECTION: 'CMC',
   REGIME_REJECTION: 'Regime',

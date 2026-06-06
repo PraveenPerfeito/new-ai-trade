@@ -168,10 +168,13 @@ async def save_signal(signal: Signal) -> str | None:
 async def has_recent_signal(
     symbol: str,
     signal_type: str,
-    timeframe: str,
-    cooldown_minutes: int = 60,
+    scanner_mode: str,
+    cooldown_minutes: int = 240,   # Phase SIGNAL.COOLDOWN.1: 4h window (was 60min on timeframe)
 ) -> bool:
-    """Return True when the same symbol/direction/timeframe was already persisted."""
+    """
+    Return True when the same symbol+direction+mode was persisted within the cooldown window.
+    Prevents repeated signals for the same trade thesis (e.g. ETH SELL every 15min scan).
+    """
     pool = await _pool()
     if not pool:
         return False
@@ -181,16 +184,16 @@ async def has_recent_signal(
             SELECT EXISTS (
                 SELECT 1
                 FROM signals
-                WHERE upper(symbol) = upper($1)
-                  AND type = $2
-                  AND timeframe = $3
+                WHERE upper(symbol)  = upper($1)
+                  AND type           = $2
+                  AND scanner_mode   = $3
                   AND created_at >= now() - ($4::int * interval '1 minute')
                 LIMIT 1
             )
             """,
             symbol,
             signal_type,
-            timeframe,
+            scanner_mode,
             cooldown_minutes,
         ))
     except Exception as exc:

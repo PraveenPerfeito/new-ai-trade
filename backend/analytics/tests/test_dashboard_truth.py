@@ -102,7 +102,7 @@ def test_gate_rejection_normalization_keeps_required_keys():
 
     assert counts["BTC_DOWN_BUY"] == 2
     assert counts["TOXIC_DENYLIST"] == 1
-    assert counts["DUPLICATE_SIGNAL"] == 3
+    assert counts["SIGNAL_COOLDOWN"] == 3   # "duplicate" alias maps to SIGNAL_COOLDOWN
     assert counts["CONFIDENCE_REJECTION"] == 4
     assert counts["CMC_REJECTION"] == 5
     assert counts["REGIME_REJECTION"] == 6
@@ -122,7 +122,7 @@ async def test_scan_summary_aggregates_gate_rejections(monkeypatch):
                     "signals_found": 1,
                     "duration_ms": 1000,
                     "errors": 0,
-                    "gate_rejections": '{"BTC_DOWN_BUY": 2, "DUPLICATE_SIGNAL": 1}',
+                    "gate_rejections": '{"BTC_DOWN_BUY": 2, "SIGNAL_COOLDOWN": 1}',
                 },
                 {
                     "mode": "spot",
@@ -142,7 +142,7 @@ async def test_scan_summary_aggregates_gate_rejections(monkeypatch):
     summary = await scan_metrics.get_scan_summary(24)
 
     assert summary["gate_rejections"]["BTC_DOWN_BUY"] == 2
-    assert summary["gate_rejections"]["DUPLICATE_SIGNAL"] == 1
+    assert summary["gate_rejections"]["SIGNAL_COOLDOWN"] == 1
     assert summary["gate_rejections"]["CONFIDENCE_REJECTION"] == 3
     assert summary["gate_rejections"]["REGIME_REJECTION"] == 4
     assert summary["by_mode"]["spot"]["gate_rejections"]["CONFIDENCE_REJECTION"] == 3

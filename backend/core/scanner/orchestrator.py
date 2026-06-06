@@ -78,7 +78,7 @@ _SKIP_SYMBOLS = frozenset({
 _PERSISTED_GATE_KEYS = (
     "BTC_DOWN_BUY",
     "TOXIC_DENYLIST",
-    "DUPLICATE_SIGNAL",
+    "SIGNAL_COOLDOWN",   # Phase SIGNAL.COOLDOWN.1: replaces DUPLICATE_SIGNAL; 4h window, keyed by mode
     "CONFIDENCE_REJECTION",
     "CMC_REJECTION",
     "REGIME_REJECTION",
@@ -355,15 +355,15 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                 signal.market_regime = btc_regime   # Phase 8.1B — store macro regime on signal
                 signal.scan_run_id = scan_run_id
 
-                if await has_recent_signal(signal.symbol, signal.type.value, signal.timeframe):
-                    _record_persisted_gate(gate_rejections, "DUPLICATE_SIGNAL")
-                    gate_rejections_total.labels(gate="duplicate").inc()
+                if await has_recent_signal(signal.symbol, signal.type.value, mode.value, cooldown_minutes=240):
+                    _record_persisted_gate(gate_rejections, "SIGNAL_COOLDOWN")
+                    gate_rejections_total.labels(gate="signal_cooldown").inc()
                     log.info(
-                        "signal_duplicate_suppressed",
+                        "signal_cooldown_suppressed",
                         symbol=signal.symbol,
                         type=signal.type.value,
-                        timeframe=signal.timeframe,
-                        cooldown_minutes=60,
+                        mode=mode.value,
+                        cooldown_minutes=240,
                     )
                     continue
 

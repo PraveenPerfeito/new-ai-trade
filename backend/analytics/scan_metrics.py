@@ -14,7 +14,7 @@ log = get_logger(__name__)
 GATE_REJECTION_KEYS: tuple[str, ...] = (
     "BTC_DOWN_BUY",
     "TOXIC_DENYLIST",
-    "DUPLICATE_SIGNAL",
+    "SIGNAL_COOLDOWN",   # Phase SIGNAL.COOLDOWN.1: was DUPLICATE_SIGNAL (60min/timeframe)
     "CONFIDENCE_REJECTION",
     "CMC_REJECTION",
     "REGIME_REJECTION",
@@ -25,8 +25,10 @@ _GATE_ALIASES = {
     "btc_down_buy": "BTC_DOWN_BUY",
     "toxic_setup": "TOXIC_DENYLIST",
     "toxic_denylist": "TOXIC_DENYLIST",
-    "duplicate": "DUPLICATE_SIGNAL",
-    "duplicate_signal": "DUPLICATE_SIGNAL",
+    # Legacy aliases for rows written before Phase SIGNAL.COOLDOWN.1
+    "duplicate": "SIGNAL_COOLDOWN",
+    "duplicate_signal": "SIGNAL_COOLDOWN",
+    "signal_cooldown": "SIGNAL_COOLDOWN",
     "ai": "CONFIDENCE_REJECTION",
     "confidence": "CONFIDENCE_REJECTION",
     "confidence_rejection": "CONFIDENCE_REJECTION",
