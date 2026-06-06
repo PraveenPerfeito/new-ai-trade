@@ -103,7 +103,7 @@ export class QuotaGuard {
       };
 
       this.cachedState    = state;
-      this.cacheExpiresAt = now + 5_000;
+      this.cacheExpiresAt = now + 30_000;  // was 5s — 30s cache reduces quota guard Redis reads
       return state;
 
     } catch (err) {

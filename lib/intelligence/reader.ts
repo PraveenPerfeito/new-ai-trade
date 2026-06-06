@@ -23,10 +23,8 @@ async function readGroup<T>(
     const redis = getRedis();
     const raw   = await redis.get(cfg.redisKey);
     if (!raw) {
-      await redis.incr(groupMissesKey(groupName)).catch(() => {});
       return null;
     }
-    await redis.incr(groupHitsKey(groupName)).catch(() => {});
     return JSON.parse(raw) as T;
   } catch (err) {
     log.warn({ err, group: groupName }, 'intel_read_error');

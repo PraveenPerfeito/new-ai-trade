@@ -37,9 +37,9 @@ log = get_logger(__name__)
 
 T = TypeVar('T', bound=BaseSettingsGroup)
 
-_MEM_TTL            = 30       # seconds
+_MEM_TTL            = 60       # seconds (was 30 — settings change rarely; 60s cuts refresh ops by half)
 _REDIS_TTL          = 3_600    # 1 hour
-_GEN_CHECK_INTERVAL = 30.0     # seconds between generation counter checks (OPT-3: was 5.0 — settings change rarely; 30s matches in-memory TTL)
+_GEN_CHECK_INTERVAL = 60.0     # seconds between generation counter checks (was 30.0 — aligned with MEM_TTL)
 
 
 # ── Cache entry ───────────────────────────────────────────────────────────────
