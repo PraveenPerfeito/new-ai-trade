@@ -12,7 +12,9 @@ def _ms(dt: datetime) -> int:
     return int(dt.timestamp() * 1000)
 
 
-def _row(signal_type: str = "BUY") -> dict:
+def _row(signal_type: str = "BUY", created_at: datetime | None = None) -> dict:
+    if created_at is None:
+        created_at = datetime(2026, 6, 2, 14, 15, tzinfo=timezone.utc)
     return {
         "symbol": "SOL",
         "signal_type": signal_type,
@@ -21,7 +23,7 @@ def _row(signal_type: str = "BUY") -> dict:
         "target_price": 110.0 if signal_type == "BUY" else 90.0,
         "stop_loss": 95.0 if signal_type == "BUY" else 105.0,
         "rr_ratio": 2.0,
-        "created_at": datetime(2026, 6, 2, 14, 15, tzinfo=timezone.utc),
+        "created_at": created_at,
     }
 
 
@@ -68,9 +70,12 @@ async def test_resolves_signal_containing_candle_after_it_closes(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_ignores_only_candles_closed_before_signal(monkeypatch):
-    row = _row("SELL")
+    # Signal is 2 hours old; candle closes 3 hours before signal creation — must be ignored.
+    signal_time = datetime.now(timezone.utc) - timedelta(hours=2)
+    candle_time  = signal_time - timedelta(hours=1)
+    row = _row("SELL", created_at=signal_time)
     candle = _candle(
-        datetime(2026, 6, 2, 13, tzinfo=timezone.utc),
+        candle_time,
         high=106.0,
         low=88.0,
     )

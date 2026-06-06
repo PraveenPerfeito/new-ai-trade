@@ -47,9 +47,9 @@ INTEL_MISSES_KEY = "cache:intel:misses:listings"
 # Listings freshness threshold (mirrors CACHE_GROUPS.listings.ttlMs / 1000)
 INTEL_TTL_SECONDS = 5 * 60   # 5 minutes
 
-# Runtime stabilization: live signals have no persisted TrendScore/Sector
-# attribution, so CMC-derived influence is disabled until it is measurable.
-CMC_INTELLIGENCE_ENABLED = False
+# INTEL.PERSIST.1: enabled — TypeScript workers populate Redis keys every 5 min.
+# Fallback to CoinGecko when cache is cold (graceful, no signal loss).
+CMC_INTELLIGENCE_ENABLED = True
 
 
 @dataclass
