@@ -755,15 +755,27 @@ async def scan_coin(
         effective_score = setup.pre_score + funding_score_adj   # Phase 7.3A.6 funding adjustment
         ai = await validate_signal(draft, coin, ind4h, s1h * 0.4 + s4h * 0.6, volatility, setup_score=effective_score)
 
-        # Phase 8.1B — Soft regime gate: counter-trend signals require higher confidence.
-        # BULL_TREND/EUPHORIA blocks SELL with +10; BEAR_TREND/CAPITULATION blocks BUY with +10;
-        # HIGH_VOLATILITY adds +5 to both directions. SIDEWAYS: no adjustment.
+        # Phase 8.1B → SIGNAL.FACTOR.1: Regime gates.
         _BULL_CONTEXTS = {"BULL_TREND", "EUPHORIA"}
         _BEAR_CONTEXTS = {"BEAR_TREND", "CAPITULATION"}
+
+        # Hard gate: BEAR_TREND + BUY. Resolved data: N=200, WR=19%, avg_rr=-0.405.
+        # The previous +10 soft penalty still generated 200 losing signals; upgrade to
+        # hard reject before AI validation (saves tokens, removes a systematic loser).
+        if signal_type == SignalType.BUY and btc_regime in _BEAR_CONTEXTS:
+            _record_gate_rejection("REGIME_REJECTION", gate_rejections)
+            log.info(
+                "rejected_bear_trend_buy",
+                symbol=coin.symbol,
+                regime=btc_regime,
+                signal_type=signal_type.value,
+            )
+            return None
+
+        # Soft gate: SELL in bull regime and HIGH_VOLATILITY still get a confidence
+        # hurdle — less decisive than bear+buy but still counter-trend risk.
         regime_adj = 0
         if signal_type == SignalType.SELL and btc_regime in _BULL_CONTEXTS:
-            regime_adj = 10
-        elif signal_type == SignalType.BUY and btc_regime in _BEAR_CONTEXTS:
             regime_adj = 10
         elif btc_regime == "HIGH_VOLATILITY":
             regime_adj = 5
@@ -773,6 +785,43 @@ async def scan_coin(
             setup, signal_type, mode, volatility
         )
         adjusted_confidence = max(ai.confidence - confidence_penalty, 0)
+
+        # SIGNAL.FACTOR.1: Intelligence-driven confidence boosts (resolved outcome data).
+        # Applied after penalty so the net is fair; clamped to 100.
+        # OI_NEUTRAL / STABLE_funding / HIGH_MOMENTUM_BREAKOUT / 20d_low are futures-only
+        # where data is available; breakout boosts apply across all modes.
+        _boost = 0
+        _boost_reasons: list[str] = []
+
+        if setup.breakout_strength == "HIGH_MOMENTUM_BREAKOUT":
+            _boost += 8
+            _boost_reasons.append("HIGH_MOMENTUM_BREAKOUT")
+        elif setup.breakout_type == "20d_low":
+            _boost += 5
+            _boost_reasons.append("20d_low_breakout")
+
+        if futures_data:
+            if futures_data.oi_interpretation == "NEUTRAL":
+                _boost += 6
+                _boost_reasons.append("OI_NEUTRAL")
+            if signal_type == SignalType.SELL and futures_data.positioning_context == "EXTREME_LONG":
+                _boost += 4
+                _boost_reasons.append("EXTREME_LONG_crowd")
+            if futures_data.funding_trend == "STABLE":
+                _boost += 3
+                _boost_reasons.append("STABLE_funding")
+
+        if _boost > 0:
+            adjusted_confidence = min(adjusted_confidence + _boost, 100)
+            log.info(
+                "intelligence_confidence_boost",
+                symbol=coin.symbol,
+                boost=_boost,
+                reasons=_boost_reasons,
+                raw_confidence=ai.confidence,
+                adjusted_confidence=adjusted_confidence,
+            )
+
         if confidence_penalty > 0:
             log.info(
                 "null_setup_confidence_penalty",
