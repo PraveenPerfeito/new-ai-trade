@@ -1,0 +1,7 @@
+{
+  "crons": [
+    { "path": "/api/intelligence/cron/listings",  "schedule": "*/5 * * * *"  },
+    { "path": "/api/intelligence/cron/global",    "schedule": "*/10 * * * *" },
+    { "path": "/api/intelligence/cron/trending",  "schedule": "*/10 * * * *" }
+  ]
+}

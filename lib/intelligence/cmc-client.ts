@@ -105,30 +105,44 @@ export interface CmcKeyInfo {
   credit_count_left: number;
 }
 
+// ─── CMC error guard ──────────────────────────────────────────────────────────
+// CMC returns 200 OK with data.data=null when the API key plan doesn't support
+// the endpoint. Detect this and throw a descriptive error so workers can fall back.
+
+function assertCmcData<T>(data: T | null | undefined, endpoint: string, status: { error_code?: number; error_message?: string } | undefined): T {
+  if (data !== null && data !== undefined) return data;
+  const code = status?.error_code ?? 'unknown';
+  const msg  = status?.error_message ?? 'no data returned';
+  throw new Error(`CMC plan restriction on ${endpoint} (code=${code}): ${msg}`);
+}
+
 // ─── Fetch functions ──────────────────────────────────────────────────────────
 
 export async function fetchListings(limit = 100): Promise<CmcListingCoin[]> {
   const res = await getClient().get('/cryptocurrency/listings/latest', {
     params: { limit, convert: 'USD', sort: 'market_cap' },
   });
-  log.debug({ count: res.data.data?.length }, 'cmc_listings_fetched');
-  return res.data.data as CmcListingCoin[];
+  const data = assertCmcData(res.data.data, '/listings/latest', res.data.status);
+  log.debug({ count: (data as CmcListingCoin[]).length }, 'cmc_listings_fetched');
+  return data as CmcListingCoin[];
 }
 
 export async function fetchGlobalMetrics(): Promise<CmcGlobalMetrics> {
   const res = await getClient().get('/global-metrics/quotes/latest', {
     params: { convert: 'USD' },
   });
+  const data = assertCmcData(res.data.data, '/global-metrics/quotes/latest', res.data.status);
   log.debug('cmc_global_fetched');
-  return res.data.data as CmcGlobalMetrics;
+  return data as CmcGlobalMetrics;
 }
 
 export async function fetchTrending(limit = 20): Promise<CmcTrendingCoin[]> {
   const res = await getClient().get('/cryptocurrency/trending/latest', {
     params: { limit, convert: 'USD' },
   });
-  log.debug({ count: res.data.data?.length }, 'cmc_trending_fetched');
-  return res.data.data as CmcTrendingCoin[];
+  const data = assertCmcData(res.data.data, '/trending/latest', res.data.status);
+  log.debug({ count: (data as CmcTrendingCoin[]).length }, 'cmc_trending_fetched');
+  return data as CmcTrendingCoin[];
 }
 
 export async function fetchCategories(): Promise<CmcCategory[]> {

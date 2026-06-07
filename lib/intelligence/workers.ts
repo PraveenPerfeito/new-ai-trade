@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { getRedis } from '@/lib/redis';
 import { createLogger } from '@/lib/logger';
 import { getQuotaGuard } from './quota-guard';
@@ -9,6 +10,7 @@ import {
   fetchCategories,
   fetchMetadata,
   fetchKeyInfo,
+  type CmcListingCoin,
 } from './cmc-client';
 import {
   normalizeListings,
@@ -97,20 +99,74 @@ function registerWorker(
   log.info({ name, intervalMs }, 'intel_worker_started');
 }
 
-// ─── Individual tick handlers ─────────────────────────────────────────────────
+// ─── CoinGecko fallback for plan-restricted CMC endpoints ────────────────────
+// Used when CMC API plan doesn't include listings/global/trending endpoints.
 
-async function tickListings(): Promise<void> {
-  const quota = getQuotaGuard();
-  if (!(await quota.canConsume(1))) return;
-  const raw  = await fetchListings(100);
-  const snap = normalizeListings(raw);
-  const redis = getRedis();
-  await redis.set(CACHE_GROUPS.listings.redisKey, JSON.stringify(snap), 'PX', CACHE_GROUPS.listings.ttlMs * 2);
-  await quota.consume(1);
-  log.debug({ count: snap.coins.length }, 'worker_listings_refreshed');
+const CG_BASE    = 'https://api.coingecko.com/api/v3';
+const CG_TIMEOUT = 15_000;
+
+async function _cgFetchListings(limit: number): Promise<CmcListingCoin[]> {
+  const res = await axios.get(`${CG_BASE}/coins/markets`, {
+    params: {
+      vs_currency: 'usd',
+      order: 'market_cap_desc',
+      per_page: Math.min(limit, 250),
+      page: 1,
+      price_change_percentage: '1h,24h,7d',
+    },
+    timeout: CG_TIMEOUT,
+  });
+  return (res.data as Array<{
+    symbol: string; name: string; market_cap_rank: number;
+    current_price: number; market_cap: number; total_volume: number;
+    price_change_percentage_24h: number;
+    price_change_percentage_1h_in_currency?: number;
+    price_change_percentage_7d_in_currency?: number;
+    last_updated: string;
+  }>).map((c) => ({
+    id:       0,
+    name:     c.name,
+    symbol:   c.symbol.toUpperCase(),
+    cmc_rank: c.market_cap_rank ?? 999,
+    quote: {
+      USD: {
+        price:                 c.current_price ?? 0,
+        volume_24h:            c.total_volume ?? 0,
+        percent_change_1h:     c.price_change_percentage_1h_in_currency ?? 0,
+        percent_change_24h:    c.price_change_percentage_24h ?? 0,
+        percent_change_7d:     c.price_change_percentage_7d_in_currency ?? 0,
+        market_cap:            c.market_cap ?? 0,
+        market_cap_dominance:  0,
+        last_updated:          c.last_updated ?? new Date().toISOString(),
+      },
+    },
+  }));
 }
 
-async function tickGlobal(): Promise<void> {
+// ─── Individual tick handlers ─────────────────────────────────────────────────
+
+export async function tickListings(): Promise<void> {
+  const quota = getQuotaGuard();
+  if (!(await quota.canConsume(1))) return;
+
+  let raw: CmcListingCoin[];
+  let usedCmc = true;
+  try {
+    raw = await fetchListings(100);
+  } catch (cmcErr) {
+    log.warn({ err: cmcErr }, 'cmc_listings_plan_restricted_falling_back_to_coingecko');
+    raw     = await _cgFetchListings(100);
+    usedCmc = false;
+  }
+
+  const snap  = normalizeListings(raw);
+  const redis = getRedis();
+  await redis.set(CACHE_GROUPS.listings.redisKey, JSON.stringify(snap), 'PX', CACHE_GROUPS.listings.ttlMs * 2);
+  if (usedCmc) await quota.consume(1);
+  log.debug({ count: snap.coins.length, source: usedCmc ? 'cmc' : 'coingecko' }, 'worker_listings_refreshed');
+}
+
+export async function tickGlobal(): Promise<void> {
   const quota = getQuotaGuard();
   if (!(await quota.canConsume(1))) return;
   const raw  = await fetchGlobalMetrics();
@@ -121,7 +177,7 @@ async function tickGlobal(): Promise<void> {
   log.debug('worker_global_refreshed');
 }
 
-async function tickTrending(): Promise<void> {
+export async function tickTrending(): Promise<void> {
   const quota = getQuotaGuard();
   if (!(await quota.canConsume(1))) return;
   const raw  = await fetchTrending(20);

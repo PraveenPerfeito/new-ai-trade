@@ -297,9 +297,17 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                             analysis = tr.sector_report.get(meta.sector)
                             if analysis:
                                 sector_status_map[sym] = analysis.status.value
+                if not all_coins:
+                    log.warning(
+                        "trending_universe_empty_using_standard_fallback",
+                        original_count=len(coin_result.coins),
+                        reason="build_trending_universe_returned_no_candidates",
+                    )
+                    all_coins = coin_result.coins
+
                 log.info(
                     "trending_universe_applied",
-                    total_candidates=tr.total_unique,
+                    total_candidates=len(tr.coins),
                     new_from_cmc_trending=tr.new_from_trending,
                     rising_sectors=tr.rising_sectors,
                     source_counts=tr.source_counts,
