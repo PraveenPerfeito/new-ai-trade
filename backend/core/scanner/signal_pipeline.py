@@ -772,13 +772,18 @@ async def scan_coin(
             )
             return None
 
-        # Soft gate: SELL in bull regime and HIGH_VOLATILITY still get a confidence
-        # hurdle — less decisive than bear+buy but still counter-trend risk.
+        # Soft gates: direction-vs-regime mismatches and data gaps.
         regime_adj = 0
         if signal_type == SignalType.SELL and btc_regime in _BULL_CONTEXTS:
             regime_adj = 10
         elif btc_regime == "HIGH_VOLATILITY":
             regime_adj = 5
+        elif not btc_regime:
+            # CONFIDENCE.TRUTH.1: NULL regime → N=492, WR=17.7%, Exp=-0.904.
+            # Missing regime is not neutral — with Claude's max output of 95 this
+            # effectively hard-gates spot (min_conf=80+15=95 is the edge), futures
+            # (82+15=97 > 95, always reject), and high_confidence (87+15=102).
+            regime_adj = 15
 
         required_confidence = config.min_confidence + regime_adj
         confidence_penalty, penalty_reasons = _null_setup_confidence_penalty(
@@ -799,6 +804,12 @@ async def scan_coin(
         elif setup.breakout_type == "20d_low":
             _boost += 5
             _boost_reasons.append("20d_low_breakout")
+        elif setup.breakout_strength == "EARLY_BREAKOUT":
+            # CONFIDENCE.TRUTH.1: EARLY_BREAKOUT WR=24.1%, Exp=-0.821 — same as no
+            # breakout. An unconfirmed attempt that hasn't broken structure is penalized
+            # unless it's a specific 20d_low pattern (caught by the elif above).
+            _boost -= 4
+            _boost_reasons.append("EARLY_BREAKOUT_penalty")
 
         if futures_data:
             if futures_data.oi_interpretation == "NEUTRAL":
@@ -811,16 +822,31 @@ async def scan_coin(
                 _boost += 3
                 _boost_reasons.append("STABLE_funding")
 
-        if _boost > 0:
-            adjusted_confidence = min(adjusted_confidence + _boost, 100)
+        if _boost != 0:
+            adjusted_confidence = min(max(adjusted_confidence + _boost, 0), 100)
             log.info(
-                "intelligence_confidence_boost",
+                "intelligence_confidence_adjustment",
                 symbol=coin.symbol,
-                boost=_boost,
+                adjustment=_boost,
                 reasons=_boost_reasons,
                 raw_confidence=ai.confidence,
                 adjusted_confidence=adjusted_confidence,
             )
+
+        # CONFIDENCE.TRUTH.1: Spot signals without confirmed breakout account for 58%
+        # of all 90+ SL_HIT. Cap at 88 to keep them in the better-performing 85-89
+        # tier. CONFIRMED_BREAKOUT and above are exempt — they earned the higher score.
+        if (mode == ScannerMode.SPOT
+                and setup.breakout_strength in (None, "NONE", "EARLY_BREAKOUT")
+                and adjusted_confidence > 88):
+            log.info(
+                "spot_no_breakout_confidence_cap",
+                symbol=coin.symbol,
+                original=adjusted_confidence,
+                capped=88,
+                breakout_strength=setup.breakout_strength,
+            )
+            adjusted_confidence = 88
 
         if confidence_penalty > 0:
             log.info(
