@@ -73,6 +73,9 @@ class Settings(BaseSettings):
                 pass
         return [o.strip() for o in v.split(",") if o.strip()]
 
+    # ── Frontend URL (used by Python backend to trigger intelligence refresh) ──
+    next_app_url: str = ""           # e.g. https://your-app.vercel.app
+
     # ── Admin auth ────────────────────────────────────────────────────────────
     admin_secret: str = ""          # shared secret: Next.js proxy → FastAPI
 

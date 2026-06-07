@@ -147,6 +147,22 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
         }
         scanner_mode = mode_map.get(mode, ScannerMode.SPOT)
 
+        async def _trigger_intelligence_refresh() -> None:
+            """Fire-and-forget: warm the Next.js intelligence Redis cache after each scan."""
+            try:
+                import httpx as _httpx
+                settings = get_settings()
+                base_url = (settings.next_app_url or "").rstrip("/")
+                if not base_url:
+                    return
+                headers = {}
+                if settings.admin_secret:
+                    headers["x-admin-secret"] = settings.admin_secret
+                async with _httpx.AsyncClient(timeout=10.0) as client:
+                    await client.post(f"{base_url}/api/intelligence/refresh", headers=headers)
+            except Exception as exc:
+                logger.debug(f"intelligence_refresh_skipped error={exc}")
+
         async def _run_and_record():
             result = await run_scan(scanner_mode)
             try:
@@ -162,6 +178,8 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
                 )
             except Exception:
                 pass
+            # Keep intelligence cache warm on Vercel after each scan cycle
+            await _trigger_intelligence_refresh()
             return result
 
         scan_result = asyncio.run(_run_and_record())

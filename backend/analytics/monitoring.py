@@ -103,7 +103,7 @@ async def record_binance_error() -> None:
 THRESHOLDS: dict[str, dict] = {
     # (higher is better)
     "signals_per_day":         {"healthy": 1,     "warning": 0,       "critical": -1,      "inverted": False},
-    "win_rate_pct":            {"healthy": 33.0,  "warning": 15.0,    "critical": 0.0,     "inverted": False},
+    "win_rate_pct":            {"healthy": 42.0,  "warning": 33.0,    "critical": 20.0,    "inverted": False},
     "coins_scanned_per_run":   {"healthy": 50,    "warning": 20,      "critical": 5,       "inverted": False},
     # (lower is better)
     "sl_rate_pct":             {"healthy": 60.0,  "warning": 80.0,    "critical": 95.0,    "inverted": True},
@@ -177,14 +177,32 @@ async def get_monitoring_snapshot() -> dict:
     except Exception:
         pass
 
-    # CMC credits (monthly ÷ day-of-month for daily estimate)
+    # CMC credits — 7-day rolling daily average using daily snapshots
     cmc_credits_day = 0
     try:
         from backend.cache.redis_cache import get_redis
         redis = await get_redis()
         raw   = await redis.get("intel:quota:used")
-        cmc_month       = int(raw or 0)
-        cmc_credits_day = round(cmc_month / max(now.day, 1))
+        cmc_month = int(raw or 0)
+
+        # Store today's snapshot so rolling history accumulates (8d TTL)
+        await redis.set(f"intel:quota:snapshot:{today}", str(cmc_month), ex=8 * 24 * 3600)
+
+        # Find the oldest available daily snapshot within the last 7 days
+        oldest_val, oldest_days = None, 0
+        for days_back in range(7, 0, -1):
+            day = (now.date() - timedelta(days=days_back)).isoformat()
+            snap = await redis.get(f"intel:quota:snapshot:{day}")
+            if snap is not None:
+                oldest_val = int(snap)
+                oldest_days = days_back
+                break
+
+        if oldest_val is not None and oldest_days > 0:
+            cmc_credits_day = max(0, round((cmc_month - oldest_val) / oldest_days))
+        else:
+            # No rolling history yet — fall back to month-to-date average
+            cmc_credits_day = round(cmc_month / max(now.day, 1))
     except Exception:
         pass
 

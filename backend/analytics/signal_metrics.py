@@ -374,58 +374,63 @@ async def get_analytics(window_hours: int = 168) -> dict:
 
 # ── Intelligence calibration summary (GAP-5) ─────────────────────────────────
 
+_INTEL_MIN_SAMPLES = 10  # tiers with fewer samples are suppressed (unreliable stats)
+
+
 async def get_intelligence_summary(window_hours: int = 720) -> dict:
     """Best-performing intelligence tier per dimension from resolved outcomes."""
     outcomes = await get_outcomes(window_hours)
     if not outcomes:
         return {"insufficient_data": True, "total": 0, "window_hours": window_hours}
 
-    def _best(key: str) -> dict | None:
+    total = len(outcomes)
+
+    def _dim_stats(key: str, get_label=None) -> dict:
+        """Return best-tier stats + null_count/null_pct for one intelligence dimension."""
         groups: dict[str, list] = {}
+        null_count = 0
         for o in outcomes:
-            val = o.get(key)
-            if val is not None:
-                groups.setdefault(str(val), []).append(o)
+            raw = o.get(key)
+            label = get_label(raw) if get_label else (str(raw) if raw is not None else None)
+            if label is None or label == "N/A":
+                null_count += 1
+                continue
+            groups.setdefault(label, []).append(o)
+
         best: dict | None = None
         best_wr = -1.0
         for name, rows in groups.items():
-            if len(rows) < 5:
+            if len(rows) < _INTEL_MIN_SAMPLES:
                 continue
             stats = compute_stats(rows)
             wr = stats.get("win_rate") or 0.0
             if wr > best_wr:
                 best_wr = wr
                 best = {"label": name, "n": len(rows), **stats}
-        return best
 
-    def _best_trend_tier() -> dict | None:
-        groups: dict[str, list] = {}
-        for o in outcomes:
-            tier = trend_score_tier(o.get("trend_score"))
-            if tier == "N/A":
-                continue
-            groups.setdefault(tier, []).append(o)
-        best: dict | None = None
-        best_wr = -1.0
-        for name, rows in groups.items():
-            if len(rows) < 5:
-                continue
-            stats = compute_stats(rows)
-            wr = stats.get("win_rate") or 0.0
-            if wr > best_wr:
-                best_wr = wr
-                best = {"label": name, "n": len(rows), **stats}
-        return best
+        return {
+            "best":      best,
+            "null_count": null_count,
+            "null_pct":  round(null_count / total * 100, 1) if total else 0.0,
+            "note":      f"{null_count}/{total} signals have no {key} data" if null_count else None,
+        }
 
+    dims = {
+        "trend_score_tier":         _dim_stats("trend_score", get_label=lambda v: trend_score_tier(v) if v is not None else None),
+        "sector_status":            _dim_stats("sector_status"),
+        "breakout_type":            _dim_stats("breakout_type"),
+        "breakout_strength":        _dim_stats("breakout_strength"),
+        "oi_interpretation":        _dim_stats("oi_interpretation"),
+        "funding_trend":            _dim_stats("funding_trend"),
+        "positioning_context":      _dim_stats("positioning_context"),
+    }
+    # Backward-compatible flat keys consumed by the frontend
+    flat = {f"best_{k}": v["best"] for k, v in dims.items()}
     return {
-        "total":                      len(outcomes),
-        "window_hours":               window_hours,
-        "insufficient_data":          False,
-        "best_trend_score_tier":      _best_trend_tier(),
-        "best_sector_status":         _best("sector_status"),
-        "best_breakout_type":         _best("breakout_type"),
-        "best_breakout_strength":     _best("breakout_strength"),
-        "best_oi_interpretation":     _best("oi_interpretation"),
-        "best_funding_trend":         _best("funding_trend"),
-        "best_positioning_context":   _best("positioning_context"),
+        "total":             total,
+        "window_hours":      window_hours,
+        "insufficient_data": False,
+        "min_samples":       _INTEL_MIN_SAMPLES,
+        **flat,
+        "null_stats":        {k: {"null_count": v["null_count"], "null_pct": v["null_pct"], "note": v["note"]} for k, v in dims.items()},
     }

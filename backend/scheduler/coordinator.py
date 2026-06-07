@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import time
+from datetime import datetime, timezone
 from typing import Literal
 
 import redis as sync_redis
@@ -102,7 +103,45 @@ class SchedulerCoordinator:
             log.warning("coordinator_is_enabled_redis_error", error=str(exc))
             return True  # fail-open: Redis unavailable → assume enabled
 
+    # ── Next-scan helpers ─────────────────────────────────────────────────────
+
+    @staticmethod
+    def _next_beat_fire(fire_minutes: list[int]) -> float | None:
+        """Return Unix timestamp of next Celery beat fire for the given minute list."""
+        try:
+            now = datetime.now(timezone.utc)
+            cur = now.minute
+            from datetime import timedelta
+            for m in sorted(fire_minutes):
+                if cur < m:
+                    nxt = now.replace(minute=m, second=0, microsecond=0)
+                    return nxt.timestamp()
+            # All minutes passed — advance to next hour, first minute
+            next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+            return next_hour.replace(minute=sorted(fire_minutes)[0]).timestamp()
+        except Exception:
+            return None
+
     # ── Status snapshot ───────────────────────────────────────────────────────
+
+    def _last_scan_from_db(self) -> float | None:
+        """Fall back to scan_metrics_log for last scan timestamp when Redis key is absent."""
+        try:
+            import asyncio as _asyncio
+            from backend.database.session import get_pool
+
+            async def _query() -> float | None:
+                pool = await get_pool()
+                row = await pool.fetchrow(
+                    "SELECT created_at FROM scan_metrics_log ORDER BY created_at DESC LIMIT 1"
+                )
+                if row:
+                    return row["created_at"].timestamp()
+                return None
+
+            return _asyncio.run(_query())
+        except Exception:
+            return None
 
     def status(self) -> dict:
         # OPT-7: serve from 5s cache — reduces 5 Redis ops to 1 GET on dashboard polls
@@ -119,11 +158,22 @@ class SchedulerCoordinator:
             if self.is_scan_running(m)  # type: ignore[arg-type]
         ]
         last_ts_raw = self._redis.get("scheduler:last_scan_ts")
+        last_scan_at = float(last_ts_raw) if last_ts_raw else self._last_scan_from_db()
+
+        # Beat schedule: next fire times per mode (crontab mirrors beat_schedule.py)
+        next_scan_at = {
+            "standard":        self._next_beat_fire([0, 15, 30, 45]),
+            "high_confidence": self._next_beat_fire([5, 35]),
+            "futures":         self._next_beat_fire([10, 40]),
+            "trending":        self._next_beat_fire([20, 50]),
+        }
+
         result = {
             "enabled":       enabled,
             "scanning":      bool(running_modes),
             "running_modes": running_modes,
-            "last_scan_at":  float(last_ts_raw) if last_ts_raw else None,
+            "last_scan_at":  last_scan_at,
+            "next_scan_at":  next_scan_at,
         }
         try:
             self._redis.setex(_STATUS_CACHE_KEY, _STATUS_CACHE_TTL, json.dumps(result))

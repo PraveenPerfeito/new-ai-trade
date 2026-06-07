@@ -36,10 +36,12 @@ router = APIRouter(prefix="/api/providers", tags=["providers"])
 PROVIDER_NAMES = frozenset({
     "coingecko", "coinmarketcap", "binance", "dexscreener", "coinpaprika", "geckoterm"
 })
-METRICS_PREFIX   = "providers:metrics:"
-FAILOVER_LOG_KEY = "providers:failover:log"
-CONFIG_KEY       = "settings:d:providers"
-COINS_CACHE_PAT  = "cache:market-data:*"
+METRICS_PREFIX      = "providers:metrics:"
+FAILOVER_LOG_KEY    = "providers:failover:log"
+CONFIG_KEY          = "settings:d:providers"
+COINS_CACHE_PAT     = "cache:market-data:*"
+HEALTH_SNAPSHOT_KEY = "providers:health:snapshot"
+HEALTH_SNAPSHOT_TTL = 30  # seconds — reduces ~37,440 Redis ops/day to ~1,440
 
 _DEFAULT_PRIORITY: dict[str, int] = {
     "coinmarketcap": 1, "coingecko": 2, "binance": 3,
@@ -128,10 +130,27 @@ async def _get_metrics(redis, name: str) -> dict[str, Any]:
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
+async def _invalidate_snapshot() -> None:
+    try:
+        redis = await get_redis()
+        await redis.delete(HEALTH_SNAPSHOT_KEY)
+    except Exception:
+        pass
+
+
 @router.get("")
 async def list_providers() -> dict:
     """All providers with live health metrics and current config."""
     redis = await get_redis()
+
+    # 30s snapshot cache — reduces 37K Redis ops/day to ~1.4K on dashboard polls
+    try:
+        cached = await redis.get(HEALTH_SNAPSHOT_KEY)
+        if cached:
+            return json.loads(cached)
+    except Exception:
+        pass
+
     cfg = await _read_config()
 
     providers = []
@@ -173,7 +192,12 @@ async def list_providers() -> dict:
         providers.append({"name": name, "enabled": enabled, "priority": priority, **metrics})
 
     providers.sort(key=lambda p: p["priority"])
-    return {"success": True, "providers": providers}
+    result = {"success": True, "providers": providers}
+    try:
+        await redis.setex(HEALTH_SNAPSHOT_KEY, HEALTH_SNAPSHOT_TTL, json.dumps(result))
+    except Exception:
+        pass
+    return result
 
 
 @router.get("/failover-history")
@@ -205,6 +229,7 @@ async def enable_provider(name: str) -> dict:
     cfg = await _read_config()
     cfg.setdefault(name, {})["enabled"] = True
     await _write_config(cfg)
+    await _invalidate_snapshot()
     log.info("provider_enabled", provider=name)
     return {"success": True, "provider": name, "enabled": True}
 
@@ -215,6 +240,7 @@ async def disable_provider(name: str) -> dict:
     cfg = await _read_config()
     cfg.setdefault(name, {})["enabled"] = False
     await _write_config(cfg)
+    await _invalidate_snapshot()
     log.info("provider_disabled", provider=name)
     return {"success": True, "provider": name, "enabled": False}
 
@@ -227,6 +253,7 @@ async def set_priority(name: str, body: PriorityBody) -> dict:
     cfg = await _read_config()
     cfg.setdefault(name, {})["priority"] = body.priority
     await _write_config(cfg)
+    await _invalidate_snapshot()
     log.info("provider_priority_set", provider=name, priority=body.priority)
     return {"success": True, "provider": name, "priority": body.priority}
 

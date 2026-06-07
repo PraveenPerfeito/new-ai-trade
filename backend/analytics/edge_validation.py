@@ -94,9 +94,10 @@ async def _fetch_ai_join(pool, window_hours: int) -> list[dict]:
                      THEN false ELSE true END AS used_fallback,
                 COALESCE(s.validation_source, 'HEURISTIC') = 'CLAUDE' AS validated,
                 o.confidence AS ai_confidence,
-                NULL::int AS latency_ms
+                acl.latency_ms AS latency_ms
             FROM signal_outcomes o
             LEFT JOIN signals s ON s.id = o.signal_id
+            LEFT JOIN ai_call_log acl ON acl.signal_id = o.signal_id
             WHERE o.outcome != 'PENDING'
               AND o.created_at >= NOW() - ($1 || ' hours')::interval
             """,

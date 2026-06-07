@@ -14,6 +14,7 @@ import Link from 'next/link'
 
 interface CeleryStatus {
   enabled: boolean; scanning: boolean; running_modes: string[]; last_scan_at: number | null
+  next_scan_at?: Record<string, number | null>
 }
 
 interface OpsFlags {
@@ -172,15 +173,22 @@ export default function AdminScannerPage() {
 
   useEffect(() => {
     const tick = () => {
-      if (!status?.last_scan_at) { setCountdown(null); return }
-      const nextAt = status.last_scan_at + 15 * 60
-      const diff   = Math.max(0, Math.floor(nextAt - Date.now() / 1000))
-      setCountdown(diff)
+      // Prefer backend-computed next_scan_at for the current mode; fall back to last+15min
+      const modeNext = status?.next_scan_at?.[scanMode] ?? null
+      if (modeNext) {
+        const diff = Math.max(0, Math.floor(modeNext - Date.now() / 1000))
+        setCountdown(diff)
+      } else if (status?.last_scan_at) {
+        const diff = Math.max(0, Math.floor(status.last_scan_at + 15 * 60 - Date.now() / 1000))
+        setCountdown(diff)
+      } else {
+        setCountdown(null)
+      }
     }
     tick()
     const t = setInterval(tick, 1000)
     return () => clearInterval(t)
-  }, [status?.last_scan_at])
+  }, [status?.last_scan_at, status?.next_scan_at, scanMode])
 
   // ── Action helpers ────────────────────────────────────────────────────────
 

@@ -11,7 +11,7 @@ from typing import Any
 
 import httpx
 
-from backend.cache.redis_cache import RedisCache
+from backend.cache.redis_cache import RedisCache, get_redis
 from backend.config import get_settings
 from backend.core.scanner.models import Candle, CoinData
 from backend.logging.setup import get_logger
@@ -130,36 +130,70 @@ def _drop_open_candle(candles: list[Candle], now_ms: int | None = None) -> list[
     return candles
 
 
+_BINANCE_META_KEY    = "providers:metrics:binance:meta"
+_BINANCE_LATENCY_KEY = "providers:metrics:binance:latency"
+_BINANCE_ERRORS_KEY  = "providers:metrics:binance:errors"
+
+
+async def _record_binance_kline_metric(latency_ms: float, success: bool) -> None:
+    """Fire-and-forget: update providers:metrics:binance Redis keys for dashboard."""
+    try:
+        redis = await get_redis()
+        ts_ms = str(int(time.time() * 1000))
+        pipe  = redis.pipeline()
+        if success:
+            pipe.hset(_BINANCE_META_KEY, mapping={"lastSuccess": ts_ms})
+            pipe.hincrby(_BINANCE_META_KEY, "requestsToday", 1)
+            pipe.rpush(_BINANCE_LATENCY_KEY, round(latency_ms))
+            pipe.ltrim(_BINANCE_LATENCY_KEY, -100, -1)
+        else:
+            pipe.hset(_BINANCE_META_KEY, mapping={"lastError": ts_ms})
+            pipe.rpush(_BINANCE_ERRORS_KEY, ts_ms)
+            pipe.ltrim(_BINANCE_ERRORS_KEY, -100, -1)
+        await pipe.execute()
+    except Exception:
+        pass
+
+
 async def fetch_spot_klines(symbol: str, interval: str = "1h", limit: int = 100) -> list[Candle]:
     for base in (SPOT_BASE, SPOT_BASE_US):
+        t0 = time.perf_counter()
         try:
             data = await _get(
                 f"{base}/klines",
                 params={"symbol": symbol, "interval": interval, "limit": limit},
                 service="binance",
             )
+            latency_ms = (time.perf_counter() - t0) * 1000
+            asyncio.ensure_future(_record_binance_kline_metric(latency_ms, success=True))
             return _drop_open_candle(_parse_klines(data)) if data else []
         except httpx.HTTPStatusError as exc:
+            asyncio.ensure_future(_record_binance_kline_metric(0, success=False))
             if exc.response.status_code == 451 and base == SPOT_BASE:
                 log.warning("binance_geo_blocked_trying_us", symbol=symbol)
                 continue
             log.warning("spot_klines_failed", symbol=symbol, error=str(exc))
             return []
         except Exception as exc:
+            asyncio.ensure_future(_record_binance_kline_metric(0, success=False))
             log.warning("spot_klines_failed", symbol=symbol, error=str(exc))
             return []
     return []
 
 
 async def fetch_futures_klines(symbol: str, interval: str = "1h", limit: int = 100) -> list[Candle]:
+    t0 = time.perf_counter()
     try:
         data = await _get(
             f"{FUTURES_BASE}/klines",
             params={"symbol": symbol, "interval": interval, "limit": limit},
             service="binance",
         )
+        latency_ms = (time.perf_counter() - t0) * 1000
+        asyncio.ensure_future(_record_binance_kline_metric(latency_ms, success=True))
         return _drop_open_candle(_parse_klines(data)) if data else []
     except Exception as exc:
+        asyncio.ensure_future(_record_binance_kline_metric(0, success=False))
         log.warning("futures_klines_failed", symbol=symbol, error=str(exc))
         return []
 
