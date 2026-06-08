@@ -18,6 +18,14 @@ GATE_REJECTION_KEYS: tuple[str, ...] = (
     "CONFIDENCE_REJECTION",
     "CMC_REJECTION",
     "REGIME_REJECTION",
+    # MARKET_STRUCTURE.FIX.1 — sub-condition telemetry (7 market structure filters)
+    "ms_sideways",
+    "ms_overextension",
+    "ms_candle_rejection",
+    "ms_trend_exhaustion",
+    "ms_fake_volume",
+    "ms_sr_rejection",
+    "ms_weak_breakout",
 )
 
 _GATE_ALIASES = {

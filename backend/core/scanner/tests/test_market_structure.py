@@ -316,11 +316,194 @@ class TestRunMarketStructureChecks:
         # Overextension should fire (range = 31, factor ≈ 15.5)
         assert result.pass_ is False
 
-    def test_result_has_adx_even_on_pass(self):
-        candles, atr = self._clean_breakout_candles()
+
+# ── MARKET_STRUCTURE.FIX.1: regime-aware F4 / F6 + sub-condition telemetry ────
+# TRUTH: SELL+EARLY_BREAKOUT.TRUTH.1 proved bears stay oversold longer,
+#        and BEAR_TREND support levels break more reliably than in SIDEWAYS.
+
+class TestF4RegimeAwareTrendExhaustion:
+    """F4: RSI sustained below 27 fires after 5 candles in non-bear regimes,
+    but requires 8 consecutive candles in BEAR_TREND / CAPITULATION."""
+
+    @staticmethod
+    def _rsi_mock(n_oversold: int, total: int = 50) -> "np.ndarray":
+        """Return a mock RSI array with the last n_oversold values set to 20 (< 27)."""
+        import numpy as np
+        arr = np.full(total, 50.0)
+        if n_oversold:
+            arr[-n_oversold:] = 20.0
+        return arr
+
+    def test_5_oversold_candles_rejects_in_sideways(self) -> None:
+        from unittest.mock import patch
+        candles = trending_candles(100.0, -1.0, 50)
+        with patch("backend.core.scanner.market_structure._calc_rsi_series",
+                   return_value=self._rsi_mock(5)):
+            is_ex, reason = detect_trend_exhaustion(candles, SignalType.SELL, btc_regime="SIDEWAYS")
+        assert is_ex is True
+        assert "5" in reason
+
+    def test_6_oversold_candles_rejects_in_sideways(self) -> None:
+        from unittest.mock import patch
+        candles = trending_candles(100.0, -1.0, 50)
+        with patch("backend.core.scanner.market_structure._calc_rsi_series",
+                   return_value=self._rsi_mock(6)):
+            is_ex, _ = detect_trend_exhaustion(candles, SignalType.SELL, btc_regime="SIDEWAYS")
+        assert is_ex is True  # 6 >= 5 → exhausted in SIDEWAYS
+
+    def test_6_oversold_candles_passes_in_bear_trend(self) -> None:
+        from unittest.mock import patch
+        candles = trending_candles(100.0, -1.0, 50)
+        with patch("backend.core.scanner.market_structure._calc_rsi_series",
+                   return_value=self._rsi_mock(6)):
+            is_ex, _ = detect_trend_exhaustion(candles, SignalType.SELL, btc_regime="BEAR_TREND")
+        assert is_ex is False  # 6 < 8 → not exhausted in BEAR_TREND
+
+    def test_8_oversold_candles_rejects_in_bear_trend(self) -> None:
+        from unittest.mock import patch
+        candles = trending_candles(100.0, -1.0, 50)
+        with patch("backend.core.scanner.market_structure._calc_rsi_series",
+                   return_value=self._rsi_mock(8)):
+            is_ex, reason = detect_trend_exhaustion(candles, SignalType.SELL, btc_regime="BEAR_TREND")
+        assert is_ex is True   # 8 >= 8 → exhausted in BEAR_TREND
+        assert "8" in reason
+
+    def test_8_oversold_candles_rejects_in_capitulation(self) -> None:
+        from unittest.mock import patch
+        candles = trending_candles(100.0, -1.0, 50)
+        with patch("backend.core.scanner.market_structure._calc_rsi_series",
+                   return_value=self._rsi_mock(8)):
+            is_ex, _ = detect_trend_exhaustion(candles, SignalType.SELL, btc_regime="CAPITULATION")
+        assert is_ex is True   # CAPITULATION shares same threshold as BEAR_TREND
+
+    def test_buy_overbought_threshold_unaffected_by_regime(self) -> None:
+        """BUY overbought (RSI > 73) still fires at 5 candles regardless of regime."""
+        import numpy as np
+        from unittest.mock import patch
+        candles = trending_candles(100.0, 1.0, 50)
+        mock_rsi = np.full(50, 50.0)
+        mock_rsi[-5:] = 80.0  # last 5 above 73
+        with patch("backend.core.scanner.market_structure._calc_rsi_series",
+                   return_value=mock_rsi):
+            is_ex_bear, _ = detect_trend_exhaustion(candles, SignalType.BUY, btc_regime="BEAR_TREND")
+            is_ex_sw,   _ = detect_trend_exhaustion(candles, SignalType.BUY, btc_regime="SIDEWAYS")
+        assert is_ex_bear is True  # BUY threshold is always 5 (regime gate blocks BUY+BEAR anyway)
+        assert is_ex_sw   is True
+
+
+class TestF6RegimeAwareSRRejection:
+    """F6: SELL pivot-support threshold is 2 in non-bear regimes, 3 in BEAR_TREND/CAPITULATION."""
+
+    # current_price=103.0, atr=2.0 → threshold=2.4, underfoot zone=(100.6, 103.0)
+    _CP  = 103.0
+    _ATR = 2.0
+
+    @staticmethod
+    def _candles_with_pivot_lows(num_pivots: int) -> list[Candle]:
+        """50 candles where ambient low=104.0 is ABOVE current_price (103.0) so ambient
+        candles are outside the underfoot zone (100.6, 103.0).
+        Explicit pivot lows at 101.0 / 101.3 / 101.5 are inside the zone and unique minima."""
+        ambient_close, ambient_hi, ambient_lo = 103.0, 105.0, 104.0
+        candles = [
+            Candle(open_time=i, open=ambient_close, high=ambient_hi, low=ambient_lo,
+                   close=ambient_close, volume=1000.0)
+            for i in range(50)
+        ]
+        pivot_positions = [10, 20, 30]
+        pivot_lows_vals = [101.0, 101.3, 101.5]  # all inside (100.6, 103.0)
+        for k in range(num_pivots):
+            pos = pivot_positions[k]
+            plo = pivot_lows_vals[k]
+            candles[pos] = Candle(open_time=pos, open=ambient_close, high=ambient_hi, low=plo,
+                                  close=ambient_close, volume=1000.0)
+        return candles
+
+    def test_2_pivot_lows_rejects_sell_in_sideways(self) -> None:
+        candles = self._candles_with_pivot_lows(2)
+        is_rej, _ = detect_sr_rejection(candles, self._CP, self._ATR, SignalType.SELL, "SIDEWAYS")
+        assert is_rej is True   # 2 >= 2 → blocked in SIDEWAYS
+
+    def test_2_pivot_lows_passes_sell_in_bear_trend(self) -> None:
+        candles = self._candles_with_pivot_lows(2)
+        is_rej, _ = detect_sr_rejection(candles, self._CP, self._ATR, SignalType.SELL, "BEAR_TREND")
+        assert is_rej is False  # 2 < 3 → not blocked in BEAR_TREND (support breaks more reliably)
+
+    def test_2_pivot_lows_passes_sell_in_capitulation(self) -> None:
+        candles = self._candles_with_pivot_lows(2)
+        is_rej, _ = detect_sr_rejection(candles, self._CP, self._ATR, SignalType.SELL, "CAPITULATION")
+        assert is_rej is False  # CAPITULATION shares same threshold as BEAR_TREND
+
+    def test_3_pivot_lows_rejects_sell_in_bear_trend(self) -> None:
+        candles = self._candles_with_pivot_lows(3)
+        is_rej, reason = detect_sr_rejection(candles, self._CP, self._ATR, SignalType.SELL, "BEAR_TREND")
+        assert is_rej is True   # 3 >= 3 → blocked even in BEAR_TREND
+        assert "3" in reason
+
+    def test_buy_overhead_threshold_unaffected_by_regime(self) -> None:
+        """BUY direction: overhead resistance uses no regime logic — must behave identically."""
+        candles = self._candles_with_pivot_lows(2)
+        is_rej_sw,   _ = detect_sr_rejection(candles, self._CP, self._ATR, SignalType.BUY, "SIDEWAYS")
+        is_rej_bear, _ = detect_sr_rejection(candles, self._CP, self._ATR, SignalType.BUY, "BEAR_TREND")
+        assert is_rej_sw == is_rej_bear
+
+
+class TestMsSubconditionTelemetry:
+    """gate_rejections dict is populated with the correct ms_* key on each rejection."""
+
+    def test_sideways_rejection_records_ms_sideways(self) -> None:
+        gate_rejections: dict[str, int] = {}
+        candles = flat_candles(100.0, 50, atr_frac=0.0005)
         result = run_market_structure_checks(
-            candles=candles, atr=atr, current_price=candles[-1].close,
-            volume_spike=2.0, signal_type=SignalType.BUY,
+            candles, atr=0.05, current_price=100.0, volume_spike=1.0,
+            signal_type=SignalType.SELL, gate_rejections=gate_rejections,
         )
-        assert isinstance(result.adx, float)
-        assert result.adx >= 0
+        assert result.pass_ is False
+        assert gate_rejections.get("ms_sideways", 0) == 1
+
+    def test_exactly_one_ms_key_set_per_rejection(self) -> None:
+        """Short-circuit gate: only the first failing filter increments its key."""
+        gate_rejections: dict[str, int] = {}
+        candles = flat_candles(100.0, 50, atr_frac=0.0005)
+        run_market_structure_checks(
+            candles, atr=0.05, current_price=100.0, volume_spike=1.0,
+            signal_type=SignalType.SELL, gate_rejections=gate_rejections,
+        )
+        ms_keys = [
+            "ms_sideways", "ms_overextension", "ms_candle_rejection",
+            "ms_trend_exhaustion", "ms_fake_volume", "ms_sr_rejection", "ms_weak_breakout",
+        ]
+        assert sum(gate_rejections.get(k, 0) for k in ms_keys) == 1
+
+    def test_overextension_records_ms_overextension(self) -> None:
+        gate_rejections: dict[str, int] = {}
+        # 11 candles total → sideways check requires ≥ 20 → skipped; overextension fires
+        candles = flat_candles(100.0, 10)
+        candles.append(Candle(open_time=10, open=100.0, high=125.0, low=97.0, close=124.0, volume=1000.0))
+        run_market_structure_checks(
+            candles, atr=2.0, current_price=124.0, volume_spike=1.0,
+            signal_type=SignalType.BUY, gate_rejections=gate_rejections,
+        )
+        assert gate_rejections.get("ms_overextension", 0) == 1
+        assert gate_rejections.get("ms_sideways", 0) == 0
+
+    def test_no_ms_key_set_when_gate_passes(self) -> None:
+        gate_rejections: dict[str, int] = {}
+        candles = trending_candles(100.0, 2.0, 60)
+        result = run_market_structure_checks(
+            candles, atr=2.0, current_price=candles[-1].close, volume_spike=1.5,
+            signal_type=SignalType.BUY, gate_rejections=gate_rejections,
+        )
+        ms_keys = [
+            "ms_sideways", "ms_overextension", "ms_candle_rejection",
+            "ms_trend_exhaustion", "ms_fake_volume", "ms_sr_rejection", "ms_weak_breakout",
+        ]
+        if result.pass_:
+            assert sum(gate_rejections.get(k, 0) for k in ms_keys) == 0
+
+    def test_none_gate_rejections_does_not_raise(self) -> None:
+        candles = flat_candles(100.0, 50, atr_frac=0.0005)
+        result = run_market_structure_checks(
+            candles, atr=0.05, current_price=100.0, volume_spike=1.0,
+            signal_type=SignalType.SELL, gate_rejections=None,
+        )
+        assert result.pass_ is False

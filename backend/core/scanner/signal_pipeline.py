@@ -628,6 +628,8 @@ async def scan_coin(
             current_price=ind1h.current_price,
             volume_spike=ind1h.volume_spike,
             signal_type=signal_type,
+            btc_regime=btc_regime,           # MARKET_STRUCTURE.FIX.1 — regime-aware F4/F6
+            gate_rejections=gate_rejections,  # MARKET_STRUCTURE.FIX.1 — sub-condition telemetry
         )
         if not structure.pass_:
             _record_gate_rejection("market_structure", gate_rejections)

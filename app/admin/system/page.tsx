@@ -83,14 +83,87 @@ function GateRejectionGrid({ counts }: { counts?: Record<string, number> }) {
   )
 }
 
+const MS_GATE_LABELS: { key: string; label: string }[] = [
+  { key: 'ms_sideways',         label: 'Sideways / Low ADX' },
+  { key: 'ms_overextension',    label: 'Overextension' },
+  { key: 'ms_candle_rejection', label: 'Candle Structure' },
+  { key: 'ms_trend_exhaustion', label: 'Trend Exhaustion' },
+  { key: 'ms_fake_volume',      label: 'Fake Volume' },
+  { key: 'ms_sr_rejection',     label: 'S/R Rejection' },
+  { key: 'ms_weak_breakout',    label: 'Weak Breakout' },
+]
+
+function MarketStructureBreakdown({
+  counts24h,
+  counts7d,
+}: {
+  counts24h?: Record<string, number>
+  counts7d?: Record<string, number>
+}) {
+  const total24h = MS_GATE_LABELS.reduce((s, { key }) => s + (counts24h?.[key] ?? 0), 0)
+  const total7d  = MS_GATE_LABELS.reduce((s, { key }) => s + (counts7d?.[key]  ?? 0), 0)
+
+  return (
+    <div className="glass-card rounded-xl p-4">
+      <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">
+        Market Structure Breakdown
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-terminal-muted/60 text-[10px] uppercase">
+              <th className="text-left pb-2 font-medium">Filter</th>
+              <th className="text-right pb-2 font-medium w-16">24h</th>
+              <th className="text-right pb-2 font-medium w-14">24h %</th>
+              <th className="text-right pb-2 font-medium w-16">7d</th>
+              <th className="text-right pb-2 font-medium w-14">7d %</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-terminal-border/10">
+            {MS_GATE_LABELS.map(({ key, label }) => {
+              const n24 = counts24h?.[key] ?? 0
+              const n7  = counts7d?.[key]  ?? 0
+              const p24 = total24h > 0 ? Math.round(n24 / total24h * 100) : 0
+              const p7  = total7d  > 0 ? Math.round(n7  / total7d  * 100) : 0
+              return (
+                <tr key={key}>
+                  <td className="py-1.5 text-terminal-muted">{label}</td>
+                  <td className="py-1.5 text-right font-mono text-terminal-text">{n24}</td>
+                  <td className="py-1.5 text-right font-mono text-terminal-muted/60">{p24}%</td>
+                  <td className="py-1.5 text-right font-mono text-terminal-text">{n7}</td>
+                  <td className="py-1.5 text-right font-mono text-terminal-muted/60">{p7}%</td>
+                </tr>
+              )
+            })}
+            <tr className="font-semibold">
+              <td className="py-1.5 text-terminal-text text-[10px] uppercase tracking-wide">Total</td>
+              <td className="py-1.5 text-right font-mono text-terminal-text">{total24h}</td>
+              <td className="py-1.5 text-right font-mono text-terminal-muted/60">100%</td>
+              <td className="py-1.5 text-right font-mono text-terminal-text">{total7d}</td>
+              <td className="py-1.5 text-right font-mono text-terminal-muted/60">100%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      {total24h === 0 && total7d === 0 && (
+        <p className="text-terminal-muted/40 text-[10px] font-mono mt-2">
+          Sub-condition data available after first scan with MARKET_STRUCTURE.FIX.1 deployed
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function SystemPage() {
-  const healthFetcher  = useCallback(() => adminApi.health.ready(), [])
-  const scanFetcher    = useCallback(() => adminApi.analytics.scans(24), [])
-  const aiFetcher      = useCallback(() => adminApi.analytics.ai(24), [])
-  const monitorFetcher = useCallback(() => adminApi.analytics.monitor(), [])
+  const healthFetcher   = useCallback(() => adminApi.health.ready(), [])
+  const scanFetcher     = useCallback(() => adminApi.analytics.scans(24), [])
+  const scan7dFetcher   = useCallback(() => adminApi.analytics.scans(168), [])
+  const aiFetcher       = useCallback(() => adminApi.analytics.ai(24), [])
+  const monitorFetcher  = useCallback(() => adminApi.analytics.monitor(), [])
 
   const { data: health,  loading: hl } = useAutoRefresh<HealthReady>(healthFetcher, 120_000)
   const { data: scans }                = useAutoRefresh<ScanSummaryResponse>(scanFetcher, 120_000)
+  const { data: scans7d }              = useAutoRefresh<ScanSummaryResponse>(scan7dFetcher, 120_000)
   const { data: ai }                   = useAutoRefresh<AiSummaryResponse>(aiFetcher, 120_000)
   const { data: monitor }              = useAutoRefresh<MonitorSnapshot>(monitorFetcher, 60_000)
 
@@ -242,6 +315,11 @@ export default function SystemPage() {
       )}
 
       <GateRejectionGrid counts={scans?.gate_rejections} />
+
+      <MarketStructureBreakdown
+        counts24h={scans?.gate_rejections}
+        counts7d={scans7d?.gate_rejections}
+      />
 
       {/* Diagnostics section label */}
       <p className="text-[9px] text-terminal-muted/40 uppercase tracking-widest flex items-center gap-2">

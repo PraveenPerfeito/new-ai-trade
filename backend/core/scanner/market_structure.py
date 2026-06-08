@@ -205,6 +205,7 @@ def analyze_candle_structure(
 def detect_trend_exhaustion(
     candles: list[Candle],
     signal_type: SignalType,
+    btc_regime: str = "SIDEWAYS",  # MARKET_STRUCTURE.FIX.1 — F4 bear-aware RSI threshold
 ) -> tuple[bool, str]:
     """
     Returns (is_exhausted, reason).
@@ -247,8 +248,10 @@ def detect_trend_exhaustion(
             pct = (1 - pl_new / pl_old) * 100
             return True, f"Bullish RSI divergence: price low -{pct:.1f}% but RSI low rose {rl_new - rl_old:.1f}pts — downtrend losing steam"
 
-        if all(r < 27 for r in rsi_win[-5:]):
-            return True, "RSI sustained below 27 for 5 consecutive candles — oversold extension, bounce risk high"
+        # F4.FIX: in BEAR_TREND/CAPITULATION coins stay oversold longer — require 8 candles
+        _rsi_sustained_n = 8 if btc_regime in {"BEAR_TREND", "CAPITULATION"} else 5
+        if len(rsi_win) >= _rsi_sustained_n and all(r < 27 for r in rsi_win[-_rsi_sustained_n:]):
+            return True, f"RSI sustained below 27 for {_rsi_sustained_n} consecutive candles — oversold extension, bounce risk high"
 
     return False, ""
 
@@ -260,6 +263,7 @@ def detect_sr_rejection(
     current_price: float,
     atr: float,
     signal_type: SignalType,
+    btc_regime: str = "SIDEWAYS",  # MARKET_STRUCTURE.FIX.1 — F6 bear-aware pivot threshold
 ) -> tuple[bool, str]:
     """
     Returns (is_near_rejection, reason).
@@ -291,7 +295,9 @@ def detect_sr_rejection(
             return True, f"{len(overhead)} resistance pivots within 1.2× ATR overhead — price entering a tested rejection zone"
     else:
         underfoot = [l for l in pivot_lows if current_price - threshold < l < current_price]
-        if len(underfoot) >= 2:
+        # F6.FIX: in BEAR_TREND/CAPITULATION support breaks more reliably — require 3 pivots
+        _pivot_threshold = 3 if btc_regime in {"BEAR_TREND", "CAPITULATION"} else 2
+        if len(underfoot) >= _pivot_threshold:
             return True, f"{len(underfoot)} support pivots within 1.2× ATR below — price entering a tested bounce zone"
 
     return False, ""
@@ -369,12 +375,20 @@ def analyze_breakout_strength(
 
 # ── Aggregate gate ─────────────────────────────────────────────────────────────
 
+def _ms_record(key: str, gate_rejections: dict[str, int] | None) -> None:
+    """Increment a market-structure sub-condition counter in gate_rejections."""
+    if gate_rejections is not None:
+        gate_rejections[key] = gate_rejections.get(key, 0) + 1
+
+
 def run_market_structure_checks(
-    candles:       list[Candle],
-    atr:           float,
-    current_price: float,
-    volume_spike:  float,
-    signal_type:   SignalType,
+    candles:         list[Candle],
+    atr:             float,
+    current_price:   float,
+    volume_spike:    float,
+    signal_type:     SignalType,
+    btc_regime:      str = "SIDEWAYS",              # MARKET_STRUCTURE.FIX.1 — regime-aware F4/F6
+    gate_rejections: dict[str, int] | None = None,  # MARKET_STRUCTURE.FIX.1 — sub-condition telemetry
 ) -> MarketStructureResult:
     """
     Runs all 7 filters cheapest-to-most-expensive and short-circuits on
@@ -383,30 +397,37 @@ def run_market_structure_checks(
     """
     is_sideways, sideways_reason, adx = detect_sideways_market(candles, atr)
     if is_sideways:
+        _ms_record("ms_sideways", gate_rejections)
         return MarketStructureResult(**{"pass": False, "rejection_reason": sideways_reason, "adx": adx})
 
     is_overext, overext_reason, _ = detect_overextension(candles, atr, signal_type)
     if is_overext:
+        _ms_record("ms_overextension", gate_rejections)
         return MarketStructureResult(**{"pass": False, "rejection_reason": overext_reason, "adx": adx})
 
     candle_ok, candle_reason = analyze_candle_structure(candles, signal_type, atr)
     if not candle_ok:
+        _ms_record("ms_candle_rejection", gate_rejections)
         return MarketStructureResult(**{"pass": False, "rejection_reason": candle_reason, "adx": adx})
 
-    is_exhausted, exhaustion_reason = detect_trend_exhaustion(candles, signal_type)
+    is_exhausted, exhaustion_reason = detect_trend_exhaustion(candles, signal_type, btc_regime)
     if is_exhausted:
+        _ms_record("ms_trend_exhaustion", gate_rejections)
         return MarketStructureResult(**{"pass": False, "rejection_reason": exhaustion_reason, "adx": adx})
 
     is_fake, fake_reason = is_fake_volume_spike(candles, volume_spike, atr)
     if is_fake:
+        _ms_record("ms_fake_volume", gate_rejections)
         return MarketStructureResult(**{"pass": False, "rejection_reason": fake_reason, "adx": adx})
 
-    is_sr, sr_reason = detect_sr_rejection(candles, current_price, atr, signal_type)
+    is_sr, sr_reason = detect_sr_rejection(candles, current_price, atr, signal_type, btc_regime)
     if is_sr:
+        _ms_record("ms_sr_rejection", gate_rejections)
         return MarketStructureResult(**{"pass": False, "rejection_reason": sr_reason, "adx": adx})
 
     is_weak, weak_reason = analyze_breakout_strength(candles, atr, volume_spike, signal_type)
     if is_weak:
+        _ms_record("ms_weak_breakout", gate_rejections)
         return MarketStructureResult(**{"pass": False, "rejection_reason": weak_reason, "adx": adx})
 
     return MarketStructureResult(**{"pass": True, "rejection_reason": None, "adx": adx})
