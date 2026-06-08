@@ -212,7 +212,8 @@ async def check_pending_outcomes() -> dict:
 
 
 async def _try_resolve(row: dict) -> dict | None:
-    symbol   = row["symbol"] + "USDT"
+    raw = row["symbol"]
+    symbol = raw if raw.endswith("USDT") else raw + "USDT"  # P2.7: guard against BTCUSDTUSDT
     entry    = float(row["entry_price"])
     tp       = float(row["target_price"])
     sl       = float(row["stop_loss"])

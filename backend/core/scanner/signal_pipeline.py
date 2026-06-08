@@ -811,6 +811,7 @@ async def scan_coin(
             _boost -= 4
             _boost_reasons.append("EARLY_BREAKOUT_penalty")
 
+        # P2.6: futures_data is None for SPOT mode — OI_NEUTRAL boost is safe from firing on spot coins
         if futures_data:
             if futures_data.oi_interpretation == "NEUTRAL":
                 _boost += 6

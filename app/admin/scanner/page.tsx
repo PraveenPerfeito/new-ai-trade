@@ -133,8 +133,12 @@ export default function AdminScannerPage() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await adminApi.scheduler.status()
+      const [res, ctrl] = await Promise.all([
+        adminApi.scheduler.status(),
+        fetch('/api/scanner/control').then(r => r.json()).catch(() => ({})),
+      ])
       if (res.success && res.data) setStatus(res.data)
+      if (ctrl?.rejectionStats) setRejStats(ctrl.rejectionStats)
     } catch { /* silent */ }
   }, [])
 
@@ -164,12 +168,6 @@ export default function AdminScannerPage() {
     const t2 = setInterval(fetchFlags,  60_000)  // OPT-11: was 15_000 — flags rarely change; pub/sub handles urgency
     return () => { clearInterval(t1); clearInterval(t2) }
   }, [fetchStatus, fetchFlags])
-
-  useEffect(() => {
-    fetch('/api/scanner/control').then(r => r.json()).then(j => {
-      if (j.rejectionStats) setRejStats(j.rejectionStats)
-    }).catch(() => {})
-  }, [])
 
   useEffect(() => {
     const tick = () => {

@@ -15,6 +15,7 @@ import type { TacticalSignalRow, MarketRegime } from '@/types'
 
 interface CeleryStatus {
   enabled: boolean; scanning: boolean; running_modes: string[]; last_scan_at: number | null
+  next_scan_at?: Record<string, number | null>
 }
 interface RegimeData {
   regime: MarketRegime; btcRsi4h: number; btcTrend4h: string
@@ -103,15 +104,19 @@ export default function CommandOverviewPage() {
 
   useEffect(() => {
     const tick = () => {
-      if (!celery?.last_scan_at) { setCountdown(null); return }
-      const nextAt = celery.last_scan_at + 15 * 60
-      const diff   = Math.max(0, Math.floor(nextAt - Date.now() / 1000))
+      if (!celery) { setCountdown(null); return }
+      // Prefer server-computed next_scan_at for standard mode; fall back to
+      // last_scan_at + 15 min only if the server didn't return the field.
+      const serverNext = celery.next_scan_at?.['standard'] ?? null
+      const nextAt = serverNext ?? (celery.last_scan_at ? celery.last_scan_at + 15 * 60 : null)
+      if (!nextAt) { setCountdown(null); return }
+      const diff = Math.max(0, Math.floor(nextAt - Date.now() / 1000))
       setCountdown(diff)
     }
     tick()
     const t = setInterval(tick, 1000)
     return () => clearInterval(t)
-  }, [celery?.last_scan_at])
+  }, [celery])
 
   const handlePause = async () => {
     if (!celery || pausing) return

@@ -198,6 +198,12 @@ export interface IntelligencePerfRow {
   insufficient_data:  boolean
 }
 
+export interface IntelligenceNullStat {
+  null_count: number
+  null_pct:   number
+  note:       string | null
+}
+
 export interface IntelligenceSummary {
   total:                    number
   window_hours:             number
@@ -209,6 +215,7 @@ export interface IntelligenceSummary {
   best_oi_interpretation:   IntelligencePerfRow | null
   best_funding_trend:       IntelligencePerfRow | null
   best_positioning_context: IntelligencePerfRow | null
+  null_stats?:              Record<string, IntelligenceNullStat>
 }
 
 export interface EdgeReport {

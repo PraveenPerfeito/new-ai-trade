@@ -4,7 +4,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { adminApi, AiSummaryResponse, EdgeReport } from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
 import { analyticsWindowLabel } from '@/lib/window-label'
-import { Brain, Zap, AlertTriangle, CheckCircle, Power } from 'lucide-react'
+import { Brain, Zap, AlertTriangle, CheckCircle, Power, Clock } from 'lucide-react'
+
+// P3.2: Haiku pricing — update here when Anthropic changes rates
+const HAIKU_PRICE_IN_PER_M  = 0.80   // USD per 1M input tokens (Haiku 4.5)
+const HAIKU_PRICE_OUT_PER_M = 4.00   // USD per 1M output tokens (Haiku 4.5)
+const HAIKU_PRICING_LABEL = `Haiku: $${HAIKU_PRICE_IN_PER_M}/M in + $${HAIKU_PRICE_OUT_PER_M}/M out`
 
 function pct(v: number | null | undefined, d = 1) {
   return v != null ? `${(v * 100).toFixed(d)}%` : '—'
@@ -198,7 +203,7 @@ export default function CalibrationPage() {
           <StatCard
             label="💰 Est. Cost Today"
             value={ai?.estimated_cost_usd != null ? `$${ai.estimated_cost_usd.toFixed(4)}` : '—'}
-            sub="Haiku: $0.25/M in + $1.25/M out"
+            sub={HAIKU_PRICING_LABEL}
             accent="default"
           />
           <StatCard
@@ -253,6 +258,19 @@ export default function CalibrationPage() {
         <p className="text-[9px] text-zinc-600 uppercase tracking-widest mb-3 flex items-center gap-2">
           <span className="h-px flex-1 bg-zinc-800" />Historical Performance - {analyticsWindowLabel(edge?.window_hours ?? 720)}<span className="h-px flex-1 bg-zinc-800" />
         </p>
+
+        {/* P2.2: Building-data banner when statistical significance not yet reached */}
+        {!el && edge?.edge_verdict?.confidence_level === 'insufficient_data' && (
+          <div className="rounded-xl px-5 py-4 bg-blue-500/5 border border-blue-500/20 flex items-start gap-3 mb-3">
+            <Clock className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-blue-300 text-sm font-semibold">Building performance data</p>
+              <p className="text-zinc-500 text-xs mt-1 leading-relaxed">
+                Not enough resolved signals yet for statistical significance. Check back in 3–5 days as more signals resolve.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Live confidence bands */}
         {edge?.confidence_calibration?.bands && edge.confidence_calibration.bands.length > 0 ? (
