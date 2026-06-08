@@ -802,10 +802,10 @@ async def scan_coin(
         elif setup.breakout_type == "20d_low":
             _boost += 5
             _boost_reasons.append("20d_low_breakout")
-        elif setup.breakout_strength == "EARLY_BREAKOUT":
-            # CONFIDENCE.TRUTH.1: EARLY_BREAKOUT WR=24.1%, Exp=-0.821 — same as no
-            # breakout. An unconfirmed attempt that hasn't broken structure is penalized
-            # unless it's a specific 20d_low pattern (caught by the elif above).
+        elif setup.breakout_strength == "EARLY_BREAKOUT" and signal_type == SignalType.BUY:
+            # EARLY_BREAKOUT.TRUTH.1: penalty is direction-aware.
+            # BUY+EARLY WR=13%, Exp=-0.598 — premature long entry, penalise.
+            # SELL+EARLY WR=68%, Exp=+1.074 — breakdown confirmation, neutral (no penalty).
             _boost -= 4
             _boost_reasons.append("EARLY_BREAKOUT_penalty")
 
