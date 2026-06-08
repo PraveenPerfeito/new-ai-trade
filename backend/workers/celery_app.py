@@ -85,3 +85,6 @@ def start_health_check_server(sender, **kwargs):
     """Start HTTP health server so Railway web-service health checks pass."""
     from backend.workers.health_server import start_health_server
     start_health_server()
+    # P3.1: Write initial heartbeat so /health/ready reports worker as alive immediately
+    from backend.workers.scan_task import write_worker_heartbeat
+    write_worker_heartbeat()

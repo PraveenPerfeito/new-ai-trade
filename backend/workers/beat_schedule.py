@@ -76,6 +76,15 @@ BEAT_SCHEDULE = {
             "queue": "celery",
         },
     },
+    # Worker liveness heartbeat: every 60 seconds — /health/ready checks this key
+    "worker-heartbeat": {
+        "task": "backend.workers.scan_task.worker_heartbeat",
+        "schedule": 60.0,   # seconds
+        "options": {
+            "expires": 55,
+            "queue": "celery",
+        },
+    },
     # Refresh mv_daily_outcome_summary after midnight data lands: 00:05 UTC
     "refresh-daily-view": {
         "task": "backend.workers.analytics_tasks.refresh_daily_view",

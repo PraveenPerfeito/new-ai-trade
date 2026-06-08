@@ -236,6 +236,33 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
             logger.warning(f"release_scan_lock_failed mode={mode} error={lock_exc} — lock will expire via Redis TTL")
 
 
+_HEARTBEAT_KEY = "celery:worker:last_heartbeat"
+_HEARTBEAT_TTL = 300  # 5 minutes — health check threshold
+
+
+def write_worker_heartbeat() -> None:
+    """Write the worker heartbeat key synchronously. Safe to call from signals."""
+    try:
+        from backend.scheduler.coordinator import SchedulerCoordinator
+        coord = SchedulerCoordinator()
+        coord._redis.setex(_HEARTBEAT_KEY, _HEARTBEAT_TTL, str(time.time()))
+    except Exception as exc:
+        logger.warning(f"worker_heartbeat_write_failed error={exc}")
+
+
+@shared_task(
+    name="backend.workers.scan_task.worker_heartbeat",
+    max_retries=0,
+    queue="celery",
+    soft_time_limit=10,
+    time_limit=15,
+    ignore_result=True,
+)
+def worker_heartbeat() -> None:
+    """Periodic heartbeat — refreshes celery:worker:last_heartbeat every 60s."""
+    write_worker_heartbeat()
+
+
 @shared_task(
     bind=True,
     name="backend.workers.scan_task.check_signal_outcomes",
