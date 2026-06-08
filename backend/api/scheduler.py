@@ -23,7 +23,8 @@ def _coordinator() -> SchedulerCoordinator:
 @router.get("/status")
 @limiter.limit(SCHEDULER_LIMIT)
 async def get_status(request: Request):
-    status = _coordinator().status()
+    # P0.1: use status_async() — avoids asyncio.run() inside an already-running event loop
+    status = await _coordinator().status_async()
     return {"success": True, "data": status}
 
 

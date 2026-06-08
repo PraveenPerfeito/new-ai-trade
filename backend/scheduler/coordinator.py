@@ -5,6 +5,7 @@ a scan at a time — replaces the globalThis singleton in lib/scheduler.ts.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from datetime import datetime, timezone
@@ -125,9 +126,8 @@ class SchedulerCoordinator:
     # ── Status snapshot ───────────────────────────────────────────────────────
 
     def _last_scan_from_db(self) -> float | None:
-        """Fall back to scan_metrics_log for last scan timestamp when Redis key is absent."""
+        """Sync fallback for Celery worker context (no running event loop)."""
         try:
-            import asyncio as _asyncio
             from backend.database.session import get_pool
 
             async def _query() -> float | None:
@@ -139,11 +139,26 @@ class SchedulerCoordinator:
                     return row["created_at"].timestamp()
                 return None
 
-            return _asyncio.run(_query())
+            return asyncio.run(_query())
+        except Exception:
+            return None
+
+    async def _last_scan_from_db_async(self) -> float | None:
+        """Async fallback — safe to call from FastAPI (no asyncio.run nesting)."""
+        try:
+            from backend.database.session import get_pool
+            pool = await get_pool()
+            row = await pool.fetchrow(
+                "SELECT created_at FROM scan_metrics_log ORDER BY created_at DESC LIMIT 1"
+            )
+            if row:
+                return row["created_at"].timestamp()
+            return None
         except Exception:
             return None
 
     def status(self) -> dict:
+        """Sync status for Celery workers. Calls _last_scan_from_db (asyncio.run safe there)."""
         # OPT-7: serve from 5s cache — reduces 5 Redis ops to 1 GET on dashboard polls
         try:
             cached = self._redis.get(_STATUS_CACHE_KEY)
@@ -177,6 +192,53 @@ class SchedulerCoordinator:
         }
         try:
             self._redis.setex(_STATUS_CACHE_KEY, _STATUS_CACHE_TTL, json.dumps(result))
+        except Exception:
+            pass
+        return result
+
+    async def status_async(self) -> dict:
+        """
+        Async version of status() for FastAPI endpoints.
+        Avoids asyncio.run() nesting by using _last_scan_from_db_async().
+        Sync Redis reads run in a thread pool so they don't block the event loop.
+        """
+        loop = asyncio.get_event_loop()
+
+        # Cache check — sync Redis read in executor
+        try:
+            cached = await loop.run_in_executor(None, self._redis.get, _STATUS_CACHE_KEY)
+            if cached:
+                return json.loads(cached)
+        except Exception:
+            pass
+
+        enabled      = await loop.run_in_executor(None, self.is_enabled)
+        running_modes = [
+            m for m in ("standard", "high_confidence", "futures")
+            if await loop.run_in_executor(None, self.is_scan_running, m)  # type: ignore[arg-type]
+        ]
+        last_ts_raw  = await loop.run_in_executor(None, self._redis.get, "scheduler:last_scan_ts")
+        last_scan_at = float(last_ts_raw) if last_ts_raw else await self._last_scan_from_db_async()
+
+        next_scan_at = {
+            "standard":        self._next_beat_fire([0, 15, 30, 45]),
+            "high_confidence": self._next_beat_fire([5, 35]),
+            "futures":         self._next_beat_fire([10, 40]),
+            "trending":        self._next_beat_fire([20, 50]),
+        }
+
+        result = {
+            "enabled":       enabled,
+            "scanning":      bool(running_modes),
+            "running_modes": running_modes,
+            "last_scan_at":  last_scan_at,
+            "next_scan_at":  next_scan_at,
+        }
+        try:
+            await loop.run_in_executor(
+                None,
+                lambda: self._redis.setex(_STATUS_CACHE_KEY, _STATUS_CACHE_TTL, json.dumps(result)),
+            )
         except Exception:
             pass
         return result
