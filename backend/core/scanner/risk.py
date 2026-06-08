@@ -208,7 +208,7 @@ def _validate_leverage(
 
 # ── Quality scoring ───────────────────────────────────────────────────────────
 
-def _calc_quality_score(inp: RiskInput, sl_pct: float) -> float:
+def _calc_quality_score(inp: RiskInput, sl_pct: float) -> tuple[float, dict[str, float]]:
     score = 35.0
 
     if inp.rr_ratio >= 3.0:   score += 15
@@ -249,7 +249,29 @@ def _calc_quality_score(inp: RiskInput, sl_pct: float) -> float:
     if inp.mode == ScannerMode.FUTURES and inp.rr_ratio >= 2.5:
         score += 5
 
-    return min(100.0, max(0.0, score))
+    base_score = score
+
+    # RISKGRADE.FIX.1 — breakout quality bonus
+    breakout_bonus = 0.0
+    bs = inp.breakout_strength
+    if bs == "HIGH_MOMENTUM_BREAKOUT":  breakout_bonus = 15.0
+    elif bs == "CONFIRMED_BREAKOUT":    breakout_bonus = 10.0
+    elif bs == "EARLY_BREAKOUT":        breakout_bonus = 4.0
+    score += breakout_bonus
+
+    # RISKGRADE.FIX.1 — regime quality adjustment
+    regime_bonus = 0.0
+    regime = (inp.btc_regime or "").upper()
+    if regime in {"BEAR_TREND", "CAPITULATION", "BULL_TREND", "EUPHORIA"}:
+        regime_bonus = 5.0
+    elif not regime or regime == "UNKNOWN":
+        regime_bonus = -10.0
+    score += regime_bonus
+
+    return (
+        min(100.0, max(0.0, score)),
+        {"base_score": base_score, "breakout_bonus": breakout_bonus, "regime_bonus": regime_bonus},
+    )
 
 
 # ── Grade assignment ──────────────────────────────────────────────────────────
@@ -292,12 +314,21 @@ def validate_risk(inp: RiskInput) -> RiskResult:
     risk_score += _validate_liquidity(inp.coin, inp.ind_1h.volume_spike, violations, warnings)
     risk_score += _validate_leverage(sl_pct, inp.mode, max_lev, violations, warnings)
 
-    if inp.mode == ScannerMode.FUTURES:
-        risk_score += 5.0
+    futures_penalty = 2.0 if inp.mode == ScannerMode.FUTURES else 0.0  # RISKGRADE.FIX.1: was 5.0
+    risk_score += futures_penalty
 
     risk_score = min(100.0, max(0.0, risk_score))
 
-    quality_score = _calc_quality_score(inp, sl_pct)
+    quality_score, _qf = _calc_quality_score(inp, sl_pct)
+    grade_factors = {
+        "base_quality":    _qf["base_score"],
+        "breakout_bonus":  _qf["breakout_bonus"],
+        "regime_bonus":    _qf["regime_bonus"],
+        "futures_penalty": futures_penalty,
+        "final_quality":   quality_score,
+        "final_risk":      risk_score,
+    }
+
     has_critical  = any(v.severity == ViolationSeverity.CRITICAL for v in violations)
     passed        = not has_critical and risk_score <= 60 and quality_score >= 35
     grade         = _assign_grade(risk_score, quality_score) if passed else RiskGrade.F
@@ -321,4 +352,5 @@ def validate_risk(inp: RiskInput) -> RiskResult:
         "max_safe_leverage":       max_lev,
         "position_size_multiplier": pos_multi,
         "summary":                 summary,
+        "grade_factors":           grade_factors,
     })

@@ -62,6 +62,8 @@ def _good_input(
     volatility: VolatilityRating = VolatilityRating.NORMAL,
     volume_24h: float = 100_000_000.0,
     combined_strength: float = 65.0,
+    btc_regime: str = "SIDEWAYS",
+    breakout_strength: str | None = None,
 ) -> RiskInput:
     ind_1h = _ind(rsi=rsi, hist=hist, volume_spike=volume_spike)
     ind_4h = _ind(rsi=58.0, hist=0.3)
@@ -76,6 +78,8 @@ def _good_input(
         mode=mode,
         volatility=volatility,
         combined_strength=combined_strength,
+        btc_regime=btc_regime,
+        breakout_strength=breakout_strength,
     )
 
 
@@ -274,3 +278,56 @@ class TestLeverageTier:
         tight  = validate_risk(_good_input(mode=ScannerMode.FUTURES, entry=100.0, sl=98.0))
         wide   = validate_risk(_good_input(mode=ScannerMode.FUTURES, entry=100.0, sl=93.0))
         assert tight.max_safe_leverage >= wide.max_safe_leverage
+
+
+# ── RISKGRADE.FIX.1 — breakout bonus, regime adjustment, futures penalty ──────
+
+class TestRiskgradeFix1:
+
+    def test_high_momentum_breakout_raises_quality(self):
+        base    = validate_risk(_good_input())
+        with_bo = validate_risk(_good_input(breakout_strength="HIGH_MOMENTUM_BREAKOUT"))
+        assert with_bo.quality_score == min(100.0, base.quality_score + 15.0)
+
+    def test_confirmed_breakout_raises_quality(self):
+        base    = validate_risk(_good_input())
+        with_bo = validate_risk(_good_input(breakout_strength="CONFIRMED_BREAKOUT"))
+        assert with_bo.quality_score == min(100.0, base.quality_score + 10.0)
+
+    def test_early_breakout_raises_quality(self):
+        base    = validate_risk(_good_input())
+        with_bo = validate_risk(_good_input(breakout_strength="EARLY_BREAKOUT"))
+        assert with_bo.quality_score == min(100.0, base.quality_score + 4.0)
+
+    def test_no_breakout_no_bonus(self):
+        base     = validate_risk(_good_input())
+        none_bo  = validate_risk(_good_input(breakout_strength=None))
+        assert base.quality_score == none_bo.quality_score
+
+    def test_bear_trend_regime_adds_quality(self):
+        base = validate_risk(_good_input(btc_regime="SIDEWAYS"))
+        bear = validate_risk(_good_input(btc_regime="BEAR_TREND"))
+        assert bear.quality_score == min(100.0, base.quality_score + 5.0)
+
+    def test_unknown_regime_penalizes_quality(self):
+        base    = validate_risk(_good_input(btc_regime="SIDEWAYS"))
+        unknown = validate_risk(_good_input(btc_regime="UNKNOWN"))
+        assert unknown.quality_score == max(0.0, base.quality_score - 10.0)
+
+    def test_futures_penalty_is_two(self):
+        # clean spot baseline — no leverage penalty at 3% stop (max_lev=6 ≥ 3)
+        spot    = validate_risk(_good_input(mode=ScannerMode.SPOT))
+        futures = validate_risk(_good_input(mode=ScannerMode.FUTURES))
+        assert futures.risk_score == spot.risk_score + 2.0
+
+    def test_grade_factors_contains_required_keys(self):
+        result = validate_risk(_good_input(
+            breakout_strength="CONFIRMED_BREAKOUT",
+            btc_regime="BEAR_TREND",
+        ))
+        for key in ("base_quality", "breakout_bonus", "regime_bonus",
+                    "futures_penalty", "final_quality", "final_risk"):
+            assert key in result.grade_factors
+        assert result.grade_factors["breakout_bonus"]  == 10.0
+        assert result.grade_factors["regime_bonus"]    == 5.0
+        assert result.grade_factors["futures_penalty"] == 0.0

@@ -147,6 +147,8 @@ class RiskInput(BaseModel):
     mode:              ScannerMode
     volatility:        VolatilityRating
     combined_strength: float
+    btc_regime:        str = "SIDEWAYS"   # RISKGRADE.FIX.1 — regime quality adjustment
+    breakout_strength: str | None = None  # RISKGRADE.FIX.1 — breakout quality bonus
 
 
 class RiskResult(BaseModel):
@@ -159,6 +161,7 @@ class RiskResult(BaseModel):
     max_safe_leverage:       int
     position_size_multiplier: float
     summary:                 str
+    grade_factors:           dict[str, float] = {}  # RISKGRADE.FIX.1 — scoring breakdown
 
     model_config = {"populate_by_name": True}
 

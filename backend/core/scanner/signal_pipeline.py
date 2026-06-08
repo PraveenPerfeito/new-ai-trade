@@ -691,6 +691,8 @@ async def scan_coin(
             mode=mode,
             volatility=volatility,
             combined_strength=s1h * 0.4 + s4h * 0.6,
+            btc_regime=btc_regime,
+            breakout_strength=setup.breakout_strength,
         ))
         if not risk.pass_:
             _record_gate_rejection("risk_engine", gate_rejections)
