@@ -134,21 +134,61 @@ _BINANCE_META_KEY    = "providers:metrics:binance:meta"
 _BINANCE_LATENCY_KEY = "providers:metrics:binance:latency"
 _BINANCE_ERRORS_KEY  = "providers:metrics:binance:errors"
 
+# Redis reduction: batch kline metrics into a 5-second window instead of one
+# pipeline per kline call.  A full 80-coin × 3-timeframe scan fires ~240 calls;
+# this collapses them into a single flush at ~5 ops per scan instead of ~720.
+_batch_successes: int   = 0
+_batch_latencies: list[int] = []
+_batch_errors:    list[str] = []
+_batch_flush_task: "asyncio.Task | None" = None
+_batch_lock = asyncio.Lock()
+_BATCH_WINDOW_S = 5.0
+
 
 async def _record_binance_kline_metric(latency_ms: float, success: bool) -> None:
-    """Fire-and-forget: update providers:metrics:binance Redis keys for dashboard."""
+    """Accumulate per-kline metrics; a background task flushes them every 5 s."""
+    global _batch_successes, _batch_flush_task
+    async with _batch_lock:
+        if success:
+            _batch_successes += 1
+            _batch_latencies.append(round(latency_ms))
+        else:
+            _batch_errors.append(str(int(time.time() * 1000)))
+        if _batch_flush_task is None or _batch_flush_task.done():
+            _batch_flush_task = asyncio.ensure_future(_flush_binance_metrics_after_delay())
+
+
+async def _flush_binance_metrics_after_delay() -> None:
+    await asyncio.sleep(_BATCH_WINDOW_S)
+    await _flush_binance_metrics()
+
+
+async def _flush_binance_metrics() -> None:
+    """Write accumulated Binance kline metrics to Redis in a single pipeline."""
+    global _batch_successes, _batch_latencies, _batch_errors
+    async with _batch_lock:
+        successes = _batch_successes
+        latencies = list(_batch_latencies)
+        errors    = list(_batch_errors)
+        _batch_successes = 0
+        _batch_latencies.clear()
+        _batch_errors.clear()
+
+    if not successes and not errors:
+        return
     try:
         redis = await get_redis()
         ts_ms = str(int(time.time() * 1000))
         pipe  = redis.pipeline()
-        if success:
+        if successes:
             pipe.hset(_BINANCE_META_KEY, mapping={"lastSuccess": ts_ms})
-            pipe.hincrby(_BINANCE_META_KEY, "requestsToday", 1)
-            pipe.rpush(_BINANCE_LATENCY_KEY, round(latency_ms))
-            pipe.ltrim(_BINANCE_LATENCY_KEY, -100, -1)
-        else:
+            pipe.hincrby(_BINANCE_META_KEY, "requestsToday", successes)
+            if latencies:
+                pipe.rpush(_BINANCE_LATENCY_KEY, *latencies)
+                pipe.ltrim(_BINANCE_LATENCY_KEY, -100, -1)
+        if errors:
             pipe.hset(_BINANCE_META_KEY, mapping={"lastError": ts_ms})
-            pipe.rpush(_BINANCE_ERRORS_KEY, ts_ms)
+            pipe.rpush(_BINANCE_ERRORS_KEY, *errors)
             pipe.ltrim(_BINANCE_ERRORS_KEY, -100, -1)
         await pipe.execute()
     except Exception:
@@ -181,7 +221,14 @@ async def fetch_spot_klines(symbol: str, interval: str = "1h", limit: int = 100)
     return []
 
 
+# P1.5: Track consecutive futures failures for geo-block detection
+_futures_consecutive_failures = 0
+_futures_alert_sent_at: float = 0.0
+_FUTURES_ALERT_THROTTLE_S = 3600  # alert at most once per hour
+
+
 async def fetch_futures_klines(symbol: str, interval: str = "1h", limit: int = 100) -> list[Candle]:
+    global _futures_consecutive_failures, _futures_alert_sent_at
     t0 = time.perf_counter()
     try:
         data = await _get(
@@ -191,11 +238,58 @@ async def fetch_futures_klines(symbol: str, interval: str = "1h", limit: int = 1
         )
         latency_ms = (time.perf_counter() - t0) * 1000
         asyncio.ensure_future(_record_binance_kline_metric(latency_ms, success=True))
+        _futures_consecutive_failures = 0  # reset on success
         return _drop_open_candle(_parse_klines(data)) if data else []
+    except httpx.HTTPStatusError as exc:
+        asyncio.ensure_future(_record_binance_kline_metric(0, success=False))
+        _futures_consecutive_failures += 1
+        status = exc.response.status_code
+        log.warning("futures_klines_failed", symbol=symbol, status=status,
+                    consecutive=_futures_consecutive_failures, error=str(exc))
+        if status == 451:
+            asyncio.ensure_future(_maybe_send_futures_geo_alert(status))
+        elif _futures_consecutive_failures >= 5:
+            asyncio.ensure_future(_maybe_send_futures_geo_alert(status))
+        return []
     except Exception as exc:
         asyncio.ensure_future(_record_binance_kline_metric(0, success=False))
-        log.warning("futures_klines_failed", symbol=symbol, error=str(exc))
+        _futures_consecutive_failures += 1
+        log.warning("futures_klines_failed", symbol=symbol,
+                    consecutive=_futures_consecutive_failures, error=str(exc))
+        if _futures_consecutive_failures >= 5:
+            asyncio.ensure_future(_maybe_send_futures_geo_alert(None))
         return []
+
+
+async def _maybe_send_futures_geo_alert(status_code: int | None) -> None:
+    """Alert once per hour when futures API is repeatedly failing (geo-block or outage)."""
+    global _futures_alert_sent_at
+    now = time.monotonic()
+    if now - _futures_alert_sent_at < _FUTURES_ALERT_THROTTLE_S:
+        return
+    _futures_alert_sent_at = now
+    try:
+        from backend.core.scanner.telegram_notifier import _is_configured, _enqueue
+        if not _is_configured():
+            return
+        if status_code == 451:
+            reason = "HTTP <b>451 Unavailable For Legal Reasons</b> — Binance geo-block detected."
+            action = "Railway region may be restricted by Binance. Consider switching deployment region or using a proxy."
+        else:
+            reason = f"<b>{_futures_consecutive_failures} consecutive failures</b> fetching futures klines."
+            action = "Check Binance futures API connectivity and Railway network egress."
+        text = (
+            f"⚡ <b>Binance Futures API Down</b>\n\n"
+            f"{reason}\n\n"
+            f"Impact: Futures/High-Confidence signals degraded.\n"
+            f"{action}\n\n"
+            f"<i>Admin → Providers for details.</i>"
+        )
+        _enqueue(text)
+        log.warning("futures_geo_alert_sent", status_code=status_code,
+                    consecutive=_futures_consecutive_failures)
+    except Exception as exc:
+        log.warning("futures_geo_alert_failed", error=str(exc))
 
 
 async def fetch_klines(

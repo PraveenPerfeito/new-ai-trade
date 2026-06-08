@@ -10,6 +10,7 @@ const ADMIN_PREFIXES = [
   '/api/admin',
   '/api/scanner',
   '/api/scheduler',
+  '/api/analytics',
 ]
 
 function isAdminPath(pathname: string): boolean {

@@ -101,7 +101,7 @@ def _record_call_outcome(is_fallback: bool) -> None:
     total_recent    = len(_all_calls_window)
     fallback_recent = len(_degradation_window)
     if total_recent >= 5 and fallback_recent / total_recent >= _DEGRADATION_THRESHOLD:
-        # Only log once per 15-min window to avoid spam
+        # Only fire once per 15-min window to avoid spam
         if now - _degradation_alerted_at > _DEGRADATION_WINDOW_S:
             _degradation_alerted_at = now
             log.warning(
@@ -112,6 +112,32 @@ def _record_call_outcome(is_fallback: bool) -> None:
                 window_minutes=15,
                 note="Claude fallback rate >50% — check Anthropic API key and quota",
             )
+            # P1.4: Schedule Telegram alert (fire-and-forget — called from async scan context)
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(_send_degradation_alert(fallback_recent, total_recent))
+            except RuntimeError:
+                pass  # not in an async context (e.g. tests) — skip Telegram
+
+
+async def _send_degradation_alert(fallbacks: int, total: int) -> None:
+    """Send one Telegram ops alert when Claude API is degraded. Throttled at call site."""
+    try:
+        from backend.core.scanner.telegram_notifier import _is_configured, _enqueue
+        if not _is_configured():
+            return
+        rate_pct = round(fallbacks / total * 100)
+        text = (
+            f"⚠️ <b>Claude AI Degraded</b>\n\n"
+            f"Fallback rate: <b>{rate_pct}%</b> "
+            f"({fallbacks}/{total} calls in last 15 min)\n"
+            f"→ Heuristic scoring active\n\n"
+            f"<i>Check ANTHROPIC_API_KEY and daily quota in Admin → Calibration.</i>"
+        )
+        _enqueue(text)
+        log.info("degradation_alert_sent", fallback_pct=rate_pct)
+    except Exception as exc:
+        log.warning("degradation_alert_failed", error=str(exc))
 
 
 class _SlidingWindowRateLimiter:

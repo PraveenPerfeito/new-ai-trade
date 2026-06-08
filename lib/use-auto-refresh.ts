@@ -12,19 +12,22 @@ export function useAutoRefresh<T>(
   fetcher: () => Promise<T>,
   intervalMs = 30_000,
 ): RefreshState<T> {
-  const [data, setData]             = useState<T | null>(null)
-  const [loading, setLoading]       = useState(true)
-  const [error, setError]           = useState<string | null>(null)
+  const [data, setData]               = useState<T | null>(null)
+  const [loading, setLoading]         = useState(true)
+  const [error, setError]             = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-  const abortRef = useRef<AbortController | null>(null)
+  const abortRef   = useRef<AbortController | null>(null)
+  // Keep a mutable ref to the latest fetcher so `refresh` never needs to
+  // change identity when the caller passes a new inline arrow function.
+  const fetcherRef = useRef<() => Promise<T>>(fetcher)
+  useEffect(() => { fetcherRef.current = fetcher })
 
   const refresh = useCallback(() => {
-    // Cancel any in-flight request before starting a new one
     abortRef.current?.abort()
     abortRef.current = new AbortController()
     const { signal } = abortRef.current
 
-    fetcher()
+    fetcherRef.current()
       .then(d => {
         if (signal.aborted) return
         setData(d)
@@ -38,7 +41,7 @@ export function useAutoRefresh<T>(
       .finally(() => {
         if (!signal.aborted) setLoading(false)
       })
-  }, [fetcher])
+  }, []) // stable — fetcher updates flow through fetcherRef, not re-renders
 
   useEffect(() => {
     refresh()
