@@ -46,6 +46,8 @@ AI-powered crypto trading signal scanner (public brand: **SignalEdge AI**) built
 32. **Celery worker heartbeat** — `celery:worker:last_heartbeat` Redis key (TTL 300s) written by `write_worker_heartbeat()` on `worker_ready` signal and refreshed every 60s via the `worker-heartbeat` beat task. `/health/ready` reads this key; if age > 300s → `"celery_worker": "unknown"`. Gap between write (startup) and first beat task fires ≤ 60s — within the 300s threshold.
 33. **Binance kline metric batching** — `_record_binance_kline_metric()` in `market_fetcher.py` accumulates successes/latencies/errors for 5 seconds, then flushes a single Redis pipeline. Reduces Redis ops from ~240 individual pipelines per scan to 1 batched pipeline (~98% reduction). Binance 451 (geo-block) detected separately: consecutive failures ≥ 5 or HTTP 451 → hourly-throttled Telegram alert.
 34. **useAutoRefresh stable identity** — `lib/use-auto-refresh.ts` uses a `fetcherRef = useRef(fetcher)` to hold the latest fetcher without it becoming a `useCallback` dependency. The refresh callback has empty deps `[]` — stable identity across renders — so the `useEffect` interval is set once and never reset by inline function recreation. Previously a new arrow function passed as `fetcher` caused the interval to reset every render cycle (over-fetching).
+35. **Grade C outperforms A/B — calibrated in RISKGRADE.FIX.1** — Grade C Exp=+0.962R vs A=+0.098R (9.8×) before fix. Root cause: flat `+5` futures risk penalty pushed quality confirmed-breakout futures signals from Grade B into Grade C. Fixed in commit `1ad5ef2`: futures penalty `5.0 → 2.0`; breakout quality bonus (HIGH_MOMENTUM +15, CONFIRMED +10, EARLY +4); regime quality adjustment (BEAR/BULL/CAP/EUPHORIA +5, UNKNOWN −10). `RiskInput` gains `btc_regime` + `breakout_strength`; `RiskResult` gains `grade_factors` telemetry dict. See `docs/RISKGRADE_TRUTH_1.md`. POSTFIX.1 validation after 7 days.
+36. **MARKET_STRUCTURE.FIX.1 — regime-aware thresholds** — F4 trend exhaustion SELL RSI-sustained threshold 5→8 in BEAR_TREND/CAPITULATION; F6 S/R rejection SELL pivot threshold 2→3 in BEAR_TREND/CAPITULATION. 7 `ms_*` sub-condition keys tracked in `gate_rejections` per scan; `MarketStructureBreakdown` table on System dashboard (24h + 7d). Commit `405c11f`. POSTFIX.1 validation after 7 days deployed.
 
 ---
 
@@ -197,6 +199,71 @@ Complete redesign of admin dashboard for founder operational clarity and workflo
 - **Futures:** min_mcap=$1B, min_vol=$200M, confidence≥82, max_coins=50
 - **High_confidence:** min_mcap=$2B, min_vol=$500M, confidence≥87, max_coins=30
 - **Trending:** min_mcap=$50M, min_vol=$10M, confidence≥78, max_coins=80
+
+---
+
+## Phase MARKET_STRUCTURE.FIX.1 — Regime-Aware Thresholds + Sub-Condition Telemetry (June 2026)
+
+**Motivation:** MARKET_STRUCTURE.TRUTH.1 audit identified 939 market structure rejections over 14 days. F6 S/R rejection was too aggressive in BEAR_TREND (support levels break; blocking SELL there hurts expectancy). F4 trend exhaustion RSI threshold was too tight for extended bear markets.
+
+**Changes:**
+1. **F4 Trend Exhaustion** — SELL RSI-sustained candle threshold: 5→8 in `BEAR_TREND`/`CAPITULATION`. Spot bears run longer before exhaustion; the old threshold was firing on normal trend continuation.
+2. **F6 S/R Rejection** — SELL pivot-support count threshold: 2→3 in `BEAR_TREND`/`CAPITULATION`. Support levels break down in bear markets; prior threshold was blocking valid breakdown SELL signals.
+3. **Sub-condition telemetry** — `_ms_record(key, gate_rejections)` helper records which of 7 market structure filters fired per scan. 7 new keys (`ms_sideways`…`ms_weak_breakout`) in `GATE_REJECTION_KEYS`. `MarketStructureBreakdown` table on System dashboard shows 24h + 7d breakdown.
+
+**Files changed:** `backend/core/scanner/market_structure.py`, `signal_pipeline.py`, `backend/analytics/scan_metrics.py`, `app/admin/system/page.tsx`  
+**Tests:** 46/46 passing (16 new regime-aware tests). Commit `405c11f`.  
+**POSTFIX.1:** After 7 days, validate ms_sr_rejection + ms_trend_exhaustion counts decrease and newly unblocked signals have WR ≥ 48%.
+
+---
+
+## Phase RISKGRADE.TRUTH.1 — Grade Audit (June 2026)
+
+**Finding:** Grade C Exp=+0.962R vs Grade A Exp=+0.098R (9.8× gap). Grade C is not a quality tier — it is an accidental futures-mode bucket.
+
+**Root causes:**
+1. **Flat +5 futures penalty** (`risk.py:295`) pushes confirmed-breakout futures signals (quality 75, risk 32→37) from Grade B into Grade C. Grade C is 98.9% futures, 70.3% confirmed breakout.
+2. **NULL market_regime contaminates A/B** — 40% of Grade A signals have NULL `market_regime` with WR=15%, Exp=−0.535R, dragging Grade A headline from ~+0.48R to +0.098R.
+3. **Quality score ignores breakout/regime context** — `_calc_quality_score()` scores RR, volume, MACD, RSI, volatility, SL distance. No breakout, regime alignment, OI, or positioning input. Confirmed breakout signals (WR=54–82%) receive same quality weight as no-breakout signals.
+
+**Key data (30d, n=1,708 resolved):**
+
+| Grade | n | WR | Exp | Futures% | Confirmed Breakout% | NULL Regime% |
+|-------|---|----|-----|---------|--------------------|----|
+| A | 845 | 35.4% | +0.098R | 12.9% | 31.8% | 39.6% |
+| B | 772 | 36.7% | +0.136R | 10.4% | 44.4% | 41.3% |
+| C | 91 | 56.0% | +0.962R | 98.9% | 70.3% | 26.4% |
+
+Grade A/B in BEAR_TREND (regime known): WR=49–51%, Exp=+0.52–0.59R — excellent. The problem is grade contamination from NULL-regime signals, not bad signal generation.
+
+**Fix:** RISKGRADE.FIX.1. See `docs/RISKGRADE_TRUTH_1.md`.
+
+---
+
+## Phase RISKGRADE.FIX.1 — Grade Recalibration (June 2026)
+
+**Motivation:** RISKGRADE.TRUTH.1 audit found Grade C Exp=+0.962R vs Grade A Exp=+0.098R (9.8× gap). Flat +5 futures risk penalty was the primary driver — pushing quality futures signals from Grade B into Grade C. NULL-regime contamination (40% of Grade A/B signals) was secondary. Quality scoring had no breakout or regime inputs.
+
+**Changes (commit `1ad5ef2`):**
+1. **Futures risk penalty** — `risk.py`: `+5.0 → +2.0`. Promotes confirmed-breakout futures signals (quality ~75, base risk ~32) from Grade C back to Grade B.
+2. **Breakout quality bonus** — `_calc_quality_score()`: HIGH_MOMENTUM_BREAKOUT +15, CONFIRMED_BREAKOUT +10, EARLY_BREAKOUT +4. Rewards the highest-WR signal type in the system (WR 54–82%).
+3. **Regime quality adjustment** — `_calc_quality_score()`: BEAR/BULL/CAPITULATION/EUPHORIA +5, UNKNOWN/NULL −10. Penalises the NULL-regime cohort (WR=15%) that was contaminating Grades A and B.
+4. **Grade factors telemetry** — `RiskResult.grade_factors` dict: `base_quality`, `breakout_bonus`, `regime_bonus`, `futures_penalty`, `final_quality`, `final_risk`. Enables post-deployment calibration analysis.
+
+**Model changes:**
+- `RiskInput`: +`btc_regime: str = "SIDEWAYS"`, +`breakout_strength: str | None = None`
+- `RiskResult`: +`grade_factors: dict[str, float] = {}`
+- `signal_pipeline.py`: Step 9 `validate_risk()` call now passes `btc_regime` + `breakout_strength`
+
+**Tests:** 40/40 passing (8 new in `TestRiskgradeFix1`).
+
+**Expected outcome (simulation):**
+- Grade A WR: 35.4% → ~42–48% (NULL-regime signals deprioritized via quality penalty)
+- Grade B WR: 36.7% → ~43–47% (confirmed-breakout futures migrate in from C)
+- Grade C: residual borderline signals only; WR ~50–55%
+- Monotonicity A > B > C for WR and expectancy ✅
+
+**POSTFIX.1 (7 days post-deploy):** Measure grade distribution shift, WR per grade, % Grade A with NULL regime, % Grade C from futures.
 
 ---
 
