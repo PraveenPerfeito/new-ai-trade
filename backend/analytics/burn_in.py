@@ -325,7 +325,66 @@ async def run_hourly_anomaly_check() -> dict:
         anomalies=len(anomalies),
         critical=result["critical_count"],
     )
+
+    # P0.2: Alert via Telegram when any critical anomaly is present.
+    # Throttled to once per 15 minutes to prevent spam.
+    if result["critical_count"] > 0:
+        await _maybe_send_critical_anomaly_alert(anomalies)
+
     return result
+
+
+# P0.2: Critical anomaly alerting ─────────────────────────────────────────────
+_ANOMALY_ALERT_THROTTLE_KEY = "anomaly:alert:critical"
+_ANOMALY_ALERT_THROTTLE_TTL = 15 * 60   # 15 minutes
+
+
+async def _maybe_send_critical_anomaly_alert(anomalies: list) -> None:
+    """Send one Telegram alert per 15-min window when critical anomalies exist."""
+    criticals = [a for a in anomalies if getattr(a, "severity", None) == "critical"
+                 or (isinstance(a, dict) and a.get("severity") == "critical")]
+    if not criticals:
+        return
+
+    try:
+        from backend.cache.redis_cache import get_redis
+        redis = await get_redis()
+        # Check throttle — skip if an alert was already sent in the last 15 min
+        if await redis.get(_ANOMALY_ALERT_THROTTLE_KEY):
+            log.debug("critical_anomaly_alert_throttled")
+            return
+        # Set throttle BEFORE sending to prevent parallel workers racing
+        await redis.setex(_ANOMALY_ALERT_THROTTLE_KEY, _ANOMALY_ALERT_THROTTLE_TTL, "1")
+    except Exception as exc:
+        log.warning("anomaly_alert_throttle_check_failed", error=str(exc))
+        # Don't send if we can't check throttle — prevents spam on Redis failure
+
+    try:
+        from backend.config import get_settings
+        settings = get_settings()
+        token   = settings.telegram_bot_token
+        chat_id = settings.telegram_chat_id
+        if not token or not chat_id:
+            return
+
+        lines = [f"🚨 <b>Critical Anomaly Detected</b>"]
+        for a in criticals[:3]:  # cap at 3 to keep message compact
+            msg = a.message if hasattr(a, "message") else a.get("message", "unknown")
+            atype = a.type if hasattr(a, "type") else a.get("type", "unknown")
+            lines.append(f"• <b>{atype}</b>: {msg}")
+        if len(criticals) > 3:
+            lines.append(f"  …and {len(criticals) - 3} more")
+        lines.append("\n<i>Check SignalEdge Admin → Anomalies</i>")
+
+        import httpx
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": chat_id, "text": "\n".join(lines), "parse_mode": "HTML"},
+            )
+        log.info("critical_anomaly_alert_sent", count=len(criticals))
+    except Exception as exc:
+        log.warning("critical_anomaly_alert_failed", error=str(exc))
 
 
 # ── History queries ───────────────────────────────────────────────────────────

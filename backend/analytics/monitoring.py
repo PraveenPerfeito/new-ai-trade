@@ -86,8 +86,8 @@ async def record_scan(coins_scanned: int, duration_ms: int) -> None:
         await redis.setex(f"{_PREFIX}:last_scan_duration_ms", 3_600, str(duration_ms))
         await redis.lpush(f"{_PREFIX}:scan_durations", duration_ms)
         await redis.ltrim(f"{_PREFIX}:scan_durations", 0, 47)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("monitor_record_scan_duration_failed", error=str(exc))
 
 async def record_telegram_send() -> None:
     await _incr("telegram_sends")
@@ -161,8 +161,8 @@ async def get_monitoring_snapshot() -> dict:
         redis          = await get_redis()
         raw            = await redis.get(f"{_PREFIX}:last_scan_duration_ms")
         last_duration_s = round(int(raw or 0) / 1000)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("monitor_read_scan_duration_failed", error=str(exc))
 
     # Claude/heuristic from ai_call_log
     claude_calls = heuristic_calls = fallback_pct = 0.0
@@ -174,8 +174,8 @@ async def get_monitoring_snapshot() -> dict:
         heuristic_calls = ai.get("heuristic_calls", 0)
         fallback_pct    = round(ai.get("fallback_rate", 0) * 100, 1)
         estimated_cost_usd = ai.get("estimated_cost_usd", 0.0)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("monitor_read_ai_metrics_failed", error=str(exc))
 
     # CMC credits — 7-day rolling daily average using daily snapshots
     cmc_credits_day = 0
@@ -203,8 +203,8 @@ async def get_monitoring_snapshot() -> dict:
         else:
             # No rolling history yet — fall back to month-to-date average
             cmc_credits_day = round(cmc_month / max(now.day, 1))
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("monitor_read_cmc_credits_failed", error=str(exc))
 
     # 7-day win/SL rate from signal_outcomes
     win_rate_pct = sl_rate_pct = 0.0
@@ -224,8 +224,8 @@ async def get_monitoring_snapshot() -> dict:
             resolved_7d  = row["total"]
             win_rate_pct = round(row["tp"] / row["total"] * 100, 1)
             sl_rate_pct  = round(row["sl"] / row["total"] * 100, 1)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("monitor_read_outcome_rates_failed", error=str(exc))
 
     metrics = {
         "signals_per_day": {
