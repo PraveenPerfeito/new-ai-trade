@@ -44,6 +44,32 @@ async def readiness():
         checks["postgres"] = f"error: {exc}"
         ok = False
 
+    # P3.1: Celery worker liveness — inspect active queues via Redis
+    try:
+        from backend.cache.redis_cache import get_redis
+        import time
+        redis = await get_redis()
+        # Workers publish heartbeats to celery:workers:<hostname> every ~2s
+        # as heartbeat events. A simpler proxy: check if the Celery control
+        # key exists. If Redis is up (checked above) and a worker registered
+        # within the last 5 min, it's alive.
+        worker_ts = await redis.get("celery:worker:last_heartbeat")
+        if worker_ts and (time.time() - float(worker_ts)) < 300:
+            checks["celery_worker"] = "ok"
+        else:
+            checks["celery_worker"] = "unknown"  # no heartbeat — may still be alive
+    except Exception as exc:
+        checks["celery_worker"] = f"error: {exc}"
+
+    # P3.1: Binance spot connectivity — lightweight ping via /api/v3/ping
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get("https://api.binance.com/api/v3/ping")
+            checks["binance"] = "ok" if resp.status_code == 200 else f"http_{resp.status_code}"
+    except Exception as exc:
+        checks["binance"] = f"error: {type(exc).__name__}"
+
     status_code = 200 if ok else 503
     return JSONResponse(
         content={"status": "ready" if ok else "degraded", "checks": checks},

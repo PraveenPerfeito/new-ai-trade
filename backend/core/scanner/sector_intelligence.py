@@ -113,7 +113,7 @@ ACCEL_THRESHOLD              = 3.0    # |delta| threshold for ACCELERATING / WEA
 
 # Redis baseline key (purely Python-owned — TS workers do not touch this)
 SECTOR_BASELINE_KEY = "cache:intel:sector_baseline"
-SECTOR_BASELINE_TTL = 45 * 60   # 45 minutes
+SECTOR_BASELINE_TTL = 60 * 60   # 60 minutes — aligned with CMC categories cache TTL
 
 
 # ── Data models ───────────────────────────────────────────────────────────────
