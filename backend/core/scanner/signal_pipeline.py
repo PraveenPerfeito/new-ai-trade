@@ -218,6 +218,21 @@ def _match_toxic_setup(description: str) -> str | None:
     return None
 
 
+def _early_breakout_confidence_adj(
+    breakout_strength: str | None,
+    signal_type: SignalType,
+) -> int:
+    """Return the confidence adjustment for EARLY_BREAKOUT signals.
+
+    EARLY_BREAKOUT.TRUTH.1 — direction-aware:
+      BUY  + EARLY_BREAKOUT: −4  (WR=13%, Exp=−0.598 — premature long entry)
+      SELL + EARLY_BREAKOUT:  0  (WR=68%, Exp=+1.074 — breakdown confirmation)
+    """
+    if breakout_strength == "EARLY_BREAKOUT" and signal_type == SignalType.BUY:
+        return -4
+    return 0
+
+
 def _null_setup_confidence_penalty(
     setup: SetupResult,
     signal_type: SignalType,
@@ -802,12 +817,11 @@ async def scan_coin(
         elif setup.breakout_type == "20d_low":
             _boost += 5
             _boost_reasons.append("20d_low_breakout")
-        elif setup.breakout_strength == "EARLY_BREAKOUT" and signal_type == SignalType.BUY:
-            # EARLY_BREAKOUT.TRUTH.1: penalty is direction-aware.
-            # BUY+EARLY WR=13%, Exp=-0.598 — premature long entry, penalise.
-            # SELL+EARLY WR=68%, Exp=+1.074 — breakdown confirmation, neutral (no penalty).
-            _boost -= 4
-            _boost_reasons.append("EARLY_BREAKOUT_penalty")
+        elif setup.breakout_strength == "EARLY_BREAKOUT":
+            _adj = _early_breakout_confidence_adj(setup.breakout_strength, signal_type)
+            if _adj != 0:
+                _boost += _adj
+                _boost_reasons.append("EARLY_BREAKOUT_penalty")
 
         # P2.6: futures_data is None for SPOT mode — OI_NEUTRAL boost is safe from firing on spot coins
         if futures_data:

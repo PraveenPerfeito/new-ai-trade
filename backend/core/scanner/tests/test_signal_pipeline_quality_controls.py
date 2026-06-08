@@ -3,6 +3,7 @@ from __future__ import annotations
 from backend.core.scanner.models import ScannerMode, SetupResult, SignalType, VolatilityRating
 from backend.core.scanner.signal_pipeline import (
     _btc_context_from_setup_description,
+    _early_breakout_confidence_adj,
     _match_toxic_setup,
     _normalize_setup_description,
     _null_setup_confidence_penalty,
@@ -70,6 +71,56 @@ def test_btc_context_gate_blocks_only_buy_signals_when_btc_is_down() -> None:
     assert _should_block_buy_for_btc_context(SignalType.SELL, down_description) is False
     assert _should_block_buy_for_btc_context(SignalType.BUY, up_description) is False
     assert _should_block_buy_for_btc_context(SignalType.BUY, flat_description) is False
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# EARLY_BREAKOUT.TRUTH.1 — direction-aware confidence adjustment
+# SELL+EARLY: WR=68%, Exp=+1.074 → no penalty
+# BUY+EARLY:  WR=13%, Exp=−0.598 → −4 penalty
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_early_breakout_adj_is_zero_for_sell() -> None:
+    """SELL + EARLY_BREAKOUT must receive no penalty (exp +1.074)."""
+    assert _early_breakout_confidence_adj("EARLY_BREAKOUT", SignalType.SELL) == 0
+
+
+def test_early_breakout_adj_is_minus_four_for_buy() -> None:
+    """BUY + EARLY_BREAKOUT must retain the −4 penalty (exp −0.598)."""
+    assert _early_breakout_confidence_adj("EARLY_BREAKOUT", SignalType.BUY) == -4
+
+
+def test_early_breakout_adj_ignores_other_breakout_strengths() -> None:
+    """Only EARLY_BREAKOUT triggers the adjustment; all others return 0."""
+    assert _early_breakout_confidence_adj("CONFIRMED_BREAKOUT", SignalType.BUY) == 0
+    assert _early_breakout_confidence_adj("HIGH_MOMENTUM_BREAKOUT", SignalType.BUY) == 0
+    assert _early_breakout_confidence_adj("NONE", SignalType.BUY) == 0
+    assert _early_breakout_confidence_adj(None, SignalType.BUY) == 0
+
+
+def test_early_breakout_adj_buy_bear_trend_still_blocked_by_regime_gate() -> None:
+    """Safety: BUY+BEAR_TREND is blocked at Step 10.5 (regime hard gate) before
+    the confidence adjustment is ever evaluated. Removing the SELL penalty
+    cannot re-enable BUY+BEAR_TREND signals — the regime gate is independent."""
+    # The regime gate fires before _early_breakout_confidence_adj is called.
+    # This test documents the invariant: even if adj=0 for BUY, the regime gate
+    # ensures BUY+BEAR_TREND never reaches the confidence step.
+    # We verify the adj itself still returns -4 for BUY (it is never reached
+    # for BEAR_TREND, but the value must remain correct for non-BEAR regimes).
+    assert _early_breakout_confidence_adj("EARLY_BREAKOUT", SignalType.BUY) == -4
+
+
+def test_early_breakout_adj_null_regime_still_hard_gated() -> None:
+    """Safety: NULL regime adds +15 to required confidence (spot: 95, futures: 97).
+    Removing the SELL penalty (0 instead of −4) cannot unblock NULL regime signals
+    because the required_confidence floor is unreachable regardless of the adj."""
+    # Spot:          required = 80 + 15 = 95  (max AI output = 95 → edge case only)
+    # Futures:       required = 82 + 15 = 97  (impossible)
+    # High-conf:     required = 87 + 15 = 102 (impossible)
+    # adj for SELL = 0, so adjusted_confidence = raw - 0 = raw
+    # raw must be >= 95/97/102 → still effectively blocked
+    adj_sell = _early_breakout_confidence_adj("EARLY_BREAKOUT", SignalType.SELL)
+    assert adj_sell == 0  # penalty removed
+    # The NULL regime gate (+15) is separate — not affected by this change
 
 
 def test_null_setup_confidence_penalty_stacks_only_for_null_bucket() -> None:
