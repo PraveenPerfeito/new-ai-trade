@@ -720,6 +720,20 @@ async def scan_coin(
             except Exception as exc:
                 log.warning("futures_intelligence_failed", symbol=coin.symbol, error=str(exc))
 
+        # Step 10.5: Regime hard gate — before AI to avoid wasting tokens.
+        _BULL_CONTEXTS = {"BULL_TREND", "EUPHORIA"}
+        _BEAR_CONTEXTS = {"BEAR_TREND", "CAPITULATION"}
+        # Hard gate: BEAR_TREND + BUY. Resolved data: N=200, WR=19%, avg_rr=-0.405.
+        if signal_type == SignalType.BUY and btc_regime in _BEAR_CONTEXTS:
+            _record_gate_rejection("REGIME_REJECTION", gate_rejections)
+            log.info(
+                "rejected_bear_trend_buy",
+                symbol=coin.symbol,
+                regime=btc_regime,
+                signal_type=signal_type.value,
+            )
+            return None
+
         # Step 11: AI validation
         draft = Signal(
             symbol=coin.symbol,
@@ -756,22 +770,6 @@ async def scan_coin(
         ai = await validate_signal(draft, coin, ind4h, s1h * 0.4 + s4h * 0.6, volatility, setup_score=effective_score)
 
         # Phase 8.1B → SIGNAL.FACTOR.1: Regime gates.
-        _BULL_CONTEXTS = {"BULL_TREND", "EUPHORIA"}
-        _BEAR_CONTEXTS = {"BEAR_TREND", "CAPITULATION"}
-
-        # Hard gate: BEAR_TREND + BUY. Resolved data: N=200, WR=19%, avg_rr=-0.405.
-        # The previous +10 soft penalty still generated 200 losing signals; upgrade to
-        # hard reject before AI validation (saves tokens, removes a systematic loser).
-        if signal_type == SignalType.BUY and btc_regime in _BEAR_CONTEXTS:
-            _record_gate_rejection("REGIME_REJECTION", gate_rejections)
-            log.info(
-                "rejected_bear_trend_buy",
-                symbol=coin.symbol,
-                regime=btc_regime,
-                signal_type=signal_type.value,
-            )
-            return None
-
         # Soft gates: direction-vs-regime mismatches and data gaps.
         regime_adj = 0
         if signal_type == SignalType.SELL and btc_regime in _BULL_CONTEXTS:
