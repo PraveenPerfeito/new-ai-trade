@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import {
   Activity, Zap, ScanLine, Target, RefreshCw,
   Play, Square, ArrowRight, CheckCircle,
@@ -673,17 +672,13 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'regime',   label: 'Regime'     },
 ]
 
-function TabInit({ setTab }: { setTab: (t: Tab) => void }) {
-  const params = useSearchParams()
-  useEffect(() => {
-    const t = params.get('tab') as Tab | null
-    if (t && TABS.some(x => x.id === t)) setTab(t)
-  }, [params, setTab])
-  return null
-}
-
 export default function TradingOperationsPage() {
   const [tab, setTab] = useState<Tab>('overview')
+
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab') as Tab | null
+    if (t && TABS.some(x => x.id === t)) setTab(t)
+  }, [])
 
   // ── Shared data (single polling registry) ──────────────────────────────────
   const celeryFetcher  = useCallback(()=>adminApi.scheduler.status().then(r=>r.success?r.data:null), [])
@@ -769,7 +764,6 @@ export default function TradingOperationsPage() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4 max-w-6xl mx-auto">
-      <Suspense fallback={null}><TabInit setTab={setTab} /></Suspense>
       {/* Header */}
       <div>
         <h1 className="text-lg sm:text-xl font-semibold text-white">Trading Operations</h1>
