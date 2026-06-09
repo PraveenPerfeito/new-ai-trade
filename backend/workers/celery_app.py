@@ -34,6 +34,7 @@ def create_celery() -> Celery:
         task_acks_late=True,
         task_reject_on_worker_lost=True,
         worker_prefetch_multiplier=1,   # one task at a time per worker process
+        worker_concurrency=2,           # cap prefork processes; default=cpu_count() causes OOM on Railway
         broker_connection_retry_on_startup=True,
 
         # Result expiry — keep results for 1 hour
