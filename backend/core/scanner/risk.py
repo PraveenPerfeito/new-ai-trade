@@ -314,7 +314,7 @@ def validate_risk(inp: RiskInput) -> RiskResult:
     risk_score += _validate_liquidity(inp.coin, inp.ind_1h.volume_spike, violations, warnings)
     risk_score += _validate_leverage(sl_pct, inp.mode, max_lev, violations, warnings)
 
-    futures_penalty = 2.0 if inp.mode == ScannerMode.FUTURES else 0.0  # RISKGRADE.FIX.1: was 5.0
+    futures_penalty = 0.0  # ALPHA.TRUTH.1: removed (was 5.0→2.0→0). Grade C > A/B persisted after FIX.1; penalty distorts grading without improving outcomes.
     risk_score += futures_penalty
 
     risk_score = min(100.0, max(0.0, risk_score))

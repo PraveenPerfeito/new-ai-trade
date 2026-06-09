@@ -753,6 +753,14 @@ async def scan_coin(
             )
             return None
 
+        # ALPHA.TRUTH.1: NULL regime hard gate — N=677, WR=14.9%, Exp=-0.543R.
+        # Previous regime_adj=15 soft gate was bypassed by intelligence boosts
+        # pushing adjusted_confidence above the 95 required floor. Hard reject.
+        if not btc_regime:
+            _record_gate_rejection("REGIME_REJECTION", gate_rejections)
+            log.info("rejected_null_regime", symbol=coin.symbol, signal_type=signal_type.value)
+            return None
+
         # Step 11: AI validation
         draft = Signal(
             symbol=coin.symbol,
@@ -795,12 +803,6 @@ async def scan_coin(
             regime_adj = 10
         elif btc_regime == "HIGH_VOLATILITY":
             regime_adj = 5
-        elif not btc_regime:
-            # CONFIDENCE.TRUTH.1: NULL regime → N=492, WR=17.7%, Exp=-0.904.
-            # Missing regime is not neutral — with Claude's max output of 95 this
-            # effectively hard-gates spot (min_conf=80+15=95 is the edge), futures
-            # (82+15=97 > 95, always reject), and high_confidence (87+15=102).
-            regime_adj = 15
 
         required_confidence = config.min_confidence + regime_adj
         confidence_penalty, penalty_reasons = _null_setup_confidence_penalty(
@@ -829,9 +831,12 @@ async def scan_coin(
 
         # P2.6: futures_data is None for SPOT mode — futures boosts are safe from firing on spot coins
         if futures_data:
-            # OI_NEUTRAL removed: neutral OI means no institutional backing — not a positive signal.
-            # (Previously +6 was inflating 84-88 futures signals into the 90-95 band, which
-            # has 31.7% WR vs 46.9% WR for 85-90 — the highest-confidence band underperformed.)
+            # ALPHA.TRUTH.1: OI_NEUTRAL restored — N=38, WR=76.3%, Exp=+1.776R (strong signal).
+            # The 90-95 band collapse was caused by NULL-regime signals getting this boost, not
+            # by OI_NEUTRAL itself being bad. NULL regime is now hard-gated before AI.
+            if futures_data.oi_interpretation == "NEUTRAL":
+                _boost += 6
+                _boost_reasons.append("OI_NEUTRAL")
             if signal_type == SignalType.SELL and futures_data.positioning_context == "EXTREME_LONG":
                 _boost += 4
                 _boost_reasons.append("EXTREME_LONG_crowd")
