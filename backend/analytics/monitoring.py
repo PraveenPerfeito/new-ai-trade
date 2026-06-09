@@ -153,32 +153,70 @@ def _entry(metric: str, value: float, unit: str = "") -> dict:
 
 # ── Main snapshot ─────────────────────────────────────────────────────────────
 
+async def _read_db_scan_stats_24h(now: datetime) -> dict | None:
+    """DB-authoritative scan stats from scan_metrics_log.
+    Eliminates 3 Redis reads per monitoring call (~43K ops/month) and avoids
+    UTC-midnight reset artefacts in the Redis counter path.
+    """
+    try:
+        from backend.database.session import get_pool
+        pool = await get_pool()
+        row = await pool.fetchrow(
+            """
+            SELECT
+                COUNT(*)                  AS scans,
+                ROUND(AVG(coins_scanned)) AS avg_coins,
+                (SELECT duration_ms FROM scan_metrics_log
+                 ORDER BY created_at DESC LIMIT 1) AS last_duration_ms
+            FROM scan_metrics_log
+            WHERE created_at > $1
+            """,
+            now - timedelta(hours=24),
+        )
+        return {
+            "scans":            int(row["scans"]            or 0),
+            "avg_coins":        int(row["avg_coins"]        or 0),
+            "last_duration_ms": int(row["last_duration_ms"] or 0),
+        } if row else None
+    except Exception as exc:
+        log.warning("monitor_db_scan_stats_failed", error=str(exc))
+        return None
+
+
 async def get_monitoring_snapshot() -> dict:
     """Build today's full operational monitoring snapshot."""
     today = _today()
     now   = datetime.now(timezone.utc)
 
-    # Daily counters. Generated signals are DB-authoritative; Redis is a fallback only.
+    # Generated signals — DB-authoritative; Redis is fallback only.
     redis_signals  = await _read("signals")
     db_signals     = await _read_db_generated_signals_24h(now)
     signals        = db_signals if db_signals is not None else redis_signals
     signals_source = "database" if db_signals is not None else "redis_fallback"
-    scans        = await _read("scans")
-    coins_total  = await _read("coins_scanned")
+
+    # Scan counters — DB-authoritative (scan_metrics_log).  Redis fallback
+    # retained for the rare case where the DB pool is unavailable.
+    db_scan_stats     = await _read_db_scan_stats_24h(now)
+    if db_scan_stats:
+        scans             = db_scan_stats["scans"]
+        avg_coins_per_run = db_scan_stats["avg_coins"]
+        last_duration_s   = round(db_scan_stats["last_duration_ms"] / 1000)
+    else:
+        # Redis fallback
+        scans         = await _read("scans")
+        coins_total   = await _read("coins_scanned")
+        avg_coins_per_run = round(coins_total / scans) if scans > 0 else 0
+        last_duration_s   = 0
+        try:
+            from backend.cache.redis_cache import get_redis
+            redis = await get_redis()
+            raw   = await redis.get(f"{_PREFIX}:last_scan_duration_ms")
+            last_duration_s = round(int(raw or 0) / 1000)
+        except Exception as exc:
+            log.warning("monitor_read_scan_duration_failed", error=str(exc))
+
     tg_sends     = await _read("telegram_sends")
     binance_errs = await _read("binance_errors")
-
-    avg_coins_per_run = round(coins_total / scans) if scans > 0 else 0
-
-    # Last scan duration
-    last_duration_s = 0
-    try:
-        from backend.cache.redis_cache import get_redis
-        redis          = await get_redis()
-        raw            = await redis.get(f"{_PREFIX}:last_scan_duration_ms")
-        last_duration_s = round(int(raw or 0) / 1000)
-    except Exception as exc:
-        log.warning("monitor_read_scan_duration_failed", error=str(exc))
 
     # Claude/heuristic from ai_call_log
     claude_calls = heuristic_calls = fallback_pct = 0.0

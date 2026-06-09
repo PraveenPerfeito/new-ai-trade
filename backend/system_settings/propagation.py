@@ -117,8 +117,8 @@ async def _async_listener_loop(service) -> None:
                 try:
                     data, _ = await service._get_group_raw(group_name)
                     apply_group_to_modules(group_name, data)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log.warning("settings_apply_failed", group=group_name, error=str(exc))
 
                 log.debug("settings_propagated_async", group=group_name)
 

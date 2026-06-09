@@ -3,9 +3,28 @@
 import { useState, useCallback } from 'react'
 import {
   TrendingUp, TrendingDown, Activity,
-  ArrowUpRight, ArrowDownRight, RefreshCw, AlertTriangle,
+  ArrowUpRight, ArrowDownRight, RefreshCw, AlertTriangle, Newspaper,
 } from 'lucide-react'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
+
+interface NewsItem {
+  title:      string
+  url:        string
+  source:     string
+  publishedAt: string
+  sentiment?: 'bullish' | 'bearish' | 'neutral'
+}
+interface NewsSnapshot {
+  fearGreedValue:  number | null
+  fearGreedLabel:  string | null
+  fearGreedTs:     string | null
+  headlines:       NewsItem[]
+  bullishCount:    number
+  bearishCount:    number
+  neutralCount:    number
+  cachedAt:        string
+  informationalOnly: true
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,11 +90,96 @@ function Change({ val, size = 'sm' }: { val: number; size?: 'sm' | 'xs' }) {
   )
 }
 
+// ─── News Intelligence Panel ──────────────────────────────────────────────────
+// IMPORTANT: informational only — this data is NEVER fed into the signal
+// pipeline. Signals are generated exclusively by the Python scanner based on
+// technical analysis and on-chain data. News context is displayed here for
+// human situational awareness only.
+
+const FG_COLOR: Record<string, string> = {
+  'Extreme Fear':  'text-red-400',
+  'Fear':          'text-orange-400',
+  'Neutral':       'text-zinc-400',
+  'Greed':         'text-green-400',
+  'Extreme Greed': 'text-emerald-400',
+}
+const SENT_STYLE: Record<string, string> = {
+  bullish: 'text-green-400 bg-green-500/10 border-green-500/20',
+  bearish: 'text-red-400 bg-red-500/10 border-red-500/20',
+  neutral: 'text-zinc-400 bg-zinc-800/60 border-zinc-700',
+}
+
+function NewsIntelligencePanel({ data }: { data: NewsSnapshot }) {
+  const fgColor = data.fearGreedLabel ? (FG_COLOR[data.fearGreedLabel] ?? 'text-zinc-400') : 'text-zinc-400'
+  const total   = data.bullishCount + data.bearishCount + data.neutralCount
+  return (
+    <div className="space-y-3">
+      {/* Disclaimer banner */}
+      <div className="flex items-center gap-2 rounded-lg px-3 py-2 bg-amber-500/5 border border-amber-500/20 text-amber-400/80 text-[10px]">
+        <AlertTriangle className="w-3 h-3 shrink-0" />
+        Informational only — news context is never used by the signal pipeline. Signals are driven by technical analysis only.
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {/* Fear & Greed */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 sm:col-span-1">
+          <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1">Fear & Greed</p>
+          <p className={`text-2xl font-bold font-mono ${fgColor}`}>{data.fearGreedValue ?? '—'}</p>
+          <p className={`text-[10px] mt-0.5 ${fgColor}`}>{data.fearGreedLabel ?? 'N/A'}</p>
+        </div>
+        {/* Sentiment counts */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
+          <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1">Bullish</p>
+          <p className="text-2xl font-bold font-mono text-green-400">{data.bullishCount}</p>
+          <p className="text-[10px] text-zinc-600 mt-0.5">{total > 0 ? `${Math.round(data.bullishCount / total * 100)}%` : '—'} of stories</p>
+        </div>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
+          <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1">Bearish</p>
+          <p className="text-2xl font-bold font-mono text-red-400">{data.bearishCount}</p>
+          <p className="text-[10px] text-zinc-600 mt-0.5">{total > 0 ? `${Math.round(data.bearishCount / total * 100)}%` : '—'} of stories</p>
+        </div>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
+          <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1">Headlines</p>
+          <p className="text-2xl font-bold font-mono text-white">{total}</p>
+          <p className="text-[10px] text-zinc-600 mt-0.5">from {data.headlines.length > 0 ? Array.from(new Set(data.headlines.map(h => h.source))).length : 0} sources</p>
+        </div>
+      </div>
+
+      {/* Headlines list */}
+      {data.headlines.length > 0 && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl divide-y divide-zinc-800/60">
+          {data.headlines.slice(0, 10).map((item: NewsItem, i) => (
+            <a
+              key={i}
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-start gap-3 px-4 py-2.5 hover:bg-zinc-800/40 transition-colors"
+            >
+              <span className={`text-[9px] px-1.5 py-0.5 rounded border shrink-0 mt-0.5 font-semibold uppercase ${SENT_STYLE[item.sentiment ?? 'neutral']}`}>
+                {item.sentiment ?? 'N'}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-zinc-200 leading-snug line-clamp-2">{item.title}</p>
+                <p className="text-[9px] text-zinc-600 mt-0.5">
+                  {item.source} · {item.publishedAt ? new Date(item.publishedAt).toLocaleTimeString() : '—'}
+                </p>
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
+      <p className="text-zinc-700 text-[9px] text-right">Cached {data.cachedAt ? new Date(data.cachedAt).toLocaleTimeString() : '—'} · 15-min cache</p>
+    </div>
+  )
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function MarketIntelligencePage() {
   const [data,  setData]  = useState<IntelligenceData | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [news,  setNews]  = useState<NewsSnapshot | null>(null)
 
   const fetch_ = useCallback(async () => {
     try {
@@ -86,7 +190,16 @@ export default function MarketIntelligencePage() {
     } catch (err) { setError(err instanceof Error ? err.message : String(err)) }
   }, [])
 
+  const fetchNews = useCallback(async () => {
+    try {
+      const res  = await fetch('/api/news')
+      const json = await res.json() as NewsSnapshot & { success?: boolean }
+      if (json.success) setNews(json)
+    } catch { /* non-fatal */ }
+  }, [])
+
   useAutoRefresh(fetch_, 120_000)
+  useAutoRefresh(fetchNews, 900_000)  // 15-min — matches server-side cache TTL
 
   const regime = data?.regime
   const meta   = regime ? REGIME_META[regime.regime] : null
@@ -231,6 +344,22 @@ export default function MarketIntelligencePage() {
           )}
         </>
       )}
+
+      {/* ── News Intelligence (informational only — never auto-influences signals) ── */}
+      <div>
+        <div className="flex items-center gap-2 mb-2.5">
+          <Newspaper className="w-3.5 h-3.5 text-zinc-500" />
+          <p className="text-[9px] text-zinc-500 uppercase tracking-widest">News Intelligence · Informational</p>
+        </div>
+        {news
+          ? <NewsIntelligencePanel data={news} />
+          : (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-5 py-4 text-xs text-zinc-500 text-center">
+              Loading news… (cached 15 min)
+            </div>
+          )
+        }
+      </div>
     </div>
   )
 }

@@ -134,8 +134,8 @@ async def _invalidate_snapshot() -> None:
     try:
         redis = await get_redis()
         await redis.delete(HEALTH_SNAPSHOT_KEY)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("invalidate_snapshot_redis_error", error=str(exc))
 
 
 @router.get("")
@@ -148,8 +148,8 @@ async def list_providers() -> dict:
         cached = await redis.get(HEALTH_SNAPSHOT_KEY)
         if cached:
             return json.loads(cached)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("list_providers_cache_read_error", error=str(exc))
 
     cfg = await _read_config()
 
@@ -195,8 +195,8 @@ async def list_providers() -> dict:
     result = {"success": True, "providers": providers}
     try:
         await redis.setex(HEALTH_SNAPSHOT_KEY, HEALTH_SNAPSHOT_TTL, json.dumps(result))
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("list_providers_cache_write_error", error=str(exc))
     return result
 
 
@@ -208,8 +208,8 @@ async def failover_history(limit: int = 20) -> dict:
     for r in raw:
         try:
             events.append(json.loads(r))
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("failover_history_json_parse_error", error=str(exc))
     return {"success": True, "events": events}
 
 

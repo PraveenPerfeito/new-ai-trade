@@ -442,7 +442,8 @@ async def fetch_funding_rate(symbol: str) -> float:
         if not data:
             return 0.0
         return float(data.get("lastFundingRate") or data.get("fundingRate") or 0)
-    except Exception:
+    except Exception as exc:
+        log.debug("fetch_funding_rate_failed", symbol=symbol, error=str(exc))
         return 0.0
 
 

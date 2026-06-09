@@ -238,7 +238,7 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
 
 
 _HEARTBEAT_KEY = "celery:worker:last_heartbeat"
-_HEARTBEAT_TTL = 600  # 10 minutes — 2.5× the 240s beat interval (A1 OPS.CONSOLIDATION.1)
+_HEARTBEAT_TTL = 1800  # 30 minutes — 3× the 600s beat interval (A2 PLATFORM.TRUTH.1)
 
 
 def write_worker_heartbeat() -> None:

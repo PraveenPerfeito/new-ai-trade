@@ -5,8 +5,8 @@ import {
   ScanLine, Play, Square, RefreshCw, AlertTriangle, CheckCircle,
   Clock, ArrowRight, Zap, Bot, Send, ShieldAlert, Wrench,
 } from 'lucide-react'
-import { ScannerMode, RejectionStats } from '@/types'
-import { adminApi, SettingsGroupResponse } from '@/lib/admin-api'
+import { ScannerMode } from '@/types'
+import { adminApi, SettingsGroupResponse, ScanSummaryResponse } from '@/lib/admin-api'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 
@@ -150,20 +150,20 @@ export default function AdminScannerPage() {
   const [error,     setError]     = useState<string | null>(null)
   const [loading,   setLoading]   = useState(false)
   const [scanMode,  setScanMode]  = useState<ScannerMode>('spot')
-  const [scanning,  setScanning]  = useState(false)
-  const [scanDone,  setScanDone]  = useState(false)
-  const [countdown, setCountdown] = useState<number | null>(null)
-  const [rejStats,  setRejStats]  = useState<RejectionStats | null>(null)
+  const [scanning,   setScanning]   = useState(false)
+  const [scanDone,   setScanDone]   = useState(false)
+  const [countdown,  setCountdown]  = useState<number | null>(null)
+  const [scanStats,  setScanStats]  = useState<ScanSummaryResponse | null>(null)
   const scanDoneTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const fetchStatus = useCallback(async () => {
     try {
-      const [res, ctrl] = await Promise.all([
+      const [res, stats] = await Promise.all([
         adminApi.scheduler.status(),
-        fetch('/api/scanner/control').then(r => r.json()).catch(() => ({})),
+        adminApi.analytics.scans(24).catch(() => null),
       ])
       if (res.success && res.data) setStatus(res.data)
-      if (ctrl?.rejectionStats) setRejStats(ctrl.rejectionStats)
+      if (stats) setScanStats(stats)
     } catch { /* silent */ }
   }, [])
 
@@ -474,43 +474,65 @@ export default function AdminScannerPage() {
         </p>
       </div>
 
-      {/* ── Section: Rejection Stats ────────────────────────────────────────── */}
-      {rejStats && rejStats.totalScanned > 0 && (
-        <div>
-          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3 font-semibold">Last Scan — Rejection Breakdown</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-            {[
-              { label: 'Scanned',     value: rejStats.totalScanned,  color: 'text-terminal-text' },
-              { label: 'Accepted',    value: rejStats.totalAccepted, color: 'text-emerald-400'   },
-              { label: 'Rejected',    value: rejStats.totalRejected, color: 'text-red-400'       },
-              { label: 'Accept Rate', value: rejStats.totalScanned > 0 ? `${((rejStats.totalAccepted / rejStats.totalScanned) * 100).toFixed(1)}%` : '0%', color: 'text-blue-400' },
-            ].map(c => (
-              <div key={c.label} className="glass-card rounded-xl px-4 py-3">
-                <p className="text-terminal-muted text-[10px] uppercase tracking-widest mb-1">{c.label}</p>
-                <p className={`text-xl font-bold font-mono ${c.color}`}>{c.value}</p>
-              </div>
-            ))}
-          </div>
-          {rejStats.topReasons.length > 0 && (
-            <div className="glass-card rounded-xl p-4">
-              <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Top Rejection Gates</p>
-              <div className="space-y-2.5">
-                {rejStats.topReasons.map(r => (
-                  <div key={r.stage}>
-                    <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-terminal-text text-sm capitalize">{r.stage.replace(/_/g, ' ')}</span>
-                      <span className="text-terminal-muted text-xs font-mono">{r.count} · {r.pct}%</span>
-                    </div>
-                    <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full bg-blue-400/40" style={{ width: `${r.pct}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
+      {/* ── Section: Scan Stats (DB-authoritative via scan_metrics_log) ──────── */}
+      {scanStats && scanStats.total_scans > 0 && (() => {
+        const totalScanned  = Math.round((scanStats.avg_coins_scanned ?? 0) * scanStats.total_scans)
+        const totalAccepted = Math.round((scanStats.avg_signals_found ?? 0) * scanStats.total_scans)
+        const totalRejected = Math.max(0, totalScanned - totalAccepted)
+        const acceptRate    = totalScanned > 0 ? ((totalAccepted / totalScanned) * 100).toFixed(1) : '0.0'
+        const gates         = scanStats.gate_rejections ?? {}
+        const totalGate     = Object.values(gates).reduce((s, n) => s + n, 0)
+        const topGates      = Object.entries(gates)
+          .filter(([, n]) => n > 0)
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, 8)
+
+        return (
+          <div>
+            <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3 font-semibold">
+              Last 24h — Scan Summary (DB truth)
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+              {[
+                { label: 'Scanned',     value: totalScanned,  color: 'text-terminal-text' },
+                { label: 'Signals',     value: totalAccepted, color: 'text-emerald-400'   },
+                { label: 'Rejected',    value: totalRejected, color: 'text-red-400'       },
+                { label: 'Accept Rate', value: `${acceptRate}%`, color: 'text-blue-400'  },
+              ].map(c => (
+                <div key={c.label} className="glass-card rounded-xl px-4 py-3">
+                  <p className="text-terminal-muted text-[10px] uppercase tracking-widest mb-1">{c.label}</p>
+                  <p className={`text-xl font-bold font-mono ${c.color}`}>{c.value}</p>
+                </div>
+              ))}
             </div>
-          )}
-        </div>
-      )}
+            {topGates.length > 0 && (
+              <div className="glass-card rounded-xl p-4">
+                <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">
+                  Gate Rejections — 24h ({scanStats.total_scans} scans)
+                </p>
+                <div className="space-y-2.5">
+                  {topGates.map(([gate, count]) => {
+                    const pct = totalGate > 0 ? Math.round(count / totalGate * 100) : 0
+                    return (
+                      <div key={gate}>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-terminal-text text-sm capitalize">
+                            {gate.replace(/_/g, ' ').toLowerCase()}
+                          </span>
+                          <span className="text-terminal-muted text-xs font-mono">{count} · {pct}%</span>
+                        </div>
+                        <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full bg-blue-400/40" style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
     </div>
   )
 }

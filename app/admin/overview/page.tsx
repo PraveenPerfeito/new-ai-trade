@@ -2,8 +2,8 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import {
-  Activity, ScanLine, Zap,
-  RefreshCw, Play, Square, Clock,
+  Activity, Zap,
+  RefreshCw, Play, Square,
   TrendingUp, TrendingDown, Minus, CheckCircle, XCircle,
   ChevronRight,
 } from 'lucide-react'
@@ -79,25 +79,37 @@ function MetricTile({ label, value, sub, href, accent = 'default' }: {
   return href ? <Link href={href} className="block">{el}</Link> : el
 }
 
+interface SignalCounts {
+  signals_today:  number
+  active_signals: number
+  win_rate_7d:    number
+  expectancy_7d:  number
+  resolved_7d:    number
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CommandOverviewPage() {
-  const [celery,    setCelery]    = useState<CeleryStatus | null>(null)
-  const [regime,    setRegime]    = useState<RegimeData | null>(null)
-  const [signals,   setSignals]   = useState<TacticalSignalRow[]>([])
-  const [cache,     setCache]     = useState<CacheTelemetry | null>(null)
-  const [providers, setProviders] = useState<ProviderStatus[]>([])
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null)
-  const [countdown, setCountdown] = useState<number | null>(null)
-  const [pausing,   setPausing]   = useState(false)
+  const [celery,       setCelery]      = useState<CeleryStatus | null>(null)
+  const [regime,       setRegime]      = useState<RegimeData | null>(null)
+  const [signals,      setSignals]     = useState<TacticalSignalRow[]>([])
+  const [cache,        setCache]       = useState<CacheTelemetry | null>(null)
+  const [providers,    setProviders]   = useState<ProviderStatus[]>([])
+  const [signalCounts, setSignalCounts]= useState<SignalCounts | null>(null)
+  const [updatedAt,    setUpdatedAt]   = useState<string | null>(null)
+  const [countdown,    setCountdown]   = useState<number | null>(null)
+  const [pausing,      setPausing]     = useState(false)
 
   const fetchAll = useCallback(async () => {
     await Promise.allSettled([
       adminApi.scheduler.status().then(res => { if (res.success && res.data) setCelery(res.data) }).catch(() => {}),
       fetch('/api/market/intelligence').then(r => r.json()).then(j => { if (j.success) setRegime(j.regime) }),
-      fetch('/api/signals/tactical?limit=100&lifecycleStage=all').then(r => r.json()).then(j => { if (j.success) setSignals(j.signals) }),
+      // Tactical feed limited to 6 rows — only used for the recent-signals list, not for metric tiles
+      fetch('/api/signals/tactical?limit=6&lifecycleStage=all').then(r => r.json()).then(j => { if (j.success) setSignals(j.signals) }),
       fetch('/api/cache/intelligence').then(r => r.json()).then(j => { if (j.success) setCache(j.telemetry) }),
       fetch('/api/health/providers').then(r => r.json()).then(j => { if (j.providers) setProviders(j.providers) }).catch(() => {}),
+      // DB-authoritative signal counts — bypasses limit=100 inaccuracy
+      fetch('/api/signals/counts').then(r => r.json()).then(j => { if (j.success) setSignalCounts(j) }).catch(() => {}),
     ])
     setUpdatedAt(new Date().toLocaleTimeString())
   }, [])
@@ -132,6 +144,7 @@ export default function CommandOverviewPage() {
     } finally { setPausing(false) }
   }
 
+  // Lifecycle pills from the 6-row tactical fetch — for display only (not metric tiles)
   const lifecycleCounts = signals.reduce<Record<string, number>>((acc, s) => {
     acc[s.lifecycleStage] = (acc[s.lifecycleStage] ?? 0) + 1; return acc
   }, {})
@@ -142,7 +155,6 @@ export default function CommandOverviewPage() {
   const sentCount   = (lifecycleCounts['TELEGRAM_SENT'] ?? 0) + (lifecycleCounts['AI_APPROVED'] ?? 0)
   const freshGroups = cache ? cache.groups.filter(g => !g.isStale).length : null
   const quotaPct    = cache?.quota?.pctUsed != null ? Math.round(cache.quota.pctUsed) : null
-  const healthyProviders = providers.filter(p => p.healthy).length
 
   return (
     <div className="p-4 sm:p-6 space-y-4 max-w-6xl mx-auto">
@@ -324,12 +336,36 @@ export default function CommandOverviewPage() {
         )}
       </div>
 
-      {/* ── Metric tiles row (no duplicates — active already shown in scanner card) ── */}
+      {/* ── Metric tiles — DB-authoritative, not bounded by limit=100 ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <MetricTile label="Recent Sent"    value={sentCount}  sub="latest 100 tactical rows" href="/admin/signals"  accent={sentCount > 0 ? 'blue' : 'default'} />
-        <MetricTile label="Recent TP"      value={tpCount}    sub="latest 100 tactical rows" href="/admin/tactical" accent={tpCount > 0 ? 'green' : 'default'} />
-        <MetricTile label="Recent SL"      value={slCount}    sub="latest 100 tactical rows" href="/admin/tactical" accent={slCount > 0 ? 'red' : 'default'} />
-        <MetricTile label="Providers Up"   value={providers.length > 0 ? `${healthyProviders}/${providers.length}` : '—'} sub="data feeds healthy" href="/admin/providers" accent={healthyProviders === providers.length && providers.length > 0 ? 'green' : 'amber'} />
+        <MetricTile
+          label="Signals Today"
+          value={signalCounts?.signals_today ?? '—'}
+          sub="generated last 24h"
+          href="/admin/signals"
+          accent={signalCounts != null ? (signalCounts.signals_today > 0 ? 'blue' : 'default') : 'default'}
+        />
+        <MetricTile
+          label="Active Signals"
+          value={signalCounts?.active_signals ?? '—'}
+          sub="open positions (7d)"
+          href="/admin/tactical"
+          accent={signalCounts != null ? (signalCounts.active_signals > 0 ? 'green' : 'default') : 'default'}
+        />
+        <MetricTile
+          label="Win Rate 7D"
+          value={signalCounts?.resolved_7d ? `${signalCounts.win_rate_7d}%` : '—'}
+          sub={signalCounts?.resolved_7d ? `${signalCounts.resolved_7d} resolved` : 'no resolved signals'}
+          href="/admin/analytics"
+          accent={signalCounts?.win_rate_7d != null ? (signalCounts.win_rate_7d >= 50 ? 'green' : signalCounts.win_rate_7d >= 40 ? 'amber' : 'red') : 'default'}
+        />
+        <MetricTile
+          label="Expectancy 7D"
+          value={signalCounts?.resolved_7d ? `${signalCounts.expectancy_7d > 0 ? '+' : ''}${signalCounts.expectancy_7d}R` : '—'}
+          sub="avg return per trade"
+          href="/admin/analytics"
+          accent={signalCounts?.expectancy_7d != null ? (signalCounts.expectancy_7d > 0 ? 'green' : signalCounts.expectancy_7d > -0.2 ? 'amber' : 'red') : 'default'}
+        />
       </div>
 
       {/* ── Recent signals — card rows (no horizontal scroll) ── */}

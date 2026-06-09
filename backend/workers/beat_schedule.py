@@ -80,15 +80,15 @@ BEAT_SCHEDULE = {
             "queue": "celery",
         },
     },
-    # Worker liveness heartbeat: every 240 seconds — _HEARTBEAT_TTL is 600s,
-    # so a 240s interval gives 2.5× safety margin before /health/ready reports
-    # "unknown".  Reduces heartbeat to 360 msgs/day (was 720 at 120s — A1
-    # OPS.CONSOLIDATION.1 saves 10,800 msgs/month).
+    # Worker liveness heartbeat: every 600 seconds (10 min).
+    # _HEARTBEAT_TTL is 1800s; /health/ready threshold is 900s.
+    # Safety margin: 900s threshold / 600s interval = 1.5× (one missed fire before "unknown").
+    # CloudAMQP: 6 msgs/hour = 4,320 msgs/month (was 10,800 at 240s — A2 PLATFORM.TRUTH.1).
     "worker-heartbeat": {
         "task": "backend.workers.scan_task.worker_heartbeat",
-        "schedule": 240.0,  # seconds (was 120.0 — A1 OPS.CONSOLIDATION.1)
+        "schedule": 600.0,  # seconds (was 240.0 — A2 PLATFORM.TRUTH.1)
         "options": {
-            "expires": 235,
+            "expires": 590,
             "queue": "celery",
         },
     },

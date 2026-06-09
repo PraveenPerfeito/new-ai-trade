@@ -1,15 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { adminApi, AiSummaryResponse, EdgeReport } from '@/lib/admin-api'
+import { useCallback } from 'react'
+import { adminApi, AiSummaryResponse } from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
-import { analyticsWindowLabel } from '@/lib/window-label'
-import { Brain, Zap, AlertTriangle, CheckCircle, Power, Clock } from 'lucide-react'
-
-// P3.2: Haiku pricing — update here when Anthropic changes rates
-const HAIKU_PRICE_IN_PER_M  = 0.80   // USD per 1M input tokens (Haiku 4.5)
-const HAIKU_PRICE_OUT_PER_M = 4.00   // USD per 1M output tokens (Haiku 4.5)
-const HAIKU_PRICING_LABEL = `Haiku: $${HAIKU_PRICE_IN_PER_M}/M in + $${HAIKU_PRICE_OUT_PER_M}/M out`
+import { Brain } from 'lucide-react'
 
 function pct(v: number | null | undefined, d = 1) {
   return v != null ? `${(v * 100).toFixed(d)}%` : '—'
@@ -62,42 +56,15 @@ const CONFIDENCE_THRESHOLDS = [
 ]
 
 export default function CalibrationPage() {
-  const aiFetcher   = useCallback(() => adminApi.analytics.ai(24), [])
-  const edgeFetcher = useCallback(() => adminApi.analytics.edgeReport(), [])
+  // AI diagnostics only — Claude calls, latency, errors, verdict distribution.
+  // Heavy metrics (AI calls count, cost, confidence bands, Claude effectiveness)
+  // live on the System page and Analytics page respectively.
+  const aiFetcher = useCallback(() => adminApi.analytics.ai(24), [])
+  const { data: ai, loading: ail } = useAutoRefresh<AiSummaryResponse>(aiFetcher, 120_000)
 
-  const { data: ai, loading: ail }  = useAutoRefresh<AiSummaryResponse>(aiFetcher, 120_000)
-  const { data: edge, loading: el } = useAutoRefresh<EdgeReport>(edgeFetcher, 120_000)
-
-  const claude    = edge?.claude_effectiveness
   const verdicts  = ai?.verdicts ?? (ai as any)?.verdict_distribution ?? {}
-  const totalVerd = Object.values(verdicts as Record<string, number>).reduce((a, b) => a + b, 0)
+  const totalVerd = Object.values(verdicts as Record<string, number>).reduce((a: number, b: number) => a + b, 0)
   const hasAiData = (ai?.total_calls ?? 0) > 0
-
-  // ── AI enable/disable toggle ──────────────────────────────────────────────
-  const [aiEnabled, setAiEnabled] = useState<boolean | null>(null)
-  const [toggling, setToggling]   = useState(false)
-
-  useEffect(() => {
-    adminApi.settings.group('ai')
-      .then(g => {
-        const field = g.fields?.find((f: { key: string }) => f.key === 'enabled')
-        setAiEnabled((field as any)?.value !== false)
-      })
-      .catch(() => setAiEnabled(true))
-  }, [])
-
-  const toggleAi = async () => {
-    if (aiEnabled === null || toggling) return
-    setToggling(true)
-    try {
-      await adminApi.settings.patch('ai', { enabled: !aiEnabled })
-      setAiEnabled(!aiEnabled)
-    } catch (e) {
-      console.error('Failed to toggle AI', e)
-    } finally {
-      setToggling(false)
-    }
-  }
 
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
@@ -105,39 +72,11 @@ export default function CalibrationPage() {
       <div className="flex items-center gap-3">
         <Brain className="w-6 h-6 text-blue-400" />
         <div>
-          <h1 className="text-xl font-semibold text-white">Calibration</h1>
-          <p className="text-sm text-zinc-400">AI effectiveness - rolling 24h · confidence thresholds - historical windows</p>
-        </div>
-      </div>
-
-      {/* ── Claude API master toggle ── */}
-      <div className={`rounded-xl px-5 py-4 border flex items-center gap-4 ${
-        aiEnabled === false
-          ? 'bg-red-500/5 border-red-500/25'
-          : 'bg-zinc-900 border-zinc-800'
-      }`}>
-        <Power className={`w-5 h-5 shrink-0 ${aiEnabled === false ? 'text-red-400' : 'text-green-400'}`} />
-        <div className="flex-1">
-          <p className={`text-sm font-semibold ${aiEnabled === false ? 'text-red-300' : 'text-white'}`}>
-            Claude AI Validation — {aiEnabled === null ? '...' : aiEnabled ? 'ENABLED' : 'DISABLED'}
-          </p>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            {aiEnabled === false
-              ? 'Disabled — scanner uses heuristic scoring only. Re-enable when API credits are available.'
-              : 'Enabled — each signal is validated by Claude Haiku. Disable to conserve API credits.'}
+          <h1 className="text-xl font-semibold text-white">AI Calibration</h1>
+          <p className="text-sm text-zinc-400">
+            Claude API diagnostics — 24h · toggle AI on Scanner page
           </p>
         </div>
-        <button
-          onClick={toggleAi}
-          disabled={toggling || aiEnabled === null}
-          className={`text-xs font-semibold px-4 py-2 rounded-lg border transition-all disabled:opacity-40 ${
-            aiEnabled === false
-              ? 'bg-green-500/15 border-green-500/30 text-green-300 hover:bg-green-500/25'
-              : 'bg-red-500/15 border-red-500/30 text-red-300 hover:bg-red-500/25'
-          }`}
-        >
-          {toggling ? '...' : aiEnabled === false ? '▶ Enable Claude' : '⏸ Disable Claude'}
-        </button>
       </div>
 
       {/* Warmup banner */}
@@ -153,22 +92,12 @@ export default function CalibrationPage() {
         </div>
       )}
 
-      {/* ── SECTION: CURRENT STATE ── */}
-      <p className="text-[9px] text-zinc-600 uppercase tracking-widest flex items-center gap-2 pt-1">
-        <span className="h-px flex-1 bg-zinc-800" />Current State - {analyticsWindowLabel(24)}<span className="h-px flex-1 bg-zinc-800" />
-      </p>
-
-      {/* Key metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard
-          label="Total AI Calls"
-          value={ai?.total_calls ?? 0}
-          sub="rolling 24h"
-        />
+      {/* ── API Health ── */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <StatCard
           label="Success Rate"
           value={pct(ai?.success_rate)}
-          sub="API calls OK"
+          sub="API calls OK (24h)"
           accent={ai?.success_rate != null ? (ai.success_rate >= 0.9 ? 'good' : ai.success_rate >= 0.7 ? 'warn' : 'bad') : 'default'}
         />
         <StatCard
@@ -178,52 +107,19 @@ export default function CalibrationPage() {
           accent={ai?.avg_latency_ms != null ? (ai.avg_latency_ms < 2000 ? 'good' : 'warn') : 'default'}
         />
         <StatCard
-          label="Error Rate"
-          value={pct(ai?.error_rate)}
-          sub="fallback rate"
-          accent={ai?.error_rate != null ? (ai.error_rate < 0.1 ? 'good' : ai.error_rate < 0.3 ? 'warn' : 'bad') : 'default'}
+          label="Last Error"
+          value={ai?.last_error ? 'See logs' : 'None'}
+          sub={ai?.last_error ? ai.last_error.slice(0, 40) : 'All calls clean'}
+          accent={ai?.last_error ? 'bad' : 'good'}
         />
       </div>
 
-      {/* Validation source + cost breakdown — Phase 7.2B.9 + 7.2B.7.4A */}
-      {hasAiData && (
-        <div className="grid grid-cols-2 gap-3">
-          <StatCard
-            label="🤖 Claude Validated"
-            value={ai?.claude_calls ?? 0}
-            sub="Anthropic API calls"
-            accent="good"
-          />
-          <StatCard
-            label="⚡ Heuristic Validated"
-            value={ai?.heuristic_calls ?? 0}
-            sub="Claude OFF or low score"
-            accent={(ai?.fallback_rate ?? 0) > 0.5 ? 'warn' : 'default'}
-          />
-          <StatCard
-            label="💰 Est. Cost Today"
-            value={ai?.estimated_cost_usd != null ? `$${ai.estimated_cost_usd.toFixed(4)}` : '—'}
-            sub={HAIKU_PRICING_LABEL}
-            accent="default"
-          />
-          <StatCard
-            label="⚠ Last Error"
-            value={ai?.last_error ? 'See logs' : 'None'}
-            sub={ai?.last_error ? ai.last_error.slice(0, 40) : 'All calls clean'}
-            accent={ai?.last_error ? 'bad' : 'good'}
-          />
-        </div>
-      )}
-
-      {/* ── SECTION: PERFORMANCE ── */}
-      <p className="text-[9px] text-zinc-600 uppercase tracking-widest flex items-center gap-2 pt-1">
-        <span className="h-px flex-1 bg-zinc-800" />Performance<span className="h-px flex-1 bg-zinc-800" />
-      </p>
-
-      {/* Verdict distribution */}
+      {/* ── Verdict Distribution ── */}
       {totalVerd > 0 && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-4">Verdict Distribution</h2>
+          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-4">
+            Verdict Distribution — {totalVerd} calls (24h)
+          </h2>
           <div className="space-y-3">
             {Object.entries(verdicts as Record<string, number>).map(([k, v]) => (
               <VerdictBar key={k} label={k} count={v} total={totalVerd} />
@@ -232,83 +128,10 @@ export default function CalibrationPage() {
         </div>
       )}
 
-      {/* Claude effectiveness */}
-      {claude && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-4">
-            Claude Effectiveness - {analyticsWindowLabel(edge?.window_hours ?? 720)}
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {[
-              { label: 'Signals Logged', value: claude.total_with_ai_log },
-              { label: 'Verdict',        value: claude.verdict?.replace(/_/g, ' ') ?? '—' },
-              ...Object.entries(claude.heuristic ?? {}).map(([k, v]) => ({ label: k.replace(/_/g, ' '), value: String(v) })),
-            ].map(({ label, value }) => (
-              <div key={label}>
-                <div className="text-xs text-zinc-500 mb-0.5 capitalize">{label}</div>
-                <div className="text-sm font-semibold text-white capitalize">{value}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── SECTION: HISTORICAL PERFORMANCE ── */}
+      {/* ── Confidence Tier Reference ── */}
       <div className="pt-2">
         <p className="text-[9px] text-zinc-600 uppercase tracking-widest mb-3 flex items-center gap-2">
-          <span className="h-px flex-1 bg-zinc-800" />Historical Performance - {analyticsWindowLabel(edge?.window_hours ?? 720)}<span className="h-px flex-1 bg-zinc-800" />
-        </p>
-
-        {/* P2.2: Building-data banner when statistical significance not yet reached */}
-        {!el && edge?.edge_verdict?.confidence_level === 'insufficient_data' && (
-          <div className="rounded-xl px-5 py-4 bg-blue-500/5 border border-blue-500/20 flex items-start gap-3 mb-3">
-            <Clock className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-blue-300 text-sm font-semibold">Building performance data</p>
-              <p className="text-zinc-500 text-xs mt-1 leading-relaxed">
-                Not enough resolved signals yet for statistical significance. Check back in 3–5 days as more signals resolve.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Live confidence bands */}
-        {edge?.confidence_calibration?.bands && edge.confidence_calibration.bands.length > 0 ? (
-          <div className="space-y-1.5">
-            {edge.confidence_calibration.bands.map((b) => (
-              <div key={b.label} className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 flex items-center gap-3">
-                <span className="text-zinc-300 font-mono text-xs w-16 shrink-0">{b.label}</span>
-                <span className="text-zinc-500 text-xs w-12 shrink-0">{b.total} sig</span>
-                <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                  {!b.insufficient_data && b.win_rate != null && (
-                    <div className="h-full rounded-full transition-all"
-                      style={{
-                        width: `${(b.win_rate * 100).toFixed(0)}%`,
-                        backgroundColor: b.win_rate >= 0.6 ? '#22c55e' : b.win_rate >= 0.5 ? '#f59e0b' : '#ef4444',
-                      }} />
-                  )}
-                </div>
-                <span className={`text-xs font-mono font-semibold w-12 text-right shrink-0 ${
-                  b.insufficient_data || b.win_rate == null ? 'text-zinc-600' :
-                  b.win_rate >= 0.6 ? 'text-green-400' : b.win_rate >= 0.5 ? 'text-amber-400' : 'text-red-400'
-                }`}>
-                  {b.insufficient_data || b.win_rate == null ? '—' : `${(b.win_rate * 100).toFixed(1)}%`}
-                </span>
-                <span className="text-zinc-600 font-mono text-xs w-14 text-right shrink-0 hidden sm:block">
-                  {b.expectancy != null ? `${b.expectancy > 0 ? '+' : ''}${b.expectancy.toFixed(2)}R` : '—'}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-zinc-600 text-xs">No resolved signals yet — run scans to populate confidence performance.</p>
-        )}
-      </div>
-
-      {/* ── SECTION: REFERENCE ── */}
-      <div className="pt-2">
-        <p className="text-[9px] text-zinc-600 uppercase tracking-widest mb-3 flex items-center gap-2">
-          <span className="h-px flex-1 bg-zinc-800" />Confidence Tiers<span className="h-px flex-1 bg-zinc-800" />
+          <span className="h-px flex-1 bg-zinc-800" />Confidence Tiers — Reference<span className="h-px flex-1 bg-zinc-800" />
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {CONFIDENCE_THRESHOLDS.map((t) => (
@@ -319,6 +142,9 @@ export default function CalibrationPage() {
             </div>
           ))}
         </div>
+        <p className="text-zinc-700 text-[10px] mt-2">
+          Full confidence calibration bands and Claude effectiveness: Analytics → Edge Validation tab
+        </p>
       </div>
     </div>
   )

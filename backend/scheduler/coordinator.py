@@ -91,8 +91,11 @@ class SchedulerCoordinator:
         try:
             key = f"{_LOCK_KEY_PREFIX}{mode}"
             return self._redis.exists(key) == 1
-        except Exception:
-            return False  # fail-safe: assume not running if Redis unavailable
+        except Exception as exc:
+            # Fail-open: assume not running if Redis unavailable. Log so ops can
+            # detect Redis outages that could allow duplicate scans.
+            log.warning("is_scan_running_redis_error", mode=mode, error=str(exc))
+            return False
 
     # ── Scheduler enable / disable ────────────────────────────────────────────
 

@@ -141,13 +141,22 @@ function PipelineIntegrityCard({
 
 // ── Gate rejection labels ─────────────────────────────────────────────────────
 
+// All 12 canonical pipeline gate keys (PIPELINE.HARDENING.1 + original 6)
 const GATE_REJECTION_LABELS: Record<string, string> = {
-  BTC_DOWN_BUY: 'BTC-down BUY',
-  TOXIC_DENYLIST: 'Toxic denylist',
-  SIGNAL_COOLDOWN: '4h cooldown',
-  CONFIDENCE_REJECTION: 'Confidence',
-  CMC_REJECTION: 'CMC',
-  REGIME_REJECTION: 'Regime',
+  // Outer gates (original 6)
+  BTC_DOWN_BUY:          'BTC-down BUY',
+  TOXIC_DENYLIST:        'Toxic denylist',
+  SIGNAL_COOLDOWN:       '4h cooldown',
+  CONFIDENCE_REJECTION:  'Confidence',
+  CMC_REJECTION:         'CMC filter',
+  REGIME_REJECTION:      'Regime',
+  // Inner pipeline gates (added PIPELINE.HARDENING.1)
+  MTF_REJECTION:             'MTF analysis',
+  VOLATILITY_REJECTION:      'Volatility',
+  TREND_STRENGTH_REJECTION:  'Trend strength',
+  SETUP_REJECTION:           'Setup score',
+  RR_REJECTION:              'R:R ratio',
+  RISK_REJECTION:            'Risk engine',
 }
 
 function GateRejectionGrid({ counts }: { counts?: Record<string, number> }) {
@@ -157,7 +166,7 @@ function GateRejectionGrid({ counts }: { counts?: Record<string, number> }) {
       <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-2">
         Gate Rejections - {analyticsWindowLabel(24)}
       </p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {keys.map((key) => (
           <div key={key} className="rounded-lg border border-terminal-border/30 px-3 py-2">
             <p className="text-terminal-muted/70 text-[10px]">{GATE_REJECTION_LABELS[key]}</p>
@@ -240,20 +249,83 @@ function MarketStructureBreakdown({
   )
 }
 
-export default function SystemPage() {
-  const healthFetcher   = useCallback(() => adminApi.health.ready(), [])
-  const scanFetcher     = useCallback(() => adminApi.analytics.scans(24), [])
-  const scan7dFetcher   = useCallback(() => adminApi.analytics.scans(168), [])
-  const aiFetcher       = useCallback(() => adminApi.analytics.ai(24), [])
-  const monitorFetcher  = useCallback(() => adminApi.analytics.monitor(), [])
+// ── 8-provider unified health table (Phase 5) ────────────────────────────────
 
-  const { data: health,  loading: hl } = useAutoRefresh<HealthReady>(healthFetcher, 120_000)
-  const { data: scans }                = useAutoRefresh<ScanSummaryResponse>(scanFetcher, 120_000)
-  const { data: scans7d }              = useAutoRefresh<ScanSummaryResponse>(scan7dFetcher, 120_000)
-  const { data: ai }                   = useAutoRefresh<AiSummaryResponse>(aiFetcher, 120_000)
+interface ProviderCheckResult {
+  name: string; healthy: boolean; latencyMs: number; note?: string; error?: string
+}
+
+const PROVIDER_ORDER = ['Binance','CMC','CoinGecko','Claude','Telegram','Supabase','Redis','CloudAMQP']
+const PROVIDER_ROLE: Record<string, string> = {
+  Binance:    'OHLCV / Futures',
+  CMC:        'Market Intelligence',
+  CoinGecko:  'Fallback Data',
+  Claude:     'AI Validation',
+  Telegram:   'Alert Delivery',
+  Supabase:   'Database / Auth',
+  Redis:      'Cache / Pub-Sub',
+  CloudAMQP:  'Task Broker',
+}
+
+function ProviderHealthTable({ providers }: { providers: ProviderCheckResult[] }) {
+  const sorted = PROVIDER_ORDER.map(n => providers.find(p => p.name === n)).filter(Boolean) as ProviderCheckResult[]
+  return (
+    <div className="glass-card rounded-xl p-4 overflow-x-auto">
+      <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">
+        Provider Health — 8 Services
+      </p>
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-terminal-muted/60 text-[10px] uppercase">
+            <th className="text-left pb-2 font-medium w-28">Provider</th>
+            <th className="text-left pb-2 font-medium">Role</th>
+            <th className="text-right pb-2 font-medium w-16">Status</th>
+            <th className="text-right pb-2 font-medium w-16">Latency</th>
+            <th className="text-left pb-2 font-medium pl-3">Note</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-terminal-border/10">
+          {sorted.map(p => (
+            <tr key={p.name}>
+              <td className="py-1.5 text-terminal-text font-semibold">{p.name}</td>
+              <td className="py-1.5 text-terminal-muted/70">{PROVIDER_ROLE[p.name] ?? ''}</td>
+              <td className="py-1.5 text-right">
+                <span className={`font-mono font-bold text-[10px] uppercase ${p.healthy ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {p.healthy ? '✓ UP' : '✗ DOWN'}
+                </span>
+              </td>
+              <td className="py-1.5 text-right font-mono text-terminal-muted/70">
+                {p.latencyMs > 0 ? `${p.latencyMs}ms` : '—'}
+              </td>
+              <td className="py-1.5 pl-3 text-terminal-muted/60 max-w-xs truncate">
+                {p.error
+                  ? <span className="text-red-400/80">{p.error}</span>
+                  : p.note ?? ''}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+export default function SystemPage() {
+  const healthFetcher    = useCallback(() => adminApi.health.ready(), [])
+  const providerFetcher  = useCallback(() => fetch('/api/health/providers').then(r => r.json()), [])
+  const scanFetcher      = useCallback(() => adminApi.analytics.scans(24), [])
+  const scan7dFetcher    = useCallback(() => adminApi.analytics.scans(168), [])
+  const aiFetcher        = useCallback(() => adminApi.analytics.ai(24), [])
+  const monitorFetcher   = useCallback(() => adminApi.analytics.monitor(), [])
+
+  const { data: health,    loading: hl } = useAutoRefresh<HealthReady>(healthFetcher, 120_000)
+  const { data: provData }               = useAutoRefresh<{ providers: ProviderCheckResult[] }>(providerFetcher, 120_000)
+  const { data: scans }                  = useAutoRefresh<ScanSummaryResponse>(scanFetcher, 120_000)
+  const { data: scans7d }                = useAutoRefresh<ScanSummaryResponse>(scan7dFetcher, 120_000)
+  const { data: ai }                     = useAutoRefresh<AiSummaryResponse>(aiFetcher, 120_000)
   // R7: shared polling — multiple tabs/widgets reuse the same timer + response.
   // Interval raised 60s → 120s; monitor counters are daily aggregates.
-  const { data: monitor }              = useSharedPolling<MonitorSnapshot>('admin:monitor', monitorFetcher, 120_000)
+  const { data: monitor }                = useSharedPolling<MonitorSnapshot>('admin:monitor', monitorFetcher, 120_000)
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -302,6 +374,11 @@ export default function SystemPage() {
           </div>
         )}
       </div>
+
+      {/* Provider health table — 8 services */}
+      {provData?.providers && provData.providers.length > 0 && (
+        <ProviderHealthTable providers={provData.providers} />
+      )}
 
       {/* Secondary: Operational metrics */}
       <div>
