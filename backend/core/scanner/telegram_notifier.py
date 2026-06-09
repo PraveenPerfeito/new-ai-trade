@@ -25,6 +25,12 @@ from backend.metrics.prometheus import external_api_errors_total
 
 log = get_logger(__name__)
 
+
+def _on_task_done(task: asyncio.Task, label: str) -> None:
+    if not task.cancelled() and task.exception() is not None:
+        log.warning("background_task_failed", task=label, error=str(task.exception()))
+
+
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 _MIN_INTERVAL = 1.1   # seconds between messages to the same chat (Telegram: 1/s)
@@ -359,7 +365,8 @@ async def send_signal_alert(signal: Signal) -> bool:
     # Monitoring counter (fire-and-forget)
     try:
         from backend.analytics.monitoring import record_telegram_send as _mon_tg  # noqa: PLC0415
-        asyncio.create_task(_mon_tg())
+        t = asyncio.create_task(_mon_tg())
+        t.add_done_callback(lambda t: _on_task_done(t, "monitor_telegram"))
     except Exception:
         pass
     return True

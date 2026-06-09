@@ -4,6 +4,7 @@ Each completed scan writes a row to scan_metrics_log for trend analysis.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -18,6 +19,13 @@ GATE_REJECTION_KEYS: tuple[str, ...] = (
     "CONFIDENCE_REJECTION",
     "CMC_REJECTION",
     "REGIME_REJECTION",
+    # PIPELINE.HARDENING.1 — full inner-pipeline gate accounting
+    "MTF_REJECTION",
+    "VOLATILITY_REJECTION",
+    "TREND_STRENGTH_REJECTION",
+    "SETUP_REJECTION",
+    "RR_REJECTION",
+    "RISK_REJECTION",
     # MARKET_STRUCTURE.FIX.1 — sub-condition telemetry (7 market structure filters)
     "ms_sideways",
     "ms_overextension",
@@ -44,6 +52,19 @@ _GATE_ALIASES = {
     "cmc_rejection": "CMC_REJECTION",
     "regime": "REGIME_REJECTION",
     "regime_rejection": "REGIME_REJECTION",
+    # PIPELINE.HARDENING.1 — lowercase aliases for pre-hardening rows
+    "mtf": "MTF_REJECTION",
+    "mtf_rejection": "MTF_REJECTION",
+    "volatility": "VOLATILITY_REJECTION",
+    "volatility_rejection": "VOLATILITY_REJECTION",
+    "trend_strength": "TREND_STRENGTH_REJECTION",
+    "trend_strength_rejection": "TREND_STRENGTH_REJECTION",
+    "setup_score": "SETUP_REJECTION",
+    "setup_rejection": "SETUP_REJECTION",
+    "rr_ratio": "RR_REJECTION",
+    "rr_rejection": "RR_REJECTION",
+    "risk_engine": "RISK_REJECTION",
+    "risk_rejection": "RISK_REJECTION",
 }
 
 
@@ -73,20 +94,27 @@ async def record_scan(
     if pool is None:
         return
     normalized_rejections = normalize_gate_rejections(gate_rejections)
-    try:
-        await pool.execute(
-            """
-            INSERT INTO scan_metrics_log (
+    last_exc: Exception | None = None
+    # M3 PIPELINE.HARDENING.1 — retry transient DB write failures (2 retries)
+    for attempt in range(3):
+        try:
+            await pool.execute(
+                """
+                INSERT INTO scan_metrics_log (
+                    scan_id, mode, coins_scanned, signals_found,
+                    duration_ms, errors, gate_rejections
+                ) VALUES ($1,$2,$3,$4,$5,$6,$7)
+                """,
                 scan_id, mode, coins_scanned, signals_found,
-                duration_ms, errors, gate_rejections
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7)
-            """,
-            scan_id, mode, coins_scanned, signals_found,
-            duration_ms, errors,
-            json.dumps(normalized_rejections),
-        )
-    except Exception as exc:
-        log.warning("record_scan_failed", scan_id=scan_id, error=str(exc))
+                duration_ms, errors,
+                json.dumps(normalized_rejections),
+            )
+            return
+        except Exception as exc:
+            last_exc = exc
+            if attempt < 2:
+                await asyncio.sleep(0.5 * (2 ** attempt))
+    log.warning("record_scan_failed", scan_id=scan_id, error=str(last_exc))
 
 
 async def get_scan_summary(window_hours: int = 24) -> dict:

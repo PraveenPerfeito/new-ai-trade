@@ -175,10 +175,17 @@ _NULL_EMA_ALIGNMENT_MARKERS = (
 )
 
 _PROMETHEUS_GATE_LABELS = {
-    "BTC_DOWN_BUY": "btc_context",
-    "TOXIC_DENYLIST": "toxic_setup",
-    "CONFIDENCE_REJECTION": "ai",
-    "REGIME_REJECTION": "regime",
+    "BTC_DOWN_BUY":             "btc_context",
+    "TOXIC_DENYLIST":           "toxic_setup",
+    "CONFIDENCE_REJECTION":     "ai",
+    "REGIME_REJECTION":         "regime",
+    # PIPELINE.HARDENING.1 — canonical gate labels for Prometheus
+    "MTF_REJECTION":            "mtf",
+    "VOLATILITY_REJECTION":     "volatility",
+    "TREND_STRENGTH_REJECTION": "trend_strength",
+    "SETUP_REJECTION":          "setup_score",
+    "RR_REJECTION":             "rr_ratio",
+    "RISK_REJECTION":           "risk_engine",
 }
 
 
@@ -616,13 +623,13 @@ async def scan_coin(
         # Step 4: MTF confirmation
         mtf = confirm_multi_timeframe(ind1h, ind4h, signal_type)
         if not mtf.confirmed:
-            _record_gate_rejection("mtf", gate_rejections)
+            _record_gate_rejection("MTF_REJECTION", gate_rejections)
             return None
 
         # Step 5: Volatility gate
         volatility = calc_volatility_rating(ind1h.atr, ind1h.current_price)
         if volatility == VolatilityRating.EXTREME:
-            _record_gate_rejection("volatility", gate_rejections)
+            _record_gate_rejection("VOLATILITY_REJECTION", gate_rejections)
             log.info("rejected_extreme_volatility", symbol=coin.symbol)
             return None
 
@@ -630,7 +637,7 @@ async def scan_coin(
         s1h = calc_trend_strength(ind1h)
         s4h = calc_trend_strength(ind4h)
         if s1h * 0.4 + s4h * 0.6 < 30:
-            _record_gate_rejection("trend_strength", gate_rejections)
+            _record_gate_rejection("TREND_STRENGTH_REJECTION", gate_rejections)
             return None
 
         # Step 5b: Market structure (7 filters)
@@ -680,7 +687,7 @@ async def scan_coin(
             )
             return None
         if not setup.has_setup:
-            _record_gate_rejection("setup_score", gate_rejections)
+            _record_gate_rejection("SETUP_REJECTION", gate_rejections)
             return None
 
         # Step 8: Trade levels + RR gate
@@ -688,7 +695,7 @@ async def scan_coin(
             return None
         levels = trade_levels(ind1h.current_price, ind1h.atr, signal_type, mode)
         if levels.rr_ratio < config.min_rr_ratio:
-            _record_gate_rejection("rr_ratio", gate_rejections)
+            _record_gate_rejection("RR_REJECTION", gate_rejections)
             return None
 
         # Step 9: Risk engine
@@ -707,7 +714,7 @@ async def scan_coin(
             breakout_strength=setup.breakout_strength,
         ))
         if not risk.pass_:
-            _record_gate_rejection("risk_engine", gate_rejections)
+            _record_gate_rejection("RISK_REJECTION", gate_rejections)
             log.info("rejected_risk_engine", symbol=coin.symbol, summary=risk.summary)
             return None
 

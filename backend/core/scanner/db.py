@@ -5,6 +5,7 @@ All operations degrade gracefully when DATABASE_URL is not configured.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime
 from typing import Any
@@ -94,75 +95,81 @@ async def save_signal(signal: Signal) -> str | None:
     pool = await _pool()
     if not pool:
         return None
-    try:
-        expl = signal.ai_explainability.model_dump() if signal.ai_explainability else None
-        ind  = signal.indicators
-        row = await pool.fetchrow(
-            """
-            INSERT INTO signals (
-                scan_run_id, symbol, name, type, timeframe, scanner_mode,
-                entry_price, target_price, stop_loss, rr_ratio, confidence,
-                rsi, macd_histogram, ema_trend, atr, volume_spike,
-                setup_description, ai_validated, ai_reasoning,
-                ai_explainability, risks, strengths, telegram_sent,
-                breakout_type,
-                breakout_strength, oi_interpretation, funding_trend,
-                positioning_context, trend_score,
-                sector_status,
-                market_regime,
-                validation_source
-            ) VALUES (
-                $1::uuid, $2, $3, $4, $5, $6,
-                $7, $8, $9, $10, $11,
-                $12, $13, $14, $15, $16,
-                $17, $18, $19,
-                $20, $21, $22, $23,
-                $24,
-                $25, $26, $27,
-                $28, $29,
-                $30,
-                $31,
-                $32
+    expl = signal.ai_explainability.model_dump() if signal.ai_explainability else None
+    ind  = signal.indicators
+    last_exc: Exception | None = None
+    # C3 PIPELINE.HARDENING.1 — 3-attempt retry with 0.5s exponential backoff
+    for attempt in range(3):
+        try:
+            row = await pool.fetchrow(
+                """
+                INSERT INTO signals (
+                    scan_run_id, symbol, name, type, timeframe, scanner_mode,
+                    entry_price, target_price, stop_loss, rr_ratio, confidence,
+                    rsi, macd_histogram, ema_trend, atr, volume_spike,
+                    setup_description, ai_validated, ai_reasoning,
+                    ai_explainability, risks, strengths, telegram_sent,
+                    breakout_type,
+                    breakout_strength, oi_interpretation, funding_trend,
+                    positioning_context, trend_score,
+                    sector_status,
+                    market_regime,
+                    validation_source
+                ) VALUES (
+                    $1::uuid, $2, $3, $4, $5, $6,
+                    $7, $8, $9, $10, $11,
+                    $12, $13, $14, $15, $16,
+                    $17, $18, $19,
+                    $20, $21, $22, $23,
+                    $24,
+                    $25, $26, $27,
+                    $28, $29,
+                    $30,
+                    $31,
+                    $32
+                )
+                RETURNING id::text
+                """,
+                signal.scan_run_id,
+                signal.symbol,
+                signal.name,
+                signal.type.value,
+                signal.timeframe,
+                signal.scanner_mode.value,
+                signal.entry_price,
+                signal.target_price,
+                signal.stop_loss,
+                signal.rr_ratio,
+                signal.confidence,
+                ind.rsi if ind else None,
+                ind.macd.histogram if ind else None,
+                ind.trend.value if ind else None,
+                ind.atr if ind else None,
+                ind.volume_spike if ind else None,
+                signal.setup_description,
+                signal.ai_validated,
+                signal.ai_reasoning or None,
+                json.dumps(expl) if expl else None,
+                signal.risks,
+                signal.strengths,
+                signal.telegram_sent,
+                signal.breakout_type,        # Phase 7.4A.6.1
+                signal.breakout_strength,    # Phase 7.4A.6.3
+                signal.oi_interpretation,    # Phase 7.4A.6.3
+                signal.funding_trend,        # Phase 7.4A.6.3
+                signal.positioning_context,  # Phase 7.4A.6.3
+                signal.trend_score,          # Phase 7.4A.6.3
+                signal.sector_status,        # Phase 7.4A.7.2
+                signal.market_regime,        # Phase 8.1B
+                signal.validation_source,    # Phase 7.2B.9
             )
-            RETURNING id::text
-            """,
-            signal.scan_run_id,
-            signal.symbol,
-            signal.name,
-            signal.type.value,
-            signal.timeframe,
-            signal.scanner_mode.value,
-            signal.entry_price,
-            signal.target_price,
-            signal.stop_loss,
-            signal.rr_ratio,
-            signal.confidence,
-            ind.rsi if ind else None,
-            ind.macd.histogram if ind else None,
-            ind.trend.value if ind else None,
-            ind.atr if ind else None,
-            ind.volume_spike if ind else None,
-            signal.setup_description,
-            signal.ai_validated,
-            signal.ai_reasoning or None,
-            json.dumps(expl) if expl else None,
-            signal.risks,
-            signal.strengths,
-            signal.telegram_sent,
-            signal.breakout_type,        # Phase 7.4A.6.1
-            signal.breakout_strength,    # Phase 7.4A.6.3
-            signal.oi_interpretation,    # Phase 7.4A.6.3
-            signal.funding_trend,        # Phase 7.4A.6.3
-            signal.positioning_context,  # Phase 7.4A.6.3
-            signal.trend_score,          # Phase 7.4A.6.3
-            signal.sector_status,        # Phase 7.4A.7.2
-            signal.market_regime,        # Phase 8.1B
-            signal.validation_source,    # Phase 7.2B.9
-        )
-        return row["id"] if row else None
-    except Exception as exc:
-        log.warning("db_save_signal_failed", symbol=signal.symbol, error=str(exc))
-        return None
+            return row["id"] if row else None
+        except Exception as exc:
+            last_exc = exc
+            if attempt < 2:
+                await asyncio.sleep(0.5 * (2 ** attempt))  # 0.5s, 1.0s
+    log.warning("db_save_signal_failed", symbol=signal.symbol, error=str(last_exc))
+    return None
 
 
 async def has_recent_signal(

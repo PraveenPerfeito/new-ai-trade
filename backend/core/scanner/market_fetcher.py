@@ -22,6 +22,12 @@ from backend.metrics.prometheus import (
 
 log = get_logger(__name__)
 
+
+def _on_task_done(task: asyncio.Task, label: str) -> None:
+    if not task.cancelled() and task.exception() is not None:
+        log.warning("background_task_failed", task=label, error=str(task.exception()))
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 SPOT_BASE    = "https://api.binance.com/api/v3"
@@ -155,7 +161,8 @@ async def _record_binance_kline_metric(latency_ms: float, success: bool) -> None
         else:
             _batch_errors.append(str(int(time.time() * 1000)))
         if _batch_flush_task is None or _batch_flush_task.done():
-            _batch_flush_task = asyncio.ensure_future(_flush_binance_metrics_after_delay())
+            _batch_flush_task = asyncio.create_task(_flush_binance_metrics_after_delay())
+            _batch_flush_task.add_done_callback(lambda t: _on_task_done(t, "flush_binance_metrics"))
 
 
 async def _flush_binance_metrics_after_delay() -> None:
@@ -205,17 +212,17 @@ async def fetch_spot_klines(symbol: str, interval: str = "1h", limit: int = 100)
                 service="binance",
             )
             latency_ms = (time.perf_counter() - t0) * 1000
-            asyncio.ensure_future(_record_binance_kline_metric(latency_ms, success=True))
+            asyncio.create_task(_record_binance_kline_metric(latency_ms, success=True))
             return _drop_open_candle(_parse_klines(data)) if data else []
         except httpx.HTTPStatusError as exc:
-            asyncio.ensure_future(_record_binance_kline_metric(0, success=False))
+            asyncio.create_task(_record_binance_kline_metric(0, success=False))
             if exc.response.status_code == 451 and base == SPOT_BASE:
                 log.warning("binance_geo_blocked_trying_us", symbol=symbol)
                 continue
             log.warning("spot_klines_failed", symbol=symbol, error=str(exc))
             return []
         except Exception as exc:
-            asyncio.ensure_future(_record_binance_kline_metric(0, success=False))
+            asyncio.create_task(_record_binance_kline_metric(0, success=False))
             log.warning("spot_klines_failed", symbol=symbol, error=str(exc))
             return []
     return []
@@ -237,27 +244,30 @@ async def fetch_futures_klines(symbol: str, interval: str = "1h", limit: int = 1
             service="binance",
         )
         latency_ms = (time.perf_counter() - t0) * 1000
-        asyncio.ensure_future(_record_binance_kline_metric(latency_ms, success=True))
+        asyncio.create_task(_record_binance_kline_metric(latency_ms, success=True))
         _futures_consecutive_failures = 0  # reset on success
         return _drop_open_candle(_parse_klines(data)) if data else []
     except httpx.HTTPStatusError as exc:
-        asyncio.ensure_future(_record_binance_kline_metric(0, success=False))
+        asyncio.create_task(_record_binance_kline_metric(0, success=False))
         _futures_consecutive_failures += 1
         status = exc.response.status_code
         log.warning("futures_klines_failed", symbol=symbol, status=status,
                     consecutive=_futures_consecutive_failures, error=str(exc))
         if status == 451:
-            asyncio.ensure_future(_maybe_send_futures_geo_alert(status))
+            t = asyncio.create_task(_maybe_send_futures_geo_alert(status))
+            t.add_done_callback(lambda t: _on_task_done(t, "futures_geo_alert"))
         elif _futures_consecutive_failures >= 5:
-            asyncio.ensure_future(_maybe_send_futures_geo_alert(status))
+            t = asyncio.create_task(_maybe_send_futures_geo_alert(status))
+            t.add_done_callback(lambda t: _on_task_done(t, "futures_geo_alert"))
         return []
     except Exception as exc:
-        asyncio.ensure_future(_record_binance_kline_metric(0, success=False))
+        asyncio.create_task(_record_binance_kline_metric(0, success=False))
         _futures_consecutive_failures += 1
         log.warning("futures_klines_failed", symbol=symbol,
                     consecutive=_futures_consecutive_failures, error=str(exc))
         if _futures_consecutive_failures >= 5:
-            asyncio.ensure_future(_maybe_send_futures_geo_alert(None))
+            t = asyncio.create_task(_maybe_send_futures_geo_alert(None))
+            t.add_done_callback(lambda t: _on_task_done(t, "futures_geo_alert"))
         return []
 
 

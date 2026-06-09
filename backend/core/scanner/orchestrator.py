@@ -82,6 +82,13 @@ _PERSISTED_GATE_KEYS = (
     "CONFIDENCE_REJECTION",
     "CMC_REJECTION",
     "REGIME_REJECTION",
+    # PIPELINE.HARDENING.1 — full pipeline accounting (6 additional inner-pipeline gates)
+    "MTF_REJECTION",
+    "VOLATILITY_REJECTION",
+    "TREND_STRENGTH_REJECTION",
+    "SETUP_REJECTION",
+    "RR_REJECTION",
+    "RISK_REJECTION",
 )
 
 
@@ -375,31 +382,40 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                     )
                     continue
 
+                # C1/C2 PIPELINE.HARDENING.1 — persistence-first: only accept a signal
+                # if it was successfully written to DB. Prevents Telegram alerts and
+                # analytics for signals that have no DB row.
                 sig_id = await save_signal(signal)
-                if sig_id:
-                    signal.id = sig_id
-                    # Monitoring counter (fire-and-forget)
-                    try:
-                        from backend.analytics.monitoring import record_signal as _mon_signal  # noqa: PLC0415
-                        t = asyncio.create_task(_mon_signal())
-                        t.add_done_callback(lambda t: _on_task_done(t, "monitor_signal"))
-                    except Exception:
-                        pass
+                if not sig_id:
+                    log.error(
+                        "signal_dropped_save_failed",
+                        symbol=signal.symbol,
+                        type=signal.type.value,
+                        mode=mode.value,
+                    )
+                    continue
+
+                signal.id = sig_id
+                # Monitoring counter (fire-and-forget)
+                try:
+                    from backend.analytics.monitoring import record_signal as _mon_signal  # noqa: PLC0415
+                    t = asyncio.create_task(_mon_signal())
+                    t.add_done_callback(lambda t: _on_task_done(t, "monitor_signal"))
+                except Exception:
+                    pass
 
                 if signal.confidence >= alert_thr:
                     sent = await send_signal_alert(signal)
                     signal.telegram_sent = sent
-                    # Update DB to reflect actual send status (INSERT happens before send)
-                    if sent and signal.id:
+                    if sent:
                         try:
                             await mark_signal_telegram_sent(signal.id)
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            log.warning("mark_telegram_sent_failed", signal_id=signal.id, error=str(exc))
 
-                # Analytics: register outcome tracker + paper trade (best-effort)
-                if signal.id:
-                    t = asyncio.create_task(_register_analytics(signal))
-                    t.add_done_callback(lambda t: _on_task_done(t, "register_analytics"))
+                # Analytics: register outcome tracker (best-effort)
+                t = asyncio.create_task(_register_analytics(signal))
+                t.add_done_callback(lambda t: _on_task_done(t, "register_analytics"))
 
                 signals.append(signal)
                 progress.signals_found += 1

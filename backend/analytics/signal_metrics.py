@@ -172,6 +172,31 @@ async def check_pending_outcomes() -> dict:
     if pool is None:
         return {"resolved": 0, "still_pending": 0, "errors": 0}
 
+    # H3 PIPELINE.HARDENING.1 — auto-timeout outcomes older than STALE_DAYS to
+    # prevent permanent PENDING orphans after the 7-day fetch window closes.
+    try:
+        tag = await pool.execute(
+            """
+            UPDATE signal_outcomes
+            SET outcome = 'TIMEOUT',
+                exit_price = entry_price,
+                exit_time = NOW(),
+                rr_achieved = 0,
+                pnl_pct = 0,
+                duration_hours = EXTRACT(EPOCH FROM (NOW() - created_at)) / 3600,
+                resolved_at = NOW(),
+                checked_at = NOW(),
+                check_count = check_count + 1
+            WHERE outcome = 'PENDING'
+              AND created_at < NOW() - INTERVAL '7 days'
+            """,
+        )
+        stale_count = int(tag.split()[-1]) if tag else 0
+        if stale_count:
+            log.info("stale_outcomes_timed_out", count=stale_count)
+    except Exception as exc:
+        log.warning("stale_outcome_timeout_failed", error=str(exc))
+
     cutoff = datetime.now(timezone.utc) - timedelta(days=STALE_DAYS)
     try:
         rows = await pool.fetch(
@@ -225,10 +250,12 @@ async def _try_resolve(row: dict) -> dict | None:
     is_futures = row.get("scanner_mode") in ("futures", "high_confidence")
     try:
         candles = await fetch_klines(symbol, "1h", CANDLE_LIMIT, is_futures)
-    except Exception:
+    except Exception as exc:
+        log.debug("outcome_kline_fetch_failed", symbol=symbol, error=str(exc))
         return None
 
     if not candles:
+        log.debug("outcome_kline_empty", symbol=symbol)
         return None
 
     for candle in candles:
