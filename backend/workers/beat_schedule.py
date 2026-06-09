@@ -48,12 +48,14 @@ BEAT_SCHEDULE = {
             "queue": "celery",
         },
     },
-    # Signal outcome tracker: every 10 minutes
+    # Signal outcome tracker: every 30 minutes — signals resolve over hours so
+    # 30-min resolution has no meaningful impact on outcome tracking accuracy.
+    # Saves 96 msgs/day vs */10 cadence (A1 OPS.CONSOLIDATION.1, 2,880/month).
     "check-signal-outcomes": {
         "task": "backend.workers.scan_task.check_signal_outcomes",
-        "schedule": crontab(minute="*/10"),
+        "schedule": crontab(minute="*/30"),
         "options": {
-            "expires": 9 * 60,
+            "expires": 28 * 60,   # discard if not started within 28 min
             "queue": "celery",
         },
     },
@@ -67,23 +69,26 @@ BEAT_SCHEDULE = {
             "queue": "celery",
         },
     },
-    # Hourly anomaly check: at the top of every hour
+    # Anomaly check: every 2 hours — anomalies are surfaced via dashboard polling
+    # on demand; sub-hour detection latency adds no operational value.
+    # Saves 12 msgs/day vs hourly cadence (A1 OPS.CONSOLIDATION.1, 360/month).
     "hourly-anomaly-check": {
         "task": "backend.workers.analytics_tasks.hourly_anomaly_check",
-        "schedule": crontab(minute="0"),
+        "schedule": crontab(minute="0", hour="*/2"),
         "options": {
-            "expires": 55 * 60,
+            "expires": 55 * 60,   # discard if not started within 55 min of scheduled time
             "queue": "celery",
         },
     },
-    # Worker liveness heartbeat: every 120 seconds — /health/ready threshold is
-    # 300s, so a 120s interval gives 2.5× safety margin before "unknown" is
-    # reported.  Halves CloudAMQP heartbeat traffic (~720 msgs/day saved).
+    # Worker liveness heartbeat: every 240 seconds — _HEARTBEAT_TTL is 600s,
+    # so a 240s interval gives 2.5× safety margin before /health/ready reports
+    # "unknown".  Reduces heartbeat to 360 msgs/day (was 720 at 120s — A1
+    # OPS.CONSOLIDATION.1 saves 10,800 msgs/month).
     "worker-heartbeat": {
         "task": "backend.workers.scan_task.worker_heartbeat",
-        "schedule": 120.0,  # seconds (was 60.0 — R2 OPS.CONSOLIDATION.1)
+        "schedule": 240.0,  # seconds (was 120.0 — A1 OPS.CONSOLIDATION.1)
         "options": {
-            "expires": 115,
+            "expires": 235,
             "queue": "celery",
         },
     },

@@ -22,6 +22,7 @@ logger = get_logger(__name__)
     bind=True,
     name="backend.workers.analytics_tasks.daily_analytics_snapshot",
     max_retries=1,
+    ignore_result=True,           # A2 OPS.CONSOLIDATION.1: result never consumed; retry via self.retry() still works
     default_retry_delay=5 * 60,   # retry after 5 minutes on failure
     queue="celery",
     soft_time_limit=10 * 60,
@@ -61,6 +62,7 @@ def daily_analytics_snapshot(self) -> dict:
     bind=True,
     name="backend.workers.analytics_tasks.hourly_anomaly_check",
     max_retries=0,        # anomaly checks are time-sensitive; skip rather than retry
+    ignore_result=True,   # A2 OPS.CONSOLIDATION.1: result never consumed
     queue="celery",
     soft_time_limit=3 * 60,
     time_limit=4 * 60,
@@ -103,6 +105,7 @@ def hourly_anomaly_check(self) -> dict:
     bind=True,
     name="backend.workers.analytics_tasks.refresh_daily_view",
     max_retries=2,
+    ignore_result=True,          # A2 OPS.CONSOLIDATION.1: result never consumed; retry via self.retry() still works
     default_retry_delay=2 * 60,
     queue="celery",
     soft_time_limit=5 * 60,

@@ -93,6 +93,7 @@ def _check_operational_flags() -> str | None:
     bind=True,
     name="backend.workers.scan_task.run_scheduled_scan",
     max_retries=2,           # retry transient failures up to 2 times
+    ignore_result=True,      # A2 OPS.CONSOLIDATION.1: result never consumed; eliminates rpc:// AMQP result message
     queue="scanner",
     soft_time_limit=17 * 60,  # 17-minute soft kill; worst-case 80 coins ÷ 5 concurrent × 45s = 720s + overhead ≈ 840s; 1020s gives 180s buffer
     time_limit=19 * 60,       # 19-minute hard kill; 2-minute gap above soft limit for graceful SoftTimeLimitExceeded handler
@@ -237,7 +238,7 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
 
 
 _HEARTBEAT_KEY = "celery:worker:last_heartbeat"
-_HEARTBEAT_TTL = 300  # 5 minutes — health check threshold
+_HEARTBEAT_TTL = 600  # 10 minutes — 2.5× the 240s beat interval (A1 OPS.CONSOLIDATION.1)
 
 
 def write_worker_heartbeat() -> None:
@@ -267,6 +268,7 @@ def worker_heartbeat() -> None:
     bind=True,
     name="backend.workers.scan_task.check_signal_outcomes",
     max_retries=0,
+    ignore_result=True,   # A2 OPS.CONSOLIDATION.1: result never consumed
     queue="celery",
     soft_time_limit=5 * 60,
     time_limit=6 * 60,

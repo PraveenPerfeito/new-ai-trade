@@ -290,13 +290,13 @@ async def run_hourly_anomaly_check() -> dict:
     current_cal_snapshot = await _load_latest_snapshot(pool, "daily_edge")
     current_cal = (current_cal_snapshot or {}).get("confidence_calibration", {})
 
-    # Queue depths from Redis
+    # Queue depths from Redis — only "celery" queue; "scanner" queue was retired
+    # in beat_schedule.py (all tasks now route to "celery").
     queue_depths: dict[str, int] = {}
     try:
         from backend.cache.redis_cache import get_redis
         redis = await get_redis()
-        for q in ("scanner", "celery"):
-            queue_depths[q] = await redis.llen(q)
+        queue_depths["celery"] = await redis.llen("celery")
     except Exception:
         pass
 
@@ -369,8 +369,13 @@ async def _maybe_send_critical_anomaly_alert(anomalies: list) -> None:
 
         lines = [f"🚨 <b>Critical Anomaly Detected</b>"]
         for a in criticals[:3]:  # cap at 3 to keep message compact
-            msg = a.message if hasattr(a, "message") else a.get("message", "unknown")
-            atype = a.type if hasattr(a, "type") else a.get("type", "unknown")
+            # Anomaly dataclass uses anomaly_type + description (not type/message)
+            if isinstance(a, dict):
+                msg   = a.get("description", "unknown")
+                atype = a.get("anomaly_type", "unknown")
+            else:
+                msg   = a.description
+                atype = a.anomaly_type
             lines.append(f"• <b>{atype}</b>: {msg}")
         if len(criticals) > 3:
             lines.append(f"  …and {len(criticals) - 3} more")
