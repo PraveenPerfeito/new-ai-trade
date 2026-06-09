@@ -43,7 +43,7 @@ CONFIGS: dict[ScannerMode, ScannerConfig] = {
         min_market_cap=200_000_000,   # lowered from 500M — CMC gives 200 coins so rank 100-200 now included
         min_volume_24h=20_000_000,    # lowered from 50M
         min_rr_ratio=2.0,
-        min_confidence=80,
+        min_confidence=85,            # raised from 80 — 80-85 band was -0.09R across 30d/46 signals
         max_coins_to_scan=80,         # up from 50
         scanner_mode=ScannerMode.SPOT,
     ),
@@ -827,17 +827,21 @@ async def scan_coin(
                 _boost += _adj
                 _boost_reasons.append("EARLY_BREAKOUT_penalty")
 
-        # P2.6: futures_data is None for SPOT mode — OI_NEUTRAL boost is safe from firing on spot coins
+        # P2.6: futures_data is None for SPOT mode — futures boosts are safe from firing on spot coins
         if futures_data:
-            if futures_data.oi_interpretation == "NEUTRAL":
-                _boost += 6
-                _boost_reasons.append("OI_NEUTRAL")
+            # OI_NEUTRAL removed: neutral OI means no institutional backing — not a positive signal.
+            # (Previously +6 was inflating 84-88 futures signals into the 90-95 band, which
+            # has 31.7% WR vs 46.9% WR for 85-90 — the highest-confidence band underperformed.)
             if signal_type == SignalType.SELL and futures_data.positioning_context == "EXTREME_LONG":
                 _boost += 4
                 _boost_reasons.append("EXTREME_LONG_crowd")
             if futures_data.funding_trend == "STABLE":
                 _boost += 3
                 _boost_reasons.append("STABLE_funding")
+
+        # Cap total intelligence boost at +8 to prevent stacking inflation
+        if _boost > 8:
+            _boost = 8
 
         if _boost != 0:
             adjusted_confidence = min(max(adjusted_confidence + _boost, 0), 100)
