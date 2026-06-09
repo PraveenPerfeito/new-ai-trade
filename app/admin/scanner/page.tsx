@@ -32,6 +32,29 @@ const MODE_COLORS: Record<string, string> = {
 }
 const MODES: ScannerMode[] = ['spot', 'futures', 'high_confidence', 'trending']
 
+// Beat schedule minute markers — mirrors beat_schedule.py
+const MODE_FIRE_MINUTES: Record<string, number[]> = {
+  spot:            [0, 15, 30, 45],
+  futures:         [10, 40],
+  high_confidence: [5, 35],
+  trending:        [20, 50],
+}
+
+function computeNextFire(mode: string): number {
+  const mins = MODE_FIRE_MINUTES[mode] ?? [0, 15, 30, 45]
+  const now   = new Date()
+  const cur   = now.getMinutes()
+  for (const m of [...mins].sort((a, b) => a - b)) {
+    if (cur < m) {
+      const next = new Date(now); next.setMinutes(m, 0, 0)
+      return Math.max(0, Math.floor((next.getTime() - Date.now()) / 1000))
+    }
+  }
+  const next = new Date(now)
+  next.setHours(now.getHours() + 1, [...mins].sort((a, b) => a - b)[0], 0, 0)
+  return Math.max(0, Math.floor((next.getTime() - Date.now()) / 1000))
+}
+
 function timeAgo(ts: number | null): string {
   if (!ts) return '—'
   const diff = Math.floor(Date.now() / 1000 - ts)
@@ -171,22 +194,21 @@ export default function AdminScannerPage() {
 
   useEffect(() => {
     const tick = () => {
-      // Prefer backend-computed next_scan_at for the current mode; fall back to last+15min
       const modeNext = status?.next_scan_at?.[scanMode] ?? null
-      if (modeNext) {
-        const diff = Math.max(0, Math.floor(modeNext - Date.now() / 1000))
-        setCountdown(diff)
-      } else if (status?.last_scan_at) {
-        const diff = Math.max(0, Math.floor(status.last_scan_at + 15 * 60 - Date.now() / 1000))
-        setCountdown(diff)
+      const backendDiff = modeNext ? Math.floor(modeNext - Date.now() / 1000) : -1
+      if (backendDiff > 0) {
+        // Backend value is fresh — use it directly
+        setCountdown(backendDiff)
       } else {
-        setCountdown(null)
+        // Backend value is stale/absent (60s poll window passed the fire time) —
+        // compute locally from the known beat schedule so display stays accurate
+        setCountdown(computeNextFire(scanMode))
       }
     }
     tick()
     const t = setInterval(tick, 1000)
     return () => clearInterval(t)
-  }, [status?.last_scan_at, status?.next_scan_at, scanMode])
+  }, [status?.next_scan_at, scanMode])
 
   // ── Action helpers ────────────────────────────────────────────────────────
 
@@ -355,7 +377,12 @@ export default function AdminScannerPage() {
 
       {/* ── Section: Scheduler Status ───────────────────────────────────────── */}
       <div className="glass-card rounded-xl p-4 sm:p-5">
-        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3 font-semibold">Scheduler Status</p>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-terminal-muted text-xs uppercase tracking-wider font-semibold">Scheduler Status</p>
+          <button onClick={fetchStatus} className="text-zinc-500 hover:text-zinc-300 transition-colors" title="Refresh status">
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+        </div>
         <div className="flex items-center gap-3">
           <div className={cn(
             'w-3 h-3 rounded-full shrink-0',
