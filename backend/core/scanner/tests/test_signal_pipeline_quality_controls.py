@@ -79,9 +79,19 @@ def test_btc_context_gate_blocks_only_buy_signals_when_btc_is_down() -> None:
 # BUY+EARLY:  WR=13%, Exp=−0.598 → −4 penalty
 # ──────────────────────────────────────────────────────────────────────────────
 
-def test_early_breakout_adj_is_zero_for_sell() -> None:
-    """SELL + EARLY_BREAKOUT must receive no penalty (exp +1.074)."""
-    assert _early_breakout_confidence_adj("EARLY_BREAKOUT", SignalType.SELL) == 0
+def test_early_breakout_adj_sell_is_type_aware() -> None:
+    """CONFIDENCE.FIX.2: SELL+EARLY adj depends on breakout_type.
+
+    SELL + 20d_low / 30d_low → 0   (WR=87.5%, Exp=+1.63R — breakdown confirmed)
+    SELL + bb_expansion      → -5  (unconfirmed sell, modest penalty)
+    SELL + None / unknown    → -5  (cautious default — type not specified)
+    """
+    # Confirmed breakdowns → no penalty
+    assert _early_breakout_confidence_adj("EARLY_BREAKOUT", SignalType.SELL, "20d_low") == 0
+    assert _early_breakout_confidence_adj("EARLY_BREAKOUT", SignalType.SELL, "30d_low") == 0
+    # Unconfirmed or unspecified → -5
+    assert _early_breakout_confidence_adj("EARLY_BREAKOUT", SignalType.SELL, None) == -5
+    assert _early_breakout_confidence_adj("EARLY_BREAKOUT", SignalType.SELL, "bb_expansion") == -5
 
 
 def test_early_breakout_adj_is_minus_four_for_buy() -> None:
@@ -111,15 +121,14 @@ def test_early_breakout_adj_buy_bear_trend_still_blocked_by_regime_gate() -> Non
 
 def test_early_breakout_adj_null_regime_still_hard_gated() -> None:
     """Safety: NULL regime adds +15 to required confidence (spot: 95, futures: 97).
-    Removing the SELL penalty (0 instead of −4) cannot unblock NULL regime signals
-    because the required_confidence floor is unreachable regardless of the adj."""
+    CONFIDENCE.FIX.2: SELL without breakout_type = -5 (unconfirmed), so required
+    confidence is even higher — NULL regime signals remain unreachable."""
     # Spot:          required = 80 + 15 = 95  (max AI output = 95 → edge case only)
     # Futures:       required = 82 + 15 = 97  (impossible)
     # High-conf:     required = 87 + 15 = 102 (impossible)
-    # adj for SELL = 0, so adjusted_confidence = raw - 0 = raw
-    # raw must be >= 95/97/102 → still effectively blocked
+    # adj for SELL (no type) = -5, so adjusted = raw + 5 needed → even harder
     adj_sell = _early_breakout_confidence_adj("EARLY_BREAKOUT", SignalType.SELL)
-    assert adj_sell == 0  # penalty removed
+    assert adj_sell == -5  # CONFIDENCE.FIX.2: unconfirmed SELL penalty
     # The NULL regime gate (+15) is separate — not affected by this change
 
 

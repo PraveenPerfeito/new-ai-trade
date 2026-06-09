@@ -314,11 +314,15 @@ class TestRiskgradeFix1:
         unknown = validate_risk(_good_input(btc_regime="UNKNOWN"))
         assert unknown.quality_score == max(0.0, base.quality_score - 10.0)
 
-    def test_futures_penalty_is_two(self):
-        # clean spot baseline — no leverage penalty at 3% stop (max_lev=6 ≥ 3)
+    def test_futures_penalty_is_zero(self):
+        # ALPHA.TRUTH.1: futures risk penalty removed (was 5.0 → 2.0 → 0).
+        # Grade C > A/B distortion persisted after RISKGRADE.FIX.1; the +2
+        # penalty was distorting grading without improving outcomes.
+        # grade_factors["futures_penalty"] == 0.0 is also verified by
+        # test_grade_factors_contains_required_keys.
         spot    = validate_risk(_good_input(mode=ScannerMode.SPOT))
         futures = validate_risk(_good_input(mode=ScannerMode.FUTURES))
-        assert futures.risk_score == spot.risk_score + 2.0
+        assert futures.risk_score == spot.risk_score  # no futures risk penalty
 
     def test_grade_factors_contains_required_keys(self):
         result = validate_risk(_good_input(
