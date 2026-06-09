@@ -8,7 +8,6 @@ import {
   GlobalSnapshot,
   TrendingSnapshot,
   CategoriesSnapshot,
-  MetadataSnapshot,
 } from './types';
 
 const log = createLogger('lib/intelligence/reader');
@@ -48,10 +47,6 @@ export async function readTrending(): Promise<TrendingSnapshot | null> {
 
 export async function readCategories(): Promise<CategoriesSnapshot | null> {
   return readGroup<CategoriesSnapshot>('categories');
-}
-
-export async function readMetadata(): Promise<MetadataSnapshot | null> {
-  return readGroup<MetadataSnapshot>('metadata');
 }
 
 // ─── Primary entry-point used by the scanner ──────────────────────────────────

@@ -125,8 +125,6 @@ export async function preloadIntelligence(): Promise<PreloadResult> {
       skipped.push('categories');
     }
 
-    // metadata is NOT preloaded on demand — refreshed only by its dedicated worker
-
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ err }, 'intel_preload_fatal');

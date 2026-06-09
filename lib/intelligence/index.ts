@@ -13,7 +13,6 @@ export {
   readGlobal,
   readTrending,
   readCategories,
-  readMetadata,
   getIntelligenceCoins,
   isStale,
 } from './reader';

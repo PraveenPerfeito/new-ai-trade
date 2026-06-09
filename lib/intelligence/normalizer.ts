@@ -4,17 +4,14 @@ import {
   CmcGlobalMetrics,
   CmcTrendingCoin,
   CmcCategory,
-  CmcCoinInfo,
 } from './cmc-client';
 import {
   ListingsSnapshot,
   GlobalSnapshot,
   TrendingSnapshot,
   CategoriesSnapshot,
-  MetadataSnapshot,
   TrendingCoin,
   CategoryData,
-  CoinMetadata,
 } from './types';
 
 // ─── Listings ─────────────────────────────────────────────────────────────────
@@ -106,25 +103,3 @@ export function normalizeCategories(raw: CmcCategory[]): CategoriesSnapshot {
   };
 }
 
-// ─── Metadata ─────────────────────────────────────────────────────────────────
-
-export function normalizeMetadata(raw: Record<string, CmcCoinInfo>): MetadataSnapshot {
-  const coins: Record<string, CoinMetadata> = {};
-  for (const [symbol, info] of Object.entries(raw)) {
-    // CMC returns an array per symbol; take first entry
-    const entry = Array.isArray(info) ? (info as CmcCoinInfo[])[0] : info;
-    if (!entry) continue;
-    coins[symbol] = {
-      id:          entry.id,
-      symbol,
-      name:        entry.name,
-      tags:        entry.tags ?? [],
-      category:    entry.category ?? '',
-      description: entry.description ?? '',
-      logo:        entry.logo ?? '',
-      urls:        entry.urls ?? { website: [], technical_doc: [] },
-      dateAdded:   entry.date_added ?? '',
-    };
-  }
-  return { coins, refreshedAt: new Date().toISOString() };
-}

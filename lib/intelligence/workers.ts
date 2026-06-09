@@ -8,7 +8,6 @@ import {
   fetchGlobalMetrics,
   fetchTrending,
   fetchCategories,
-  fetchMetadata,
   fetchKeyInfo,
   type CmcListingCoin,
 } from './cmc-client';
@@ -17,7 +16,6 @@ import {
   normalizeGlobal,
   normalizeTrending,
   normalizeCategories,
-  normalizeMetadata,
 } from './normalizer';
 import { WorkerStatus, WorkerState } from './types';
 
@@ -199,23 +197,6 @@ async function tickCategories(): Promise<void> {
   log.debug({ count: snap.categories.length }, 'worker_categories_refreshed');
 }
 
-async function tickMetadata(): Promise<void> {
-  const quota = getQuotaGuard();
-  if (!(await quota.canConsume(1))) return;
-
-  // Fetch metadata for a fixed set of top symbols
-  const TOP_SYMBOLS = [
-    'BTC','ETH','BNB','SOL','XRP','DOGE','ADA','AVAX','LINK','SUI',
-    'TON','SHIB','DOT','MATIC','LTC','UNI','ATOM','ICP','APT','ARB',
-  ];
-  const raw  = await fetchMetadata(TOP_SYMBOLS);
-  const snap = normalizeMetadata(raw);
-  const redis = getRedis();
-  await redis.set(CACHE_GROUPS.metadata.redisKey, JSON.stringify(snap), 'PX', CACHE_GROUPS.metadata.ttlMs * 2);
-  await quota.consume(1);
-  log.debug({ count: Object.keys(snap.coins).length }, 'worker_metadata_refreshed');
-}
-
 async function tickQuotaSync(): Promise<void> {
   // Sync CMC credit usage from the API key info endpoint
   try {
@@ -235,7 +216,6 @@ export function startIntelligenceWorkers(): void {
   registerWorker('intel:global',     CACHE_GROUPS.global.ttlMs,     tickGlobal);
   registerWorker('intel:trending',   CACHE_GROUPS.trending.ttlMs,   tickTrending);
   registerWorker('intel:categories', CACHE_GROUPS.categories.ttlMs, tickCategories);
-  registerWorker('intel:metadata',   CACHE_GROUPS.metadata.ttlMs,   tickMetadata);
   registerWorker('intel:quota-sync', 15 * 60_000,                   tickQuotaSync); // every 15 min
 }
 

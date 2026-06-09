@@ -7,14 +7,12 @@ import {
   fetchGlobalMetrics,
   fetchTrending,
   fetchCategories,
-  fetchMetadata,
 } from '@/lib/intelligence/cmc-client';
 import {
   normalizeListings,
   normalizeGlobal,
   normalizeTrending,
   normalizeCategories,
-  normalizeMetadata,
 } from '@/lib/intelligence/normalizer';
 import { getIntelligenceTelemetry } from '@/lib/intelligence/telemetry';
 import { CacheGroupName } from '@/lib/intelligence/types';
@@ -23,13 +21,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const VALID_GROUPS = new Set<CacheGroupName>([
-  'listings', 'global', 'trending', 'categories', 'metadata',
+  'listings', 'global', 'trending', 'categories',
 ]);
-
-const TOP_METADATA_SYMBOLS = [
-  'BTC','ETH','BNB','SOL','XRP','DOGE','ADA','AVAX','LINK','SUI',
-  'TON','SHIB','DOT','MATIC','LTC','UNI','ATOM','ICP','APT','ARB',
-];
 
 /** POST /api/cache/intelligence/[group] — force-refresh a single cache group */
 export async function POST(
@@ -78,11 +71,6 @@ export async function POST(
       case 'categories': {
         const raw = await fetchCategories();
         snap = normalizeCategories(raw);
-        break;
-      }
-      case 'metadata': {
-        const raw = await fetchMetadata(TOP_METADATA_SYMBOLS);
-        snap = normalizeMetadata(raw);
         break;
       }
     }

@@ -88,18 +88,6 @@ export interface CmcCategory {
   coins: string[];
 }
 
-export interface CmcCoinInfo {
-  id: number;
-  name: string;
-  symbol: string;
-  category: string;
-  description: string;
-  logo: string;
-  tags: string[];
-  date_added: string;
-  urls: { website: string[]; technical_doc: string[] };
-}
-
 export interface CmcKeyInfo {
   credit_count_used: number;
   credit_count_left: number;
@@ -151,14 +139,6 @@ export async function fetchCategories(): Promise<CmcCategory[]> {
   });
   log.debug({ count: res.data.data?.length }, 'cmc_categories_fetched');
   return res.data.data as CmcCategory[];
-}
-
-export async function fetchMetadata(symbols: string[]): Promise<Record<string, CmcCoinInfo>> {
-  const res = await getClient().get('/cryptocurrency/info', {
-    params: { symbol: symbols.join(',') },
-  });
-  log.debug({ count: Object.keys(res.data.data ?? {}).length }, 'cmc_metadata_fetched');
-  return res.data.data as Record<string, CmcCoinInfo>;
 }
 
 export async function fetchKeyInfo(): Promise<CmcKeyInfo> {

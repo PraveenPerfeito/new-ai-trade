@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 import {
   RefreshCw, Layers, CheckCircle2, AlertTriangle,
-  Clock, Activity, Database, Zap, TrendingUp,
+  Clock, Activity, Zap, TrendingUp,
   BarChart2, Shield, ChevronRight,
 } from 'lucide-react'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
@@ -103,7 +103,6 @@ const GROUP_ICONS: Record<string, React.ReactNode> = {
   global:     <TrendingUp  className="w-4 h-4" />,
   trending:   <Zap         className="w-4 h-4" />,
   categories: <Layers      className="w-4 h-4" />,
-  metadata:   <Database    className="w-4 h-4" />,
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────

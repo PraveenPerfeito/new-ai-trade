@@ -9,17 +9,16 @@ export interface CacheGroupConfig {
   description: string;
 }
 
-// ─── 5 Intelligence Cache Groups ─────────────────────────────────────────────
+// ─── 4 Intelligence Cache Groups ─────────────────────────────────────────────
 //
 // Refresh cadences are chosen to stay well within 300k monthly credits:
 //   listings  every  5 min → 288 calls/day  = 288 credits/day
 //   global    every 10 min → 144 calls/day  = 144 credits/day
 //   trending  every 10 min → 144 calls/day  = 144 credits/day
 //   categories every 30 min →  48 calls/day  =  48 credits/day
-//   metadata  every  6 hr  →   4 calls/day  =   4 credits/day
 //                                              ───────────────
-//                              Total          = 628 credits/day
-//                              Monthly est.   = 18,840 credits   (6.3% of 300k)
+//                              Total          = 624 credits/day
+//                              Monthly est.   = 18,720 credits   (6.2% of 300k)
 
 export const CACHE_GROUPS: Record<CacheGroupName, CacheGroupConfig> = {
   listings: {
@@ -53,14 +52,6 @@ export const CACHE_GROUPS: Record<CacheGroupName, CacheGroupConfig> = {
     ttlMs:         30 * 60_000,   // 30 min
     creditsPerCall: 1,
     description:   'Ecosystem categories, sector performance, narrative rotation (CMC /categories)',
-  },
-  metadata: {
-    name:          'metadata',
-    label:         'Metadata Engine',
-    redisKey:      'cache:intel:metadata',
-    ttlMs:         6 * 60 * 60_000, // 6 hr
-    creditsPerCall: 1,
-    description:   'Coin tags, ecosystem labels, descriptions — aggressively cached (CMC /info)',
   },
 };
 

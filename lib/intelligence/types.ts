@@ -6,8 +6,7 @@ export type CacheGroupName =
   | 'listings'    // top-100 market rankings  (5 min)
   | 'global'      // BTC dominance, total mcap (10 min)
   | 'trending'    // trending assets           (10 min)
-  | 'categories'  // CMC ecosystem categories  (30 min)
-  | 'metadata';   // coin tags, descriptions   (6 hr)
+  | 'categories'; // CMC ecosystem categories  (30 min)
 
 // ─── Raw intelligence payloads ────────────────────────────────────────────────
 
@@ -44,18 +43,6 @@ export interface CategoryData {
   coins: string[];  // top symbol list
 }
 
-export interface CoinMetadata {
-  id: number;
-  symbol: string;
-  name: string;
-  tags: string[];
-  category: string;
-  description: string;
-  logo: string;
-  urls: { website: string[]; technical_doc: string[] };
-  dateAdded: string;
-}
-
 // ─── Intelligence snapshot (what each group stores in Redis) ─────────────────
 
 export interface ListingsSnapshot {
@@ -79,11 +66,6 @@ export interface CategoriesSnapshot {
   categories: CategoryData[];
   strongest: string;   // category name with highest avg change
   weakest: string;
-  refreshedAt: string;
-}
-
-export interface MetadataSnapshot {
-  coins: Record<string, CoinMetadata>;  // keyed by symbol
   refreshedAt: string;
 }
 
