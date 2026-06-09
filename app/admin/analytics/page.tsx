@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import { adminApi, EdgeReport, IntelligenceSummary, IntelligencePerfRow } from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
 import { formatTs } from '@/lib/utils'
@@ -662,6 +662,11 @@ type Tab = 'edge' | 'attribution' | 'calibration'
 
 export default function AnalyticsPage() {
   const [tab, setTab] = useState<Tab>('edge')
+
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab') as Tab | null
+    if (t && ['edge', 'attribution', 'calibration'].includes(t)) setTab(t)
+  }, [])
 
   const edgeFetcher  = useCallback(() => adminApi.analytics.edgeReport(), [])
   const intelFetcher = useCallback(() => adminApi.analytics.intelligence(), [])

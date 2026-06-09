@@ -539,6 +539,11 @@ function AnomaliesTab() {
 export default function SystemPage() {
   const [tab, setTab] = useState<'system' | 'anomalies'>('system')
 
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t === 'system' || t === 'anomalies') setTab(t)
+  }, [])
+
   const healthFetcher    = useCallback(() => adminApi.health.ready(), [])
   const providerFetcher  = useCallback(() => fetch('/api/health/providers').then(r => r.json()), [])
   const scanFetcher      = useCallback(() => adminApi.analytics.scans(24), [])
