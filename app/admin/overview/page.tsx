@@ -16,6 +16,8 @@ import type { TacticalSignalRow, MarketRegime } from '@/types'
 interface CeleryStatus {
   enabled: boolean; scanning: boolean; running_modes: string[]; last_scan_at: number | null
   next_scan_at?: Record<string, number | null>
+  is_overdue?: boolean
+  last_scan_age_seconds?: number | null
 }
 interface RegimeData {
   regime: MarketRegime; btcRsi4h: number; btcTrend4h: string
@@ -105,8 +107,10 @@ export default function CommandOverviewPage() {
   useEffect(() => {
     const tick = () => {
       if (!celery) { setCountdown(null); return }
-      // Prefer server-computed next_scan_at for standard mode; fall back to
-      // last_scan_at + 15 min only if the server didn't return the field.
+      // If the backend flagged the scheduler as overdue (Beat likely dead or scans
+      // failing), stop the countdown — showing a ticking timer when nothing will
+      // fire is misleading.
+      if (celery.is_overdue) { setCountdown(null); return }
       const serverNext = celery.next_scan_at?.['standard'] ?? null
       const nextAt = serverNext ?? (celery.last_scan_at ? celery.last_scan_at + 15 * 60 : null)
       if (!nextAt) { setCountdown(null); return }
@@ -161,20 +165,23 @@ export default function CommandOverviewPage() {
 
         {/* Scanner Status — spans 3 of 5 columns, more visual weight */}
         <div className={`lg:col-span-3 rounded-xl border p-5 ${
-          !celery?.enabled   ? 'bg-zinc-900 border-zinc-700' :
-          celery.scanning    ? 'bg-blue-500/5  border-blue-500/25' :
+          !celery?.enabled              ? 'bg-zinc-900 border-zinc-700' :
+          celery.scanning               ? 'bg-blue-500/5  border-blue-500/25' :
+          celery.is_overdue             ? 'bg-amber-500/5 border-amber-500/25' :
           'bg-zinc-900 border-zinc-800'
         }`}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                celery?.scanning ? 'bg-blue-400 animate-pulse' :
-                celery?.enabled  ? 'bg-green-400 animate-pulse' : 'bg-zinc-600'
+                celery?.scanning               ? 'bg-blue-400  animate-pulse' :
+                celery?.enabled && celery?.is_overdue ? 'bg-amber-400 animate-pulse' :
+                celery?.enabled                ? 'bg-green-400 animate-pulse' : 'bg-zinc-600'
               }`} />
-              <span className="text-sm font-semibold text-white">
-                {celery === null   ? 'Connecting…' :
-                 celery.scanning  ? `Scanning — ${celery.running_modes.join(', ') || 'standard'}` :
-                 celery.enabled   ? 'Auto-scan Active' :
+              <span className={`text-sm font-semibold ${celery?.is_overdue && celery?.enabled ? 'text-amber-300' : 'text-white'}`}>
+                {celery === null                     ? 'Connecting…' :
+                 celery.scanning                    ? `Scanning — ${celery.running_modes.join(', ') || 'standard'}` :
+                 celery.enabled && celery.is_overdue ? 'Auto-scan Overdue' :
+                 celery.enabled                     ? 'Auto-scan Active' :
                  'Auto-scan Paused'}
               </span>
             </div>
@@ -203,9 +210,13 @@ export default function CommandOverviewPage() {
             </div>
             <div className="bg-zinc-800/60 rounded-lg px-3 py-2.5">
               <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1">Next Scan</p>
-              <p className={`text-sm font-mono font-semibold ${celery?.scanning ? 'text-blue-400' : 'text-white'}`}>
-                {celery?.scanning  ? 'Running now' :
-                 celery?.enabled && countdown !== null ? fmtCountdown(countdown) : '—'}
+              <p className={`text-sm font-mono font-semibold ${
+                celery?.scanning  ? 'text-blue-400' :
+                celery?.is_overdue && celery?.enabled ? 'text-amber-400' : 'text-white'
+              }`}>
+                {celery?.scanning                       ? 'Running now' :
+                 celery?.enabled && celery?.is_overdue  ? 'Overdue' :
+                 celery?.enabled && countdown !== null  ? fmtCountdown(countdown) : '—'}
               </p>
             </div>
           </div>

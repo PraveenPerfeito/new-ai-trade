@@ -27,6 +27,12 @@ _ENABLED_KEY         = "scheduler:enabled"
 _STATUS_CACHE_KEY    = "scheduler:status_cache"
 _STATUS_CACHE_TTL    = 5   # OPT-7: cache status for 5s — reduces 5 ops/call → 1 GET on hits
 
+# Overdue threshold: 2× the 15-min standard scan interval.
+# If enabled and last_scan_at is older than this, Beat is likely dead or
+# every scan is failing silently — surface is_overdue=True so the UI stops
+# showing a fake countdown and shows "Overdue" instead.
+_OVERDUE_THRESHOLD_S = 30 * 60  # 30 minutes
+
 
 class SchedulerCoordinator:
     """
@@ -202,12 +208,23 @@ class SchedulerCoordinator:
             "trending":        self._next_beat_fire([20, 50]),
         }
 
+        # Overdue detection — _next_beat_fire() returns a valid future timestamp
+        # even when Beat is completely dead. is_overdue=True tells the UI to stop
+        # showing the countdown and display an amber "Overdue" warning instead.
+        now = time.time()
+        last_scan_age_s: int | None = round(now - last_scan_at) if last_scan_at else None
+        is_overdue = enabled and (
+            last_scan_at is None or (now - last_scan_at) > _OVERDUE_THRESHOLD_S
+        )
+
         result = {
-            "enabled":       enabled,
-            "scanning":      bool(running_modes),
-            "running_modes": running_modes,
-            "last_scan_at":  last_scan_at,
-            "next_scan_at":  next_scan_at,
+            "enabled":             enabled,
+            "scanning":            bool(running_modes),
+            "running_modes":       running_modes,
+            "last_scan_at":        last_scan_at,
+            "next_scan_at":        next_scan_at,
+            "is_overdue":          is_overdue,
+            "last_scan_age_seconds": last_scan_age_s,
         }
         try:
             self._redis.setex(_STATUS_CACHE_KEY, _STATUS_CACHE_TTL, json.dumps(result))
@@ -254,12 +271,20 @@ class SchedulerCoordinator:
             "trending":        self._next_beat_fire([20, 50]),
         }
 
+        now = time.time()
+        last_scan_age_s: int | None = round(now - last_scan_at) if last_scan_at else None
+        is_overdue = enabled and (
+            last_scan_at is None or (now - last_scan_at) > _OVERDUE_THRESHOLD_S
+        )
+
         result = {
-            "enabled":       enabled,
-            "scanning":      bool(running_modes),
-            "running_modes": running_modes,
-            "last_scan_at":  last_scan_at,
-            "next_scan_at":  next_scan_at,
+            "enabled":             enabled,
+            "scanning":            bool(running_modes),
+            "running_modes":       running_modes,
+            "last_scan_at":        last_scan_at,
+            "next_scan_at":        next_scan_at,
+            "is_overdue":          is_overdue,
+            "last_scan_age_seconds": last_scan_age_s,
         }
         try:
             await loop.run_in_executor(

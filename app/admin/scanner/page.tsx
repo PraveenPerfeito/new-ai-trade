@@ -15,6 +15,8 @@ import Link from 'next/link'
 interface CeleryStatus {
   enabled: boolean; scanning: boolean; running_modes: string[]; last_scan_at: number | null
   next_scan_at?: Record<string, number | null>
+  is_overdue?: boolean
+  last_scan_age_seconds?: number | null
 }
 
 interface OpsFlags {
@@ -194,13 +196,17 @@ export default function AdminScannerPage() {
 
   useEffect(() => {
     const tick = () => {
+      // If the backend reports overdue, stop the countdown — the beat schedule
+      // fire times are wall-clock math and will always show a future time even
+      // when Beat is dead. An amber "Overdue" badge is more honest than a
+      // countdown that resets every 15 minutes and never fires.
+      if (status?.is_overdue) { setCountdown(null); return }
       const modeNext = status?.next_scan_at?.[scanMode] ?? null
       const backendDiff = modeNext ? Math.floor(modeNext - Date.now() / 1000) : -1
       if (backendDiff > 0) {
-        // Backend value is fresh — use it directly
         setCountdown(backendDiff)
       } else {
-        // Backend value is stale/absent (60s poll window passed the fire time) —
+        // Backend value is stale/absent (120s poll window passed the fire time) —
         // compute locally from the known beat schedule so display stays accurate
         setCountdown(computeNextFire(scanMode))
       }
@@ -208,7 +214,7 @@ export default function AdminScannerPage() {
     tick()
     const t = setInterval(tick, 1000)
     return () => clearInterval(t)
-  }, [status?.next_scan_at, scanMode])
+  }, [status?.next_scan_at, status?.is_overdue, scanMode])
 
   // ── Action helpers ────────────────────────────────────────────────────────
 
@@ -386,28 +392,39 @@ export default function AdminScannerPage() {
         <div className="flex items-center gap-3">
           <div className={cn(
             'w-3 h-3 rounded-full shrink-0',
-            status === null                ? 'bg-zinc-500 animate-pulse'
-            : emergencyOn                  ? 'bg-red-400'
-            : isEnabled && status.scanning ? 'bg-blue-400 animate-pulse'
-            : isEnabled                    ? 'bg-emerald-400 animate-pulse'
+            status === null                        ? 'bg-zinc-500 animate-pulse'
+            : emergencyOn                          ? 'bg-red-400'
+            : isEnabled && status.scanning         ? 'bg-blue-400  animate-pulse'
+            : isEnabled && status.is_overdue       ? 'bg-amber-400 animate-pulse'
+            : isEnabled                            ? 'bg-emerald-400 animate-pulse'
             : 'bg-zinc-600',
           )} />
           <div className="min-w-0">
-            <p className="text-terminal-text font-semibold text-sm">
-              {status === null                ? 'Connecting…'
-              : emergencyOn                  ? 'Emergency Stop — blocked'
-              : isEnabled && status.scanning ? `Scanning — ${status.running_modes.join(', ') || 'standard'}`
-              : isEnabled                    ? 'Active'
+            <p className={cn(
+              'font-semibold text-sm',
+              isEnabled && status?.is_overdue && !emergencyOn ? 'text-amber-300' : 'text-terminal-text',
+            )}>
+              {status === null                        ? 'Connecting…'
+              : emergencyOn                          ? 'Emergency Stop — blocked'
+              : isEnabled && status.scanning         ? `Scanning — ${status.running_modes.join(', ') || 'standard'}`
+              : isEnabled && status.is_overdue       ? 'Overdue — Beat may be down'
+              : isEnabled                            ? 'Active'
               : 'Paused'}
             </p>
             <div className="flex items-center gap-2 flex-wrap mt-0.5">
               <span className="text-terminal-muted text-xs">
                 Last: <span className="text-terminal-text">{timeAgo(status?.last_scan_at ?? null)}</span>
               </span>
-              {isEnabled && !emergencyOn && !status?.scanning && countdown !== null && (
+              {isEnabled && !emergencyOn && !status?.scanning && !status?.is_overdue && countdown !== null && (
                 <span className="flex items-center gap-1 text-xs text-terminal-muted">
                   <Clock className="w-3 h-3" />
                   Next: <span className="text-white font-semibold font-mono ml-0.5">{fmtCountdown(countdown)}</span>
+                </span>
+              )}
+              {isEnabled && status?.is_overdue && !emergencyOn && !status?.scanning && (
+                <span className="text-xs text-amber-400/80 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  No scan in {status.last_scan_age_seconds != null ? `${Math.round(status.last_scan_age_seconds / 60)}m` : '>30m'}
                 </span>
               )}
               {isEnabled && status?.scanning && (
