@@ -3,6 +3,8 @@ Health check endpoints — mirrors /api/health in the Next.js layer.
 GET /health        → liveness probe (always 200 if process is alive)
 GET /health/ready  → readiness probe (checks Redis + DB connectivity)
 """
+import time as _time
+
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
@@ -10,6 +12,13 @@ from backend.logging.setup import get_logger
 
 log = get_logger(__name__)
 router = APIRouter(tags=["health"])
+
+# R6 OPS.CONSOLIDATION.1 — Railway probes /health/ready every ~60s.
+# Caching the result for 90s means every other probe hits this dict instead
+# of Redis+Postgres+Binance, halving the per-probe Redis ops (~43K ops/month
+# saved).  The result is still fresh enough for operational awareness.
+_HEALTH_CACHE_TTL = 90.0
+_health_cache: dict = {"data": None, "status_code": 200, "ts": 0.0}
 
 
 @router.get("/health")
@@ -19,6 +28,10 @@ async def liveness():
 
 @router.get("/health/ready")
 async def readiness():
+    now = _time.time()
+    if _health_cache["data"] is not None and (now - _health_cache["ts"]) < _HEALTH_CACHE_TTL:
+        return JSONResponse(content=_health_cache["data"], status_code=_health_cache["status_code"])
+
     checks: dict[str, str] = {}
     ok = True
 
@@ -71,7 +84,8 @@ async def readiness():
         checks["binance"] = f"error: {type(exc).__name__}"
 
     status_code = 200 if ok else 503
-    return JSONResponse(
-        content={"status": "ready" if ok else "degraded", "checks": checks},
-        status_code=status_code,
-    )
+    data = {"status": "ready" if ok else "degraded", "checks": checks}
+    _health_cache["data"] = data
+    _health_cache["status_code"] = status_code
+    _health_cache["ts"] = _time.time()
+    return JSONResponse(content=data, status_code=status_code)

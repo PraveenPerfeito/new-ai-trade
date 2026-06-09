@@ -124,7 +124,7 @@ export default function CacheIntelligencePage() {
     }
   }, [])
 
-  useAutoRefresh(fetchTelemetry, 60_000)  // OPT-5: was 10_000 — cache TTLs are 5-360 min
+  useAutoRefresh(fetchTelemetry, 120_000)  // OPT-5: was 10_000; R7: 60_000→120_000 — cache TTLs are 5-360 min
 
   const forceRefreshAll = async () => {
     setRefreshing(true)

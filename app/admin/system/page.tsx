@@ -3,6 +3,7 @@
 import { useCallback } from 'react'
 import { adminApi, HealthReady, ScanSummaryResponse, AiSummaryResponse, MonitorSnapshot, MonitorLevel } from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
+import { useSharedPolling } from '@/lib/use-shared-polling'
 import { MetricCard } from '@/components/admin/metric-card'
 import { analyticsWindowLabel } from '@/lib/window-label'
 import { Server, Database, Cpu, Activity } from 'lucide-react'
@@ -165,7 +166,9 @@ export default function SystemPage() {
   const { data: scans }                = useAutoRefresh<ScanSummaryResponse>(scanFetcher, 120_000)
   const { data: scans7d }              = useAutoRefresh<ScanSummaryResponse>(scan7dFetcher, 120_000)
   const { data: ai }                   = useAutoRefresh<AiSummaryResponse>(aiFetcher, 120_000)
-  const { data: monitor }              = useAutoRefresh<MonitorSnapshot>(monitorFetcher, 60_000)
+  // R7: shared polling — multiple tabs/widgets reuse the same timer + response.
+  // Interval raised 60s → 120s; monitor counters are daily aggregates.
+  const { data: monitor }              = useSharedPolling<MonitorSnapshot>('admin:monitor', monitorFetcher, 120_000)
 
   return (
     <div className="space-y-6 animate-fade-in">
