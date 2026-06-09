@@ -3,59 +3,17 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  LayoutDashboard, Activity, ScanLine, Zap,
-  Database, Server, AlertTriangle, BarChart3, Target, Settings2,
-  Layers, Crosshair, Globe, Brain,
+  TrendingUp, Database, BarChart3, Server, Settings2,
 } from 'lucide-react'
 
-type NavItem = {
-  href: string
-  icon: React.ElementType
-  label: string
-}
+type NavItem = { href: string; icon: React.ElementType; label: string; sub: string }
 
-type NavSection = {
-  label: string
-  items: NavItem[]
-  primary?: boolean
-}
-
-const SECTIONS: NavSection[] = [
-  {
-    label: 'TRADING DESK',
-    primary: true,
-    items: [
-      { href: '/admin/overview',  icon: LayoutDashboard, label: 'Overview'   },
-      { href: '/admin/signals',   icon: Zap,             label: 'Signals'    },
-      { href: '/admin/tactical',  icon: Crosshair,       label: 'Tactical'   },
-      { href: '/admin/settings',  icon: Settings2,       label: 'Settings'   },
-    ],
-  },
-  {
-    label: 'MARKET',
-    items: [
-      { href: '/admin/market',   icon: Activity, label: 'Intelligence' },
-      { href: '/admin/regime',   icon: Target,   label: 'Regime'       },
-      { href: '/admin/sectors',  icon: Globe,    label: 'Sectors'      },
-    ],
-  },
-  {
-    label: 'OPERATIONS',
-    items: [
-      { href: '/admin/scanner',   icon: ScanLine,      label: 'Scanner'   },
-      { href: '/admin/anomalies', icon: AlertTriangle, label: 'Anomalies' },
-      { href: '/admin/providers', icon: Database,      label: 'Providers' },
-      { href: '/admin/cache',     icon: Layers,        label: 'Cache'     },
-      { href: '/admin/system',    icon: Server,        label: 'System'    },
-    ],
-  },
-  {
-    label: 'REVIEW',
-    items: [
-      { href: '/admin/analytics',   icon: BarChart3, label: 'Analytics'   },
-      { href: '/admin/calibration', icon: Brain,     label: 'Calibration' },
-    ],
-  },
+const NAV_ITEMS: NavItem[] = [
+  { href: '/admin/trading',      icon: TrendingUp, label: 'Trading',      sub: 'Overview · Scanner · Signals · Regime'  },
+  { href: '/admin/intelligence', icon: Database,   label: 'Intelligence', sub: 'Providers · Cache · Sectors · Market'   },
+  { href: '/admin/analytics',    icon: BarChart3,  label: 'Analytics',    sub: 'Edge · Attribution · Calibration'       },
+  { href: '/admin/system',       icon: Server,     label: 'System',       sub: 'Health · Anomalies · Operations'        },
+  { href: '/admin/settings',     icon: Settings2,  label: 'Settings',     sub: 'Signal quality · Risk · Presets'        },
 ]
 
 export function AdminSidebar() {
@@ -77,71 +35,38 @@ export function AdminSidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2.5">
-        {SECTIONS.map((section, si) => {
-          const topGap = si === 0
-            ? ''
-            : si === 1
-              ? 'mt-4'
-              : 'mt-2'
-
+      <nav className="flex-1 overflow-y-auto py-4 px-2.5 space-y-1">
+        {NAV_ITEMS.map(({ href, icon: Icon, label, sub }) => {
+          const active = path === href || path.startsWith(href + '/')
           return (
-            <div key={si} className={topGap}>
-              <p className="px-3 pt-3 pb-1.5 text-[10px] uppercase tracking-widest text-terminal-muted/50 font-semibold select-none">
-                {section.label}
-              </p>
-              {section.items.map(({ href, icon: Icon, label }) => {
-                const active = path === href || path.startsWith(href + '/')
-                const inactiveText = section.primary
-                  ? 'text-terminal-text/80'
-                  : 'text-terminal-muted'
-
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    className={[
-                      'flex items-center gap-3 px-3 rounded-md transition-all duration-150 mb-0.5 relative overflow-hidden border',
-                      section.primary
-                        ? 'py-2 text-sm font-semibold'
-                        : 'py-2 text-sm font-medium',
-                      active
-                        ? 'bg-bull-default/10 text-bull-default border-bull-default/15'
-                        : `${inactiveText} hover:text-terminal-text hover:bg-terminal-bright/40 border-transparent`,
-                    ].join(' ')}
-                  >
-                    {active && (
-                      <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-bull-default/90" />
-                    )}
-                    <Icon size={14} strokeWidth={active ? 2.5 : 2} />
-                    <span className="truncate">{label}</span>
-                    {active && (
-                      <span className="ml-auto w-1.5 h-1.5 rounded-full bg-bull-default/70 animate-pulse-slow shrink-0" />
-                    )}
-                  </Link>
-                )
-              })}
-            </div>
+            <Link
+              key={href}
+              href={href}
+              className={[
+                'flex items-start gap-3 px-3 py-2.5 rounded-md transition-all duration-150 relative overflow-hidden border',
+                active
+                  ? 'bg-bull-default/10 text-bull-default border-bull-default/15'
+                  : 'text-terminal-text/80 hover:text-terminal-text hover:bg-terminal-bright/40 border-transparent',
+              ].join(' ')}
+            >
+              {active && (
+                <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-bull-default/90" />
+              )}
+              <Icon size={16} strokeWidth={active ? 2.5 : 2} className="mt-0.5 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-tight truncate">{label}</p>
+                <p className="text-[10px] text-terminal-muted/50 mt-0.5 leading-tight truncate">{sub}</p>
+              </div>
+              {active && (
+                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-bull-default/70 animate-pulse-slow shrink-0 mt-1" />
+              )}
+            </Link>
           )
         })}
       </nav>
 
       {/* Footer */}
       <div className="px-4 py-3 border-t border-terminal-border">
-        <div className="flex items-center gap-1.5 mb-2">
-          <Link
-            href="/admin/signals"
-            className="px-2 py-0.5 rounded border border-terminal-border/40 text-[10px] font-mono text-terminal-muted/50 hover:text-terminal-text hover:border-terminal-border transition-colors"
-          >
-            Signals
-          </Link>
-          <Link
-            href="/admin/scanner"
-            className="px-2 py-0.5 rounded border border-terminal-border/40 text-[10px] font-mono text-terminal-muted/50 hover:text-terminal-text hover:border-terminal-border transition-colors"
-          >
-            Scanner
-          </Link>
-        </div>
         <div className="flex items-center gap-2">
           <span className="relative flex h-1.5 w-1.5 shrink-0">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-bull-default opacity-40" />
