@@ -67,8 +67,8 @@ async def readiness():
         # key exists. If Redis is up (checked above) and a worker registered
         # within the last 5 min, it's alive.
         worker_ts = await redis.get("celery:worker:last_heartbeat")
-        if worker_ts and (time.time() - float(worker_ts)) < 900:
-            # 900s threshold = 1.5× the 600s beat interval (A2 PLATFORM.TRUTH.1)
+        if worker_ts and (time.time() - float(worker_ts)) < 1800:
+            # 1800s = Redis TTL of the key; key exists → worker wrote it within its lifetime
             checks["celery_worker"] = "ok"
         else:
             checks["celery_worker"] = "unknown"  # no heartbeat — may still be alive

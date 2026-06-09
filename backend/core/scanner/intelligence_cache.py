@@ -40,10 +40,6 @@ log = get_logger(__name__)
 # Redis key written by lib/intelligence/workers.ts  tickListings()
 INTEL_LISTINGS_KEY = "cache:intel:listings"
 
-# Shared hit/miss counters — incremented by both TS reader.ts and this module
-INTEL_HITS_KEY   = "cache:intel:hits:listings"
-INTEL_MISSES_KEY = "cache:intel:misses:listings"
-
 # Listings freshness threshold (mirrors CACHE_GROUPS.listings.ttlMs / 1000)
 INTEL_TTL_SECONDS = 5 * 60   # 5 minutes
 
@@ -122,12 +118,6 @@ async def read_intelligence_listings(limit: int = 200) -> IntelligenceCacheResul
                 intelligence_cache_hits_total.labels(source="redis_intelligence").inc()
                 intelligence_cache_age_seconds.observe(cache_age)
 
-                # Shared Redis counters (visible to TypeScript admin dashboard)
-                try:
-                    await redis.incr(INTEL_HITS_KEY)
-                except Exception:
-                    pass
-
                 log.info(
                     "intel_cache_hit",
                     count=len(coins),
@@ -170,9 +160,7 @@ async def read_trending_coins() -> list[dict]:
         if raw:
             snapshot = json.loads(raw)
             coins = snapshot.get("trending", [])
-            await redis.incr("cache:intel:hits:trending")
             return coins
-        await redis.incr("cache:intel:misses:trending")
     except Exception as exc:
         log.warning("intel_trending_read_error", error=str(exc))
     return []
@@ -194,9 +182,7 @@ async def read_categories() -> tuple[list[dict], str]:
             snapshot     = json.loads(raw)
             categories   = snapshot.get("categories", [])
             refreshed_at = snapshot.get("refreshedAt", "")
-            await redis.incr("cache:intel:hits:categories")
             return categories, refreshed_at
-        await redis.incr("cache:intel:misses:categories")
     except Exception as exc:
         log.warning("intel_categories_read_error", error=str(exc))
     return [], ""
@@ -278,12 +264,6 @@ async def _fallback_coingecko(limit: int, reason: str = "cache_cold") -> Intelli
     from backend.core.scanner.market_fetcher import _fetch_coingecko  # noqa: PLC0415
 
     intelligence_cache_misses_total.inc()
-
-    try:
-        redis = await get_redis()
-        await redis.incr(INTEL_MISSES_KEY)
-    except Exception:
-        pass
 
     log.warning(
         "intel_cache_miss_falling_back_to_coingecko",

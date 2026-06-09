@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import {
   Database, Layers, Globe, Activity,
   TrendingUp, TrendingDown, RefreshCw,
@@ -599,6 +600,15 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'market',    label: 'Market'    },
 ]
 
+function TabInit({ setTab }: { setTab: (t: Tab) => void }) {
+  const params = useSearchParams()
+  useEffect(() => {
+    const t = params.get('tab') as Tab | null
+    if (t && TABS.some(x => x.id === t)) setTab(t)
+  }, [params, setTab])
+  return null
+}
+
 export default function IntelligenceCenterPage() {
   const [tab, setTab] = useState<Tab>('providers')
   const [refreshing,       setRefreshing]       = useState(false)
@@ -661,6 +671,7 @@ export default function IntelligenceCenterPage() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4 max-w-6xl mx-auto">
+      <Suspense fallback={null}><TabInit setTab={setTab} /></Suspense>
       <div>
         <h1 className="text-lg sm:text-xl font-semibold text-white">Intelligence Center</h1>
         <p className="text-xs text-zinc-500 mt-0.5">Providers · Cache · Sectors · Market</p>

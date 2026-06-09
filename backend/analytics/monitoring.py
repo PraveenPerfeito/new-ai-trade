@@ -188,11 +188,14 @@ async def get_monitoring_snapshot() -> dict:
     today = _today()
     now   = datetime.now(timezone.utc)
 
-    # Generated signals — DB-authoritative; Redis is fallback only.
-    redis_signals  = await _read("signals")
-    db_signals     = await _read_db_generated_signals_24h(now)
-    signals        = db_signals if db_signals is not None else redis_signals
-    signals_source = "database" if db_signals is not None else "redis_fallback"
+    # Generated signals — DB-authoritative; Redis read only when DB unavailable.
+    db_signals = await _read_db_generated_signals_24h(now)
+    if db_signals is not None:
+        signals        = db_signals
+        signals_source = "database"
+    else:
+        signals        = await _read("signals")
+        signals_source = "redis_fallback"
 
     # Scan counters — DB-authoritative (scan_metrics_log).  Redis fallback
     # retained for the rare case where the DB pool is unavailable.

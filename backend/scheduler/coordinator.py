@@ -21,7 +21,6 @@ log = get_logger(__name__)
 
 ScanMode = Literal["standard", "high_confidence", "futures"]
 
-_SCHEDULER_STATE_KEY = "scheduler:state"
 _LOCK_KEY_PREFIX     = "scheduler:lock:"
 _ENABLED_KEY         = "scheduler:enabled"
 _STATUS_CACHE_KEY    = "scheduler:status_cache"
