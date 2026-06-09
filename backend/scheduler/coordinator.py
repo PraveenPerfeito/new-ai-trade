@@ -72,27 +72,39 @@ class SchedulerCoordinator:
             return True  # fail-open: Redis unavailable → allow scan (no duplicate guard)
 
     def release_scan_lock(self, mode: ScanMode) -> None:
-        key = f"{_LOCK_KEY_PREFIX}{mode}"
-        self._redis.delete(key)
-        self._redis.delete(_STATUS_CACHE_KEY)   # OPT-7: scanning state changed
+        try:
+            key = f"{_LOCK_KEY_PREFIX}{mode}"
+            self._redis.delete(key)
+            self._redis.delete(_STATUS_CACHE_KEY)
+        except Exception as exc:
+            log.warning("release_scan_lock_redis_error", error=str(exc))
         scheduler_scanning.set(0)
         log.debug("scan_lock_released", mode=mode)
 
     def is_scan_running(self, mode: ScanMode) -> bool:
-        key = f"{_LOCK_KEY_PREFIX}{mode}"
-        return self._redis.exists(key) == 1
+        try:
+            key = f"{_LOCK_KEY_PREFIX}{mode}"
+            return self._redis.exists(key) == 1
+        except Exception:
+            return False  # fail-safe: assume not running if Redis unavailable
 
     # ── Scheduler enable / disable ────────────────────────────────────────────
 
     def enable(self) -> None:
-        self._redis.set(_ENABLED_KEY, "1")
-        self._redis.delete(_STATUS_CACHE_KEY)   # OPT-7: invalidate status cache
+        try:
+            self._redis.set(_ENABLED_KEY, "1")
+            self._redis.delete(_STATUS_CACHE_KEY)
+        except Exception as exc:
+            log.warning("scheduler_enable_redis_error", error=str(exc))
         scheduler_active.set(1)
         log.info("scheduler_enabled")
 
     def disable(self) -> None:
-        self._redis.set(_ENABLED_KEY, "0")
-        self._redis.delete(_STATUS_CACHE_KEY)   # OPT-7: invalidate status cache
+        try:
+            self._redis.set(_ENABLED_KEY, "0")
+            self._redis.delete(_STATUS_CACHE_KEY)
+        except Exception as exc:
+            log.warning("scheduler_disable_redis_error", error=str(exc))
         scheduler_active.set(0)
         log.info("scheduler_disabled")
 
@@ -172,8 +184,15 @@ class SchedulerCoordinator:
             m for m in ("standard", "high_confidence", "futures")
             if self.is_scan_running(m)  # type: ignore[arg-type]
         ]
-        last_ts_raw = self._redis.get("scheduler:last_scan_ts")
-        last_scan_at = float(last_ts_raw) if last_ts_raw else self._last_scan_from_db()
+        try:
+            last_ts_raw = self._redis.get("scheduler:last_scan_ts")
+        except Exception:
+            last_ts_raw = None
+        if last_ts_raw and time.time() - float(last_ts_raw) < 30 * 60:
+            last_scan_at: float | None = float(last_ts_raw)
+        else:
+            # Redis timestamp missing or >30 min stale — query DB for true last scan
+            last_scan_at = self._last_scan_from_db() or (float(last_ts_raw) if last_ts_raw else None)
 
         # Beat schedule: next fire times per mode (crontab mirrors beat_schedule.py)
         next_scan_at = {
@@ -217,8 +236,16 @@ class SchedulerCoordinator:
             m for m in ("standard", "high_confidence", "futures")
             if await loop.run_in_executor(None, self.is_scan_running, m)  # type: ignore[arg-type]
         ]
-        last_ts_raw  = await loop.run_in_executor(None, self._redis.get, "scheduler:last_scan_ts")
-        last_scan_at = float(last_ts_raw) if last_ts_raw else await self._last_scan_from_db_async()
+        try:
+            last_ts_raw = await loop.run_in_executor(None, self._redis.get, "scheduler:last_scan_ts")
+        except Exception:
+            last_ts_raw = None
+        if last_ts_raw and time.time() - float(last_ts_raw) < 30 * 60:
+            last_scan_at: float | None = float(last_ts_raw)
+        else:
+            # Redis timestamp missing or >30 min stale — query DB for true last scan
+            db_ts = await self._last_scan_from_db_async()
+            last_scan_at = db_ts or (float(last_ts_raw) if last_ts_raw else None)
 
         next_scan_at = {
             "standard":        self._next_beat_fire([0, 15, 30, 45]),
@@ -244,8 +271,8 @@ class SchedulerCoordinator:
         return result
 
     def record_scan_complete(self) -> None:
-        self._redis.set("scheduler:last_scan_ts", str(time.time()))
         try:
-            self._redis.delete(_STATUS_CACHE_KEY)   # OPT-7: force fresh status on next poll
-        except Exception:
-            pass
+            self._redis.set("scheduler:last_scan_ts", str(time.time()))
+            self._redis.delete(_STATUS_CACHE_KEY)
+        except Exception as exc:
+            log.warning("record_scan_complete_redis_error", error=str(exc))
