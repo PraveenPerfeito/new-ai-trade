@@ -221,16 +221,28 @@ def _match_toxic_setup(description: str) -> str | None:
 def _early_breakout_confidence_adj(
     breakout_strength: str | None,
     signal_type: SignalType,
+    breakout_type: str | None = None,
 ) -> int:
     """Return the confidence adjustment for EARLY_BREAKOUT signals.
 
-    EARLY_BREAKOUT.TRUTH.1 — direction-aware:
-      BUY  + EARLY_BREAKOUT: −4  (WR=13%, Exp=−0.598 — premature long entry)
-      SELL + EARLY_BREAKOUT:  0  (WR=68%, Exp=+1.074 — breakdown confirmation)
+    CONFIDENCE.FIX.2 — direction + type aware:
+      SELL + 20d_low/30d_low:   0  (WR=87.5%, Exp=+1.63R — breakdown confirmation, alpha)
+      SELL + bb_expansion:      -5  (unconfirmed sell, modest penalty)
+      BUY  + 20d_high/30d_high: -4  (WR=13%, Exp=−0.598 — premature long entry)
+      BUY  + bb_expansion:     -10  (WR=14%, Exp=−0.76R at 90+ — flush below 90 threshold)
+      BUY  + other/None:        -4  (original penalty)
     """
-    if breakout_strength == "EARLY_BREAKOUT" and signal_type == SignalType.BUY:
-        return -4
-    return 0
+    if breakout_strength != "EARLY_BREAKOUT":
+        return 0
+    bt = breakout_type or ""
+    if signal_type == SignalType.SELL:
+        if any(t in bt for t in ("20d_low", "30d_low")):
+            return 0
+        return -5
+    # BUY path
+    if "bb_expansion" in bt:
+        return -10
+    return -4
 
 
 def _null_setup_confidence_penalty(
@@ -824,7 +836,7 @@ async def scan_coin(
             _boost += 5
             _boost_reasons.append("20d_low_breakout")
         elif setup.breakout_strength == "EARLY_BREAKOUT":
-            _adj = _early_breakout_confidence_adj(setup.breakout_strength, signal_type)
+            _adj = _early_breakout_confidence_adj(setup.breakout_strength, signal_type, setup.breakout_type)
             if _adj != 0:
                 _boost += _adj
                 _boost_reasons.append("EARLY_BREAKOUT_penalty")
@@ -873,6 +885,20 @@ async def scan_coin(
                 breakout_strength=setup.breakout_strength,
             )
             adjusted_confidence = 88
+
+        # CONFIDENCE.FIX.2: Spot signals with no intelligence context capped at 89.
+        # Data: spot+no_intel at 90-94 WR=32.6% vs 85-89 WR=69.7% (n=181).
+        # Crossing 90 requires at least one futures intelligence dimension.
+        if (mode == ScannerMode.SPOT
+                and futures_data is None
+                and adjusted_confidence >= 90):
+            log.info(
+                "spot_no_intel_confidence_cap",
+                symbol=coin.symbol,
+                original=adjusted_confidence,
+                capped=89,
+            )
+            adjusted_confidence = 89
 
         if confidence_penalty > 0:
             log.info(
