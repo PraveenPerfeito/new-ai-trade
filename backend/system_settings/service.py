@@ -39,7 +39,7 @@ T = TypeVar('T', bound=BaseSettingsGroup)
 
 _MEM_TTL            = 60       # seconds (was 30 — settings change rarely; 60s cuts refresh ops by half)
 _REDIS_TTL          = 3_600    # 1 hour
-_GEN_CHECK_INTERVAL = 60.0     # seconds between generation counter checks (was 30.0 — aligned with MEM_TTL)
+_GEN_CHECK_INTERVAL = 120.0    # seconds between generation counter checks (R3 OPS.CONSOLIDATION.1: was 60.0)
 
 
 # ── Cache entry ───────────────────────────────────────────────────────────────

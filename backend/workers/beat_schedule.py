@@ -76,12 +76,14 @@ BEAT_SCHEDULE = {
             "queue": "celery",
         },
     },
-    # Worker liveness heartbeat: every 60 seconds — /health/ready checks this key
+    # Worker liveness heartbeat: every 120 seconds — /health/ready threshold is
+    # 300s, so a 120s interval gives 2.5× safety margin before "unknown" is
+    # reported.  Halves CloudAMQP heartbeat traffic (~720 msgs/day saved).
     "worker-heartbeat": {
         "task": "backend.workers.scan_task.worker_heartbeat",
-        "schedule": 60.0,   # seconds
+        "schedule": 120.0,  # seconds (was 60.0 — R2 OPS.CONSOLIDATION.1)
         "options": {
-            "expires": 55,
+            "expires": 115,
             "queue": "celery",
         },
     },

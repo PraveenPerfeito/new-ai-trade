@@ -31,13 +31,28 @@ def _key(metric: str, day: str | None = None) -> str:
 
 # ── Redis counter helpers ─────────────────────────────────────────────────────
 
+# R4: Quota snapshot is written once per hour.  The 7-day rolling average it
+# feeds uses daily granularity, so writing on every monitoring call (~60s) is
+# pure waste.  A dict is used instead of globals to avoid 'global' statements.
+_snapshot_write_state: dict = {"hour": -1, "date": ""}
+
+# R5: Track keys that already have their TTL set; skip EXPIRE on subsequent
+# calls.  Keys include today's date, so new-day keys automatically miss the
+# set and get their TTL on first write.  At most ~5 entries grow per day
+# (signals, scans, coins_scanned, telegram_sends, binance_errors).
+_initialized_keys: set[str] = set()
+
+
 async def _incr(metric: str, amount: int = 1) -> None:
     try:
         from backend.cache.redis_cache import get_redis
         redis = await get_redis()
+        key   = _key(metric)
         pipe  = redis.pipeline()
-        pipe.incrby(_key(metric), amount)
-        pipe.expire(_key(metric), _TTL)
+        pipe.incrby(key, amount)
+        if key not in _initialized_keys:
+            pipe.expire(key, _TTL)
+            _initialized_keys.add(key)
         await pipe.execute()
     except Exception as exc:
         log.debug("monitor_incr_failed", metric=metric, error=str(exc))
@@ -84,8 +99,9 @@ async def record_scan(coins_scanned: int, duration_ms: int) -> None:
         from backend.cache.redis_cache import get_redis
         redis = await get_redis()
         await redis.setex(f"{_PREFIX}:last_scan_duration_ms", 3_600, str(duration_ms))
-        await redis.lpush(f"{_PREFIX}:scan_durations", duration_ms)
-        await redis.ltrim(f"{_PREFIX}:scan_durations", 0, 47)
+        # R1: scan_durations list removed — key was written but never read anywhere.
+        # last_scan_duration_ms (scalar above) is the only duration value consumed by
+        # get_monitoring_snapshot() and the dashboard.
     except Exception as exc:
         log.warning("monitor_record_scan_duration_failed", error=str(exc))
 
@@ -185,8 +201,13 @@ async def get_monitoring_snapshot() -> dict:
         raw   = await redis.get("intel:quota:used")
         cmc_month = int(raw or 0)
 
-        # Store today's snapshot so rolling history accumulates (8d TTL)
-        await redis.set(f"intel:quota:snapshot:{today}", str(cmc_month), ex=8 * 24 * 3600)
+        # Store today's snapshot so rolling history accumulates (8d TTL).
+        # R4: only write once per hour — daily granularity is all the rolling
+        # average needs; writing on every dashboard poll is pure waste.
+        if _snapshot_write_state["date"] != today or _snapshot_write_state["hour"] != now.hour:
+            await redis.set(f"intel:quota:snapshot:{today}", str(cmc_month), ex=8 * 24 * 3600)
+            _snapshot_write_state["date"] = today
+            _snapshot_write_state["hour"] = now.hour
 
         # Find the oldest available daily snapshot within the last 7 days
         oldest_val, oldest_days = None, 0
