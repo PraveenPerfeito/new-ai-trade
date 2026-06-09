@@ -15,7 +15,7 @@ BEAT_SCHEDULE = {
             # Discard if not started within 17 min — matches soft_time_limit so a delayed
             # queued task still has a full 17 min to run before expiry discards it.
             "expires": 17 * 60,
-            "queue": "scanner",
+            "queue": "celery",
         },
     },
     # High-confidence scan: every 30 minutes
@@ -25,7 +25,7 @@ BEAT_SCHEDULE = {
         "kwargs": {"mode": "high_confidence"},
         "options": {
             "expires": 17 * 60,
-            "queue": "scanner",
+            "queue": "celery",
         },
     },
     # Futures scan: every 30 minutes, offset by 10 minutes to avoid pile-up
@@ -35,7 +35,7 @@ BEAT_SCHEDULE = {
         "kwargs": {"mode": "futures"},
         "options": {
             "expires": 17 * 60,
-            "queue": "scanner",
+            "queue": "celery",
         },
     },
     # Trending scan: every 30 minutes — populates trend_score + sector_status (INTEL.PERSIST.1)
@@ -45,7 +45,7 @@ BEAT_SCHEDULE = {
         "kwargs": {"mode": "trending"},
         "options": {
             "expires": 17 * 60,
-            "queue": "scanner",
+            "queue": "celery",
         },
     },
     # Signal outcome tracker: every 10 minutes
