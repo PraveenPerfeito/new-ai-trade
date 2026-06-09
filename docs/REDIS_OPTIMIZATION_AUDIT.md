@@ -1,4 +1,82 @@
-# Phase 7.2B.10 — Redis Optimization Audit
+# Redis Optimization Audit Log
+
+---
+
+## Phase REDIS.OPTIMIZE.1 — Current Phase (June 2026)
+
+**Baseline:** ~430K ops/month (after Phase 7.2B.10 reductions)  
+**Target:** <250K ops/month  
+**Required reduction:** ~42%  
+**Projected savings:** ~175–190K ops/month across 7 fixes
+
+### Hotspot Summary
+
+| Rank | Key / Endpoint | Ops/Month | Root Cause |
+|------|---------------|-----------|------------|
+| 1 | `/health/ready` (Railway polls ~60s) | ~86,400 | PING + GET heartbeat on every health check |
+| 2 | `intel:quota:snapshot:{date}` write | ~42,480 | SET on every `/api/analytics/monitor` call (should be hourly) |
+| 3 | `worker-heartbeat` beat task | ~43,200 | SETEX every 60s; 300s threshold means 120s is fine |
+| 4 | `settings:generation` GET | ~43,200 | Gen check every 60s per worker; 120s is safe |
+| 5 | CMC worker quota `consume()` pipeline | ~56,160 | 3 ops per tick × 624 ticks/day (correct — see note) |
+| 6 | `cache:intel:hits/misses:*` INCRs + GETs | ~31,680 | Cosmetic dashboard counters; Prometheus already records this |
+| 7 | `monitor:scan_durations` lpush+ltrim | ~14,400 | List written every scan; never read anywhere |
+| 8 | Monitoring `_incr()` EXPIRE on every call | ~15,780 | EXPIRE runs on each INCR even after TTL is set |
+
+> **Note on CMC workers (rank 5):** The 624 ticks/day and 3-op pipelines are correct behaviour — CMC worker architecture requires this. No change needed; listed for visibility.
+
+### Fix Tracking
+
+| ID | Status | Savings/Month | File | Change |
+|----|--------|---------------|------|--------|
+| O1 | ⬜ PENDING | ~43,200 | `backend/api/health.py` | Add 90s in-process cache for `/health/ready` result |
+| O2 | ⬜ PENDING | ~15,780 | `backend/analytics/monitoring.py` | Skip EXPIRE in `_incr()` after first call per day per metric key |
+| O3 | ⬜ PENDING | ~21,600 | `backend/workers/beat_schedule.py` | Heartbeat schedule `60.0 → 120.0` seconds |
+| O4 | ⬜ PENDING | ~21,600 | `backend/system_settings/service.py` | `_GEN_CHECK_INTERVAL = 60.0 → 120.0` |
+| O5 | ⬜ PENDING | ~42,480 | `backend/analytics/monitoring.py` | Quota snapshot write: once per hour, not per monitoring call |
+| O6 | ⬜ PENDING | ~14,400 | `backend/analytics/monitoring.py` | Remove `monitor:scan_durations` lpush+ltrim (key never read) |
+| O7 | ⬜ PENDING | ~31,680 | `intelligence_cache.py`, `telemetry.ts` | Remove hit/miss Redis INCRs; cache page shows age instead of hit rate |
+
+**P0 (no UX impact):** O3, O4, O5, O6 → saves ~99,480 ops/month → 430K → ~330K  
+**P1 (tiny code change):** + O1, O2 → saves ~58,980 more → 330K → ~271K  
+**P2 (UI update):** + O7 → saves ~31,680 more → 271K → **~239K ✅ under 250K**
+
+### Fix Details
+
+#### O1 — Health check in-process cache (`backend/api/health.py`)
+`/health/ready` is called every ~60s by Railway. Each call: `redis.ping()` + `redis.get("celery:worker:last_heartbeat")` = 2 Redis ops. With a 90s in-process module-level cache, Railway calls (every 60s) alternate: miss → hit → miss → hit → 50% reduction.
+- Add module-level `_readiness_cache: dict = {"result": None, "expires_at": 0.0}`
+- Cache TTL: 90s (heartbeat threshold is 300s; 90s is safe)
+- Skip Redis checks and return cached result if `time.time() < expires_at`
+
+#### O2 — Skip EXPIRE after first `_incr()` per day (`backend/analytics/monitoring.py`)
+`_incr()` runs `INCRBY + EXPIRE` on every call. The TTL only needs to be set once per day per metric key. After that, re-running EXPIRE is wasted ops.
+- Add module-level `_initialized_keys: set[str] = set()`
+- In `_incr()`: include `pipe.expire()` only if `key not in _initialized_keys`, then add to set
+- Key includes today's date so the set naturally becomes stale at midnight; clear on date change
+
+#### O3 — Heartbeat interval 60s → 120s (`backend/workers/beat_schedule.py`)
+`"schedule": 60.0` → `"schedule": 120.0`. The `/health/ready` threshold is 300s — a 120s heartbeat gives 2.5× safety margin before the worker is considered dead.
+
+#### O4 — Settings gen check 60s → 120s (`backend/system_settings/service.py`)
+`_GEN_CHECK_INTERVAL = 60.0` → `_GEN_CHECK_INTERVAL = 120.0`. Settings change at most a few times per day (admin patches). 120s propagation window is undetectable in practice.
+
+#### O5 — Quota snapshot write: once per hour (`backend/analytics/monitoring.py`)
+`get_monitoring_snapshot()` line 189 runs `await redis.set("intel:quota:snapshot:{today}", ...)` on **every call**. This is the write path for the rolling CMC credit history. It needs to be written at most once per hour (the rolling average is computed over days).
+- Add module-level `_last_snapshot_hour: int = -1`
+- Only write if `datetime.now().hour != _last_snapshot_hour`, then update `_last_snapshot_hour`
+
+#### O6 — Remove `monitor:scan_durations` list (`backend/analytics/monitoring.py`)
+`record_scan()` lines 87–88: `await redis.lpush(...)` + `await redis.ltrim(...)`. Grep confirms nothing reads `monitor:scan_durations` anywhere. The dashboard reads `monitor:last_scan_duration_ms` (a separate key). Delete both lines.
+
+#### O7 — Remove intelligence hit/miss counters (`intelligence_cache.py` + `telemetry.ts`)
+**Python side:** Remove `await redis.incr(INTEL_HITS_KEY)` from `read_intelligence_listings()`, `read_trending_coins()`, `read_categories()`. Prometheus counters (`intelligence_cache_hits_total`) already record this.  
+**TypeScript side (`telemetry.ts`):** Remove `redis.get(groupHitsKey(name))` and `redis.get(groupMissesKey(name))` from the `Promise.all`. Update return object: set `hitCount: 0, missCount: 0, hitRate: 0`.  
+**Cache page:** Replace "Hit Rate: X%" display with "Age: Xm Ys / Fresh|Stale" (already computed from `ageSeconds` and `isStale`).  
+**`cache-groups.ts`:** Remove `groupHitsKey()` and `groupMissesKey()` exports if they become unused.
+
+---
+
+## Phase 7.2B.10 — Completed (May 2026)
 
 **Date:** 2026-05-31  
 **Baseline:** 615K commands/month (Upstash dashboard)  
