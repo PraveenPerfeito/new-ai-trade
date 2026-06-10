@@ -57,6 +57,8 @@ interface TrendingCoin { id: number; symbol: string; name: string; rank: number;
 interface IntelligenceData { regime: RegimeData; global: GlobalData | null; trending: { trending: TrendingCoin[]; refreshedAt: string } | null; listings: { breadthUp: number; breadthDown: number; topMovers: { symbol: string; change: number }[] } | null; computedAt: string }
 interface NewsItem { title: string; url: string; source: string; publishedAt: string; sentiment?: 'bullish' | 'bearish' | 'neutral' }
 interface NewsSnapshot { fearGreedValue: number | null; fearGreedLabel: string | null; headlines: NewsItem[]; bullishCount: number; bearishCount: number; neutralCount: number; cachedAt: string }
+interface GrokNewsItem { title: string; url: string; source: string; publishedAt: string; sentiment: 'bullish' | 'bearish' | 'neutral'; summary: string }
+interface GrokNewsData { news: GrokNewsItem[]; fetchedAt: string; model: string; cached: boolean }
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -262,6 +264,13 @@ function ProvidersTab({ providers, loading }: { providers: ProviderCheckResult[]
 
 // ── Cache tab ────────────────────────────────────────────────────────────────
 
+const INTEL_SECTIONS = [
+  { key: 'listings',   label: 'Market Snapshot',     ttlMin: 5,  desc: 'Top 200 listings, breadth, movers'  },
+  { key: 'global',     label: 'Global Metrics',      ttlMin: 5,  desc: 'Market cap, volume, dominance'       },
+  { key: 'categories', label: 'Sector Intelligence', ttlMin: 60, desc: 'CMC category states + signals'       },
+  { key: 'trending',   label: 'Trending Engine',     ttlMin: 5,  desc: 'CMC trending coins, 5-source fusion' },
+]
+
 function CacheTab({ data, onForceRefresh, onRefreshGroup, onRefreshAll, refreshing, refreshingGroup, error }: {
   data: IntelligenceTelemetry | null
   onForceRefresh: () => void; onRefreshGroup: (g: string) => void; onRefreshAll: () => void
@@ -280,6 +289,30 @@ function CacheTab({ data, onForceRefresh, onRefreshGroup, onRefreshAll, refreshi
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-xs font-medium text-white transition-colors">
           <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`}/>Refresh All Sources
         </button>
+      </div>
+
+      {/* Intel sections quick-refresh */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        {INTEL_SECTIONS.map(s => {
+          const group = data?.groups.find(g => g.name === s.key)
+          const stale = group ? group.isStale : false
+          const age   = group ? formatAge(group.ageSeconds) : `every ${s.ttlMin}m`
+          return (
+            <div key={s.key} className={`bg-zinc-900 border rounded-xl px-3 py-2.5 ${stale ? 'border-orange-500/25' : 'border-zinc-800'}`}>
+              <div className="flex items-start justify-between gap-1 mb-1">
+                <p className="text-[10px] text-zinc-300 font-medium leading-tight">{s.label}</p>
+                <span className={`text-[8px] font-mono font-bold px-1 py-0.5 rounded shrink-0 ${stale ? 'text-orange-400 bg-orange-900/30' : 'text-emerald-400 bg-emerald-900/20'}`}>
+                  {stale ? 'STALE' : 'FRESH'}
+                </span>
+              </div>
+              <p className="text-[9px] text-zinc-600 mb-2 font-mono">{age}</p>
+              <button onClick={() => { onRefreshGroup(s.key); onRefreshAll() }} disabled={refreshingGroup === s.key || refreshing}
+                className="w-full flex items-center justify-center gap-1 px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-[9px] text-zinc-400 transition-colors font-mono">
+                <RefreshCw className={`w-2.5 h-2.5 ${refreshingGroup === s.key ? 'animate-spin' : ''}`}/>Refresh
+              </button>
+            </div>
+          )
+        })}
       </div>
 
 
@@ -782,15 +815,133 @@ function MarketTab({ data, news, error }: { data: IntelligenceData | null; news:
   )
 }
 
+// ── News tab (Grok live search) ───────────────────────────────────────────────
+
+const GROK_SENT_STYLE: Record<string, string> = {
+  bullish: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25',
+  bearish: 'text-red-400     bg-red-500/10     border-red-500/25',
+  neutral: 'text-zinc-400   bg-zinc-800/60    border-zinc-700',
+}
+const GROK_SENT_LABEL: Record<string, string> = { bullish: 'B+', bearish: 'B−', neutral: 'N' }
+
+function timeAgo(iso: string): string {
+  try {
+    const diff = Date.now() - new Date(iso).getTime()
+    if (diff < 0) return 'just now'
+    const m = Math.floor(diff / 60_000)
+    if (m < 1)   return 'just now'
+    if (m < 60)  return `${m}m ago`
+    if (m < 1440) return `${Math.floor(m / 60)}h ago`
+    return `${Math.floor(m / 1440)}d ago`
+  } catch { return '' }
+}
+
+function NewsTab({ data, loading, error, onRefresh, refreshing }: {
+  data:       GrokNewsData | null
+  loading:    boolean
+  error:      string | null
+  onRefresh:  () => void
+  refreshing: boolean
+}) {
+  if (loading && !data) {
+    return (
+      <div className="space-y-3 max-w-5xl">
+        <div className="flex items-center justify-center h-40 gap-3 text-zinc-500 text-sm">
+          <RefreshCw className="w-4 h-4 animate-spin text-violet-400"/>
+          <span>Grok is searching live news…</span>
+        </div>
+      </div>
+    )
+  }
+
+  const bullish = data?.news.filter(n => n.sentiment === 'bullish').length ?? 0
+  const bearish = data?.news.filter(n => n.sentiment === 'bearish').length ?? 0
+  const neutral = data?.news.filter(n => n.sentiment === 'neutral').length ?? 0
+
+  return (
+    <div className="space-y-4 max-w-5xl">
+      {/* Header row */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded border text-violet-400 border-violet-500/30 bg-violet-500/8">
+            ⚡ Live via Grok
+          </span>
+          {data && (
+            <span className="text-[10px] text-zinc-600 font-mono">
+              {data.cached ? 'cached' : 'live'} · {timeAgo(data.fetchedAt)}
+            </span>
+          )}
+        </div>
+        <button onClick={onRefresh} disabled={refreshing}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-xs font-medium text-white transition-colors">
+          <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`}/>Refresh
+        </button>
+      </div>
+
+      {error && (
+        <div className="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0"/>
+          {error.includes('XAI_API_KEY') ? 'XAI_API_KEY not configured — add it to your environment variables.' : error}
+        </div>
+      )}
+
+      {/* Sentiment summary */}
+      {data && data.news.length > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-zinc-900 border border-emerald-500/20 rounded-xl px-4 py-3 text-center">
+            <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1">Bullish</p>
+            <p className="text-2xl font-bold font-mono text-emerald-400">{bullish}</p>
+          </div>
+          <div className="bg-zinc-900 border border-red-500/20 rounded-xl px-4 py-3 text-center">
+            <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1">Bearish</p>
+            <p className="text-2xl font-bold font-mono text-red-400">{bearish}</p>
+          </div>
+          <div className="bg-zinc-900 border border-zinc-700/40 rounded-xl px-4 py-3 text-center">
+            <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1">Neutral</p>
+            <p className="text-2xl font-bold font-mono text-zinc-400">{neutral}</p>
+          </div>
+        </div>
+      )}
+
+      {/* News feed */}
+      {data && data.news.length > 0 ? (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl divide-y divide-zinc-800/60">
+          {data.news.map((item, i) => (
+            <a key={i} href={item.url} target="_blank" rel="noopener noreferrer"
+              className="flex items-start gap-3 px-4 py-3 hover:bg-zinc-800/30 transition-colors group">
+              <span className={`text-[9px] px-1.5 py-0.5 rounded border shrink-0 mt-0.5 font-bold ${GROK_SENT_STYLE[item.sentiment]}`}>
+                {GROK_SENT_LABEL[item.sentiment]}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-zinc-100 leading-snug group-hover:text-white transition-colors line-clamp-2">{item.title}</p>
+                {item.summary && (
+                  <p className="text-[10px] text-zinc-500 mt-0.5 leading-snug line-clamp-2">{item.summary}</p>
+                )}
+                <p className="text-[9px] text-zinc-600 mt-1 font-mono">{item.source} · {timeAgo(item.publishedAt)}</p>
+              </div>
+              <ArrowUpRight className="w-3.5 h-3.5 text-zinc-700 group-hover:text-zinc-400 shrink-0 mt-0.5 transition-colors"/>
+            </a>
+          ))}
+        </div>
+      ) : !error && !loading ? (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-5 py-8 text-xs text-zinc-500 text-center">
+          No news loaded yet — click Refresh to fetch live news via Grok.
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'providers' | 'cache' | 'sectors' | 'market'
+type Tab = 'providers' | 'cache' | 'sectors' | 'market' | 'news'
 
 const TABS: { id: Tab; label: string; sub: string }[] = [
   { id: 'providers', label: 'Providers', sub: '8 services'   },
   { id: 'cache',     label: 'Cache',     sub: 'CMC quota'    },
   { id: 'sectors',   label: 'Sectors',   sub: 'CMC ecosystem'},
   { id: 'market',    label: 'Market',    sub: 'regime + news'},
+  { id: 'news',      label: 'News',      sub: 'Grok live'    },
 ]
 
 export default function IntelligenceCenterPage() {
@@ -801,11 +952,15 @@ export default function IntelligenceCenterPage() {
     if (t && TABS.some(x => x.id === t)) setTab(t)
   }, [])
 
-  const [refreshing,      setRefreshing]      = useState(false)
-  const [refreshingGroup, setRefreshingGroup] = useState<string | null>(null)
-  const [cacheError,      setCacheError]      = useState<string | null>(null)
-  const [sectorsError,    setSectorsError]    = useState<string | null>(null)
-  const [marketError,     setMarketError]     = useState<string | null>(null)
+  const [refreshing,       setRefreshing]       = useState(false)
+  const [refreshingGroup,  setRefreshingGroup]  = useState<string | null>(null)
+  const [cacheError,       setCacheError]       = useState<string | null>(null)
+  const [sectorsError,     setSectorsError]     = useState<string | null>(null)
+  const [marketError,      setMarketError]      = useState<string | null>(null)
+  const [grokNews,         setGrokNews]         = useState<GrokNewsData | null>(null)
+  const [grokLoading,      setGrokLoading]      = useState(false)
+  const [grokError,        setGrokError]        = useState<string | null>(null)
+  const [grokRefreshing,   setGrokRefreshing]   = useState(false)
 
   // ── Data fetchers ─────────────────────────────────────────────────────────
   const providerFetcher = useCallback(() =>
@@ -838,6 +993,24 @@ export default function IntelligenceCenterPage() {
   const { data: news    }                            = useAutoRefresh<NewsSnapshot | null>(newsFetcher, 900_000)
 
   // ── Cache actions ─────────────────────────────────────────────────────────
+  async function fetchGrokNews(force = false) {
+    if (grokLoading) return
+    const isRefresh = force || grokNews !== null
+    if (isRefresh) setGrokRefreshing(true); else setGrokLoading(true)
+    setGrokError(null)
+    try {
+      const res  = await fetch(`/api/news/grok${force ? '?force=1' : ''}`)
+      const json = await res.json() as GrokNewsData & { success: boolean; error?: string }
+      if (json.success) { setGrokNews(json); setGrokError(null) }
+      else setGrokError(json.error ?? 'Failed to load news')
+    } catch (e) { setGrokError(e instanceof Error ? e.message : 'Network error') }
+    finally { setGrokLoading(false); setGrokRefreshing(false) }
+  }
+
+  // Auto-fetch news when News tab is first opened
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (tab === 'news' && !grokNews && !grokLoading) fetchGrokNews() }, [tab])
+
   function refreshAllPolling() { refreshCache(); refreshSectors(); refreshMarket() }
 
   async function handleForceRefresh() {
@@ -908,6 +1081,15 @@ export default function IntelligenceCenterPage() {
       )}
       {tab === 'sectors' && <SectorsTab data={sectors ?? null} error={sectorsError}/>}
       {tab === 'market'  && <MarketTab  data={market ?? null}  news={news ?? null} error={marketError}/>}
+      {tab === 'news'    && (
+        <NewsTab
+          data={grokNews}
+          loading={grokLoading}
+          error={grokError}
+          onRefresh={() => fetchGrokNews(true)}
+          refreshing={grokRefreshing}
+        />
+      )}
     </div>
   )
 }
