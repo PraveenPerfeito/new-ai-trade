@@ -41,8 +41,7 @@ async function fetchFromGrok(apiKey: string): Promise<GrokNewsItem[]> {
     body: JSON.stringify({
       model:    'grok-3-latest',
       // Agent Tools API — replaces deprecated search_parameters
-      tools: [{ type: 'live_search' }],
-      tool_choice: 'auto',
+      tools: [{ type: 'live_search', live_search: {} }],
       messages: [{
         role:    'user',
         content: `Search for the latest cryptocurrency and crypto market news from the last 6 hours.
