@@ -227,6 +227,7 @@ export function computeAttribution(rows: AttributionRow[], windowHours = 720): A
   const byAiValidated   = byDim(rows, r => (r.aiValidated ? 'ai' : 'heuristic') as 'ai' | 'heuristic', k => k === 'ai' ? 'AI Validated' : 'Heuristic');
   const byTimeframe     = byDim(rows, r => r.timeframe,         k => tfLabels[k]     ?? k);
   const byScannerMode   = byDim(rows, r => r.scannerMode,       k => modeLabels[k]   ?? k);
+  const byGrade         = byDim(rows, r => r.riskGrade,         k => `Grade ${k}`);
 
   const edgePatterns = topPatterns(tactRows);
 
@@ -249,7 +250,7 @@ export function computeAttribution(rows: AttributionRow[], windowHours = 720): A
     resolvedRows,
     dataGap,
     insufficient: resolvedRows < 20,
-    dimensions: { byRegime, byMcapTier, bySignalState, byExtensionRisk, bySector, byAiValidated, byTimeframe, byScannerMode },
+    dimensions: { byRegime, byMcapTier, bySignalState, byExtensionRisk, bySector, byAiValidated, byTimeframe, byScannerMode, byGrade },
     edgePatterns,
     recommendations: recs,
     aiEffectiveness,

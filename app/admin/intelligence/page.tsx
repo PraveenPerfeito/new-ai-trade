@@ -13,6 +13,7 @@ import { useSharedPolling } from '@/lib/use-shared-polling'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
 import { formatTs } from '@/lib/utils'
 import type { SectorStats } from '@/types'
+import { ProviderHealthTable } from '@/components/admin/provider-health-table'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -65,12 +66,6 @@ const PROVIDER_META: Record<string, { label: string; role: string; color: string
   coingecko:     { label: 'CoinGecko',      role: 'Backup Intelligence',    color: '#2d9e49', quotaNote: 'Free tier',             stackRole: 'Backup Redundancy'    },
   dexscreener:   { label: 'DexScreener',    role: 'Low-Cap Intelligence',   color: '#7c3aed', quotaNote: 'Unlimited',             stackRole: 'Optional Low-Cap'     },
   coinpaprika:   { label: 'CoinPaprika',    role: 'Legacy Provider',        color: '#4b5563', quotaNote: 'Rate-limited',          stackRole: 'Legacy'               },
-}
-const PROVIDER_ORDER = ['Binance', 'CMC', 'CoinGecko', 'Claude', 'Telegram', 'Supabase', 'Redis', 'CloudAMQP']
-const PROVIDER_ROLE: Record<string, string> = {
-  Binance: 'OHLCV / Futures', CMC: 'Market Intelligence', CoinGecko: 'Fallback Data',
-  Claude: 'AI Validation', Telegram: 'Alert Delivery', Supabase: 'Database / Auth',
-  Redis: 'Cache / Pub-Sub', CloudAMQP: 'Task Broker',
 }
 const REGIME_META: Record<string, { label: string; color: string; border: string; desc: string }> = {
   BULL_TREND:      { label: 'Bull Trend',     color: 'text-green-400',  border: 'border-green-500/25',  desc: 'BTC 4h bullish · strong trend momentum' },
@@ -138,7 +133,6 @@ function workerStateColor(state: WorkerStatus['state']) {
 // ── Providers tab ────────────────────────────────────────────────────────────
 
 function ProvidersTab({ providers, loading }: { providers: ProviderCheckResult[]; loading: boolean }) {
-  const sorted = PROVIDER_ORDER.map(n => providers.find(p => p.name === n)).filter(Boolean) as ProviderCheckResult[]
   const up    = providers.filter(p => p.healthy).length
   const total = providers.length
 
@@ -157,39 +151,14 @@ function ProvidersTab({ providers, loading }: { providers: ProviderCheckResult[]
       </div>
 
       {/* Health table */}
-      <div className="glass-card rounded-xl p-4 overflow-x-auto">
-        <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">8-Service Health Check</p>
-        {loading ? (
+      {loading ? (
+        <div className="glass-card rounded-xl p-4">
+          <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">Provider Health — 8 Services</p>
           <div className="space-y-1.5">{Array.from({length:6}).map((_,i)=><div key={i} className="skeleton h-7 rounded"/>)}</div>
-        ) : (
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-terminal-muted/60 text-[10px] uppercase">
-                <th className="text-left pb-2 font-medium w-28">Provider</th>
-                <th className="text-left pb-2 font-medium">Role</th>
-                <th className="text-right pb-2 font-medium w-16">Status</th>
-                <th className="text-right pb-2 font-medium w-16">Latency</th>
-                <th className="text-left pb-2 font-medium pl-3">Note</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-terminal-border/10">
-              {sorted.map(p => (
-                <tr key={p.name}>
-                  <td className="py-1.5 text-terminal-text font-semibold">{p.name}</td>
-                  <td className="py-1.5 text-terminal-muted/70">{PROVIDER_ROLE[p.name] ?? ''}</td>
-                  <td className="py-1.5 text-right">
-                    <span className={`font-mono font-bold text-[10px] uppercase ${p.healthy ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {p.healthy ? '✓ UP' : '✗ DOWN'}
-                    </span>
-                  </td>
-                  <td className="py-1.5 text-right font-mono text-terminal-muted/70">{p.latencyMs > 0 ? `${p.latencyMs}ms` : '—'}</td>
-                  <td className="py-1.5 pl-3 text-terminal-muted/60 max-w-xs truncate">{p.error ? <span className="text-red-400/80">{p.error}</span> : p.note ?? ''}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+        </div>
+      ) : (
+        <ProviderHealthTable providers={providers} />
+      )}
 
       {/* Provider metadata cards */}
       <div>

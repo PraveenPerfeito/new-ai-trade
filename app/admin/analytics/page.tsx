@@ -450,6 +450,99 @@ function AIEffectivenessSection({ ai }: { ai: AttributionReport['aiEffectiveness
   )
 }
 
+const GRADE_COLOR: Record<string, string> = {
+  'Grade A': 'text-green-400', 'Grade B': 'text-blue-400', 'Grade C': 'text-amber-400',
+  'Grade D': 'text-orange-400', 'Grade F': 'text-red-400',
+}
+
+function RiskGradeAnalysis({ rows }: { rows: AttributionDimension[] }) {
+  if (!rows.length) return (
+    <div className="glass-card rounded-lg p-5">
+      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-2">Risk Grade Analysis</p>
+      <p className="text-terminal-muted/60 text-xs">No resolved signals with grade data yet. Warms up as signals reach TP/SL.</p>
+    </div>
+  )
+  const sorted = [...rows].sort((a, b) => a.key.localeCompare(b.key))
+  return (
+    <div>
+      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Risk Grade Analysis — RISKGRADE.FIX.1 Validation</p>
+      <div className="glass-card rounded-lg overflow-hidden overflow-x-auto">
+        <table className="w-full text-xs min-w-[360px]">
+          <thead>
+            <tr className="border-b border-terminal-border">
+              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Grade</th>
+              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Signals</th>
+              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Win Rate</th>
+              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold hidden sm:table-cell">Expectancy</th>
+              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold hidden sm:table-cell">Avg RR</th>
+              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Target</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map(d => {
+              const gradeColor = GRADE_COLOR[d.label] ?? 'text-terminal-text'
+              const targets: Record<string, string> = { 'Grade A': 'WR ≥ 42%', 'Grade B': 'WR ≥ 43%', 'Grade C': 'WR ≥ 50%' }
+              const target = targets[d.label] ?? ''
+              const wrOk = d.winRate != null && d.winRate >= 0.42
+              return (
+                <tr key={d.key} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
+                  <td className={`py-2 px-3 font-mono font-bold ${gradeColor}`}>{d.label}</td>
+                  <td className="py-2 px-3 font-mono text-terminal-muted">{d.total}</td>
+                  <td className="py-2 px-3 font-mono">
+                    {d.winRate != null
+                      ? <span className={d.winRate >= 0.42 ? 'text-bull-default' : 'text-bear-default'}>{pct(d.winRate)}</span>
+                      : <span className="text-terminal-muted/40">—</span>}
+                  </td>
+                  <td className="py-2 px-3 font-mono hidden sm:table-cell">
+                    {d.expectancy != null
+                      ? <span className={d.expectancy > 0 ? 'text-bull-default' : 'text-bear-default'}>{exp(d.expectancy)}</span>
+                      : <span className="text-terminal-muted/40">—</span>}
+                  </td>
+                  <td className="py-2 px-3 font-mono text-terminal-muted hidden sm:table-cell">{rr(d.avgRRAchieved)}</td>
+                  <td className="py-2 px-3 font-mono text-terminal-muted/50">
+                    {target && <span className={wrOk ? 'text-bull-default/60' : 'text-terminal-muted/40'}>{target}</span>}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+        <p className="px-3 py-2 text-terminal-muted/30 text-[10px] font-mono border-t border-terminal-border/20">
+          RISKGRADE.FIX.1: futures penalty +5→+2 · breakout bonus HIGH_MOM +15 · regime quality ±5/−10 for NULL
+        </p>
+      </div>
+    </div>
+  )
+}
+
+const POSTFIX_ITEMS = [
+  { key: 'CONFIDENCE.POSTFIX.1',       label: 'Confidence Calibration Validation', desc: 'Verify ECE improvement after threshold recalibration.' },
+  { key: 'RISKGRADE.POSTFIX.1',        label: 'Risk Grade Validation',             desc: 'Confirm Grade A WR ≥ 42%, Grade C shrinks to residual.' },
+  { key: 'MARKET_STRUCTURE.POSTFIX.1', label: 'Market Structure Validation',       desc: 'ms_sr_rejection + ms_trend_exhaustion counts decrease; newly unblocked signals WR ≥ 48%.' },
+  { key: 'ALPHA.POSTFIX.1',            label: 'Alpha Attribution Validation',      desc: 'Sector intelligence and breakout strength attribution confirmed.' },
+]
+
+function IntelligenceValidationSection() {
+  return (
+    <div>
+      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Intelligence Validation — POSTFIX.1 Staging</p>
+      <div className="space-y-2">
+        {POSTFIX_ITEMS.map(item => (
+          <div key={item.key} className="glass-card rounded-lg px-4 py-3 flex items-start gap-3">
+            <span className="text-terminal-muted/30 font-mono text-[10px] w-4 mt-0.5 shrink-0">◌</span>
+            <div className="min-w-0">
+              <p className="text-terminal-text text-xs font-semibold">{item.label}</p>
+              <p className="text-terminal-muted/60 text-xs mt-0.5">{item.desc}</p>
+            </div>
+            <span className="ml-auto text-[9px] font-mono font-bold text-terminal-muted/30 uppercase tracking-widest shrink-0 mt-0.5">PENDING</span>
+          </div>
+        ))}
+      </div>
+      <p className="text-terminal-muted/30 text-[10px] font-mono mt-2">Validation gates populate after 7 days post-deployment</p>
+    </div>
+  )
+}
+
 function DailyReportTrigger() {
   const [sending, setSending] = useState(false)
   const [result, setResult] = useState<string | null>(null)
@@ -552,11 +645,17 @@ function AttributionTab({ data, loading }: { data: AttributionReport | null; loa
             <DimTable title="By Scanner Mode" rows={dimensions.byScannerMode} />
           </div>
 
+          {/* Risk Grade Analysis — RISKGRADE.FIX.1 validation */}
+          <RiskGradeAnalysis rows={dimensions.byGrade} />
+
           {/* AI effectiveness */}
           <AIEffectivenessSection ai={aiEffectiveness} />
 
           {/* Recommendations */}
           <RecommendationsSection recs={recommendations} />
+
+          {/* Intelligence Validation — POSTFIX.1 staging */}
+          <IntelligenceValidationSection />
         </>
       )}
 

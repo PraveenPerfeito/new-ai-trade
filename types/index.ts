@@ -708,6 +708,7 @@ export interface AttributionReport {
     byAiValidated:   AttributionDimension[]
     byTimeframe:     AttributionDimension[]
     byScannerMode:   AttributionDimension[]
+    byGrade:         AttributionDimension[]
   }
   edgePatterns:    EdgePattern[]
   recommendations: ThresholdRecommendation[]

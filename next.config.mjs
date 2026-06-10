@@ -23,12 +23,28 @@ const nextConfig = {
     serverComponentsExternalPackages: ['pino', 'pino-pretty'],
   },
 
-  // Phase 7 — redirect renamed admin pages
+  // ADMIN.CONSOLIDATION.1 — 13 pages → 4 operational centers (June 2026)
   async redirects() {
     return [
+      // Legacy Phase 7 renames
       { source: '/admin/operations', destination: '/admin/market',      permanent: true },
       { source: '/admin/readiness',  destination: '/admin/regime',       permanent: true },
       { source: '/admin/ai',         destination: '/admin/calibration',  permanent: true },
+      // Trading Operations (merged: overview, scanner, signals, tactical, regime)
+      { source: '/admin/overview',   destination: '/admin/trading',                     permanent: true },
+      { source: '/admin/scanner',    destination: '/admin/trading?tab=scanner',          permanent: false },
+      { source: '/admin/signals',    destination: '/admin/trading?tab=signals',          permanent: false },
+      { source: '/admin/tactical',   destination: '/admin/trading?tab=tactical',         permanent: false },
+      { source: '/admin/regime',     destination: '/admin/trading?tab=regime',           permanent: false },
+      // Intelligence Center (merged: providers, cache, sectors, market)
+      { source: '/admin/providers',  destination: '/admin/intelligence',                 permanent: true },
+      { source: '/admin/cache',      destination: '/admin/intelligence?tab=cache',       permanent: false },
+      { source: '/admin/sectors',    destination: '/admin/intelligence?tab=sectors',     permanent: false },
+      { source: '/admin/market',     destination: '/admin/intelligence?tab=market',      permanent: false },
+      // Analytics & Calibration (merged: calibration)
+      { source: '/admin/calibration', destination: '/admin/analytics?tab=calibration',  permanent: false },
+      // System (merged: anomalies)
+      { source: '/admin/anomalies',  destination: '/admin/system?tab=anomalies',         permanent: false },
     ];
   },
 
