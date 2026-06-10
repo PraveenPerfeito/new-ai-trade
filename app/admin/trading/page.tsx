@@ -293,7 +293,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
               <div key={sig.id??i} className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 flex items-center gap-3 hover:border-zinc-700 transition-colors">
                 <span className="font-semibold text-sm text-white w-16 shrink-0">{sig.symbol}</span>
                 <span className={`text-xs font-semibold w-8 shrink-0 ${sig.type==='BUY'?'text-green-400':'text-red-400'}`}>{sig.type}</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>{sig.lifecycleStage.replace(/_/g,' ')}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>{(sig.lifecycleStage??'').replace(/_/g,' ')}</span>
                 <div className="ml-auto flex items-center gap-4">
                   <span className="text-xs font-mono text-zinc-300 hidden sm:block">{sig.confidence}%</span>
                   <span className="text-xs font-mono text-zinc-500 hidden sm:block">{sig.rrRatio?.toFixed(1) ?? '—'}:1</span>
@@ -470,7 +470,7 @@ function SignalsTab() {
   const [typeFilter, setTypeFilter] = useState<'all'|'BUY'|'SELL'>('all')
   const [modeFilter, setModeFilter] = useState<'all'|string>('all')
   const fetcher = useCallback(() =>
-    fetch('/api/signals?limit=50').then(r=>r.json()).then(j=>j.signals??[]), [])
+    fetch('/api/signals/tactical?limit=50&lifecycleStage=all').then(r=>r.json()).then(j=>j.signals??[]).catch(()=>[]), [])
   const { data: signals, loading } = useAutoRefresh<TacticalSignalRow[]>(fetcher, 120_000)
 
   const filtered = (signals??[]).filter(s=>
@@ -508,11 +508,11 @@ function SignalsTab() {
           <div key={sig.id??i} className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 flex items-center gap-3 hover:border-zinc-700 transition-colors">
             <span className="font-semibold text-sm text-white w-20 shrink-0">{sig.symbol}</span>
             <span className={`text-xs font-semibold w-8 shrink-0 ${sig.type==='BUY'?'text-green-400':'text-red-400'}`}>{sig.type}</span>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>{sig.lifecycleStage.replace(/_/g,' ')}</span>
-            {sig.scannerMode && <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 hidden sm:inline ${MODE_COLORS[sig.scannerMode]}`}>{sig.scannerMode.replace('_',' ')}</span>}
+            <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>{(sig.lifecycleStage??'').replace(/_/g,' ')}</span>
+            {sig.scannerMode && <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 hidden sm:inline ${MODE_COLORS[sig.scannerMode]??'text-zinc-400 border-zinc-600'}`}>{sig.scannerMode.replace('_',' ')}</span>}
             <div className="ml-auto flex items-center gap-4 shrink-0">
               <span className="text-xs font-mono text-zinc-300 hidden sm:block">{sig.confidence}%</span>
-              <span className="text-xs font-mono text-zinc-500 hidden sm:block">{sig.rrRatio?.toFixed(1)}:1</span>
+              <span className="text-xs font-mono text-zinc-500 hidden sm:block">{sig.rrRatio?.toFixed(1) ?? '—'}:1</span>
               <span className="text-[11px] text-zinc-600 tabular-nums">{sig.createdAt?timeAgo(String(sig.createdAt)):'—'}</span>
             </div>
           </div>
@@ -575,12 +575,12 @@ function TacticalTab() {
                   <span className="font-bold text-white">{sig.symbol}</span>
                   <span className={`text-xs font-semibold ${isBuy?'text-green-400':'text-red-400'}`}>{sig.type}</span>
                   {meta && <span className={`text-[10px] px-1.5 py-0.5 rounded border ${meta.color}`}>{meta.label}</span>}
-                  {sig.scannerMode && <span className={`text-[10px] px-1.5 py-0.5 rounded border ${MODE_COLORS[sig.scannerMode]}`}>{sig.scannerMode.replace('_',' ')}</span>}
+                  {sig.scannerMode && <span className={`text-[10px] px-1.5 py-0.5 rounded border ${MODE_COLORS[sig.scannerMode]??'text-zinc-400 border-zinc-600'}`}>{sig.scannerMode.replace('_',' ')}</span>}
                   <span className="ml-auto text-xs text-zinc-500">{sig.createdAt?timeAgo(String(sig.createdAt)):'—'}</span>
                 </div>
                 <div className="flex gap-4 mt-1.5 flex-wrap">
                   <span className="text-[11px] text-zinc-500">Conf: <span className="text-zinc-300 font-mono">{sig.confidence}%</span></span>
-                  <span className="text-[11px] text-zinc-500">RR: <span className="text-zinc-300 font-mono">{sig.rrRatio?.toFixed(1)}:1</span></span>
+                  <span className="text-[11px] text-zinc-500">RR: <span className="text-zinc-300 font-mono">{sig.rrRatio?.toFixed(1) ?? '—'}:1</span></span>
                   {sig.entryPrice > 0 && <span className="text-[11px] text-zinc-500">Entry: <span className="text-zinc-300 font-mono">${sig.entryPrice.toFixed(4)}</span></span>}
                   {sig.targetPrice > 0 && <span className="text-[11px] text-zinc-500">TP: <span className={`font-mono ${isBuy?'text-green-400':'text-red-400'}`}>${sig.targetPrice.toFixed(4)}</span></span>}
                 </div>
