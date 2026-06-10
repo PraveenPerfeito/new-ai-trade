@@ -86,12 +86,33 @@ const STAGE_META: Record<string, { label: string; color: string }> = {
   CLOSED:        { label: 'Closed',      color: 'text-zinc-500    bg-zinc-500/10    border-zinc-600/20'    },
   ANALYZED:      { label: 'Analyzed',    color: 'text-indigo-400  bg-indigo-500/10  border-indigo-500/20'  },
 }
+const STAGE_TIPS: Record<string, string> = {
+  VALIDATED:     'Passed all 11 scanner gates — queued for AI or heuristic review',
+  AI_APPROVED:   'Claude AI reviewed & approved · confidence ≥ 80%',
+  SCREENED:      'Heuristic rules approved · fires when AI is disabled or setup score < 78',
+  TELEGRAM_SENT: 'Alert delivered to Telegram channel',
+  ACTIVE:        'Signal is live within its trading window · 1h → 8h · 4h → 24h · 1d → 72h',
+  STALE:         'Trading window expired — TP/SL not hit · no longer actionable',
+  TP_HIT:        'Take-profit target reached · winning trade · outcome recorded',
+  SL_HIT:        'Stop-loss triggered · losing trade · outcome recorded',
+  CLOSED:        'Timed out without hitting TP or SL',
+  ANALYZED:      'Outcome included in attribution & edge analytics',
+}
 function StageLegend() {
   return (
     <div className="flex items-center gap-2 flex-wrap py-2 px-3 rounded-lg bg-zinc-900/50 border border-zinc-800">
       <span className="text-[10px] text-zinc-600 font-semibold uppercase tracking-wider shrink-0 mr-1">Stage key</span>
       {(Object.entries(STAGE_META) as [string, {label:string;color:string}][]).map(([key,meta])=>(
-        <span key={key} className={`text-[10px] px-1.5 py-0.5 rounded border ${meta.color}`}>{meta.label}</span>
+        <div key={key} className="relative group">
+          <span className={`text-[10px] px-1.5 py-0.5 rounded border cursor-default select-none ${meta.color}`}>{meta.label}</span>
+          {STAGE_TIPS[key] && (
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:block w-56 px-2.5 py-2 bg-zinc-800 border border-zinc-700 rounded-lg pointer-events-none shadow-xl">
+              <p className={`text-[10px] font-semibold mb-0.5 ${meta.color.split(' ')[0]}`}>{meta.label}</p>
+              <p className="text-[10px] text-zinc-400 leading-snug whitespace-normal">{STAGE_TIPS[key]}</p>
+              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-700"/>
+            </div>
+          )}
+        </div>
       ))}
     </div>
   )
