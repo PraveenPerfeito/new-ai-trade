@@ -78,13 +78,23 @@ const STAGE_META: Record<string, { label: string; color: string }> = {
   VALIDATED:     { label: 'Validated',   color: 'text-zinc-400    bg-zinc-500/10    border-zinc-500/20'    },
   AI_APPROVED:   { label: 'AI Approved', color: 'text-purple-400  bg-purple-500/10  border-purple-500/20'  },
   SCREENED:      { label: 'Screened',    color: 'text-sky-400     bg-sky-500/10     border-sky-500/20'     },
-  TELEGRAM_SENT: { label: 'Sent',        color: 'text-purple-400  bg-purple-500/10  border-purple-500/20'  },
+  TELEGRAM_SENT: { label: 'Sent',        color: 'text-blue-400   bg-blue-500/10   border-blue-500/20'   },
   ACTIVE:        { label: 'Active',      color: 'text-green-400   bg-green-500/10   border-green-500/20'   },
   STALE:         { label: 'Stale',       color: 'text-amber-400   bg-amber-500/10   border-amber-500/20'   },
   TP_HIT:        { label: 'TP Hit',      color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
   SL_HIT:        { label: 'SL Hit',      color: 'text-red-400     bg-red-500/10     border-red-500/20'     },
   CLOSED:        { label: 'Closed',      color: 'text-zinc-500    bg-zinc-500/10    border-zinc-600/20'    },
   ANALYZED:      { label: 'Analyzed',    color: 'text-indigo-400  bg-indigo-500/10  border-indigo-500/20'  },
+}
+function StageLegend() {
+  return (
+    <div className="flex items-center gap-2 flex-wrap py-2 px-3 rounded-lg bg-zinc-900/50 border border-zinc-800">
+      <span className="text-[10px] text-zinc-600 font-semibold uppercase tracking-wider shrink-0 mr-1">Stage key</span>
+      {(Object.entries(STAGE_META) as [string, {label:string;color:string}][]).map(([key,meta])=>(
+        <span key={key} className={`text-[10px] px-1.5 py-0.5 rounded border ${meta.color}`}>{meta.label}</span>
+      ))}
+    </div>
+  )
 }
 const GRADE_STYLE: Record<string, string> = {
   A: 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30',
@@ -837,6 +847,8 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
         ))}
       </div>
 
+      <StageLegend />
+
       {loading && <div className="space-y-2">{Array.from({length:5}).map((_,i)=><div key={i} className="skeleton h-14 rounded-xl"/>)}</div>}
       {!loading && sorted.length === 0 && (
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-8 text-center text-zinc-600 text-sm">No signals match the current filters</div>
@@ -1060,6 +1072,8 @@ function TacticalTab({ currentRegime }: { currentRegime: MarketRegime | null }) 
           </button>
         ))}
       </div>
+
+      <StageLegend />
 
       {loading && <div className="space-y-2">{Array.from({length:4}).map((_,i)=><div key={i} className="skeleton h-20 rounded-xl"/>)}</div>}
       {!loading && signals.length === 0 && (
