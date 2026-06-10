@@ -118,6 +118,13 @@ function fmtCd(secs: number) {
   const m = Math.floor(secs / 60), s = secs % 60
   return m > 0 ? `${m}m ${s.toString().padStart(2, '0')}s` : `${s}s`
 }
+function fmtPx(p: number): string {
+  if (p >= 10000) return p.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  if (p >= 100)   return p.toLocaleString('en-US', { maximumFractionDigits: 2 })
+  if (p >= 1)     return p.toFixed(4)
+  if (p >= 0.01)  return p.toFixed(5)
+  return p.toFixed(8)
+}
 function nextFire(mode: string) {
   const mins = MODE_FIRE_MINUTES[mode] ?? [0,15,30,45]
   const now = new Date(), cur = now.getMinutes()
@@ -521,18 +528,27 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
             {signals.slice(0,6).map((sig,i)=>{
               const alignment = computeRegimeAlignment(sig.type, currentRegime ?? sig.marketRegime)
               return (
-                <div key={sig.id??i} className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 flex items-center gap-3 hover:border-zinc-700 transition-colors">
-                  <span className="font-semibold text-sm text-white w-16 shrink-0">{sig.symbol}</span>
-                  <span className={`text-xs font-semibold w-8 shrink-0 ${sig.type==='BUY'?'text-green-400':'text-red-400'}`}>{sig.type}</span>
-                  {sig.riskGrade && <GradeBadge grade={sig.riskGrade} />}
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>{(sig.lifecycleStage??'').replace(/_/g,' ')}</span>
-                  <div className="ml-auto flex items-center gap-3">
-                    <RegimeAlignDot alignment={alignment} />
-                    <ConfBar confidence={sig.confidence} />
-                    <span className="text-xs font-mono text-zinc-300 hidden sm:block">{sig.confidence}%</span>
-                    <span className="text-xs font-mono text-zinc-500 hidden sm:block">{sig.rrRatio?.toFixed(1) ?? '—'}:1</span>
-                    <span className="text-[11px] text-zinc-600 tabular-nums">{sig.createdAt?timeAgo(String(sig.createdAt)):'—'}</span>
+                <div key={sig.id??i} className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 hover:border-zinc-700 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold text-sm text-white w-16 shrink-0">{sig.symbol}</span>
+                    <span className={`text-xs font-semibold w-8 shrink-0 ${sig.type==='BUY'?'text-green-400':'text-red-400'}`}>{sig.type}</span>
+                    {sig.riskGrade && <GradeBadge grade={sig.riskGrade} />}
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>{(sig.lifecycleStage??'').replace(/_/g,' ')}</span>
+                    <div className="ml-auto flex items-center gap-3">
+                      <RegimeAlignDot alignment={alignment} />
+                      <ConfBar confidence={sig.confidence} />
+                      <span className="text-xs font-mono text-zinc-300 hidden sm:block">{sig.confidence}%</span>
+                      <span className="text-xs font-mono text-zinc-500 hidden sm:block">{sig.rrRatio?.toFixed(1) ?? '—'}:1</span>
+                      <span className="text-[11px] text-zinc-600 tabular-nums">{sig.createdAt?timeAgo(String(sig.createdAt)):'—'}</span>
+                    </div>
                   </div>
+                  {(sig.entryPrice > 0 || sig.targetPrice > 0 || sig.stopLoss > 0) && (
+                    <div className="flex items-center gap-4 mt-1 flex-wrap">
+                      {sig.entryPrice  > 0 && <span className="text-[10px] text-zinc-600">Entry <span className="text-zinc-300 font-mono">${fmtPx(sig.entryPrice)}</span></span>}
+                      {sig.targetPrice > 0 && <span className="text-[10px] text-zinc-600">TP <span className={`font-mono ${sig.type==='BUY'?'text-emerald-400':'text-red-400'}`}>${fmtPx(sig.targetPrice)}</span></span>}
+                      {sig.stopLoss    > 0 && <span className="text-[10px] text-zinc-600">SL <span className="text-red-400 font-mono">${fmtPx(sig.stopLoss)}</span></span>}
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -596,7 +612,7 @@ function ScannerTab({ celery, flags, aiEnabled, loading, error, scanning, scanDo
   const rawDurS  = scanStats?.avg_duration_s
   const rawDurMs = scanStats?.avg_duration_ms
   const durationS = rawDurS != null ? rawDurS.toFixed(1) : rawDurMs != null ? (rawDurMs / 1000).toFixed(1) : null
-  const workerOk = healthReady?.checks?.worker === 'ok' || healthReady?.checks?.database === 'ok'
+  const workerOk = healthReady?.checks?.celery_worker === 'ok'
   const workerStatus = healthReady == null ? null : workerOk ? 'ALIVE' : 'DOWN'
 
   return (
@@ -760,14 +776,19 @@ function ScannerTab({ celery, flags, aiEnabled, loading, error, scanning, scanDo
 
 // ── Signals tab ────────────────────────────────────────────────────────────────
 
+const SIG_PAGE_SIZE = 20
+
 function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
   const [typeFilter,  setTypeFilter]  = useState<'all'|'BUY'|'SELL'>('all')
   const [modeFilter,  setModeFilter]  = useState<string>('all')
   const [sortBy,      setSortBy]      = useState<'confidence'|'grade'|'rr'|'time'>('confidence')
   const [expandedId,  setExpandedId]  = useState<string|null>(null)
+  const [page,        setPage]        = useState(0)
+
+  useEffect(() => { setPage(0) }, [typeFilter, modeFilter, sortBy])
 
   const fetcher = useCallback(() =>
-    fetch('/api/signals/tactical?limit=50&lifecycleStage=all')
+    fetch('/api/signals/tactical?limit=100&lifecycleStage=all')
       .then(r=>r.json()).then(j=>j.signals??[]).catch(()=>[]), [])
   const { data: signals, loading } = useAutoRefresh<TacticalSignalRow[]>(fetcher, 120_000)
 
@@ -783,6 +804,7 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
     if (sortBy === 'time')       return new Date(String(b.createdAt)).getTime() - new Date(String(a.createdAt)).getTime()
     return 0
   })
+  const paginated = sorted.slice(page * SIG_PAGE_SIZE, (page + 1) * SIG_PAGE_SIZE)
 
   return (
     <div className="space-y-4 max-w-5xl">
@@ -820,17 +842,18 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
       )}
 
       <div className="space-y-1.5">
-        {sorted.map((sig,i)=>{
+        {paginated.map((sig,i)=>{
           const rowId = sig.id ?? String(i)
           const isExpanded = expandedId === rowId
           const alignment = computeRegimeAlignment(sig.type, currentRegime ?? sig.marketRegime)
+          const isBuy = sig.type === 'BUY'
           return (
             <div key={rowId} className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden hover:border-zinc-700 transition-colors">
               {/* Main row — clickable to expand */}
-              <div className="px-4 py-3 flex items-center gap-3 cursor-pointer select-none"
+              <div className="px-4 pt-3 pb-2 flex items-center gap-3 cursor-pointer select-none"
                 onClick={()=>setExpandedId(isExpanded ? null : rowId)}>
                 <span className="font-semibold text-sm text-white w-20 shrink-0">{sig.symbol}</span>
-                <span className={`text-xs font-semibold w-8 shrink-0 ${sig.type==='BUY'?'text-green-400':'text-red-400'}`}>{sig.type}</span>
+                <span className={`text-xs font-semibold w-8 shrink-0 ${isBuy?'text-green-400':'text-red-400'}`}>{sig.type}</span>
                 {sig.riskGrade && <GradeBadge grade={sig.riskGrade} />}
                 <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>
                   {(sig.lifecycleStage??'').replace(/_/g,' ')}
@@ -849,11 +872,38 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
                   <ChevronDown className={`w-3.5 h-3.5 text-zinc-600 transition-transform shrink-0 ${isExpanded?'rotate-180':''}`} />
                 </div>
               </div>
+              {/* Price levels — always visible */}
+              {(sig.entryPrice > 0 || sig.targetPrice > 0 || sig.stopLoss > 0) && (
+                <div className="px-4 pb-2.5 flex items-center gap-4 flex-wrap">
+                  {sig.entryPrice  > 0 && <span className="text-[10px] text-zinc-600">Entry <span className="text-zinc-300 font-mono">${fmtPx(sig.entryPrice)}</span></span>}
+                  {sig.targetPrice > 0 && <span className="text-[10px] text-zinc-600">TP <span className={`font-mono ${isBuy?'text-emerald-400':'text-red-400'}`}>${fmtPx(sig.targetPrice)}</span></span>}
+                  {sig.stopLoss    > 0 && <span className="text-[10px] text-zinc-600">SL <span className="text-red-400 font-mono">${fmtPx(sig.stopLoss)}</span></span>}
+                </div>
+              )}
               {isExpanded && <IntelligencePanel sig={sig} />}
             </div>
           )
         })}
       </div>
+
+      {/* Pagination */}
+      {sorted.length > SIG_PAGE_SIZE && (
+        <div className="flex items-center justify-between pt-1">
+          <span className="text-xs text-zinc-500">
+            {page * SIG_PAGE_SIZE + 1}–{Math.min((page + 1) * SIG_PAGE_SIZE, sorted.length)} of {sorted.length}
+          </span>
+          <div className="flex gap-2">
+            <button disabled={page === 0} onClick={()=>setPage(p=>p-1)}
+              className="text-xs px-3 py-1.5 rounded border border-zinc-700 text-zinc-400 disabled:opacity-30 hover:border-zinc-600 hover:text-zinc-300 transition-colors">
+              Prev
+            </button>
+            <button disabled={(page+1)*SIG_PAGE_SIZE>=sorted.length} onClick={()=>setPage(p=>p+1)}
+              className="text-xs px-3 py-1.5 rounded border border-zinc-700 text-zinc-400 disabled:opacity-30 hover:border-zinc-600 hover:text-zinc-300 transition-colors">
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
