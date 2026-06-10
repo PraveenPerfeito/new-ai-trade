@@ -19,12 +19,29 @@ export interface ProviderStatus {
 
 async function checkBinance(): Promise<ProviderStatus> {
   const t0 = Date.now()
+  const endpoint = 'https://api.binance.com/api/v3/ping'
   try {
-    const r = await fetch('https://api.binance.com/api/v3/ping', { signal: AbortSignal.timeout(4000) })
-    return { name: 'Binance', healthy: r.ok, latencyMs: Date.now() - t0 }
+    const r = await fetch(endpoint, { signal: AbortSignal.timeout(4000) })
+    const latencyMs = Date.now() - t0
+    log.info({ endpoint, http_status: r.status, latency_ms: latencyMs }, 'binance_health_check')
+    if (!r.ok) {
+      // fetch() resolves (not throws) for 4xx/5xx — r.ok is false, latency is real.
+      // HTTP 451: Binance geo-restricts certain cloud regions (Vercel IPs).
+      // The Python scanner on Railway is unaffected — it reaches Binance directly.
+      const geoBlock = r.status === 451 || r.status === 403
+      return {
+        name: 'Binance',
+        healthy: false,
+        latencyMs,
+        error: `HTTP ${r.status}${geoBlock ? ' — geo-restricted from Vercel region; scanner on Railway unaffected' : ''}`,
+      }
+    }
+    return { name: 'Binance', healthy: true, latencyMs }
   } catch (e) {
-    return { name: 'Binance', healthy: false, latencyMs: Date.now() - t0,
-      error: e instanceof Error ? e.message : 'unreachable' }
+    const latencyMs = Date.now() - t0
+    const reason = e instanceof Error ? e.message : 'unreachable'
+    log.info({ endpoint, latency_ms: latencyMs, failure_reason: reason }, 'binance_health_check_failed')
+    return { name: 'Binance', healthy: false, latencyMs, error: reason }
   }
 }
 
@@ -148,34 +165,37 @@ async function checkRedis(): Promise<ProviderStatus> {
 }
 
 async function checkCloudAMQP(): Promise<ProviderStatus> {
-  // CloudAMQP health is inferred from the Celery worker heartbeat key.
-  // The worker writes `celery:worker:last_heartbeat` (TTL 300s) every 60s via
-  // the beat task. If the key exists and is fresh the broker is passing messages.
-  // We cannot open a raw AMQP connection from a serverless Next.js route.
+  // CloudAMQP health = Celery worker heartbeat key in Redis.
+  // The worker writes `celery:worker:last_heartbeat` (TTL 1800s) every 600s.
+  // Key present → worker alive → broker delivering messages.
+  //
+  // NOTE: CELERY_BROKER_URL is a Railway/Python environment variable and is
+  // intentionally NOT present in Next.js / Vercel. Do NOT gate on it here —
+  // the heartbeat key is the authoritative health signal regardless of broker type.
   const t0 = Date.now()
-  const brokerConfigured = !!process.env.CELERY_BROKER_URL
-  if (!brokerConfigured) {
-    return { name: 'CloudAMQP', healthy: false, latencyMs: 0,
-      note: 'not configured', error: 'CELERY_BROKER_URL not set' }
-  }
   try {
     const { getRedis } = await import('@/lib/redis')
     const redis = getRedis()
-    const [ttl] = await Promise.race([
-      Promise.all([redis.ttl('celery:worker:last_heartbeat')]),
+    const ttl = await Promise.race([
+      redis.ttl('celery:worker:last_heartbeat'),
       new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 3000)),
-    ]) as [number]
+    ]) as number
     const latencyMs = Date.now() - t0
+    // broker_exists reflects whether CELERY_BROKER_URL is set in Next.js env.
+    // It will be false on Vercel (Railway var) — that is expected and not an error.
+    const brokerHost = (() => {
+      try { const u = process.env.CELERY_BROKER_URL; return u ? new URL(u).hostname : null } catch { return null }
+    })()
+    log.info({ broker_host: brokerHost, heartbeat_ttl: ttl, worker_alive: ttl !== -2 }, 'cloudamqp_health_check')
     if (ttl === -2) {
-      // Key absent — worker has not written a heartbeat yet (startup) or is dead
       return { name: 'CloudAMQP', healthy: false, latencyMs,
-        note: 'no heartbeat', error: 'Celery worker heartbeat missing — worker may be down or just starting up' }
+        note: 'no heartbeat', error: 'Celery worker heartbeat missing — worker may be down or starting up' }
     }
-    // Key present → worker alive, AMQP broker is delivering messages
-    const ageSeconds = 300 - ttl  // TTL starts at 300
-    const ageMin = Math.max(0, Math.round(ageSeconds / 60))
+    // TTL starts at 1800s (OPS.CONSOLIDATION.1), refreshed every 600s
+    const ageSeconds = Math.max(0, 1800 - ttl)
+    const ageMin = Math.round(ageSeconds / 60)
     return { name: 'CloudAMQP', healthy: true, latencyMs,
-      note: `worker heartbeat ${ageMin}m ago` }
+      note: `worker alive · heartbeat ${ageMin}m ago` }
   } catch (e) {
     return { name: 'CloudAMQP', healthy: false, latencyMs: Date.now() - t0,
       error: e instanceof Error ? e.message : 'check failed' }
