@@ -957,56 +957,86 @@ function LifecycleFunnel({ signals }: { signals: TacticalSignalRow[] }) {
   const lost      = counts['SL_HIT'] ?? 0
   const expired   = (counts['STALE']??0) + (counts['CLOSED']??0)
 
-  const pct = (n: number, d: number) => d > 0 ? `${Math.round(n/d*100)}%` : '—'
+  const convColor = (n: number, d: number) => {
+    if (d === 0) return 'text-zinc-500'
+    const r = n / d
+    if (r >= 0.8) return 'text-emerald-400'
+    if (r >= 0.6) return 'text-green-400'
+    if (r >= 0.4) return 'text-amber-400'
+    return 'text-red-400'
+  }
 
   const steps = [
-    { label: 'Generated', count: generated, color: 'bg-zinc-600'     },
-    { label: 'Approved',  count: approved,  color: 'bg-blue-500'     },
-    { label: 'Sent',      count: sent,      color: 'bg-purple-500'   },
-    { label: 'Active',    count: active,    color: 'bg-green-500'    },
+    { label: 'Generated', count: generated },
+    { label: 'Approved',  count: approved  },
+    { label: 'Sent',      count: sent      },
+    { label: 'Active',    count: active    },
   ]
+  const winRate = (won + lost) > 0 ? Math.round(won / (won + lost) * 100) : null
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-      <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-        <BarChart2 className="w-3 h-3"/>Pipeline · last {signals.length} signals
-      </p>
-      <div className="flex items-start gap-1 flex-wrap sm:flex-nowrap">
-        {steps.map((step, idx) => (
-          <div key={step.label} className="flex items-center gap-1 shrink-0">
-            <div className="text-center min-w-[48px]">
-              <div className={`text-lg font-bold font-mono text-white`}>{step.count}</div>
-              <div className="text-[9px] text-zinc-500 uppercase tracking-wider leading-tight">{step.label}</div>
-              {idx > 0 && steps[idx-1].count > 0 && (
-                <div className="text-[9px] text-zinc-600">{pct(step.count, steps[idx-1].count)}</div>
-              )}
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <p className="text-[9px] text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
+          <BarChart2 className="w-3 h-3"/>Pipeline · last {signals.length} signals
+        </p>
+        {winRate !== null && (
+          <span className="text-xs font-mono font-bold text-emerald-400">{winRate}% Win Rate</span>
+        )}
+      </div>
+
+      {/* Funnel step cards */}
+      <div className="flex items-stretch gap-0">
+        {steps.map((step, idx) => {
+          const prev = idx > 0 ? steps[idx-1].count : 0
+          const conv = idx > 0 && prev > 0 ? Math.round(step.count / prev * 100) : null
+          return (
+            <div key={step.label} className="flex items-center flex-1 min-w-0">
+              <div className="flex-1 min-w-0 bg-zinc-800/50 border border-zinc-700/40 rounded-lg px-2 py-2.5 text-center">
+                <div className="text-xl font-bold font-mono text-white leading-none">{step.count}</div>
+                <div className="text-[9px] text-zinc-500 uppercase tracking-wider mt-1 leading-tight">{step.label}</div>
+                {conv !== null && (
+                  <div className={`text-[10px] font-semibold mt-0.5 ${convColor(step.count, prev)}`}>{conv}%</div>
+                )}
+              </div>
+              {idx < steps.length - 1 && <ArrowRight className="w-3 h-3 text-zinc-700 shrink-0 mx-1"/>}
             </div>
-            {idx < steps.length - 1 && <span className="text-zinc-700 text-sm mx-1">→</span>}
+          )
+        })}
+      </div>
+
+      {/* Outcomes row */}
+      <div className="flex items-center gap-3 pt-2.5 border-t border-zinc-800/60 flex-wrap">
+        <span className="text-[9px] text-zinc-600 uppercase tracking-wider font-semibold shrink-0">Outcomes</span>
+        <div className="flex items-center gap-4 flex-1 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"/>
+            <span className="text-sm font-bold font-mono text-emerald-400">{won}</span>
+            <span className="text-[9px] text-zinc-500">Won</span>
           </div>
-        ))}
-        <span className="text-zinc-700 text-sm mx-1">→</span>
-        <div className="flex flex-wrap gap-x-4 gap-y-1">
-          <div className="text-center">
-            <div className="text-lg font-bold font-mono text-emerald-400">{won}</div>
-            <div className="text-[9px] text-zinc-500 uppercase tracking-wider">Won</div>
-          </div>
-          <div className="text-center">
-            <div className="text-lg font-bold font-mono text-red-400">{lost}</div>
-            <div className="text-[9px] text-zinc-500 uppercase tracking-wider">Lost</div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0"/>
+            <span className="text-sm font-bold font-mono text-red-400">{lost}</span>
+            <span className="text-[9px] text-zinc-500">Lost</span>
           </div>
           {expired > 0 && (
-            <div className="text-center">
-              <div className="text-lg font-bold font-mono text-zinc-500">{expired}</div>
-              <div className="text-[9px] text-zinc-500 uppercase tracking-wider">Expired</div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 shrink-0"/>
+              <span className="text-sm font-bold font-mono text-zinc-400">{expired}</span>
+              <span className="text-[9px] text-zinc-500">Expired</span>
             </div>
           )}
         </div>
+        {winRate !== null && (
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="w-20 h-1.5 bg-zinc-700 rounded-full overflow-hidden">
+              <div className="h-full bg-emerald-400 rounded-full" style={{width:`${winRate}%`}}/>
+            </div>
+            <span className="text-[10px] text-zinc-400 font-mono tabular-nums">{winRate}%</span>
+          </div>
+        )}
       </div>
-      {(won + lost) > 0 && (
-        <p className="text-[10px] text-zinc-500 mt-2">
-          Win rate (resolved): <span className="text-zinc-300 font-mono">{pct(won, won+lost)}</span>
-        </p>
-      )}
     </div>
   )
 }
