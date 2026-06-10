@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import {
@@ -297,7 +297,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
                 <div className="ml-auto flex items-center gap-4">
                   <span className="text-xs font-mono text-zinc-300 hidden sm:block">{sig.confidence}%</span>
                   <span className="text-xs font-mono text-zinc-500 hidden sm:block">{sig.rrRatio.toFixed(1)}:1</span>
-                  <span className="text-[11px] text-zinc-600 tabular-nums">{sig.createdAt?timeAgo(sig.createdAt.toISOString()):'—'}</span>
+                  <span className="text-[11px] text-zinc-600 tabular-nums">{sig.createdAt?timeAgo(String(sig.createdAt)):'—'}</span>
                 </div>
               </div>
             ))}
@@ -513,7 +513,7 @@ function SignalsTab() {
             <div className="ml-auto flex items-center gap-4 shrink-0">
               <span className="text-xs font-mono text-zinc-300 hidden sm:block">{sig.confidence}%</span>
               <span className="text-xs font-mono text-zinc-500 hidden sm:block">{sig.rrRatio?.toFixed(1)}:1</span>
-              <span className="text-[11px] text-zinc-600 tabular-nums">{sig.createdAt?timeAgo(sig.createdAt.toISOString()):'—'}</span>
+              <span className="text-[11px] text-zinc-600 tabular-nums">{sig.createdAt?timeAgo(String(sig.createdAt)):'—'}</span>
             </div>
           </div>
         ))}
@@ -576,7 +576,7 @@ function TacticalTab() {
                   <span className={`text-xs font-semibold ${isBuy?'text-green-400':'text-red-400'}`}>{sig.type}</span>
                   {meta && <span className={`text-[10px] px-1.5 py-0.5 rounded border ${meta.color}`}>{meta.label}</span>}
                   {sig.scannerMode && <span className={`text-[10px] px-1.5 py-0.5 rounded border ${MODE_COLORS[sig.scannerMode]}`}>{sig.scannerMode.replace('_',' ')}</span>}
-                  <span className="ml-auto text-xs text-zinc-500">{sig.createdAt?timeAgo(sig.createdAt.toISOString()):'—'}</span>
+                  <span className="ml-auto text-xs text-zinc-500">{sig.createdAt?timeAgo(String(sig.createdAt)):'—'}</span>
                 </div>
                 <div className="flex gap-4 mt-1.5 flex-wrap">
                   <span className="text-[11px] text-zinc-500">Conf: <span className="text-zinc-300 font-mono">{sig.confidence}%</span></span>
