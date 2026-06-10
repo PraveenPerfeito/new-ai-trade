@@ -49,30 +49,47 @@ export async function GET() {
       activeSignals = sig7dIds.length - (resolvedCount ?? 0)
     }
 
-    let winRate7d    = 0
-    let expectancy7d = 0
-    let resolved7d   = 0
+    let winRate7d       = 0
+    let expectancy7d    = 0
+    let resolved7d      = 0
+    let profitFactor7d  = 0
+    let avgRrAchieved7d = 0
 
     const outcomes = outcomesRes.data ?? []
     if (outcomes.length > 0) {
       resolved7d   = outcomes.length
       const tpHits = outcomes.filter((o) => o.outcome === 'TP_HIT').length
       winRate7d    = Math.round((tpHits / resolved7d) * 100)
-      // expectancy = average return_r across resolved (positive=profit, negative=loss)
+
       const returnsWithValue = outcomes.filter((o) => o.return_r != null)
       if (returnsWithValue.length > 0) {
         const sumR = returnsWithValue.reduce((s, o) => s + (o.return_r as number), 0)
         expectancy7d = Math.round((sumR / returnsWithValue.length) * 100) / 100
       }
+
+      // Profit factor = gross profit / gross loss
+      const tpReturns = outcomes.filter((o) => o.outcome === 'TP_HIT' && o.return_r != null).map((o) => o.return_r as number)
+      const slReturns = outcomes.filter((o) => o.outcome === 'SL_HIT' && o.return_r != null).map((o) => o.return_r as number)
+      if (tpReturns.length > 0 && slReturns.length > 0) {
+        const grossProfit = tpReturns.reduce((s, v) => s + v, 0)
+        const grossLoss   = Math.abs(slReturns.reduce((s, v) => s + v, 0))
+        if (grossLoss > 0) profitFactor7d = Math.round((grossProfit / grossLoss) * 100) / 100
+      }
+      // Avg RR achieved = avg return_r on winning trades
+      if (tpReturns.length > 0) {
+        avgRrAchieved7d = Math.round((tpReturns.reduce((s, v) => s + v, 0) / tpReturns.length) * 100) / 100
+      }
     }
 
     return NextResponse.json({
-      success:       true,
-      signals_today:  signalsToday,
-      active_signals: activeSignals,
-      win_rate_7d:    winRate7d,
-      expectancy_7d:  expectancy7d,
-      resolved_7d:    resolved7d,
+      success:              true,
+      signals_today:        signalsToday,
+      active_signals:       activeSignals,
+      win_rate_7d:          winRate7d,
+      expectancy_7d:        expectancy7d,
+      resolved_7d:          resolved7d,
+      profit_factor_7d:     profitFactor7d,
+      avg_rr_achieved_7d:   avgRrAchieved7d,
     })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to fetch signal counts'

@@ -1,22 +1,21 @@
-﻿'use client'
+'use client'
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import {
   Activity, Zap, ScanLine, Target, RefreshCw,
-  Play, Square, ArrowRight, CheckCircle,
+  Play, Square, ArrowRight, CheckCircle, CheckCircle2, XCircle,
   TrendingUp, TrendingDown, Minus, Clock,
   ShieldAlert, Wrench, Bot, Send, AlertTriangle,
-  ChevronRight, CheckCircle2, XCircle,
+  ChevronDown, BarChart2,
 } from 'lucide-react'
-import Link from 'next/link'
 import { adminApi } from '@/lib/admin-api'
+import type { AuditEntry, HealthReady, ScanSummaryResponse } from '@/lib/admin-api'
 import { useSharedPolling } from '@/lib/use-shared-polling'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
 import { cn } from '@/lib/utils'
-import type { TacticalSignalRow, MarketRegime, ScannerMode, SignalLifecycleStage } from '@/types'
-import type { ScanSummaryResponse } from '@/lib/admin-api'
+import type { TacticalSignalRow, MarketRegime, ScannerMode, SignalLifecycleStage, RiskGrade } from '@/types'
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface CeleryStatus {
   enabled: boolean; scanning: boolean; running_modes: string[]; last_scan_at: number | null
@@ -30,18 +29,19 @@ interface RegimeData {
 interface SignalCounts {
   signals_today: number; active_signals: number
   win_rate_7d: number; expectancy_7d: number; resolved_7d: number
+  profit_factor_7d?: number; avg_rr_achieved_7d?: number
 }
 interface OpsFlags {
   emergency_stop: boolean; maintenance_mode: boolean
   telegram: boolean; ai_validation: boolean
 }
-interface ProviderStatus { name: string; healthy: boolean; latencyMs: number; error?: string }
+interface ProviderStatus { name: string; healthy: boolean; latencyMs: number; error?: string; note?: string }
 interface CacheTelemetry {
   quota: { creditsUsed: number; monthlyBudget: number; pctUsed: number } | null
   groups: Array<{ name: string; isStale: boolean; ageSeconds: number | null }>
 }
 
-// ── Constants ────────────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 const REGIME_COLOR: Record<string, string> = {
   BULL_TREND: 'text-green-400', BEAR_TREND: 'text-red-400', SIDEWAYS: 'text-zinc-400',
@@ -85,8 +85,22 @@ const STAGE_META: Record<string, { label: string; color: string }> = {
   CLOSED:        { label: 'Closed',      color: 'text-zinc-500    bg-zinc-500/10    border-zinc-600/20'    },
   ANALYZED:      { label: 'Analyzed',    color: 'text-indigo-400  bg-indigo-500/10  border-indigo-500/20'  },
 }
+const GRADE_STYLE: Record<string, string> = {
+  A: 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30',
+  B: 'text-blue-300    bg-blue-500/15    border-blue-500/30',
+  C: 'text-amber-300   bg-amber-500/15   border-amber-500/30',
+  D: 'text-red-300     bg-red-500/15     border-red-500/30',
+  F: 'text-red-400     bg-red-500/20     border-red-500/40',
+}
+const GRADE_RANK: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, F: 4 }
+// Preset display info for preview modal
+const PRESET_DISPLAY: Record<string, { label: string; changes: string[] }> = {
+  conservative: { label: 'Conservative', changes: ['Min confidence: ~87', 'Min RR: 2.5:1', 'Fewer signals / scan'] },
+  balanced:     { label: 'Balanced',     changes: ['Min confidence: ~82', 'Min RR: 2.0:1', 'Standard volume']     },
+  aggressive:   { label: 'Aggressive',   changes: ['Min confidence: ~78', 'Min RR: 1.8:1', 'More signals / scan'] },
+}
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmt(n: number, d = 2) {
   return n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })
@@ -113,11 +127,136 @@ function nextFire(mode: string) {
   const n=new Date(now); n.setHours(now.getHours()+1,[...mins].sort((a,b)=>a-b)[0],0,0)
   return Math.max(0,Math.floor((n.getTime()-Date.now())/1000))
 }
+function computeRegimeAlignment(signalType: string, regime: MarketRegime | undefined | null): 'aligned' | 'contra' | 'neutral' {
+  if (!regime || regime === 'SIDEWAYS' || regime === 'HIGH_VOLATILITY') return 'neutral'
+  if (signalType === 'BUY'  && (regime === 'BULL_TREND' || regime === 'EUPHORIA'))     return 'aligned'
+  if (signalType === 'SELL' && (regime === 'BEAR_TREND' || regime === 'CAPITULATION')) return 'aligned'
+  if (signalType === 'BUY'  && (regime === 'BEAR_TREND' || regime === 'CAPITULATION')) return 'contra'
+  if (signalType === 'SELL' && (regime === 'BULL_TREND' || regime === 'EUPHORIA'))     return 'contra'
+  return 'neutral'
+}
+function trendScoreLabel(score: number) {
+  if (score >= 80) return `ELITE ${score}`
+  if (score >= 65) return `STRONG ${score}`
+  if (score >= 50) return `GOOD ${score}`
+  return `WEAK ${score}`
+}
+function trendScoreColor(score: number) {
+  if (score >= 80) return 'text-purple-400'
+  if (score >= 65) return 'text-emerald-400'
+  if (score >= 50) return 'text-blue-400'
+  return 'text-amber-400'
+}
+function breakoutColor(strength: string) {
+  if (strength.includes('HIGH_MOMENTUM')) return 'text-emerald-400'
+  if (strength.includes('CONFIRMED'))     return 'text-blue-400'
+  return 'text-amber-400'
+}
+function oiColor(oi: string) {
+  if (oi === 'NEW_LONGS')        return 'text-emerald-400'
+  if (oi === 'NEW_SHORTS')       return 'text-red-400'
+  if (oi === 'SHORT_COVERING')   return 'text-amber-400'
+  if (oi === 'LONG_LIQUIDATION') return 'text-red-400'
+  return 'text-zinc-400'
+}
+function posColor(pos: string) {
+  if (pos === 'EXTREME_SHORT') return 'text-emerald-400'
+  if (pos === 'SHORT_HEAVY')   return 'text-green-400'
+  if (pos === 'EXTREME_LONG')  return 'text-red-400'
+  if (pos === 'LONG_HEAVY')    return 'text-amber-400'
+  return 'text-zinc-400'
+}
+function shortLabel(s: string) { return s.replace(/_/g,' ') }
+function gradeRank(g: RiskGrade | undefined): number { return g ? (GRADE_RANK[g] ?? 5) : 5 }
 
-// ── Shared sub-components ────────────────────────────────────────────────────
+// ── Micro components ───────────────────────────────────────────────────────────
+
+function GradeBadge({ grade }: { grade: RiskGrade }) {
+  return (
+    <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded border shrink-0', GRADE_STYLE[grade] ?? 'text-zinc-500 border-zinc-700 bg-zinc-800')}>
+      {grade}
+    </span>
+  )
+}
+
+function ConfBar({ confidence }: { confidence: number }) {
+  const pct = Math.min(100, Math.max(0, confidence))
+  const color = pct >= 90 ? 'bg-emerald-400' : pct >= 80 ? 'bg-blue-400' : pct >= 70 ? 'bg-amber-400' : 'bg-red-400'
+  return (
+    <div className="w-14 h-1 bg-zinc-700 rounded-full overflow-hidden shrink-0 hidden sm:block">
+      <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
+    </div>
+  )
+}
+
+function RegimeAlignDot({ alignment }: { alignment: 'aligned' | 'contra' | 'neutral' }) {
+  if (alignment === 'aligned') return (
+    <span title="Regime aligned" className="shrink-0 flex items-center gap-0.5 text-[10px] text-emerald-400 hidden sm:flex">
+      <CheckCircle2 className="w-3 h-3" />
+    </span>
+  )
+  if (alignment === 'contra') return (
+    <span title="Contra-regime" className="shrink-0 flex items-center gap-0.5 text-[10px] text-amber-400 hidden sm:flex">
+      <XCircle className="w-3 h-3" />
+    </span>
+  )
+  return <span className="w-3 h-3 shrink-0 hidden sm:block" />
+}
+
+function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
+  type IntelField = { label: string; value: string; color?: string }
+  const fields: IntelField[] = [
+    ...(sig.trendScore != null ? [{ label: 'TrendScore', value: trendScoreLabel(sig.trendScore), color: trendScoreColor(sig.trendScore) }] : []),
+    ...(sig.sectorStatus ? [{ label: 'Sector', value: shortLabel(sig.sectorStatus) }] : []),
+    ...(sig.breakoutStrength ? [{
+      label: 'Breakout',
+      value: shortLabel(sig.breakoutStrength) + (sig.breakoutType ? ` · ${sig.breakoutType.replace(/_/g,' ')}` : ''),
+      color: breakoutColor(sig.breakoutStrength),
+    }] : []),
+    ...(sig.oiInterpretation ? [{ label: 'OI', value: shortLabel(sig.oiInterpretation), color: oiColor(sig.oiInterpretation) }] : []),
+    ...(sig.fundingTrend ? [{
+      label: 'Funding',
+      value: sig.fundingTrend + (sig.fundingTrend === 'RISING' ? ' ↗' : sig.fundingTrend === 'FALLING' ? ' ↘' : ' →'),
+      color: sig.fundingTrend === 'RISING' ? 'text-amber-400' : sig.fundingTrend === 'FALLING' ? 'text-emerald-400' : 'text-zinc-400',
+    }] : []),
+    ...(sig.positioningContext ? [{ label: 'Positioning', value: shortLabel(sig.positioningContext), color: posColor(sig.positioningContext) }] : []),
+    ...(sig.marketRegime ? [{ label: 'Regime', value: shortLabel(sig.marketRegime) }] : []),
+  ]
+
+  const hasAI = !!(sig.aiReasoning)
+  if (fields.length === 0 && !hasAI) {
+    return (
+      <div className="border-t border-zinc-800 px-4 py-3 text-[11px] text-zinc-600">
+        No intelligence data available for this signal.
+      </div>
+    )
+  }
+
+  return (
+    <div className="border-t border-zinc-800 px-4 py-3 space-y-2.5">
+      {fields.length > 0 && (
+        <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+          {fields.map((f, i) => (
+            <div key={i} className="flex items-center gap-1.5">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{f.label}</span>
+              <span className={cn('text-[11px] font-mono font-semibold', f.color ?? 'text-zinc-300')}>{f.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {hasAI && (
+        <p className="text-[11px] text-zinc-400 leading-relaxed border-l-2 border-zinc-700 pl-2.5 italic">
+          &ldquo;{sig.aiReasoning!.slice(0, 240)}{sig.aiReasoning!.length > 240 ? '…' : ''}&rdquo;
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ── Shared sub-components ──────────────────────────────────────────────────────
 
 function MetricTile({ label, value, sub, accent = 'default' }: {
-  label: string; value: React.ReactNode; sub?: string
+  label: string; value: ReactNode; sub?: string
   accent?: 'green' | 'red' | 'amber' | 'blue' | 'default'
 }) {
   const colors = { green:'text-green-400', red:'text-red-400', amber:'text-amber-400', blue:'text-blue-400', default:'text-white' }
@@ -164,20 +303,137 @@ function OpsToggle({ label, description, enabled, loading, icon, onEnable, onDis
   )
 }
 
-// ── Overview tab ─────────────────────────────────────────────────────────────
+// ── Signal Quality Scorecard ───────────────────────────────────────────────────
 
-function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, countdown, onPause, pausing }: {
+type KpiLevel = 'green' | 'amber' | 'red' | 'dim'
+function kpiColor(level: KpiLevel) {
+  if (level === 'green') return 'text-emerald-400'
+  if (level === 'amber') return 'text-amber-400'
+  if (level === 'red')   return 'text-red-400'
+  return 'text-zinc-500'
+}
+function dotColor(level: KpiLevel) {
+  if (level === 'green') return 'bg-emerald-400'
+  if (level === 'amber') return 'bg-amber-400'
+  if (level === 'red')   return 'bg-red-400'
+  return 'bg-zinc-600'
+}
+
+function ScorecardCell({ label, value, level, sub }: { label: string; value: string; level: KpiLevel; sub?: string }) {
+  return (
+    <div className="flex flex-col gap-0.5 min-w-0">
+      <span className="text-[9px] text-zinc-500 uppercase tracking-widest leading-none">{label}</span>
+      <div className="flex items-center gap-1.5">
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor(level)}`} />
+        <span className={`text-base font-bold font-mono leading-none ${kpiColor(level)}`}>{value}</span>
+      </div>
+      {sub && <span className="text-[9px] text-zinc-600 leading-none">{sub}</span>}
+    </div>
+  )
+}
+
+function SignalQualityScorecard({ counts, gradeAPct }: { counts: SignalCounts | null; gradeAPct: number | null }) {
+  if (!counts || counts.resolved_7d === 0) {
+    return (
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3">
+        <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2">Signal Quality Scorecard</p>
+        <p className="text-zinc-600 text-xs">No resolved signals yet — scorecard updates after first resolved trade.</p>
+      </div>
+    )
+  }
+  const wr = counts.win_rate_7d
+  const exp = counts.expectancy_7d
+  const pf = counts.profit_factor_7d ?? 0
+  const rr = counts.avg_rr_achieved_7d ?? 0
+
+  const wrLevel: KpiLevel  = wr >= 48 ? 'green' : wr >= 38 ? 'amber' : 'red'
+  const expLevel: KpiLevel = exp >= 0.35 ? 'green' : exp >= 0.05 ? 'amber' : 'red'
+  const pfLevel: KpiLevel  = pf >= 1.5 ? 'green' : pf >= 1.0 ? 'amber' : pf > 0 ? 'red' : 'dim'
+  const rrLevel: KpiLevel  = rr >= 2.0 ? 'green' : rr >= 1.5 ? 'amber' : rr > 0 ? 'red' : 'dim'
+  const gaLevel: KpiLevel  = gradeAPct != null ? (gradeAPct >= 55 ? 'green' : gradeAPct >= 40 ? 'amber' : 'red') : 'dim'
+
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3">
+      <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-3">Signal Quality Scorecard · 7d · {counts.resolved_7d} resolved</p>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <ScorecardCell label="Win Rate"       value={`${wr}%`}    level={wrLevel}  />
+        <ScorecardCell label="Expectancy"     value={`${exp > 0 ? '+' : ''}${exp}R`} level={expLevel} />
+        <ScorecardCell label="Profit Factor"  value={pf > 0 ? fmt(pf) : '—'} level={pfLevel} />
+        <ScorecardCell label="Avg RR Hit"     value={rr > 0 ? `${fmt(rr)}:1` : '—'} level={rrLevel} />
+        <ScorecardCell label="Grade A %"      value={gradeAPct != null ? `${gradeAPct}%` : '—'} level={gaLevel} sub="of graded signals" />
+      </div>
+    </div>
+  )
+}
+
+// ── System Status Banner ───────────────────────────────────────────────────────
+
+function SystemStatusBanner({ celery, flags, providers }: {
+  celery: CeleryStatus | null; flags: OpsFlags | null; providers: ProviderStatus[]
+}) {
+  const issues: string[] = []
+  if (flags?.emergency_stop)  issues.push('Emergency Stop ACTIVE')
+  if (flags?.maintenance_mode) issues.push('Maintenance Mode ON')
+  if (celery?.is_overdue && celery?.enabled) issues.push('Scanner overdue')
+  if (!celery?.enabled) issues.push('Scanner paused')
+  const unhealthy = providers.filter(p => !p.healthy)
+  if (unhealthy.length > 0) issues.push(`${unhealthy.length} provider${unhealthy.length > 1 ? 's' : ''} unhealthy`)
+
+  const ok = issues.length === 0
+  return (
+    <div className={cn('rounded-lg px-4 py-2.5 flex items-center gap-3 text-sm',
+      ok ? 'bg-emerald-500/5 border border-emerald-500/20' : 'bg-amber-500/5 border border-amber-500/25')}>
+      <span className={`w-2 h-2 rounded-full shrink-0 ${ok ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`} />
+      <span className={ok ? 'text-emerald-300' : 'text-amber-300'}>
+        {ok ? 'All Systems Operational' : `${issues.length} Issue${issues.length > 1 ? 's' : ''} Detected: ${issues.join(' · ')}`}
+      </span>
+    </div>
+  )
+}
+
+// ── Provider Health Row ────────────────────────────────────────────────────────
+
+function ProviderHealthRow({ providers }: { providers: ProviderStatus[] }) {
+  if (providers.length === 0) return null
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3">
+      <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2.5">Provider Health</p>
+      <div className="flex flex-wrap gap-x-5 gap-y-2">
+        {providers.map(p => (
+          <div key={p.name} className="flex items-center gap-2">
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${p.healthy ? 'bg-emerald-400' : 'bg-red-400 animate-pulse'}`} />
+            <span className={`text-xs font-medium ${p.healthy ? 'text-zinc-300' : 'text-red-300'}`}>{p.name}</span>
+            {p.latencyMs > 0 && <span className="text-[10px] text-zinc-600 font-mono">{p.latencyMs}ms</span>}
+            {p.note && <span className="text-[10px] text-zinc-600">{p.note}</span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Overview tab ───────────────────────────────────────────────────────────────
+
+function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, countdown, flags, onPause, pausing }: {
   celery: CeleryStatus | null; regime: RegimeData | null; signalCounts: SignalCounts | null
-  providers: ProviderStatus[]; cache: CacheTelemetry | null
+  providers: ProviderStatus[]; cache: CacheTelemetry | null; flags: OpsFlags | null
   signals: TacticalSignalRow[]; countdown: number | null
   onPause: () => void; pausing: boolean
 }) {
   const lc = signals.reduce<Record<string,number>>((a,s)=>{ a[s.lifecycleStage]=(a[s.lifecycleStage]??0)+1; return a }, {})
-  const freshGroups = cache ? cache.groups.filter(g=>!g.isStale).length : null
-  const quotaPct = cache?.quota?.pctUsed != null ? Math.round(cache.quota.pctUsed) : null
+  const currentRegime = regime?.regime ?? null
+
+  // Grade A% from recent signals (sample indicator)
+  const withGrade = signals.filter(s => s.riskGrade != null)
+  const gradeAPct = withGrade.length >= 3
+    ? Math.round(withGrade.filter(s => s.riskGrade === 'A').length / withGrade.length * 100)
+    : null
 
   return (
     <div className="space-y-4">
+      {/* System Status Banner */}
+      <SystemStatusBanner celery={celery} flags={flags} providers={providers} />
+
       {/* Hero row: Scanner + Regime */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         <div className={`lg:col-span-3 rounded-xl border p-5 ${
@@ -251,67 +507,81 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
         )}
       </div>
 
-      {/* Provider/cache strip */}
-      <div className="flex flex-wrap items-center gap-3">
-        {providers.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] text-zinc-600 uppercase tracking-wider">Providers:</span>
-            {providers.slice(0,4).map(p => (
-              <span key={p.name} className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border ${p.healthy?'border-green-500/20 bg-green-500/5 text-green-400':'border-red-500/20 bg-red-500/5 text-red-400'}`}>
-                <span className={`w-1 h-1 rounded-full shrink-0 ${p.healthy?'bg-green-400':'bg-red-400 animate-pulse'}`}/>{p.name}
-              </span>
-            ))}
-          </div>
-        )}
-        {freshGroups !== null && (
-          <span className="flex items-center gap-1.5 text-[10px] text-zinc-500 ml-auto">
-            <span className={`w-1.5 h-1.5 rounded-full ${freshGroups>=4?'bg-green-400':freshGroups>=2?'bg-amber-400':'bg-red-400'}`}/>
-            Cache: {freshGroups}/{cache?.groups.length??5} fresh
-          </span>
-        )}
-        {quotaPct !== null && <span className={`text-[10px] ${quotaPct<60?'text-green-400':quotaPct<80?'text-amber-400':'text-red-400'}`}>CMC {quotaPct}% used</span>}
-      </div>
+      {/* Signal Quality Scorecard */}
+      <SignalQualityScorecard counts={signalCounts} gradeAPct={gradeAPct} />
 
-      {/* Metric tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <MetricTile label="Signals Today"  value={signalCounts?.signals_today??'—'} sub="generated last 24h"
-          accent={signalCounts!=null?(signalCounts.signals_today>0?'blue':'default'):'default'}/>
-        <MetricTile label="Active Signals" value={signalCounts?.active_signals??'—'} sub="open positions (7d)"
-          accent={signalCounts!=null?(signalCounts.active_signals>0?'green':'default'):'default'}/>
-        <MetricTile label="Win Rate 7D" value={signalCounts?.resolved_7d?`${signalCounts.win_rate_7d}%`:'—'} sub={signalCounts?.resolved_7d?`${signalCounts.resolved_7d} resolved`:'no resolved signals'}
-          accent={signalCounts?.win_rate_7d!=null?(signalCounts.win_rate_7d>=50?'green':signalCounts.win_rate_7d>=40?'amber':'red'):'default'}/>
-        <MetricTile label="Expectancy 7D" value={signalCounts?.resolved_7d?`${signalCounts.expectancy_7d>0?'+':''}${signalCounts.expectancy_7d}R`:'—'} sub="avg return per trade"
-          accent={signalCounts?.expectancy_7d!=null?(signalCounts.expectancy_7d>0?'green':signalCounts.expectancy_7d>-0.2?'amber':'red'):'default'}/>
-      </div>
+      {/* Provider Health Row */}
+      <ProviderHealthRow providers={providers} />
 
       {/* Recent signals */}
       {signals.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-2">Recent Signals</p>
           <div className="space-y-1.5">
-            {signals.slice(0,6).map((sig,i)=>(
-              <div key={sig.id??i} className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 flex items-center gap-3 hover:border-zinc-700 transition-colors">
-                <span className="font-semibold text-sm text-white w-16 shrink-0">{sig.symbol}</span>
-                <span className={`text-xs font-semibold w-8 shrink-0 ${sig.type==='BUY'?'text-green-400':'text-red-400'}`}>{sig.type}</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>{(sig.lifecycleStage??'').replace(/_/g,' ')}</span>
-                <div className="ml-auto flex items-center gap-4">
-                  <span className="text-xs font-mono text-zinc-300 hidden sm:block">{sig.confidence}%</span>
-                  <span className="text-xs font-mono text-zinc-500 hidden sm:block">{sig.rrRatio?.toFixed(1) ?? '—'}:1</span>
-                  <span className="text-[11px] text-zinc-600 tabular-nums">{sig.createdAt?timeAgo(String(sig.createdAt)):'—'}</span>
+            {signals.slice(0,6).map((sig,i)=>{
+              const alignment = computeRegimeAlignment(sig.type, currentRegime ?? sig.marketRegime)
+              return (
+                <div key={sig.id??i} className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 flex items-center gap-3 hover:border-zinc-700 transition-colors">
+                  <span className="font-semibold text-sm text-white w-16 shrink-0">{sig.symbol}</span>
+                  <span className={`text-xs font-semibold w-8 shrink-0 ${sig.type==='BUY'?'text-green-400':'text-red-400'}`}>{sig.type}</span>
+                  {sig.riskGrade && <GradeBadge grade={sig.riskGrade} />}
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>{(sig.lifecycleStage??'').replace(/_/g,' ')}</span>
+                  <div className="ml-auto flex items-center gap-3">
+                    <RegimeAlignDot alignment={alignment} />
+                    <ConfBar confidence={sig.confidence} />
+                    <span className="text-xs font-mono text-zinc-300 hidden sm:block">{sig.confidence}%</span>
+                    <span className="text-xs font-mono text-zinc-500 hidden sm:block">{sig.rrRatio?.toFixed(1) ?? '—'}:1</span>
+                    <span className="text-[11px] text-zinc-600 tabular-nums">{sig.createdAt?timeAgo(String(sig.createdAt)):'—'}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
+        </div>
+      )}
+
+      {/* Cache strip — moved below fold, compact */}
+      {cache && (
+        <div className="flex items-center gap-3 text-[10px] text-zinc-600">
+          <span>Cache: {cache.groups.filter(g=>!g.isStale).length}/{cache.groups.length} fresh</span>
+          {cache.quota && <span>CMC {Math.round(cache.quota.pctUsed)}% quota</span>}
         </div>
       )}
     </div>
   )
 }
 
-// ── Scanner tab ──────────────────────────────────────────────────────────────
+// ── Scanner tab ────────────────────────────────────────────────────────────────
+
+function LastChangeAudit({ entries }: { entries: AuditEntry[] | null | undefined }) {
+  if (!entries || entries.length === 0) return null
+  return (
+    <div>
+      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-2 font-semibold">Last Changes</p>
+      <div className="glass-card rounded-xl divide-y divide-zinc-800">
+        {entries.slice(0, 5).map((e, i) => {
+          const changedKeys = Object.keys(e.changed_fields)
+          const summary = changedKeys.slice(0, 2).map(k => {
+            const cf = e.changed_fields[k]
+            return `${k.replace(/_/g,' ')}: ${String(cf.old)} → ${String(cf.new)}`
+          }).join(' · ')
+          return (
+            <div key={e.id ?? i} className="flex items-start gap-3 px-4 py-2.5">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-zinc-300 font-mono truncate">{e.group_name} · {summary}</p>
+              </div>
+              <span className="text-[10px] text-zinc-600 shrink-0 tabular-nums">{timeAgo(e.updated_at)}</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 function ScannerTab({ celery, flags, aiEnabled, loading, error, scanning, scanDone, scanMode,
-  setScanMode, onEnable, onDisable, onScanNow, onPatchFlag, onClearError, countdown, scanStats }: {
+  setScanMode, onEnable, onDisable, onScanNow, onPatchFlag, onClearError, countdown, scanStats,
+  auditEntries, healthReady }: {
   celery: CeleryStatus | null; flags: OpsFlags | null; aiEnabled: boolean | null
   loading: boolean; error: string | null; scanning: boolean; scanDone: boolean
   scanMode: ScannerMode; setScanMode: (m: ScannerMode) => void
@@ -319,8 +589,15 @@ function ScannerTab({ celery, flags, aiEnabled, loading, error, scanning, scanDo
   onPatchFlag: (g: string, k: string, v: boolean) => void
   onClearError: () => void; countdown: number | null
   scanStats: ScanSummaryResponse | null
+  auditEntries: AuditEntry[] | null
+  healthReady: HealthReady | null
 }) {
   const emergencyOn = flags?.emergency_stop ?? false
+  const rawDurS  = scanStats?.avg_duration_s
+  const rawDurMs = scanStats?.avg_duration_ms
+  const durationS = rawDurS != null ? rawDurS.toFixed(1) : rawDurMs != null ? (rawDurMs / 1000).toFixed(1) : null
+  const workerOk = healthReady?.checks?.worker === 'ok' || healthReady?.checks?.database === 'ok'
+  const workerStatus = healthReady == null ? null : workerOk ? 'ALIVE' : 'DOWN'
 
   return (
     <div className="space-y-5 max-w-5xl">
@@ -349,9 +626,9 @@ function ScannerTab({ celery, flags, aiEnabled, loading, error, scanning, scanDo
         </div>
       )}
 
-      {/* Ops toggles */}
+      {/* CRITICAL CONTROLS */}
       <div>
-        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3 font-semibold">Operational Switches</p>
+        <p className="text-[10px] font-bold text-red-400/70 uppercase tracking-widest mb-2">Critical Controls</p>
         <div className="space-y-2">
           <OpsToggle label="Emergency Stop" description="Immediately halts ALL scans, signal generation, and Telegram output. Overrides every other switch."
             enabled={flags?.emergency_stop??null} loading={loading} icon={<ShieldAlert className="w-4 h-4"/>} inverse
@@ -359,40 +636,54 @@ function ScannerTab({ celery, flags, aiEnabled, loading, error, scanning, scanDo
           <OpsToggle label="Maintenance Mode" description="Blocks all scans and Telegram sends. Read-only API calls still work."
             enabled={flags?.maintenance_mode??null} loading={loading} icon={<Wrench className="w-4 h-4"/>} inverse
             onEnable={()=>onPatchFlag('features','maintenance_mode',true)} onDisable={()=>onPatchFlag('features','maintenance_mode',false)}/>
-          <OpsToggle label="Scanner (Celery Scheduler)" description="Enables/disables the 15-min auto-scan cycle."
-            enabled={celery?.enabled??null} loading={loading} icon={<ScanLine className="w-4 h-4"/>}
-            onEnable={onEnable} onDisable={onDisable}/>
-          <OpsToggle label="Claude AI Validation" description="When OFF, signals use heuristic scoring instead of Claude Haiku."
-            enabled={aiEnabled} loading={loading} icon={<Bot className="w-4 h-4"/>}
-            onEnable={()=>{ adminApi.settings.patch('ai',{enabled:true}) }} onDisable={()=>{ adminApi.settings.patch('ai',{enabled:false}) }}/>
-          <OpsToggle label="Telegram Alerts" description="Master switch for all outgoing Telegram messages."
-            enabled={flags?.telegram??null} loading={loading} icon={<Send className="w-4 h-4"/>}
-            onEnable={()=>onPatchFlag('features','telegram',true)} onDisable={()=>onPatchFlag('features','telegram',false)}/>
         </div>
       </div>
 
       {/* Scheduler status */}
       <div className="glass-card rounded-xl p-4 sm:p-5">
         <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3 font-semibold">Scheduler Status</p>
-        <div className="flex items-center gap-3">
-          <div className={cn('w-3 h-3 rounded-full shrink-0',
+        <div className="flex items-start gap-3">
+          <div className={cn('w-3 h-3 rounded-full shrink-0 mt-0.5',
             celery===null ? 'bg-zinc-500 animate-pulse' : emergencyOn ? 'bg-red-400' :
             celery?.enabled && celery?.scanning ? 'bg-blue-400 animate-pulse' :
             celery?.enabled && celery?.is_overdue ? 'bg-amber-400 animate-pulse' :
             celery?.enabled ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600')}/>
-          <div className="min-w-0">
+          <div className="flex-1 min-w-0">
             <p className="font-semibold text-sm text-terminal-text">
               {celery===null?'Connecting…':emergencyOn?'Emergency Stop — blocked':
                celery.enabled&&celery.scanning?`Scanning — ${celery.running_modes.join(', ')||'standard'}`:
                celery.enabled&&celery.is_overdue?'Overdue — Beat may be down':celery.enabled?'Active':'Paused'}
             </p>
-            <div className="flex items-center gap-2 flex-wrap mt-0.5">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
               <span className="text-terminal-muted text-xs">Last: <span className="text-terminal-text">{timeAgo(celery?.last_scan_at??null)}</span></span>
               {celery?.enabled && !emergencyOn && !celery.scanning && !celery.is_overdue && countdown!==null && (
                 <span className="flex items-center gap-1 text-xs text-terminal-muted"><Clock className="w-3 h-3"/>Next: <span className="text-white font-semibold font-mono ml-0.5">{fmtCd(countdown)}</span></span>
               )}
+              {durationS && <span className="text-terminal-muted text-xs">Avg duration: <span className="text-terminal-text font-mono">{durationS}s</span></span>}
+              {workerStatus && (
+                <span className={`flex items-center gap-1 text-xs ${workerStatus==='ALIVE'?'text-emerald-400':'text-red-400'}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${workerStatus==='ALIVE'?'bg-emerald-400':'bg-red-400 animate-pulse'}`}/>
+                  Worker {workerStatus}
+                </span>
+              )}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* NORMAL CONTROLS */}
+      <div>
+        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Operational Controls</p>
+        <div className="space-y-2">
+          <OpsToggle label="Scanner (Celery Scheduler)" description="Enables/disables the 15-min auto-scan cycle."
+            enabled={celery?.enabled??null} loading={loading} icon={<ScanLine className="w-4 h-4"/>}
+            onEnable={onEnable} onDisable={onDisable}/>
+          <OpsToggle label="Claude AI Validation" description="When OFF, signals use heuristic scoring instead of Claude Haiku."
+            enabled={aiEnabled} loading={loading} icon={<Bot className="w-4 h-4"/>}
+            onEnable={()=>onPatchFlag('ai','enabled',true)} onDisable={()=>onPatchFlag('ai','enabled',false)}/>
+          <OpsToggle label="Telegram Alerts" description="Master switch for all outgoing Telegram messages."
+            enabled={flags?.telegram??null} loading={loading} icon={<Send className="w-4 h-4"/>}
+            onEnable={()=>onPatchFlag('features','telegram',true)} onDisable={()=>onPatchFlag('features','telegram',false)}/>
         </div>
       </div>
 
@@ -418,13 +709,13 @@ function ScannerTab({ celery, flags, aiEnabled, loading, error, scanning, scanDo
 
       {/* Gate stats */}
       {scanStats && scanStats.total_scans > 0 && (() => {
-        const total = Math.round((scanStats.avg_coins_scanned??0)*scanStats.total_scans)
+        const total    = Math.round((scanStats.avg_coins_scanned??0)*scanStats.total_scans)
         const accepted = Math.round((scanStats.avg_signals_found??0)*scanStats.total_scans)
         const rejected = Math.max(0, total-accepted)
-        const rate = total > 0 ? ((accepted/total)*100).toFixed(1) : '0.0'
-        const gates = scanStats.gate_rejections??{}
+        const rate     = total > 0 ? ((accepted/total)*100).toFixed(1) : '0.0'
+        const gates    = scanStats.gate_rejections??{}
         const totalGate = Object.values(gates).reduce((s,n)=>s+n,0)
-        const topGates = Object.entries(gates).filter(([,n])=>n>0).sort(([,a],[,b])=>b-a).slice(0,8)
+        const topGates  = Object.entries(gates).filter(([,n])=>n>0).sort(([,a],[,b])=>b-a).slice(0,8)
         return (
           <div>
             <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3 font-semibold">Last 24h — Scan Summary</p>
@@ -460,17 +751,24 @@ function ScannerTab({ celery, flags, aiEnabled, loading, error, scanning, scanDo
           </div>
         )
       })()}
+
+      {/* Last change audit */}
+      <LastChangeAudit entries={auditEntries} />
     </div>
   )
 }
 
-// ── Signals tab ──────────────────────────────────────────────────────────────
+// ── Signals tab ────────────────────────────────────────────────────────────────
 
-function SignalsTab() {
-  const [typeFilter, setTypeFilter] = useState<'all'|'BUY'|'SELL'>('all')
-  const [modeFilter, setModeFilter] = useState<'all'|string>('all')
+function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
+  const [typeFilter,  setTypeFilter]  = useState<'all'|'BUY'|'SELL'>('all')
+  const [modeFilter,  setModeFilter]  = useState<string>('all')
+  const [sortBy,      setSortBy]      = useState<'confidence'|'grade'|'rr'|'time'>('confidence')
+  const [expandedId,  setExpandedId]  = useState<string|null>(null)
+
   const fetcher = useCallback(() =>
-    fetch('/api/signals/tactical?limit=50&lifecycleStage=all').then(r=>r.json()).then(j=>j.signals??[]).catch(()=>[]), [])
+    fetch('/api/signals/tactical?limit=50&lifecycleStage=all')
+      .then(r=>r.json()).then(j=>j.signals??[]).catch(()=>[]), [])
   const { data: signals, loading } = useAutoRefresh<TacticalSignalRow[]>(fetcher, 120_000)
 
   const filtered = (signals??[]).filter(s=>
@@ -478,17 +776,36 @@ function SignalsTab() {
     (modeFilter==='all'||s.scannerMode===modeFilter)
   )
 
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortBy === 'confidence') return b.confidence - a.confidence
+    if (sortBy === 'grade')      return gradeRank(a.riskGrade) - gradeRank(b.riskGrade)
+    if (sortBy === 'rr')         return (b.rrRatio??0) - (a.rrRatio??0)
+    if (sortBy === 'time')       return new Date(String(b.createdAt)).getTime() - new Date(String(a.createdAt)).getTime()
+    return 0
+  })
+
   return (
     <div className="space-y-4 max-w-5xl">
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2">
+      {/* Controls row */}
+      <div className="flex flex-wrap gap-2 items-center">
+        {/* Sort */}
+        <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Sort:</span>
+        {(['confidence','grade','rr','time'] as const).map(s=>(
+          <button key={s} onClick={()=>setSortBy(s)}
+            className={`text-xs px-2.5 py-1 rounded border transition-colors ${sortBy===s?'bg-zinc-700 border-zinc-600 text-white':'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
+            {s==='confidence'?'Conf':s==='grade'?'Grade':s==='rr'?'RR':'Time'}
+          </button>
+        ))}
+        <div className="w-px bg-zinc-800 h-4 mx-1"/>
+        {/* Type filter */}
         {(['all','BUY','SELL'] as const).map(f=>(
           <button key={f} onClick={()=>setTypeFilter(f)}
             className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${typeFilter===f?'bg-zinc-700 border-zinc-600 text-white':'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
             {f}
           </button>
         ))}
-        <div className="w-px bg-zinc-800 mx-1"/>
+        <div className="w-px bg-zinc-800 h-4 mx-1"/>
+        {/* Mode filter */}
         {(['all',...MODES] as const).map(m=>(
           <button key={m} onClick={()=>setModeFilter(m)}
             className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${modeFilter===m?(MODE_COLORS[m]||'bg-zinc-700 border-zinc-600 text-white'):'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
@@ -498,75 +815,212 @@ function SignalsTab() {
       </div>
 
       {loading && <div className="space-y-2">{Array.from({length:5}).map((_,i)=><div key={i} className="skeleton h-14 rounded-xl"/>)}</div>}
-
-      {!loading && filtered.length === 0 && (
+      {!loading && sorted.length === 0 && (
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-8 text-center text-zinc-600 text-sm">No signals match the current filters</div>
       )}
 
       <div className="space-y-1.5">
-        {filtered.map((sig,i)=>(
-          <div key={sig.id??i} className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 flex items-center gap-3 hover:border-zinc-700 transition-colors">
-            <span className="font-semibold text-sm text-white w-20 shrink-0">{sig.symbol}</span>
-            <span className={`text-xs font-semibold w-8 shrink-0 ${sig.type==='BUY'?'text-green-400':'text-red-400'}`}>{sig.type}</span>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>{(sig.lifecycleStage??'').replace(/_/g,' ')}</span>
-            {sig.scannerMode && <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 hidden sm:inline ${MODE_COLORS[sig.scannerMode]??'text-zinc-400 border-zinc-600'}`}>{sig.scannerMode.replace('_',' ')}</span>}
-            <div className="ml-auto flex items-center gap-4 shrink-0">
-              <span className="text-xs font-mono text-zinc-300 hidden sm:block">{sig.confidence}%</span>
-              <span className="text-xs font-mono text-zinc-500 hidden sm:block">{sig.rrRatio?.toFixed(1) ?? '—'}:1</span>
-              <span className="text-[11px] text-zinc-600 tabular-nums">{sig.createdAt?timeAgo(String(sig.createdAt)):'—'}</span>
+        {sorted.map((sig,i)=>{
+          const rowId = sig.id ?? String(i)
+          const isExpanded = expandedId === rowId
+          const alignment = computeRegimeAlignment(sig.type, currentRegime ?? sig.marketRegime)
+          return (
+            <div key={rowId} className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden hover:border-zinc-700 transition-colors">
+              {/* Main row — clickable to expand */}
+              <div className="px-4 py-3 flex items-center gap-3 cursor-pointer select-none"
+                onClick={()=>setExpandedId(isExpanded ? null : rowId)}>
+                <span className="font-semibold text-sm text-white w-20 shrink-0">{sig.symbol}</span>
+                <span className={`text-xs font-semibold w-8 shrink-0 ${sig.type==='BUY'?'text-green-400':'text-red-400'}`}>{sig.type}</span>
+                {sig.riskGrade && <GradeBadge grade={sig.riskGrade} />}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>
+                  {(sig.lifecycleStage??'').replace(/_/g,' ')}
+                </span>
+                {sig.scannerMode && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 hidden sm:inline ${MODE_COLORS[sig.scannerMode]??'text-zinc-400 border-zinc-600'}`}>
+                    {sig.scannerMode.replace('_',' ')}
+                  </span>
+                )}
+                <div className="ml-auto flex items-center gap-2.5 shrink-0">
+                  <RegimeAlignDot alignment={alignment} />
+                  <ConfBar confidence={sig.confidence} />
+                  <span className="text-xs font-mono text-zinc-300 hidden sm:block w-8 text-right">{sig.confidence}%</span>
+                  <span className="text-xs font-mono text-zinc-500 hidden sm:block">{sig.rrRatio?.toFixed(1) ?? '—'}:1</span>
+                  <span className="text-[11px] text-zinc-600 tabular-nums">{sig.createdAt?timeAgo(String(sig.createdAt)):'—'}</span>
+                  <ChevronDown className={`w-3.5 h-3.5 text-zinc-600 transition-transform shrink-0 ${isExpanded?'rotate-180':''}`} />
+                </div>
+              </div>
+              {isExpanded && <IntelligencePanel sig={sig} />}
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
 }
 
-// ── Tactical tab ─────────────────────────────────────────────────────────────
+// ── Tactical tab ───────────────────────────────────────────────────────────────
 
-function TacticalTab() {
-  const [preset, setPreset] = useState<'all'|'active'|'won'|'lost'>('active')
-  const stageMap: Record<string, SignalLifecycleStage[]> = {
-    active: ['ACTIVE','AI_APPROVED','TELEGRAM_SENT'],
-    won:    ['TP_HIT','ANALYZED'],
-    lost:   ['SL_HIT'],
-  }
-  const stages = preset==='all' ? null : stageMap[preset]
+function LifecycleFunnel({ signals }: { signals: TacticalSignalRow[] }) {
+  if (signals.length === 0) return null
+  const counts: Record<string, number> = {}
+  for (const s of signals) counts[s.lifecycleStage] = (counts[s.lifecycleStage]??0)+1
 
-  const fetcher = useCallback(()=>
-    fetch(`/api/signals/tactical?limit=50&lifecycleStage=all`).then(r=>r.json()).then(j=>j.signals??[]), [])
-  const { data: allSigs, loading } = useAutoRefresh<TacticalSignalRow[]>(fetcher, 60_000)
+  const generated = signals.length
+  const approved  = signals.filter(s => ['AI_APPROVED','TELEGRAM_SENT','ACTIVE','STALE','TP_HIT','SL_HIT','CLOSED','ANALYZED'].includes(s.lifecycleStage)).length
+  const sent      = signals.filter(s => ['TELEGRAM_SENT','ACTIVE','STALE','TP_HIT','SL_HIT','CLOSED','ANALYZED'].includes(s.lifecycleStage)).length
+  const active    = counts['ACTIVE'] ?? 0
+  const won       = (counts['TP_HIT']??0) + (counts['ANALYZED']??0)
+  const lost      = counts['SL_HIT'] ?? 0
+  const expired   = (counts['STALE']??0) + (counts['CLOSED']??0)
 
-  const signals = (allSigs??[]).filter(s=>!stages||stages.includes(s.lifecycleStage))
+  const pct = (n: number, d: number) => d > 0 ? `${Math.round(n/d*100)}%` : '—'
 
-  const presets = [
-    {id:'all',label:'All',cls:'border-zinc-600 text-zinc-300'},
-    {id:'active',label:'Active',cls:'bg-green-500/10 border-green-500/30 text-green-300'},
-    {id:'won',label:'✓ Won',cls:'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'},
-    {id:'lost',label:'✗ Lost',cls:'bg-red-500/10 border-red-500/30 text-red-300'},
+  const steps = [
+    { label: 'Generated', count: generated, color: 'bg-zinc-600'     },
+    { label: 'Approved',  count: approved,  color: 'bg-blue-500'     },
+    { label: 'Sent',      count: sent,      color: 'bg-purple-500'   },
+    { label: 'Active',    count: active,    color: 'bg-green-500'    },
   ]
 
   return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+      <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+        <BarChart2 className="w-3 h-3"/>Pipeline · last {signals.length} signals
+      </p>
+      <div className="flex items-start gap-1 flex-wrap sm:flex-nowrap">
+        {steps.map((step, idx) => (
+          <div key={step.label} className="flex items-center gap-1 shrink-0">
+            <div className="text-center min-w-[48px]">
+              <div className={`text-lg font-bold font-mono text-white`}>{step.count}</div>
+              <div className="text-[9px] text-zinc-500 uppercase tracking-wider leading-tight">{step.label}</div>
+              {idx > 0 && steps[idx-1].count > 0 && (
+                <div className="text-[9px] text-zinc-600">{pct(step.count, steps[idx-1].count)}</div>
+              )}
+            </div>
+            {idx < steps.length - 1 && <span className="text-zinc-700 text-sm mx-1">→</span>}
+          </div>
+        ))}
+        <span className="text-zinc-700 text-sm mx-1">→</span>
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          <div className="text-center">
+            <div className="text-lg font-bold font-mono text-emerald-400">{won}</div>
+            <div className="text-[9px] text-zinc-500 uppercase tracking-wider">Won</div>
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-bold font-mono text-red-400">{lost}</div>
+            <div className="text-[9px] text-zinc-500 uppercase tracking-wider">Lost</div>
+          </div>
+          {expired > 0 && (
+            <div className="text-center">
+              <div className="text-lg font-bold font-mono text-zinc-500">{expired}</div>
+              <div className="text-[9px] text-zinc-500 uppercase tracking-wider">Expired</div>
+            </div>
+          )}
+        </div>
+      </div>
+      {(won + lost) > 0 && (
+        <p className="text-[10px] text-zinc-500 mt-2">
+          Win rate (resolved): <span className="text-zinc-300 font-mono">{pct(won, won+lost)}</span>
+        </p>
+      )}
+    </div>
+  )
+}
+
+function TradeStructureBar({ sig }: { sig: TacticalSignalRow }) {
+  const { entryPrice, targetPrice, stopLoss, type } = sig
+  if (!entryPrice || !targetPrice || !stopLoss) return null
+
+  const isBuy = type === 'BUY'
+  const tpDistPct = isBuy
+    ? ((targetPrice - entryPrice) / entryPrice * 100)
+    : ((entryPrice - targetPrice) / entryPrice * 100)
+  const slDistPct = isBuy
+    ? ((entryPrice - stopLoss) / entryPrice * 100)
+    : ((stopLoss - entryPrice) / entryPrice * 100)
+
+  return (
+    <div className="mt-1.5 space-y-0.5">
+      <div className="flex items-center gap-2 text-[10px] text-zinc-500">
+        <span>Entry <span className="text-zinc-300 font-mono">${entryPrice.toFixed(4)}</span></span>
+        <span className="text-emerald-400">TP +{tpDistPct.toFixed(1)}%</span>
+        <span className="text-red-400">SL -{slDistPct.toFixed(1)}%</span>
+      </div>
+      <div className="relative h-1.5 bg-zinc-800 rounded-full overflow-hidden w-full">
+        {/* SL bar (red, from left) */}
+        <div className="absolute left-0 top-0 h-full bg-red-500/50 rounded-l-full"
+          style={{ width: `${Math.min(35, slDistPct * 3)}%` }} />
+        {/* Entry marker */}
+        <div className="absolute top-0 h-full w-0.5 bg-zinc-400"
+          style={{ left: `${Math.min(35, slDistPct * 3)}%` }} />
+        {/* TP bar (green, from entry) */}
+        <div className="absolute top-0 h-full bg-emerald-500/50 rounded-r-full"
+          style={{
+            left:  `${Math.min(35, slDistPct * 3)}%`,
+            width: `${Math.min(65, tpDistPct * 2)}%`,
+          }} />
+      </div>
+    </div>
+  )
+}
+
+function TacticalTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
+  const [preset, setPreset] = useState<'active'|'won'|'lost'|'expired'|'all'>('active')
+
+  const stageMap: Record<string, SignalLifecycleStage[]> = {
+    active:  ['ACTIVE','AI_APPROVED','TELEGRAM_SENT'],
+    won:     ['TP_HIT','ANALYZED'],
+    lost:    ['SL_HIT'],
+    expired: ['STALE','CLOSED'],
+  }
+
+  const fetcher = useCallback(()=>
+    fetch(`/api/signals/tactical?limit=80&lifecycleStage=all`).then(r=>r.json()).then(j=>j.signals??[]), [])
+  const { data: allSigs, loading } = useAutoRefresh<TacticalSignalRow[]>(fetcher, 60_000)
+
+  const stages = preset==='all' ? null : (stageMap[preset] ?? null)
+  const signals = (allSigs??[]).filter(s=>!stages||stages.includes(s.lifecycleStage))
+
+  const presets: { id: string; label: string; cls: string }[] = [
+    {id:'active',  label:'Active',     cls:'bg-green-500/10 border-green-500/30 text-green-300'},
+    {id:'won',     label:'✓ Won',      cls:'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'},
+    {id:'lost',    label:'✗ Lost',     cls:'bg-red-500/10 border-red-500/30 text-red-300'},
+    {id:'expired', label:'Expired',    cls:'bg-zinc-500/10 border-zinc-600/30 text-zinc-400'},
+    {id:'all',     label:'All',        cls:'border-zinc-600 text-zinc-300'},
+  ]
+
+  const getCount = (id: string) => {
+    if (!allSigs) return 0
+    const map = stageMap[id]
+    return map ? allSigs.filter(s => map.includes(s.lifecycleStage)).length : allSigs.length
+  }
+
+  return (
     <div className="space-y-4 max-w-5xl">
+      {/* Lifecycle Funnel */}
+      <LifecycleFunnel signals={allSigs??[]} />
+
+      {/* Preset buttons */}
       <div className="flex gap-2 flex-wrap">
         {presets.map(p=>(
           <button key={p.id} onClick={()=>setPreset(p.id as typeof preset)}
             className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${preset===p.id?p.cls:'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
-            {p.label} {allSigs&&preset===p.id?`(${signals.length})`:allSigs&&p.id!=='all'?`(${(allSigs).filter(s=>!stageMap[p.id]||stageMap[p.id].includes(s.lifecycleStage)).length})`:''}
+            {p.label} {allSigs?`(${getCount(p.id)})` :''}
           </button>
         ))}
       </div>
 
       {loading && <div className="space-y-2">{Array.from({length:4}).map((_,i)=><div key={i} className="skeleton h-20 rounded-xl"/>)}</div>}
-
       {!loading && signals.length === 0 && (
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-8 text-center text-zinc-600 text-sm">No signals in this stage</div>
       )}
 
       <div className="space-y-2">
         {signals.map((sig,i)=>{
-          const meta = STAGE_META[sig.lifecycleStage]
-          const isBuy = sig.type==='BUY'
+          const meta   = STAGE_META[sig.lifecycleStage]
+          const isBuy  = sig.type==='BUY'
+          const alignment = computeRegimeAlignment(sig.type, currentRegime ?? sig.marketRegime)
+          const isActive = sig.lifecycleStage === 'ACTIVE'
           return (
             <div key={sig.id??i} className={`bg-zinc-900 border rounded-xl overflow-hidden flex`}>
               <div className={`w-1 shrink-0 ${isBuy?'bg-green-500':'bg-red-500'}`}/>
@@ -574,8 +1028,10 @@ function TacticalTab() {
                 <div className="flex items-center gap-3 flex-wrap">
                   <span className="font-bold text-white">{sig.symbol}</span>
                   <span className={`text-xs font-semibold ${isBuy?'text-green-400':'text-red-400'}`}>{sig.type}</span>
+                  {sig.riskGrade && <GradeBadge grade={sig.riskGrade} />}
                   {meta && <span className={`text-[10px] px-1.5 py-0.5 rounded border ${meta.color}`}>{meta.label}</span>}
                   {sig.scannerMode && <span className={`text-[10px] px-1.5 py-0.5 rounded border ${MODE_COLORS[sig.scannerMode]??'text-zinc-400 border-zinc-600'}`}>{sig.scannerMode.replace('_',' ')}</span>}
+                  <RegimeAlignDot alignment={alignment} />
                   <span className="ml-auto text-xs text-zinc-500">{sig.createdAt?timeAgo(String(sig.createdAt)):'—'}</span>
                 </div>
                 <div className="flex gap-4 mt-1.5 flex-wrap">
@@ -583,7 +1039,9 @@ function TacticalTab() {
                   <span className="text-[11px] text-zinc-500">RR: <span className="text-zinc-300 font-mono">{sig.rrRatio?.toFixed(1) ?? '—'}:1</span></span>
                   {sig.entryPrice > 0 && <span className="text-[11px] text-zinc-500">Entry: <span className="text-zinc-300 font-mono">${sig.entryPrice.toFixed(4)}</span></span>}
                   {sig.targetPrice > 0 && <span className="text-[11px] text-zinc-500">TP: <span className={`font-mono ${isBuy?'text-green-400':'text-red-400'}`}>${sig.targetPrice.toFixed(4)}</span></span>}
+                  {sig.stopLoss > 0 && <span className="text-[11px] text-zinc-500">SL: <span className="text-red-400 font-mono">${sig.stopLoss.toFixed(4)}</span></span>}
                 </div>
+                {isActive && <TradeStructureBar sig={sig} />}
               </div>
             </div>
           )
@@ -593,11 +1051,95 @@ function TacticalTab() {
   )
 }
 
-// ── Regime tab ───────────────────────────────────────────────────────────────
+// ── Regime tab ─────────────────────────────────────────────────────────────────
 
-function RegimeTab({ regime }: { regime: RegimeData | null }) {
-  const [applying, setApplying] = useState(false)
-  const [applyResult, setApplyResult] = useState<string|null>(null)
+function RegimePreviewModal({ targetPreset, regimeLabel, onConfirm, onClose }: {
+  targetPreset: string; regimeLabel: string; onConfirm: () => void; onClose: () => void
+}) {
+  const [loading,       setLoading]       = useState(true)
+  const [currentPreset, setCurrentPreset] = useState('—')
+
+  useEffect(() => {
+    adminApi.settings.group('scanner')
+      .then(res => {
+        const f = res.fields.find(f => f.key === 'preset')
+        setCurrentPreset(f ? String(f.value) : '—')
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const display = PRESET_DISPLAY[targetPreset]
+  const isSame  = currentPreset === targetPreset
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-white font-semibold">Apply Regime Settings</h3>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 text-lg leading-none">×</button>
+        </div>
+
+        {loading ? (
+          <p className="text-zinc-500 text-sm py-4 text-center">Loading current settings…</p>
+        ) : (
+          <>
+            <div className="space-y-3 mb-5">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-zinc-400">Current preset</span>
+                <span className="font-mono text-zinc-200">{currentPreset}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-zinc-400">Recommended for {regimeLabel}</span>
+                <span className={`font-mono font-semibold ${isSame ? 'text-zinc-400' : 'text-blue-300'}`}>{targetPreset}</span>
+              </div>
+            </div>
+
+            {isSame ? (
+              <div className="rounded-lg bg-zinc-800 px-4 py-3 text-center text-sm text-zinc-400 mb-5">
+                Already on <span className="font-mono text-zinc-300">{targetPreset}</span> preset. No changes needed.
+              </div>
+            ) : display ? (
+              <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4 mb-5">
+                <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">{display.label} Profile</p>
+                <ul className="space-y-1">
+                  {display.changes.map((c, i) => (
+                    <li key={i} className="text-xs text-zinc-300 flex items-center gap-2">
+                      <span className="w-1 h-1 rounded-full bg-blue-400 shrink-0"/>
+                      {c}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <div className="flex gap-3">
+              <button onClick={onClose}
+                className="flex-1 text-sm py-2 rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 transition-colors">
+                Cancel
+              </button>
+              {!isSame && (
+                <button onClick={()=>{ onConfirm(); onClose() }}
+                  className="flex-1 text-sm py-2 rounded-lg bg-blue-500/20 border border-blue-500/40 text-blue-300 hover:bg-blue-500/30 transition-colors font-semibold">
+                  Confirm Apply
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function RegimeTab({ regime, scanStats, regimePerfData }: {
+  regime: RegimeData | null
+  scanStats: ScanSummaryResponse | null
+  regimePerfData: Record<string, unknown> | null
+}) {
+  const [applying,     setApplying]     = useState(false)
+  const [applyResult,  setApplyResult]  = useState<string|null>(null)
+  const [previewOpen,  setPreviewOpen]  = useState(false)
 
   const REGIME_PROFILE: Record<string, string> = {
     BULL_TREND: 'aggressive', BEAR_TREND: 'conservative', SIDEWAYS: 'balanced',
@@ -619,57 +1161,168 @@ function RegimeTab({ regime }: { regime: RegimeData | null }) {
   if (!regime) return <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-8 text-center text-zinc-600">Loading regime…</div>
 
   const meta = REGIME_META[regime.regime]
-  return (
-    <div className="space-y-4 max-w-3xl">
-      <div className={`rounded-xl border p-6 bg-zinc-900 ${REGIME_BORDER[regime.regime]}`}>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <Target className="w-4 h-4 text-zinc-500"/>
-            <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">Current Regime</span>
-          </div>
-          <span className="text-[10px] text-zinc-600 font-mono">{new Date(regime.computedAt).toLocaleTimeString()}</span>
-        </div>
-        <div className={`text-3xl font-bold mt-2 mb-4 ${REGIME_COLOR[regime.regime]}`}>{REGIME_LABEL[regime.regime]}</div>
-        {meta && (
-          <>
-            <p className="text-zinc-400 text-sm leading-relaxed mb-2">{meta.desc}</p>
-            <p className="text-zinc-500 text-xs leading-relaxed border-l-2 border-zinc-700 pl-3">{meta.implication}</p>
-          </>
-        )}
-        <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-zinc-800">
-          <div><p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1">RSI 4h</p><p className={`text-xl font-bold font-mono ${regime.btcRsi4h>70?'text-red-400':regime.btcRsi4h<30?'text-green-400':'text-white'}`}>{fmt(regime.btcRsi4h,1)}</p></div>
-          <div><p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1">BTC 24h</p><p className={`text-xl font-bold font-mono ${regime.btc24hChange>=0?'text-green-400':'text-red-400'}`}>{regime.btc24hChange>=0?'+':''}{fmt(regime.btc24hChange,1)}%</p></div>
-          <div><p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1">ATR %</p><p className="text-xl font-bold font-mono text-white">{fmt(regime.btcAtrPct,2)}%</p></div>
-        </div>
-      </div>
+  const targetPreset = REGIME_PROFILE[regime.regime] ?? 'balanced'
 
-      <div className="glass-card rounded-xl p-4 flex items-center justify-between gap-4">
-        <div>
-          <p className="text-terminal-text text-sm font-semibold">Apply Regime Settings</p>
-          <p className="text-terminal-muted text-xs mt-0.5">Sets scanner preset to <span className="font-mono text-zinc-300">{REGIME_PROFILE[regime.regime]??'balanced'}</span> based on current regime</p>
+  // Gate effectiveness from scan stats
+  const gateRejections = scanStats?.gate_rejections ?? {}
+  const regimeBlocked  = gateRejections['REGIME_REJECTION'] ?? gateRejections['btc_context'] ?? 0
+  const nullBlocked    = gateRejections['NULL_REGIME'] ?? 0
+  const totalAllowed   = Math.round((scanStats?.avg_signals_found ?? 0) * (scanStats?.total_scans ?? 0))
+
+  // Regime performance from analytics data
+  type RegimePerfRow = { regime: string; n?: number; win_rate?: number | null; expectancy?: number | null }
+  const perfRows = Array.isArray((regimePerfData as { by_regime?: unknown[] } | null)?.by_regime)
+    ? (regimePerfData as { by_regime: RegimePerfRow[] }).by_regime
+    : []
+  const currentPerfRow = perfRows.find(r => r.regime === regime.regime)
+
+  return (
+    <>
+      {previewOpen && (
+        <RegimePreviewModal
+          targetPreset={targetPreset}
+          regimeLabel={REGIME_LABEL[regime.regime]}
+          onConfirm={applyRegimeSettings}
+          onClose={()=>setPreviewOpen(false)}
+        />
+      )}
+
+      <div className="space-y-4 max-w-3xl">
+        {/* Current Regime Card */}
+        <div className={`rounded-xl border p-6 bg-zinc-900 ${REGIME_BORDER[regime.regime]}`}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Target className="w-4 h-4 text-zinc-500"/>
+              <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">Current Regime</span>
+            </div>
+            <span className="text-[10px] text-zinc-600 font-mono">{new Date(regime.computedAt).toLocaleTimeString()}</span>
+          </div>
+          <div className={`text-3xl font-bold mt-2 mb-3 ${REGIME_COLOR[regime.regime]}`}>{REGIME_LABEL[regime.regime]}</div>
+          {meta && (
+            <>
+              <p className="text-zinc-400 text-sm leading-relaxed mb-2">{meta.desc}</p>
+              <p className="text-zinc-500 text-xs leading-relaxed border-l-2 border-zinc-700 pl-3">{meta.implication}</p>
+            </>
+          )}
+          {currentPerfRow && (
+            <div className="mt-3 pt-3 border-t border-zinc-800 flex gap-5 flex-wrap">
+              <div>
+                <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Win Rate (7d)</p>
+                <p className={`text-sm font-bold font-mono ${(currentPerfRow.win_rate??0)>=0.48?'text-emerald-400':(currentPerfRow.win_rate??0)>=0.38?'text-amber-400':'text-red-400'}`}>
+                  {currentPerfRow.win_rate != null ? `${Math.round(currentPerfRow.win_rate*100)}%` : '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Expectancy</p>
+                <p className={`text-sm font-bold font-mono ${(currentPerfRow.expectancy??0)>0?'text-emerald-400':(currentPerfRow.expectancy??0)>-0.1?'text-amber-400':'text-red-400'}`}>
+                  {currentPerfRow.expectancy != null ? `${currentPerfRow.expectancy>0?'+':''}${currentPerfRow.expectancy.toFixed(2)}R` : '—'}
+                </p>
+              </div>
+              {currentPerfRow.n != null && (
+                <div>
+                  <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Sample</p>
+                  <p className="text-sm font-bold font-mono text-zinc-300">n={currentPerfRow.n}</p>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-zinc-800">
+            <div><p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1">RSI 4h</p><p className={`text-xl font-bold font-mono ${regime.btcRsi4h>70?'text-red-400':regime.btcRsi4h<30?'text-green-400':'text-white'}`}>{fmt(regime.btcRsi4h,1)}</p></div>
+            <div><p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1">BTC 24h</p><p className={`text-xl font-bold font-mono ${regime.btc24hChange>=0?'text-green-400':'text-red-400'}`}>{regime.btc24hChange>=0?'+':''}{fmt(regime.btc24hChange,1)}%</p></div>
+            <div><p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1">ATR %</p><p className="text-xl font-bold font-mono text-white">{fmt(regime.btcAtrPct,2)}%</p></div>
+          </div>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
-          {applyResult && <span className={`text-xs font-mono ${applyResult.startsWith('Applied')?'text-green-400':'text-red-400'}`}>{applyResult}</span>}
-          <button onClick={applyRegimeSettings} disabled={applying}
-            className="flex items-center gap-1.5 text-xs px-4 py-2 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-300 hover:bg-blue-500/25 transition-colors disabled:opacity-40">
-            {applying ? <><RefreshCw className="w-3 h-3 animate-spin"/>Applying…</> : <>Apply Regime Settings<ArrowRight className="w-3 h-3"/></>}
-          </button>
+
+        {/* Regime Gate Effectiveness */}
+        {scanStats && scanStats.total_scans > 0 && (
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+            <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-3">Regime Gate · Last 24h ({scanStats.total_scans} scans)</p>
+            <div className="flex flex-wrap gap-5">
+              {regimeBlocked > 0 && (
+                <div>
+                  <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Blocked (contra-regime)</p>
+                  <p className="text-lg font-bold font-mono text-red-400">{regimeBlocked}</p>
+                </div>
+              )}
+              {totalAllowed > 0 && (
+                <div>
+                  <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Allowed</p>
+                  <p className="text-lg font-bold font-mono text-emerald-400">{totalAllowed}</p>
+                </div>
+              )}
+              {nullBlocked > 0 && (
+                <div>
+                  <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">NULL Regime Rejected</p>
+                  <p className="text-lg font-bold font-mono text-amber-400">{nullBlocked}</p>
+                </div>
+              )}
+              {regimeBlocked === 0 && nullBlocked === 0 && (
+                <p className="text-zinc-600 text-sm">No regime rejections recorded in the last 24h scan window.</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Apply Regime Settings */}
+        <div className="glass-card rounded-xl p-4 flex items-start sm:items-center justify-between gap-4 flex-col sm:flex-row">
+          <div>
+            <p className="text-terminal-text text-sm font-semibold">Apply Regime Settings</p>
+            <p className="text-terminal-muted text-xs mt-0.5">
+              Sets scanner to <span className="font-mono text-zinc-300">{targetPreset}</span> preset for {REGIME_LABEL[regime.regime]}
+            </p>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            {applyResult && (
+              <span className={`text-xs font-mono ${applyResult.startsWith('Applied')?'text-green-400':'text-red-400'}`}>{applyResult}</span>
+            )}
+            <button onClick={()=>setPreviewOpen(true)} disabled={applying}
+              className="flex items-center gap-1.5 text-xs px-4 py-2 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-300 hover:bg-blue-500/25 transition-colors disabled:opacity-40">
+              {applying ? <><RefreshCw className="w-3 h-3 animate-spin"/>Applying…</> : <>Preview &amp; Apply<ArrowRight className="w-3 h-3"/></>}
+            </button>
+          </div>
         </div>
+
+        {/* Regime History — distribution from performance data */}
+        {perfRows.length > 0 && (
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+            <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-3">Regime Distribution · 7d Signal Sample</p>
+            <div className="space-y-2">
+              {perfRows.map(row => {
+                const totalPerfRows = perfRows.reduce((s, r) => s + (r.n ?? 0), 0)
+                const rowPct = totalPerfRows > 0 && row.n != null ? Math.round(row.n / totalPerfRows * 100) : 0
+                const color = REGIME_COLOR[row.regime] ?? 'text-zinc-400'
+                return (
+                  <div key={row.regime}>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className={`text-xs ${color}`}>{REGIME_LABEL[row.regime] ?? row.regime}</span>
+                      <span className="text-[10px] text-zinc-500 font-mono">
+                        {row.n != null ? `n=${row.n}` : ''}{row.win_rate != null ? ` · WR ${Math.round(row.win_rate*100)}%` : ''}
+                      </span>
+                    </div>
+                    <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-zinc-600/60" style={{width:`${rowPct}%`}}/>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
-    </div>
+    </>
   )
 }
 
-// ── Main page ────────────────────────────────────────────────────────────────
+// ── Main page ──────────────────────────────────────────────────────────────────
 
 type Tab = 'overview' | 'scanner' | 'signals' | 'tactical' | 'regime'
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'overview', label: 'Overview'   },
-  { id: 'scanner',  label: 'Scanner'    },
-  { id: 'signals',  label: 'Signals'    },
-  { id: 'tactical', label: 'Tactical'   },
-  { id: 'regime',   label: 'Regime'     },
+  { id: 'overview', label: 'Overview'  },
+  { id: 'scanner',  label: 'Scanner'   },
+  { id: 'signals',  label: 'Signals'   },
+  { id: 'tactical', label: 'Tactical'  },
+  { id: 'regime',   label: 'Regime'    },
 ]
 
 export default function TradingOperationsPage() {
@@ -680,7 +1333,7 @@ export default function TradingOperationsPage() {
     if (t && TABS.some(x => x.id === t)) setTab(t)
   }, [])
 
-  // ── Shared data (single polling registry) ──────────────────────────────────
+  // ── Shared data polling (singleton registry) ───────────────────────────────
   const celeryFetcher  = useCallback(()=>adminApi.scheduler.status().then(r=>r.success?r.data:null), [])
   const regimeFetcher  = useCallback(()=>fetch('/api/market/intelligence').then(r=>r.json()).then(j=>j.regime??null), [])
   const countsFetcher  = useCallback(()=>fetch('/api/signals/counts').then(r=>r.json()), [])
@@ -698,18 +1351,24 @@ export default function TradingOperationsPage() {
       _aiEnabled:       Boolean(field(aiRes,'enabled')),
     }
   }, [])
-  const scansFetcher   = useCallback(()=>adminApi.analytics.scans(24).catch(()=>null), [])
+  const scansFetcher      = useCallback(()=>adminApi.analytics.scans(24).catch(()=>null), [])
+  const auditFetcher      = useCallback(()=>adminApi.settings.audit(5).then(r=>r.entries).catch(()=>null), [])
+  const healthReadyFetcher= useCallback(()=>adminApi.health.ready().catch(()=>null), [])
+  const regimePerfFetcher = useCallback(()=>adminApi.analytics.regime(168).catch(()=>null), [])
 
-  const { data: celery,      refresh: refreshCelery  } = useSharedPolling<CeleryStatus|null>('trading:celery', celeryFetcher, 120_000)
-  const { data: regime }                                = useSharedPolling<RegimeData|null>('trading:regime', regimeFetcher, 120_000)
-  const { data: signalCounts }                          = useSharedPolling<SignalCounts|null>('trading:counts', countsFetcher, 120_000)
-  const { data: cache }                                 = useSharedPolling<CacheTelemetry|null>('trading:cache', cacheFetcher, 120_000)
-  const { data: providers }                             = useSharedPolling<ProviderStatus[]>('trading:providers', provFetcher, 120_000)
-  const { data: recentSignals }                         = useSharedPolling<TacticalSignalRow[]>('trading:recent-sigs', sigFetcher, 120_000)
+  const { data: celery,      refresh: refreshCelery  } = useSharedPolling<CeleryStatus|null>('trading:celery',      celeryFetcher,       120_000)
+  const { data: regime }                                = useSharedPolling<RegimeData|null>  ('trading:regime',      regimeFetcher,       120_000)
+  const { data: signalCounts }                          = useSharedPolling<SignalCounts|null>('trading:counts',      countsFetcher,       120_000)
+  const { data: cache }                                 = useSharedPolling<CacheTelemetry|null>('trading:cache',     cacheFetcher,        120_000)
+  const { data: providers }                             = useSharedPolling<ProviderStatus[]> ('trading:providers',   provFetcher,         120_000)
+  const { data: recentSignals }                         = useSharedPolling<TacticalSignalRow[]>('trading:recent-sigs',sigFetcher,         120_000)
   const { data: flagsData,  refresh: refreshFlags }     = useSharedPolling<{emergency_stop:boolean;maintenance_mode:boolean;telegram:boolean;ai_validation:boolean;_aiEnabled:boolean}|null>('trading:flags', flagsFetcher, 120_000)
-  const { data: scanStats }                             = useSharedPolling<ScanSummaryResponse|null>('trading:scans', scansFetcher, 120_000)
+  const { data: scanStats }                             = useSharedPolling<ScanSummaryResponse|null>('trading:scans',scansFetcher,        120_000)
+  const { data: auditEntries }                          = useSharedPolling<AuditEntry[]|null>('trading:audit',       auditFetcher,        120_000)
+  const { data: healthReady }                           = useSharedPolling<HealthReady|null> ('trading:health-ready',healthReadyFetcher,  120_000)
+  const { data: regimePerfData }                        = useSharedPolling<Record<string,unknown>|null>('trading:regime-perf', regimePerfFetcher, 120_000)
 
-  // ── Scanner countdown ────────────────────────────────────────────────────────
+  // ── Scanner countdown ──────────────────────────────────────────────────────
   const [countdown, setCountdown] = useState<number|null>(null)
   const [scanMode,  setScanMode]  = useState<ScannerMode>('spot')
 
@@ -724,7 +1383,7 @@ export default function TradingOperationsPage() {
     tick(); const t=setInterval(tick,1000); return ()=>clearInterval(t)
   }, [celery, scanMode])
 
-  // ── Scanner actions ──────────────────────────────────────────────────────────
+  // ── Scanner actions ────────────────────────────────────────────────────────
   const [opLoading,  setOpLoading]  = useState(false)
   const [opError,    setOpError]    = useState<string|null>(null)
   const [scanning,   setScanning]   = useState(false)
@@ -762,6 +1421,8 @@ export default function TradingOperationsPage() {
     finally { setPausing(false) }
   }
 
+  const currentRegime = regime?.regime ?? null
+
   return (
     <div className="p-4 sm:p-6 space-y-4 max-w-6xl mx-auto">
       {/* Header */}
@@ -787,7 +1448,7 @@ export default function TradingOperationsPage() {
         <OverviewTab
           celery={celery??null} regime={regime??null} signalCounts={signalCounts??null}
           providers={providers??[]} cache={cache??null} signals={recentSignals??[]}
-          countdown={countdown} onPause={handlePause} pausing={pausing}
+          flags={flags} countdown={countdown} onPause={handlePause} pausing={pausing}
         />
       )}
       {tab==='scanner' && (
@@ -798,11 +1459,19 @@ export default function TradingOperationsPage() {
           onEnable={handleEnable} onDisable={handleDisable} onScanNow={handleScanNow}
           onPatchFlag={handlePatchFlag} onClearError={()=>setOpError(null)}
           countdown={countdown} scanStats={scanStats??null}
+          auditEntries={auditEntries??null}
+          healthReady={healthReady??null}
         />
       )}
-      {tab==='signals'  && <SignalsTab/>}
-      {tab==='tactical' && <TacticalTab/>}
-      {tab==='regime'   && <RegimeTab regime={regime??null}/>}
+      {tab==='signals'  && <SignalsTab  currentRegime={currentRegime} />}
+      {tab==='tactical' && <TacticalTab currentRegime={currentRegime} />}
+      {tab==='regime'   && (
+        <RegimeTab
+          regime={regime??null}
+          scanStats={scanStats??null}
+          regimePerfData={regimePerfData??null}
+        />
+      )}
     </div>
   )
 }
