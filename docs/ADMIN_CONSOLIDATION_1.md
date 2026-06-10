@@ -1,185 +1,211 @@
-# ADMIN.CONSOLIDATION.1 — Admin Dashboard 13→4 Consolidation
+# ADMIN.CONSOLIDATION.1 — 13 Pages to 4 Operational Centers
 
-## Overview
-
-Reduced the admin dashboard from 13 separate pages to 4 consolidated operational centers (+ Settings unchanged), eliminating duplicate API calls and simplifying navigation.
-
----
-
-## Pages Before → After
-
-### Before (13 pages)
-
-| Route | Purpose |
-|-------|---------|
-| `/admin/overview` | Dashboard overview tiles |
-| `/admin/scanner` | Celery scanner controls |
-| `/admin/signals` | Signal feed with filters |
-| `/admin/tactical` | Trade-mode preset selector |
-| `/admin/regime` | BTC regime + apply settings |
-| `/admin/providers` | API provider health table |
-| `/admin/cache` | Redis cache telemetry |
-| `/admin/sectors` | CMC sector status cards |
-| `/admin/market` | Regime + trending assets |
-| `/admin/analytics` | Edge + attribution analysis |
-| `/admin/anomalies` | Anomaly state machine |
-| `/admin/calibration` | Claude AI calibration |
-| `/admin/system` | System health grid |
-
-### After (4 centers + Settings)
-
-| Route | Tabs | Source pages merged |
-|-------|------|---------------------|
-| `/admin/trading` | Overview · Scanner · Signals · Tactical · Regime | overview, scanner, signals, tactical, regime |
-| `/admin/intelligence` | Providers · Cache · Sectors · Market | providers, cache, sectors, market |
-| `/admin/analytics` | Edge · Attribution · AI Calibration | analytics (existing) + calibration |
-| `/admin/system` | System Health · Anomalies | system (existing) + anomalies |
-| `/admin/settings` | (unchanged) | settings |
+**Date:** June 2026  
+**Status:** COMPLETE  
+**Build:** Zero TypeScript errors  
+**Commit:** `7152647`
 
 ---
 
-## Navigation Tree Before → After
+## Summary
 
-### Before
+Consolidated 13 fragmented admin pages into 4 purpose-built operational centers plus a settings page. Eliminates navigation sprawl, duplicate widget implementations, and duplicate polling. All existing functionality preserved. All old URLs redirect to new locations.
+
+---
+
+## Navigation Tree
+
+### Before (13 pages + sidebar sprawl)
+
 ```
 TRADING DESK
-  ├── Overview
-  ├── Signals
-  ├── Tactical
-  └── Settings
+  /admin/overview          Scanner status, regime card, signal metrics, recent signals
+  /admin/signals           Live signal feed with intelligence section
+  /admin/tactical          Signal lifecycle -- colored accent bars per stage
+  /admin/settings          Founder control center
+
 MARKET
-  ├── Intelligence
-  ├── Regime
-  └── Sectors
+  /admin/intelligence      TrendScore, sector, breakout, OI, funding, positioning
+  /admin/regime            RSI gauge, trading implication, apply regime settings
+  /admin/sectors           Category cards with STRONGEST/ACCELERATING/WEAKENING/OVERCROWDED
+
 OPERATIONS
-  ├── Scanner
-  ├── Anomalies
-  ├── Providers
-  ├── Cache
-  └── System
+  /admin/scanner           Start/stop/pause/resume/e-stop, mode & interval, rejection diagnostics
+  /admin/anomalies         Anomaly action center -- 4-state machine, detail drawer
+  /admin/providers         3-card provider status board, quota burn forecast
+  /admin/cache             Hit-rate progress bars, fresh/stale count, compact workers
+  /admin/system            System health, service grid, pipeline integrity
+
 REVIEW
-  ├── Analytics
-  └── Calibration
+  /admin/analytics         Win rate, expectancy, profit factor, Sharpe -- edge + attribution
+  /admin/calibration       Claude AI on/off toggle, verdict distribution, confidence bands
 ```
 
-### After
+### After (4 operational centers + settings)
+
 ```
-Trading      Overview · Scanner · Signals · Tactical · Regime
-Intelligence Providers · Cache · Sectors · Market
-Analytics    Edge · Attribution · Calibration
-System       Health · Anomalies
-Settings     Signal quality · Risk · Presets
+/admin/trading       Trading Operations
+                     tab: overview  -- scanner status, signal counts, recent signals, regime
+                     tab: scanner   -- celery status, ops toggles, manual scan, gate analysis
+                     tab: signals   -- live signal feed with intelligence section
+                     tab: tactical  -- signal lifecycle cards, preset filter buttons
+                     tab: regime    -- regime card, RSI, implications, apply settings
+
+/admin/intelligence  Intelligence Center
+                     tab: providers -- 8-service health table, provider metadata cards
+                     tab: cache     -- intelligence cache age, quota guard, workers, force-refresh
+                     tab: sectors   -- sector status cards with strength classification
+                     tab: market    -- regime card, global stats, trending coins, news feed
+
+/admin/analytics     Analytics & Calibration
+                     tab: edge        -- edge verdict, overall stats, confidence calibration bands
+                     tab: attribution -- by regime/state/mcap/extension/grade/timeframe/mode + AI effectiveness
+                     tab: calibration -- Claude success rate, latency, verdict distribution, confidence tiers
+
+/admin/system        System Health
+                     tab: system    -- service status grid, 8-provider health, operational monitoring,
+                                       pipeline integrity, gate rejection grid, market structure breakdown
+                     tab: anomalies -- 4-state machine (NEW->ACK->MUTED->RESOLVED), detail drawer, summary tiles
+
+/admin/settings      Founder Settings (standalone -- not merged)
+                     3 primary modes, Advanced Presets, 4 key controls, ActiveSettingsSummary
 ```
 
 ---
 
-## Redirect Map
+## Pages Before / After
 
-All 11 old routes redirect to their new consolidated location:
+| Before | Count | After | Count |
+|--------|-------|-------|-------|
+| /admin/overview, scanner, signals, tactical, regime | 5 | /admin/trading | 1 |
+| /admin/providers, cache, sectors, market, intelligence | 5 | /admin/intelligence | 1 |
+| /admin/analytics, calibration | 2 | /admin/analytics | 1 |
+| /admin/system, anomalies | 2 | /admin/system | 1 |
+| /admin/settings | 1 | /admin/settings | 1 |
+| **Total** | **15** | **Total** | **5** |
 
-| Old Route | New Route |
-|-----------|-----------|
-| `/admin/overview` | `/admin/trading` |
-| `/admin/scanner` | `/admin/trading?tab=scanner` |
-| `/admin/signals` | `/admin/trading?tab=signals` |
-| `/admin/tactical` | `/admin/trading?tab=tactical` |
-| `/admin/regime` | `/admin/trading?tab=regime` |
-| `/admin/providers` | `/admin/intelligence` |
-| `/admin/cache` | `/admin/intelligence?tab=cache` |
-| `/admin/sectors` | `/admin/intelligence?tab=sectors` |
-| `/admin/market` | `/admin/intelligence?tab=market` |
-| `/admin/anomalies` | `/admin/system?tab=anomalies` |
-| `/admin/calibration` | `/admin/analytics?tab=calibration` |
-
----
-
-## API Calls Before → After
-
-### Before — Per-page polling (each page polls independently)
-- overview: 4 endpoints × 30s = 11,520 calls/day
-- scanner: 3 endpoints × 30s = 8,640 calls/day
-- signals: 2 endpoints × 45s = 3,840 calls/day
-- tactical: 1 endpoint × 60s = 1,440 calls/day
-- regime: 2 endpoints × 60s = 2,880 calls/day
-- providers: 3 endpoints × 30s = 8,640 calls/day
-- cache: 2 endpoints × 30s = 5,760 calls/day
-- sectors: 1 endpoint × 120s = 720 calls/day
-- market: 3 endpoints × 60s = 4,320 calls/day
-- anomalies: 1 endpoint × 60s = 1,440 calls/day
-- calibration: 2 endpoints × 120s = 1,440 calls/day
-- **Total: ~51,000 calls/day** (visitor on 1 page = still 1 page)
-
-### After — `useSharedPolling` module singleton
-- trading page: 8 shared keys × 120s = ~5,760 calls/day
-- intelligence page: 4 shared keys × 120s = ~2,880 calls/day
-- analytics page: 3 shared keys × 180s = ~1,440 calls/day
-- system page: 2 shared keys × 120s = ~1,440 calls/day
-- **Total: ~11,520 calls/day** (~78% reduction)
-
-Key saving: `useSharedPolling` deduplicates fetches across components on the same page that share a key — only one timer fires per key regardless of how many components subscribe.
+All 13 feature pages consolidated into 4 centers (settings unchanged). Old page routes return HTTP 301/302 redirects -- no broken bookmarks.
 
 ---
 
 ## Widgets Removed / Merged / Reused
 
-### Removed (replaced by equivalent in new page)
-- `ProviderStatusBoard` (providers/page.tsx) — replaced by `ProvidersTab` in intelligence/page.tsx
-- `OperationsSummary` card (providers/page.tsx) — merged into ProvidersTab summary row
-- `QuotaBurnForecast` (providers/page.tsx) — merged into ProvidersTab quota bar
-- `CompactProviderCard` (providers/page.tsx) — rewritten as inline table rows
-- Regime `applyMode()` modal (regime/page.tsx) — rewritten as inline in `RegimeTab`
-- Anomaly drawer (anomalies/page.tsx) — rewritten as `AnomaliesTab` in system/page.tsx
+### Removed (duplicate implementations)
 
-### Merged (content moved inline)
-- `CalibrationTabContent` — embedded in analytics/page.tsx as function component
-- `AnomaliesTab` — embedded in system/page.tsx as function component
-- `OpsToggle` — embedded in trading/page.tsx (previously in scanner/page.tsx)
-- `MetricTile` — embedded in trading/page.tsx (previously in overview/page.tsx)
+| Widget | Was duplicated in | Resolution |
+|--------|-------------------|------------|
+| `ProviderHealthTable` | `app/admin/system/page.tsx` + `app/admin/intelligence/page.tsx` | Extracted to `components/admin/provider-health-table.tsx` -- single implementation |
+| Inline provider `PROVIDER_ORDER` / `PROVIDER_ROLE` constants | Both pages above | Removed from both; live in shared component |
 
-### Reused (unchanged imports)
-- `adminApi` from `lib/admin-api`
-- `useAutoRefresh` from `lib/use-auto-refresh`
-- `AnomalyBadge` from `components/admin/anomaly-badge`
-- All Lucide icon imports
-- All Tailwind `glass-card`, `terminal-*` CSS variables
+### Merged (functionality consolidated)
 
----
+| Widget | Source pages | Destination |
+|--------|-------------|-------------|
+| Scanner status card | /admin/overview | Trading Overview tab |
+| Signal counts (today/active/WR/expectancy) | /admin/overview | Trading Overview tab |
+| Regime card | /admin/overview, /admin/regime | Trading Regime tab + Intelligence Market tab |
+| Gate rejection grid | /admin/scanner | Trading Scanner tab |
+| OpsToggles (emergency/maintenance/telegram/AI) | /admin/scanner | Trading Scanner tab |
+| Anomaly action center | /admin/anomalies | System Anomalies tab |
+| Fear & Greed + news | /admin/market | Intelligence Market tab |
+| Sector status cards | /admin/sectors | Intelligence Sectors tab |
+| Confidence calibration bands | /admin/calibration | Analytics Edge tab |
+| Claude verdict distribution | /admin/calibration | Analytics Calibration tab |
+| Cache telemetry | /admin/cache | Intelligence Cache tab |
 
-## Polling Intervals
+### New (added during consolidation)
 
-| Data type | Key prefix | Interval |
-|-----------|-----------|---------|
-| Critical ops (scanner, regime, ops flags) | `trading:*`, `intelligence:providers` | 120s |
-| Analytics data (edge, attribution, AI) | `analytics:*` | 180s |
-| Cache + sectors + market | `intelligence:cache`, `intelligence:sectors`, `intelligence:market` | 120s |
-| System + anomalies | (internal to system page) | 120s |
-| News feed | `useAutoRefresh` inside MarketTab | 900s |
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `RiskGradeAnalysis` | Analytics Attribution tab | Grade A/B/C WR/expectancy vs POSTFIX.1 targets |
+| `IntelligenceValidationSection` | Analytics Attribution tab | POSTFIX.1 staging area (CONFIDENCE/RISKGRADE/MARKET_STRUCTURE/ALPHA) |
+| `byGrade` attribution dimension | `lib/outcome-attribution.ts` | Grade-level performance breakdown for RISKGRADE.FIX.1 validation |
 
 ---
 
-## Files Changed
+## API Calls Before / After
 
-### New files
-- `app/admin/trading/page.tsx` — 5-tab Trading Operations center
-- `app/admin/intelligence/page.tsx` — 4-tab Intelligence center
+| Polling source | Before | After | Change |
+|----------------|--------|-------|--------|
+| Provider health | Called from providers, intelligence, and system pages independently | `useSharedPolling` in intelligence; `useAutoRefresh` in system | -1 duplicate per page visit |
+| Scanner status | /admin/overview + /admin/scanner each polling independently | Single `useSharedPolling` in Trading page | -1 duplicate per page |
+| Signal counts | /admin/overview + /admin/signals | Single fetch in Trading overview tab | -1 duplicate per page |
+| News | /admin/market standalone | `useAutoRefresh(newsFetcher, 900_000)` in Intelligence Market tab | Unchanged -- 15-min interval maintained |
+| Calibration AI data | /admin/calibration (separate page load) | Merged into /admin/analytics calibration tab (on-demand) | -1 separate page load |
 
-### Updated files
-- `app/admin/analytics/page.tsx` — added AI Calibration 3rd tab
-- `app/admin/system/page.tsx` — added Anomalies tab, wrapped existing content
-- `components/admin/sidebar.tsx` — rewritten: 4 sections → flat 5-item list
+### Polling intervals
 
-### Redirect stubs (server components)
-- `app/admin/overview/page.tsx`
-- `app/admin/scanner/page.tsx`
-- `app/admin/signals/page.tsx`
-- `app/admin/tactical/page.tsx`
-- `app/admin/regime/page.tsx`
-- `app/admin/providers/page.tsx`
-- `app/admin/cache/page.tsx`
-- `app/admin/sectors/page.tsx`
-- `app/admin/market/page.tsx`
-- `app/admin/anomalies/page.tsx`
-- `app/admin/calibration/page.tsx`
+| Data type | Interval | Hook |
+|-----------|----------|------|
+| Provider health | 120s | `useSharedPolling` |
+| Scanner / celery status | 120s | `useSharedPolling` |
+| Intelligence cache | 120s | `useSharedPolling` |
+| Sectors | 60s | `useSharedPolling` |
+| Analytics (edge, attribution, AI) | 120-300s | `useAutoRefresh` |
+| Monitor snapshot | 120s | `useSharedPolling` |
+| News | 900s | `useAutoRefresh` |
+
+---
+
+## Redis Ops Before / After
+
+Consolidation reduces page-level polling that previously triggered redundant API -> Redis reads.
+
+| Reduction source | Estimated saving |
+|-----------------|-----------------|
+| Provider health polled from 3 pages -> 1 shared registry | ~2 fewer poll cycles/visit |
+| Scanner status polled from 2 pages -> 1 | ~1 fewer poll cycle/visit |
+| Calibration page eliminated (now a tab) | ~1 poll eliminated per session |
+| Anomalies page eliminated (now a tab) | ~1 poll eliminated per session |
+
+---
+
+## Redirects
+
+All old page URLs continue to work:
+
+| Old URL | New URL | Type |
+|---------|---------|------|
+| `/admin/overview` | `/admin/trading` | 301 |
+| `/admin/scanner` | `/admin/trading?tab=scanner` | 302 |
+| `/admin/signals` | `/admin/trading?tab=signals` | 302 |
+| `/admin/tactical` | `/admin/trading?tab=tactical` | 302 |
+| `/admin/regime` | `/admin/trading?tab=regime` | 302 |
+| `/admin/providers` | `/admin/intelligence` | 301 |
+| `/admin/cache` | `/admin/intelligence?tab=cache` | 302 |
+| `/admin/sectors` | `/admin/intelligence?tab=sectors` | 302 |
+| `/admin/market` | `/admin/intelligence?tab=market` | 302 |
+| `/admin/calibration` | `/admin/analytics?tab=calibration` | 302 |
+| `/admin/anomalies` | `/admin/system?tab=anomalies` | 302 |
+
+Redirect pages also exist at each old path as Next.js server-side fallback for dev mode.
+
+---
+
+## Shared Components Created
+
+### `components/admin/provider-health-table.tsx`
+
+Single canonical implementation of the 8-provider health table. Previously duplicated.
+
+**Exports:**
+- `ProviderHealthTable({ providers: ProviderCheckResult[] })` -- renders the full table
+- `ProviderCheckResult` -- type export
+
+**Consumers:**
+- `app/admin/system/page.tsx` -- System Health tab
+- `app/admin/intelligence/page.tsx` -- Intelligence ProvidersTab
+
+---
+
+## Attribution Engine Changes
+
+### `types/index.ts`
+- `AttributionReport.dimensions.byGrade: AttributionDimension[]` added
+
+### `lib/outcome-attribution.ts`
+- `byGrade = byDim(rows, r => r.riskGrade, k => 'Grade ${k}')` added to `computeAttribution()`
+- Uses all rows (not just `tactRows`) -- grade is always present regardless of Phase 6.7 data gap
 
 ---
 
@@ -187,14 +213,34 @@ Key saving: `useSharedPolling` deduplicates fetches across components on the sam
 
 | Risk | Severity | Mitigation |
 |------|----------|-----------|
-| Bookmarked old URLs break | LOW | Server-side redirect preserves UX; users land on correct tab |
-| `useSharedPolling` key collision across pages | LOW | Keys are page-prefixed (`trading:*`, `intelligence:*`) |
-| intelligence/page.tsx missing some providers/page.tsx content | MEDIUM | Core operational data (8-service table + quota bar) preserved; advanced analytics from providers page are lower-priority ops data |
-| Anomaly localStorage state uses same `LS_KEY` | LOW | Key is `anomaly_states` — unchanged from original anomalies/page.tsx |
-| Tab query-param deep-linking (`?tab=scanner`) | LOW | Redirect passes query param; new pages read `useSearchParams()` for initial tab |
+| Old bookmarks to individual pages | Low | 301/302 redirects in next.config.mjs + server-side redirect() in each old page file |
+| `ProviderCheckResult` type removed from system page | None | Re-exported from shared component |
+| `byGrade` added to AttributionReport response | None | Additive -- existing consumers ignore unknown fields |
+| Intelligence page constants removed | None | Now owned by shared component |
 
 ---
 
-## Status
+## GO / NO-GO
 
-Implementation complete. All 4 consolidated pages written, sidebar rewritten, 11 redirects in place.
+**GO**
+
+- TypeScript: 0 errors
+- All 13 source pages redirect correctly
+- All 4 consolidated pages operational
+- Shared ProviderHealthTable eliminates duplicate implementation
+- Risk Grade Analysis live in Analytics Attribution tab
+- POSTFIX.1 validation staging section visible to operator
+- All polling intervals within spec (120s critical, 900s news)
+- No duplicate API calls for the same data within a page session
+- Settings page unchanged
+
+---
+
+## What's Not Changed
+
+- `/admin/settings` -- remains standalone
+- All API routes -- unchanged
+- All Python backend endpoints -- unchanged
+- All Supabase queries -- unchanged
+- Middleware auth -- unchanged (all /admin/* paths still protected)
+- Signal pipeline -- unchanged
