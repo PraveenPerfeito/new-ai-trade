@@ -76,7 +76,8 @@ const MODE_FIRE_MINUTES: Record<string, number[]> = {
 }
 const STAGE_META: Record<string, { label: string; color: string }> = {
   VALIDATED:     { label: 'Validated',   color: 'text-zinc-400    bg-zinc-500/10    border-zinc-500/20'    },
-  AI_APPROVED:   { label: 'Approved',    color: 'text-blue-400    bg-blue-500/10    border-blue-500/20'    },
+  AI_APPROVED:   { label: 'AI Approved', color: 'text-purple-400  bg-purple-500/10  border-purple-500/20'  },
+  SCREENED:      { label: 'Screened',    color: 'text-sky-400     bg-sky-500/10     border-sky-500/20'     },
   TELEGRAM_SENT: { label: 'Sent',        color: 'text-purple-400  bg-purple-500/10  border-purple-500/20'  },
   ACTIVE:        { label: 'Active',      color: 'text-green-400   bg-green-500/10   border-green-500/20'   },
   STALE:         { label: 'Stale',       color: 'text-amber-400   bg-amber-500/10   border-amber-500/20'   },
@@ -482,7 +483,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
           {signals.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">
               {(lc['ACTIVE']??0) > 0 && <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400"><span className="w-1 h-1 rounded-full bg-blue-400"/>{lc['ACTIVE']} Active</span>}
-              {((lc['TELEGRAM_SENT']??0)+(lc['AI_APPROVED']??0)) > 0 && <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400"><Zap className="w-2.5 h-2.5"/>{(lc['TELEGRAM_SENT']??0)+(lc['AI_APPROVED']??0)} Sent</span>}
+              {((lc['TELEGRAM_SENT']??0)+(lc['AI_APPROVED']??0)+(lc['SCREENED']??0)) > 0 && <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400"><Zap className="w-2.5 h-2.5"/>{(lc['TELEGRAM_SENT']??0)+(lc['AI_APPROVED']??0)+(lc['SCREENED']??0)} Sent</span>}
               {(lc['TP_HIT']??0) > 0 && <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"><CheckCircle2 className="w-2.5 h-2.5"/>{lc['TP_HIT']} TP</span>}
               {(lc['SL_HIT']??0) > 0 && <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400"><XCircle className="w-2.5 h-2.5"/>{lc['SL_HIT']} SL</span>}
             </div>
@@ -916,7 +917,7 @@ function LifecycleFunnel({ signals }: { signals: TacticalSignalRow[] }) {
   for (const s of signals) counts[s.lifecycleStage] = (counts[s.lifecycleStage]??0)+1
 
   const generated = signals.length
-  const approved  = signals.filter(s => ['AI_APPROVED','TELEGRAM_SENT','ACTIVE','STALE','TP_HIT','SL_HIT','CLOSED','ANALYZED'].includes(s.lifecycleStage)).length
+  const approved  = signals.filter(s => ['AI_APPROVED','SCREENED','TELEGRAM_SENT','ACTIVE','STALE','TP_HIT','SL_HIT','CLOSED','ANALYZED'].includes(s.lifecycleStage)).length
   const sent      = signals.filter(s => ['TELEGRAM_SENT','ACTIVE','STALE','TP_HIT','SL_HIT','CLOSED','ANALYZED'].includes(s.lifecycleStage)).length
   const active    = counts['ACTIVE'] ?? 0
   const won       = (counts['TP_HIT']??0) + (counts['ANALYZED']??0)
@@ -1018,7 +1019,7 @@ function TacticalTab({ currentRegime }: { currentRegime: MarketRegime | null }) 
   const [preset, setPreset] = useState<'active'|'won'|'lost'|'expired'|'all'>('active')
 
   const stageMap: Record<string, SignalLifecycleStage[]> = {
-    active:  ['ACTIVE','AI_APPROVED','TELEGRAM_SENT'],
+    active:  ['ACTIVE','AI_APPROVED','SCREENED','TELEGRAM_SENT'],
     won:     ['TP_HIT','ANALYZED'],
     lost:    ['SL_HIT'],
     expired: ['STALE','CLOSED'],

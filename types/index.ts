@@ -611,7 +611,8 @@ export interface QuotaStatus {
  */
 export type SignalLifecycleStage =
   | 'VALIDATED'      // passed all pipeline gates, saved to DB
-  | 'AI_APPROVED'    // Claude AI validated (aiValidated = true)
+  | 'AI_APPROVED'    // Claude AI validated (validationSource = CLAUDE)
+  | 'SCREENED'       // heuristic-validated (validationSource = HEURISTIC / AI disabled)
   | 'TELEGRAM_SENT'  // delivered to Telegram channel
   | 'ACTIVE'         // sent + still within timeframe's useful window
   | 'STALE'          // sent but aged past the useful window

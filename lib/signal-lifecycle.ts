@@ -30,7 +30,9 @@ export function computeLifecycleStage(
     return ageMs < lifetime ? 'ACTIVE' : 'STALE';
   }
 
-  if (signal.aiValidated && signal.validationSource !== 'HEURISTIC') return 'AI_APPROVED';
+  if (signal.aiValidated) {
+    return signal.validationSource === 'HEURISTIC' ? 'SCREENED' : 'AI_APPROVED';
+  }
   return 'VALIDATED';
 }
 
@@ -47,8 +49,9 @@ export interface LifecycleConfig {
 
 export const LIFECYCLE_CONFIG: Record<SignalLifecycleStage, LifecycleConfig> = {
   VALIDATED:     { label: 'Validated',     color: 'text-terminal-muted',  badge: 'text-terminal-muted border-terminal-border bg-transparent',               order: 1 },
-  AI_APPROVED:   { label: 'Approved',      color: 'text-purple-400',      badge: 'text-purple-400 border-purple-500/30 bg-purple-500/5',                    order: 2 },
-  TELEGRAM_SENT: { label: 'Telegram Sent', color: 'text-signal-high',     badge: 'text-signal-high border-signal-high/30 bg-signal-high/5',                 order: 3 },
+  AI_APPROVED:   { label: 'AI Approved',   color: 'text-purple-400',      badge: 'text-purple-400 border-purple-500/30 bg-purple-500/5',                    order: 2 },
+  SCREENED:      { label: 'Screened',      color: 'text-sky-400',         badge: 'text-sky-400 border-sky-500/30 bg-sky-500/5',                             order: 3 },
+  TELEGRAM_SENT: { label: 'Telegram Sent', color: 'text-signal-high',     badge: 'text-signal-high border-signal-high/30 bg-signal-high/5',                 order: 4 },
   ACTIVE:        { label: 'Active',        color: 'text-bull-default',    badge: 'text-bull-default border-bull-default/30 bg-bull-default/5',               order: 4 },
   STALE:         { label: 'Stale',         color: 'text-terminal-muted/60', badge: 'text-terminal-muted border-terminal-border bg-transparent',             order: 5 },
   TP_HIT:        { label: 'TP Hit',        color: 'text-bull-default',    badge: 'text-bull-default border-bull-default/40 bg-bull-default/8 font-bold',     order: 6 },
@@ -61,7 +64,7 @@ export const LIFECYCLE_CONFIG: Record<SignalLifecycleStage, LifecycleConfig> = {
 
 /** Returns true if the stage represents an open / actionable signal. */
 export function isActiveStage(stage: SignalLifecycleStage): boolean {
-  return stage === 'ACTIVE' || stage === 'AI_APPROVED' || stage === 'TELEGRAM_SENT';
+  return stage === 'ACTIVE' || stage === 'AI_APPROVED' || stage === 'SCREENED' || stage === 'TELEGRAM_SENT';
 }
 
 /** Returns true if the signal has reached a terminal outcome. */
