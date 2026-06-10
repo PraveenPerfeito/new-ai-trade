@@ -39,7 +39,7 @@ async function fetchFromGrok(apiKey: string): Promise<GrokNewsItem[]> {
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'grok-2-latest',
+      model: 'grok-3-latest',
       messages: [{
         role:    'user',
         content: `Search for the latest cryptocurrency and crypto market news from the last 6 hours.
@@ -60,7 +60,8 @@ sentiment rules — bullish: positive price/adoption impact; bearish: negative p
   if (!res.ok) {
     const body = await res.text()
     log.error({ status: res.status, body }, 'xai_api_error')
-    throw new Error(`xAI API returned ${res.status}`)
+    // 410 = model deprecated; surface body so caller can diagnose
+    throw new Error(`xAI API ${res.status}: ${body.slice(0, 200)}`)
   }
 
   const json = await res.json() as {
@@ -127,7 +128,7 @@ export async function GET(req: Request) {
     const data: GrokNewsResponse = {
       news,
       fetchedAt: new Date().toISOString(),
-      model:     'grok-2-latest',
+      model:     'grok-3-latest',
     }
 
     _cache = { data, fetchedAt: Date.now() }

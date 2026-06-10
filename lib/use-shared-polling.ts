@@ -69,7 +69,12 @@ function _startTimer(key: string): void {
   const e = _entries.get(key)
   if (!e || e.timer !== null) return
   _run(key)
-  e.timer = setInterval(() => _run(key), e.intervalMs)
+  // intervalMs === 0 → fetch once on mount, no recurring timer
+  if (e.intervalMs > 0) {
+    e.timer = setInterval(() => _run(key), e.intervalMs)
+  } else {
+    e.timer = -1 as unknown as ReturnType<typeof setInterval>
+  }
 }
 
 function _release(key: string, subscriber: () => void): void {
@@ -77,7 +82,8 @@ function _release(key: string, subscriber: () => void): void {
   if (!e) return
   e.subscribers.delete(subscriber)
   if (e.subscribers.size === 0) {
-    if (e.timer !== null) { clearInterval(e.timer); e.timer = null }
+    if (e.timer !== null && e.timer as unknown as number !== -1) { clearInterval(e.timer) }
+    e.timer = null
     _entries.delete(key)
   }
 }
