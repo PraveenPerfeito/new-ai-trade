@@ -29,7 +29,7 @@ interface GrokNewsResponse {
 let _cache: { data: GrokNewsResponse; fetchedAt: number } | null = null
 const CACHE_TTL_MS = 5 * 60 * 1000  // 5 min
 
-// ── xAI fetch helper ──────────────────────────────────────────────────────────
+// ── xAI Agent Tools API fetch ─────────────────────────────────────────────────
 
 async function fetchFromGrok(apiKey: string): Promise<GrokNewsItem[]> {
   const res = await fetch('https://api.x.ai/v1/chat/completions', {
@@ -39,7 +39,10 @@ async function fetchFromGrok(apiKey: string): Promise<GrokNewsItem[]> {
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'grok-3-latest',
+      model:    'grok-3-latest',
+      // Agent Tools API — replaces deprecated search_parameters
+      tools: [{ type: 'web_search' }],
+      tool_choice: 'auto',
       messages: [{
         role:    'user',
         content: `Search for the latest cryptocurrency and crypto market news from the last 6 hours.
@@ -49,10 +52,6 @@ Find 12-15 real articles from reputable sources (CoinDesk, The Block, Reuters, B
 Focus on: BTC/ETH price action, regulation, exchange news, major protocol updates, macro impact on crypto.
 sentiment rules — bullish: positive price/adoption impact; bearish: negative price/regulatory risk; neutral: informational/mixed.`,
       }],
-      search_parameters: {
-        mode:    'on',
-        sources: [{ type: 'news' }, { type: 'web' }],
-      },
     }),
     signal: AbortSignal.timeout(25_000),
   })
@@ -60,31 +59,45 @@ sentiment rules — bullish: positive price/adoption impact; bearish: negative p
   if (!res.ok) {
     const body = await res.text()
     log.error({ status: res.status, body }, 'xai_api_error')
-    // 410 = model deprecated; surface body so caller can diagnose
     throw new Error(`xAI API ${res.status}: ${body.slice(0, 200)}`)
   }
 
   const json = await res.json() as {
     choices?: Array<{
       message?: {
-        content?:   string
+        content?:    string
+        tool_calls?: Array<{
+          id:       string
+          type:     string
+          function: { name: string; arguments: string }
+        }>
         citations?: Array<{ url: string; title: string; excerpt?: string }>
       }
+      finish_reason?: string
     }>
   }
 
-  const content   = json.choices?.[0]?.message?.content ?? ''
-  const citations = json.choices?.[0]?.message?.citations ?? []
+  const message   = json.choices?.[0]?.message
+  const content   = message?.content ?? ''
+  const citations = message?.citations ?? []
+
+  // If the model returned tool_calls but no content yet, it means the search
+  // step needs a follow-up. For simplicity, fall through to citations fallback.
+  if (message?.tool_calls?.length && !content) {
+    log.warn({ toolCalls: message.tool_calls.length }, 'grok_tool_calls_no_content')
+  }
 
   // Primary: parse JSON from content
-  try {
-    const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    const parsed  = JSON.parse(cleaned) as { news?: GrokNewsItem[] }
-    if (Array.isArray(parsed.news) && parsed.news.length > 0) {
-      return parsed.news.slice(0, 15)
+  if (content) {
+    try {
+      const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      const parsed  = JSON.parse(cleaned) as { news?: GrokNewsItem[] }
+      if (Array.isArray(parsed.news) && parsed.news.length > 0) {
+        return parsed.news.slice(0, 15)
+      }
+    } catch {
+      log.warn({ contentLength: content.length }, 'grok_json_parse_failed_trying_citations')
     }
-  } catch {
-    log.warn({ contentLength: content.length }, 'grok_json_parse_failed_trying_citations')
   }
 
   // Fallback: build items from citations
@@ -110,7 +123,7 @@ export async function GET(req: Request) {
 
   if (!apiKey) {
     return NextResponse.json(
-      { success: false, error: 'XAI_API_KEY not configured — add it to Railway/Vercel env vars' },
+      { success: false, error: 'XAI_API_KEY not configured — add it to Vercel env vars' },
       { status: 503 },
     )
   }

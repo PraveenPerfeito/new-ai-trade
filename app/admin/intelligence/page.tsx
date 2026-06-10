@@ -987,7 +987,7 @@ export default function IntelligenceCenterPage() {
     fetch('/api/news').then(r => r.json()).then(j => j.success ? j : null).catch(() => null), [])
 
   const { data: providers, loading: provLoading } = useSharedPolling<ProviderCheckResult[]>('intelligence:providers', providerFetcher, 120_000)
-  const { data: cacheData, refresh: refreshCache }   = useSharedPolling<IntelligenceTelemetry | null>('intelligence:cache',   cacheFetcher,   0)
+  const { data: cacheData, refresh: refreshCache }   = useSharedPolling<IntelligenceTelemetry | null>('intelligence:cache',   cacheFetcher,   120_000)
   const { data: sectors,   refresh: refreshSectors } = useSharedPolling<SectorsResponse | null>       ('intelligence:sectors', sectorsFetcher,  60_000)
   const { data: market,    refresh: refreshMarket  } = useSharedPolling<IntelligenceData | null>       ('intelligence:market',  marketFetcher,  120_000)
   const { data: news    }                            = useAutoRefresh<NewsSnapshot | null>(newsFetcher, 900_000)
