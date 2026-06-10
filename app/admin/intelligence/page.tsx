@@ -262,13 +262,6 @@ function ProvidersTab({ providers, loading }: { providers: ProviderCheckResult[]
 
 // ── Cache tab ────────────────────────────────────────────────────────────────
 
-const INTEL_SECTIONS = [
-  { key: 'listings',   label: 'Market Snapshot',      ttlMin: 5,  desc: 'Top 200 listings, breadth, movers' },
-  { key: 'global',     label: 'Global Metrics',       ttlMin: 5,  desc: 'Market cap, volume, dominance'      },
-  { key: 'categories', label: 'Sector Intelligence',  ttlMin: 60, desc: 'CMC category states + signals'      },
-  { key: 'trending',   label: 'Trending Engine',      ttlMin: 5,  desc: 'CMC trending coins, 5-source fusion' },
-]
-
 function CacheTab({ data, onForceRefresh, onRefreshGroup, onRefreshAll, refreshing, refreshingGroup, error }: {
   data: IntelligenceTelemetry | null
   onForceRefresh: () => void; onRefreshGroup: (g: string) => void; onRefreshAll: () => void
@@ -289,29 +282,6 @@ function CacheTab({ data, onForceRefresh, onRefreshGroup, onRefreshAll, refreshi
         </button>
       </div>
 
-      {/* Intel sections quick-refresh */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-        {INTEL_SECTIONS.map(s => {
-          const group = data?.groups.find(g => g.name === s.key)
-          const stale = group ? group.isStale : false
-          const age   = group ? formatAge(group.ageSeconds) : '—'
-          return (
-            <div key={s.key} className={`bg-zinc-900 border rounded-xl px-3 py-2.5 ${stale ? 'border-orange-500/25' : 'border-zinc-800'}`}>
-              <div className="flex items-start justify-between gap-1 mb-1">
-                <p className="text-[10px] text-zinc-300 font-medium leading-tight">{s.label}</p>
-                <span className={`text-[8px] font-mono font-bold px-1 py-0.5 rounded shrink-0 ${stale ? 'text-orange-400 bg-orange-900/30' : 'text-emerald-400 bg-emerald-900/20'}`}>
-                  {stale ? 'STALE' : 'FRESH'}
-                </span>
-              </div>
-              <p className="text-[9px] text-zinc-600 mb-2">{group ? age : `every ${s.ttlMin}m`}</p>
-              <button onClick={() => { onRefreshGroup(s.key); onRefreshAll() }} disabled={refreshingGroup === s.key || refreshing}
-                className="w-full flex items-center justify-center gap-1 px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-[9px] text-zinc-400 transition-colors font-mono">
-                <RefreshCw className={`w-2.5 h-2.5 ${refreshingGroup === s.key ? 'animate-spin' : ''}`}/>Refresh
-              </button>
-            </div>
-          )
-        })}
-      </div>
 
       {error && <div className="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 shrink-0"/>{error}</div>}
       {!data && !error && <div className="flex items-center justify-center h-32 text-zinc-500 text-sm"><RefreshCw className="w-4 h-4 animate-spin mr-2"/>Loading telemetry…</div>}
