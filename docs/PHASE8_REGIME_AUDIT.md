@@ -6,6 +6,28 @@
 
 ---
 
+> ### ⚠ IMPLEMENTATION STATUS — Updated 2026-06-10
+>
+> **Phase 8.1B** implemented Option B as described: `get_btc_regime()` in `market_fetcher.py`, regime passed through `orchestrator.py` → `scan_coin()` → `signal_pipeline.py`, `market_regime` persisted to `signals` + `signal_outcomes`.
+>
+> **Gate logic from Step 3 was implemented as a soft gate** (+10 confidence required for contra-regime signals, not hard block). This is the current BULL/BEAR/EUPHORIA/CAPITULATION gate behavior.
+>
+> **ALPHA.TRUTH.1 subsequently added a second, harder gate** (`signal_pipeline.py:778`):
+> ```python
+> # NULL regime hard gate — N=677, WR=14.9%, Exp=−0.543R
+> if not btc_regime:
+>     return None
+> ```
+> Signals where `btc_regime` is falsy/empty are **rejected outright** — not penalized, not passed to AI. This is in addition to (not instead of) the soft contra-regime gate. The `get_btc_regime()` fallback to `"SIDEWAYS"` when Binance fails means a Binance outage still allows signals through (safe default preserved).
+>
+> **Current gate sequence in `signal_pipeline.py`:**
+> 1. NULL regime → hard reject (ALPHA.TRUTH.1)
+> 2. Contra-regime → +10 confidence required (Phase 8.1B soft gate)
+
+---
+
+---
+
 ## Problem
 
 The production Python scanner (Railway Celery) has no BTC macro regime awareness.  

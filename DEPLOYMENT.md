@@ -31,7 +31,7 @@ Browser
 | **Railway** | FastAPI + Celery worker | Separate services from same Dockerfile |
 | **Supabase** | Postgres + Auth | Use Transaction Pooler URL (port 6543) for Railway |
 | **Upstash** | Redis (`rediss://`) | Use Singapore region if Railway is Singapore |
-| **Anthropic** | Claude Haiku AI | Toggle on/off from Admin → Calibration to save credits |
+| **Anthropic** | Claude Haiku AI | Toggle on/off from Admin → Analytics → Calibration tab to save credits |
 | **CoinMarketCap** | 200 coins per scan | Startup Plan: 10,000 credits/month |
 
 ---
@@ -54,7 +54,17 @@ database/backtest-schema.sql
 database/analytics-schema.sql
 database/admin-auth-migration.sql
 database/experiments-migration.sql
+database/settings-migration.sql
+database/settings-groups-migration.sql
+database/edge-validation-migration.sql
+database/phase-6.7-attribution-migration.sql
+database/phase-7-4a-intelligence-migration.sql
+database/phase-7-4a-6-3-migration.sql
+database/phase-7-4a-7-2-migration.sql
+database/validation-source-migration.sql
 ```
+
+> Run them in the order listed. Each migration is idempotent (`IF NOT EXISTS` / `IF NOT EXISTS`), so re-running is safe.
 
 ### 1c. Create admin user
 
@@ -100,7 +110,7 @@ This single URL is used by **all services** (Vercel, Railway API, Railway Worker
 3. Set a spend limit under **Billing → Spend Limits** (e.g. $20/month)
 4. To get 50 req/min (vs free 5 req/min): **add payment and spend $5** → auto-upgrades to Tier 1
 
-> You can toggle Claude on/off from **Admin → Calibration** without redeploying.
+> You can toggle Claude on/off from **Admin → Analytics → Calibration tab** without redeploying.
 > When off, heuristic scoring is used — zero API credits consumed.
 
 ---
@@ -161,7 +171,7 @@ REDIS_URL=rediss://default:<password>@<host>.upstash.io:6379
 ADMIN_SECRET=<run: openssl rand -hex 32>
 ADMIN_EMAILS=your@email.com
 
-# AI (toggleable from Admin → Calibration)
+# AI (toggleable from Admin → Analytics → Calibration tab without redeploying)
 ANTHROPIC_API_KEY=sk-ant-...
 
 # Market data
@@ -290,10 +300,10 @@ curl -X POST https://your-app.vercel.app/api/scanner/run \
 | Next.js logs | Vercel → project → Deployments → Functions |
 | Redis usage | Upstash → database → Metrics |
 | DB tables | Supabase → Table Editor → `signals` |
-| Admin dashboard | `/admin/overview` |
-| Scanner control | `/admin/scanner` |
-| AI toggle | `/admin/calibration` |
-| Signal feed | `/admin/signals` |
+| Admin dashboard | `/admin/trading` |
+| Scanner control | `/admin/trading?tab=scanner` |
+| AI toggle | `/admin/analytics?tab=calibration` |
+| Signal feed | `/admin/trading?tab=signals` |
 
 ---
 

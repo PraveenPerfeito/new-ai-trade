@@ -1,4 +1,4 @@
 # Deployment Guide
 
-> **The full deployment guide has moved to the project root.**
-> See [DEPLOYMENT.md](../DEPLOYMENT.md) for the complete Vercel + Render + Upstash + Supabase + Anthropic guide.
+> **The full deployment guide is at the project root.**
+> See [DEPLOYMENT.md](../DEPLOYMENT.md) for the complete Vercel + Railway + Upstash + Supabase + Anthropic guide.

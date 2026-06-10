@@ -7,6 +7,24 @@
 
 ---
 
+> ### ⚠ IMPLEMENTATION STATUS — Updated 2026-06-10
+>
+> **RISKGRADE.FIX.1** (commit `1ad5ef2`) was deployed as described in Section G below — futures penalty `5.0 → 2.0`, breakout quality bonus, regime quality adjustment.
+>
+> **Grade C > A persisted** after FIX.1. Root cause: Grade C is 98.9% futures + 72.5% confirmed breakout — a genuinely superior cohort, not a penalty artifact. The +2 penalty was still distorting grading without improving outcomes.
+>
+> **ALPHA.TRUTH.1** (commit `11a3133`) subsequently completed the fix:
+> - **Futures risk penalty → 0.0** (`risk.py:317`) — removed entirely. `futures_penalty = 0.0`.
+> - **NULL regime hard gate** (`signal_pipeline.py:778`) — `if not btc_regime: return None`. N=677 NULL-regime signals had WR=14.9%, Exp=−0.543R; prior soft gate (`regime_adj=15`) was bypassed by intelligence boosts.
+> - **OI_NEUTRAL +6 boost restored** — CONF.FIX.1 had wrongly removed it; N=38, WR=76.3%, Exp=+1.776R.
+> - **Spot min_confidence raised 80 → 85** — 80-85 band was −0.09R expectancy.
+>
+> **POSTFIX.1 targets in Section G are void** — the grade distribution targets assumed futures_penalty=2.0. With penalty=0.0 and NULL hard gate, the calibration baseline has shifted. A new 7-day POSTFIX.2 measurement should be taken from the ALPHA.TRUTH.1 deploy date.
+
+---
+
+---
+
 ## Section A — Grade Distribution
 
 | Grade | n | Wins | Losses | WR% | Avg Win RR | Avg Loss RR | **Expectancy** | Avg Planned RR | Avg Quality | Avg Risk | Avg Conf |
