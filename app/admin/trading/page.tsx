@@ -534,7 +534,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
                     <span className="font-semibold text-sm text-white w-16 shrink-0">{sig.symbol}</span>
                     <span className={`text-xs font-semibold w-8 shrink-0 ${sig.type==='BUY'?'text-green-400':'text-red-400'}`}>{sig.type}</span>
                     {sig.riskGrade && <GradeBadge grade={sig.riskGrade} />}
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>{(sig.lifecycleStage??'').replace(/_/g,' ')}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>{STAGE_META[sig.lifecycleStage]?.label ?? (sig.lifecycleStage??'').replace(/_/g,' ')}</span>
                     <div className="ml-auto flex items-center gap-3">
                       <RegimeAlignDot alignment={alignment} />
                       <ConfBar confidence={sig.confidence} />
@@ -857,7 +857,7 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
                 <span className={`text-xs font-semibold w-8 shrink-0 ${isBuy?'text-green-400':'text-red-400'}`}>{sig.type}</span>
                 {sig.riskGrade && <GradeBadge grade={sig.riskGrade} />}
                 <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>
-                  {(sig.lifecycleStage??'').replace(/_/g,' ')}
+                  {STAGE_META[sig.lifecycleStage]?.label ?? (sig.lifecycleStage??'').replace(/_/g,' ')}
                 </span>
                 {sig.scannerMode && (
                   <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 hidden sm:inline ${MODE_COLORS[sig.scannerMode]??'text-zinc-400 border-zinc-600'}`}>
