@@ -41,7 +41,7 @@ async function fetchFromGrok(apiKey: string): Promise<GrokNewsItem[]> {
     body: JSON.stringify({
       model:    'grok-3-latest',
       // Agent Tools API — replaces deprecated search_parameters
-      tools: [{ type: 'web_search' }],
+      tools: [{ type: 'live_search' }],
       tool_choice: 'auto',
       messages: [{
         role:    'user',
