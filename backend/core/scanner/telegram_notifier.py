@@ -278,10 +278,14 @@ async def send_signal_alert(signal: Signal) -> bool:
     _regime_icon = _regime_icons.get(_regime, "⚪")
     _regime_disp = _regime.replace("_", " ")
 
+    # Validation source badge
+    _vsource   = (getattr(signal, "validation_source", None) or "HEURISTIC").upper()
+    _val_label = "🤖 <b>AI Approved</b>" if _vsource == "CLAUDE" else "🔍 <b>Screened</b>"
+
     lines = [
         f"<b>{direction} — {signal.symbol}/USDT</b>",
         f"Mode: <b>{mode.upper()}</b>  |  Confidence: <b>{signal.confidence}% {conf_label}</b>",
-        f"Grade: {grade_icon} <b>{signal.risk_grade.value}</b>  |  R:R: <b>1:{signal.rr_ratio:.1f}</b>",
+        f"Grade: {grade_icon} <b>{signal.risk_grade.value}</b>  |  R:R: <b>1:{signal.rr_ratio:.1f}</b>  |  {_val_label}",
         f"Regime: {_regime_icon} <b>{_regime_disp}</b>",
         "",
         "📊 <b>Trade Levels</b>",
@@ -345,9 +349,10 @@ async def send_signal_alert(signal: Signal) -> bool:
         f"RSI: {ind.rsi:.0f}  |  Vol: {ind.volume_spike:.1f}×  |  EMA200: {'above ✅' if ind.current_price > ind.ema200 > 0 else 'below ⚠️'}",
     ]
 
-    # AI summary
+    # AI / heuristic summary
     if signal.ai_explainability and signal.ai_explainability.summary:
-        lines += ["", f"🤖 <i>{signal.ai_explainability.summary}</i>"]
+        _sum_icon = "🤖" if _vsource == "CLAUDE" else "🔍"
+        lines += ["", f"{_sum_icon} <i>{signal.ai_explainability.summary}</i>"]
 
     # Setup description
     if signal.setup_description:
