@@ -545,7 +545,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
                   {(sig.entryPrice > 0 || sig.targetPrice > 0 || sig.stopLoss > 0) && (
                     <div className="flex items-center gap-4 mt-1 flex-wrap">
                       {sig.entryPrice  > 0 && <span className="text-[10px] text-zinc-600">Entry <span className="text-zinc-300 font-mono">${fmtPx(sig.entryPrice)}</span></span>}
-                      {sig.targetPrice > 0 && <span className="text-[10px] text-zinc-600">TP <span className={`font-mono ${sig.type==='BUY'?'text-emerald-400':'text-red-400'}`}>${fmtPx(sig.targetPrice)}</span></span>}
+                      {sig.targetPrice > 0 && <span className="text-[10px] text-zinc-600">TP <span className="text-emerald-400 font-mono">${fmtPx(sig.targetPrice)}</span></span>}
                       {sig.stopLoss    > 0 && <span className="text-[10px] text-zinc-600">SL <span className="text-red-400 font-mono">${fmtPx(sig.stopLoss)}</span></span>}
                     </div>
                   )}
@@ -876,7 +876,7 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
               {(sig.entryPrice > 0 || sig.targetPrice > 0 || sig.stopLoss > 0) && (
                 <div className="px-4 pb-2.5 flex items-center gap-4 flex-wrap">
                   {sig.entryPrice  > 0 && <span className="text-[10px] text-zinc-600">Entry <span className="text-zinc-300 font-mono">${fmtPx(sig.entryPrice)}</span></span>}
-                  {sig.targetPrice > 0 && <span className="text-[10px] text-zinc-600">TP <span className={`font-mono ${isBuy?'text-emerald-400':'text-red-400'}`}>${fmtPx(sig.targetPrice)}</span></span>}
+                  {sig.targetPrice > 0 && <span className="text-[10px] text-zinc-600">TP <span className="text-emerald-400 font-mono">${fmtPx(sig.targetPrice)}</span></span>}
                   {sig.stopLoss    > 0 && <span className="text-[10px] text-zinc-600">SL <span className="text-red-400 font-mono">${fmtPx(sig.stopLoss)}</span></span>}
                 </div>
               )}

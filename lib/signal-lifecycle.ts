@@ -30,7 +30,7 @@ export function computeLifecycleStage(
     return ageMs < lifetime ? 'ACTIVE' : 'STALE';
   }
 
-  if (signal.aiValidated) return 'AI_APPROVED';
+  if (signal.aiValidated && signal.validationSource !== 'HEURISTIC') return 'AI_APPROVED';
   return 'VALIDATED';
 }
 
