@@ -20,17 +20,12 @@ export async function GET() {
     const since24h = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
     const since7d  = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
-    const [todayRes, activeRes, outcomesRes] = await Promise.all([
+    const [todayRes, sig7dRes, outcomesRes] = await Promise.all([
       // Signals generated in the last 24 hours
       admin.from('signals').select('id', { count: 'exact', head: true }).gte('created_at', since24h),
 
-      // Active open signals — not expired, not timed-out
-      // We count signals that either have no outcome row yet, or have outcome=PENDING,
-      // and were created within the last 7 days (older unresolved = stale, not "active")
-      admin.from('signals')
-        .select('id', { count: 'exact', head: true })
-        .gte('created_at', since7d)
-        .not('id', 'in', `(select signal_id from signal_outcomes where outcome != 'PENDING')`),
+      // All signal IDs from the last 7 days (to compute active count)
+      admin.from('signals').select('id').gte('created_at', since7d),
 
       // Win rate + expectancy from resolved outcomes (7d)
       admin.from('signal_outcomes')
@@ -39,8 +34,20 @@ export async function GET() {
         .in('outcome', ['TP_HIT', 'SL_HIT']),
     ])
 
-    const signalsToday  = todayRes.count ?? 0
-    const activeSignals = activeRes.count ?? 0
+    const signalsToday = todayRes.count ?? 0
+    const sig7dIds = (sig7dRes.data ?? []).map((s: { id: string }) => s.id).filter(Boolean)
+
+    // Active = signals from last 7d that have no resolved outcome
+    // PostgREST doesn't support subqueries in filters, so we do a second query
+    let activeSignals = sig7dIds.length
+    if (sig7dIds.length > 0) {
+      const { count: resolvedCount } = await admin
+        .from('signal_outcomes')
+        .select('signal_id', { count: 'exact', head: true })
+        .in('signal_id', sig7dIds)
+        .neq('outcome', 'PENDING')
+      activeSignals = sig7dIds.length - (resolvedCount ?? 0)
+    }
 
     let winRate7d    = 0
     let expectancy7d = 0
