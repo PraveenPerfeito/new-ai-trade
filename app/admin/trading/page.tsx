@@ -296,7 +296,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
                 <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>{sig.lifecycleStage.replace(/_/g,' ')}</span>
                 <div className="ml-auto flex items-center gap-4">
                   <span className="text-xs font-mono text-zinc-300 hidden sm:block">{sig.confidence}%</span>
-                  <span className="text-xs font-mono text-zinc-500 hidden sm:block">{sig.rrRatio.toFixed(1)}:1</span>
+                  <span className="text-xs font-mono text-zinc-500 hidden sm:block">{sig.rrRatio?.toFixed(1) ?? '—'}:1</span>
                   <span className="text-[11px] text-zinc-600 tabular-nums">{sig.createdAt?timeAgo(String(sig.createdAt)):'—'}</span>
                 </div>
               </div>
