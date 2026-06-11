@@ -778,7 +778,11 @@ function timeAgo(iso: string): string {
   } catch { return '' }
 }
 
+const NEWS_PAGE_SIZE = 8
+
 function NewsTab({ data, loading }: { data: NewsSnapshot | null; loading: boolean }) {
+  const [page, setPage] = useState(0)
+
   if (loading && !data) {
     return (
       <div className="flex items-center justify-center h-40 gap-3 text-zinc-500 text-sm">
@@ -789,12 +793,14 @@ function NewsTab({ data, loading }: { data: NewsSnapshot | null; loading: boolea
   }
   if (!data) return null
 
-  // Top coins by total mentions, sorted by |net| then total
   const coinEntries = Object.entries(data.coinSentiment ?? {})
     .map(([coin, s]) => ({ coin, ...s, total: s.bullish + s.bearish }))
     .filter(e => e.total > 0)
     .sort((a, b) => Math.abs(b.net) - Math.abs(a.net) || b.total - a.total)
     .slice(0, 12)
+
+  const totalPages = Math.ceil(data.headlines.length / NEWS_PAGE_SIZE)
+  const pageItems  = data.headlines.slice(page * NEWS_PAGE_SIZE, (page + 1) * NEWS_PAGE_SIZE)
 
   return (
     <div className="space-y-4 max-w-5xl">
@@ -835,7 +841,7 @@ function NewsTab({ data, loading }: { data: NewsSnapshot | null; loading: boolea
                   'bg-zinc-800/60 border-zinc-700 text-zinc-400'
                 }`}>
                   <span className="font-bold">{coin}</span>
-                  <span className="text-[9px] opacity-70">
+                  <span className="text-[9px] opacity-70 ml-0.5">
                     {bullish > 0 && <span className="text-emerald-400">▲{bullish}</span>}
                     {bullish > 0 && bearish > 0 && ' '}
                     {bearish > 0 && <span className="text-red-400">▼{bearish}</span>}
@@ -850,28 +856,59 @@ function NewsTab({ data, loading }: { data: NewsSnapshot | null; loading: boolea
 
       {/* Article feed */}
       {data.headlines.length > 0 ? (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl divide-y divide-zinc-800/60">
-          {data.headlines.map((item, i) => (
-            <a key={i} href={item.url} target="_blank" rel="noopener noreferrer"
-              className="flex items-start gap-3 px-4 py-3 hover:bg-zinc-800/30 transition-colors group">
-              <span className={`text-[9px] px-1.5 py-0.5 rounded border shrink-0 mt-0.5 font-bold ${SENT_STYLE[item.sentiment ?? 'neutral']}`}>
-                {item.sentiment === 'bullish' ? 'B+' : item.sentiment === 'bearish' ? 'B−' : 'N'}
+        <>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl divide-y divide-zinc-800/60">
+            {pageItems.map((item, i) => (
+              <a key={i} href={item.url} target="_blank" rel="noopener noreferrer"
+                className="flex items-start gap-3 px-4 py-3 hover:bg-zinc-800/30 transition-colors group">
+                <span className={`text-[9px] px-1.5 py-0.5 rounded border shrink-0 mt-0.5 font-bold ${SENT_STYLE[item.sentiment ?? 'neutral']}`}>
+                  {item.sentiment === 'bullish' ? 'B+' : item.sentiment === 'bearish' ? 'B−' : 'N'}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-zinc-100 leading-snug group-hover:text-white transition-colors line-clamp-2">{item.title}</p>
+                  {item.coins && item.coins.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {item.coins.slice(0, 4).map(c => (
+                        <span key={c} className="text-[9px] px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-400 font-mono">{c}</span>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-[9px] text-zinc-600 mt-1 font-mono">{item.source} · {timeAgo(item.publishedAt)}</p>
+                </div>
+                <ArrowUpRight className="w-3.5 h-3.5 text-zinc-700 group-hover:text-zinc-400 shrink-0 mt-0.5 transition-colors"/>
+              </a>
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[10px] text-zinc-600 font-mono">
+                {page * NEWS_PAGE_SIZE + 1}–{Math.min((page + 1) * NEWS_PAGE_SIZE, data.headlines.length)} of {data.headlines.length}
               </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-zinc-100 leading-snug group-hover:text-white transition-colors line-clamp-2">{item.title}</p>
-                {item.coins && item.coins.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {item.coins.slice(0, 4).map(c => (
-                      <span key={c} className="text-[9px] px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-400 font-mono">{c}</span>
-                    ))}
-                  </div>
-                )}
-                <p className="text-[9px] text-zinc-600 mt-1 font-mono">{item.source} · {timeAgo(item.publishedAt)}</p>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium border border-zinc-700 bg-zinc-800/60 text-zinc-300 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                  ← Prev
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => (
+                  <button key={i} onClick={() => setPage(i)}
+                    className={`w-7 h-7 rounded-lg text-xs font-mono font-medium transition-colors ${
+                      i === page
+                        ? 'bg-violet-600 text-white border border-violet-500'
+                        : 'border border-zinc-700 bg-zinc-800/60 text-zinc-400 hover:bg-zinc-700'
+                    }`}>
+                    {i + 1}
+                  </button>
+                ))}
+                <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium border border-zinc-700 bg-zinc-800/60 text-zinc-300 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                  Next →
+                </button>
               </div>
-              <ArrowUpRight className="w-3.5 h-3.5 text-zinc-700 group-hover:text-zinc-400 shrink-0 mt-0.5 transition-colors"/>
-            </a>
-          ))}
-        </div>
+            </div>
+          )}
+        </>
       ) : (
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-5 py-8 text-xs text-zinc-500 text-center">
           No headlines available — refreshes every 15 minutes.
