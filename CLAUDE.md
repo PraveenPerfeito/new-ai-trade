@@ -58,6 +58,8 @@ AI-powered crypto trading signal scanner (public brand: **SignalEdge AI**) built
 42. **SCREENED lifecycle stage** — `computeLifecycleStage()` in `lib/signal-lifecycle.ts` returns `SCREENED` (sky-400) when `signal.validationSource === 'HEURISTIC'`, and `AI_APPROVED` (purple) only for Claude-validated signals. Fixes false "AI Approved" badge when AI toggle is disabled. `STAGE_META` + `STAGE_TIPS` in `app/admin/trading/page.tsx` define labels/colors/hover tooltips for all 10 stages. Telegram alerts show "🤖 AI Approved" vs "🔍 Screened" on the Grade line based on `validation_source`. `isActiveStage()` includes SCREENED.
 43. **INTELLIGENCE.CENTER.1 — Intelligence Center redesign (June 2026)** — All 4 tabs (+ new News tab) overhauled: **Providers**: 4 summary tiles (services up, avg latency, CMC cache, Celery worker) + ProviderHealthTable + provider stack cards with latency. **Cache**: 4 quick-refresh cards per intelligence source (Market Snapshot/Global Metrics/Sector Intelligence/Trending Engine) each with FRESH/STALE + age + individual Refresh; Refresh All Sources propagates to sectors + market polling hooks; hit-rate mini bars on groups. **Sectors**: up to 8 coins per category, mini price bar, volume, stacked distribution bar. **Market**: restructured into 5 sections — BTC Regime, Global Metrics, Market Breadth + Top Movers, Trending Assets table, News Sentiment. **News** (new 5th tab): Grok live search via `/api/news/grok`; auto-fetches on tab open; bullish/bearish/neutral summary tiles; article feed with sentiment badges + source + time-ago. See decision #44.
 44. **Grok live news — `/api/news/grok`** — Calls xAI `grok-2-latest` with `search_parameters.mode="on"` + `sources=[news,web]` for real-time crypto headlines. Returns 12–15 structured articles (title, url, source, publishedAt, sentiment, summary). **No Redis** — 5-min module-level in-process cache only (resets on Vercel cold start). Force-bypass via `?force=1`. Falls back to `citations[]` array if JSON parse of content fails. Requires `XAI_API_KEY` env var in Vercel (not Railway — route is Next.js only). Without key returns 503 with clear message.
+45. **SIGNAL.QUALITY.1 — detect_setup() enhancements (June 2026, commit `3f36d65`)** — 4 improvements to setup scoring in `signal_pipeline.py`: (1) **Structure-aware stops** — `_find_structure_stop()` anchors stop to swing low/high of the 11 confirmed candles preceding entry + 0.15×ATR buffer; accepted when sl_dist is 0.4–2.5×ATR, otherwise falls back to flat 1×ATR stop. `trade_levels()` now accepts `candles` param; target = `price ± risk × target_mult` so RR = target_mult exactly regardless of stop method. (2) **ADX scoring** — `adx: float = 0.0` param added to `detect_setup()`; ADX ≥40→+12, ≥30→+8, 0<adx<18→-8; `adx=structure.adx` passed at scan_coin() Step 7. (3) **Volume spike gradient** — 5-tier gradient replaces cliff at 1.5×: ≥2.5×(+15), ≥1.8×(+12), ≥1.5×(+10), ≥1.2×(+5); weak volume <0.7×(-15), <0.8×(-10), <1.0×(-5). (4) **RSI pullback zones** — BUY RSI 42–50→+8, SELL RSI 50–58→+8; rewards optimal pullback entries that previously scored 0. Admin: `fmtDistPct()` helper, upgraded `IntelligencePanel` with quality/risk bars + TP%/SL% distances, regime implication text on regime card.
+46. **SIGNAL.QUALITY.2 — Cross-timeframe confirmation (June 2026, commit `638452e`)** — 3 further improvements to `detect_setup()`: (1) **4h MACD histogram alignment** — `ind4h.macd.histogram` direction matching signal_type→+8; diverging→-6 (cross-TF MACD check was entirely absent). (2) **4h RSI zone check** — BUY in 45-68→+8, >75→-8 (late entry on overbought 4h); SELL in 32-55→+8, <25→-8; ensures higher-TF has room to run without being extended. (3) **Daily candle pattern bonus** — MORNING_STAR/THREE_WHITE_SOLDIERS on daily BUY→+20; EVENING_STAR/THREE_BLACK_CROWS on daily SELL→+20; weaker reversal patterns (HAMMER/SHOOTING_STAR/etc.)→+12; daily patterns use the same BUY_PATTERNS/SELL_PATTERNS sets defined in the 1h candlestick section. Admin: `TradeStructureBar` price format bug fix (`.toFixed(4)`→`fmtPx()`), ADX badge in `IntelligencePanel` extracted from setup description before stripping, symbol search input in SignalsTab, confidence distribution strip (90+/85-89/80-84/<80 counts), BUY/SELL balance chips in Signals + Overview tabs.
 
 ---
 
@@ -278,6 +280,40 @@ Grade A/B in BEAR_TREND (regime known): WR=49–51%, Exp=+0.52–0.59R — excel
 
 ---
 
+## Phase SIGNAL.QUALITY.1 & SIGNAL.QUALITY.2 — Setup Scoring Enhancements (June 2026)
+
+**Motivation:** `detect_setup()` was missing critical cross-timeframe checks that are standard in institutional signal pipelines. Volume scoring had a discontinuous cliff at 1.5×. RSI pullback zones (the best entry timing) scored 0. Stops were flat ATR multiples with no market structure anchor.
+
+### SIGNAL.QUALITY.1 (commit `3f36d65`)
+
+1. **Structure-aware stops** (`_find_structure_stop()`) — Uses lowest low / highest high of the 11 confirmed candles before the current one as the swing reference, then adds 0.15×ATR as a buffer. Accepted only when the resulting stop distance is 0.4–2.5×ATR (realistic range); otherwise falls back to flat 1×ATR. Target is computed as `price ± risk × target_mult` so RR = `target_mult` regardless of whether structure or ATR stop is used.
+
+2. **ADX trend strength** — Added `adx: float = 0.0` param to `detect_setup()`; value passed from `MarketStructureResult.adx` at Step 7 in `scan_coin()`. Scoring: ADX ≥40→+12, ≥30→+8, 0<adx<18→-8. The market structure gate already rejects ADX <16 as sideways; this rewards confirmed strong trends and applies a mild penalty to the 16-18 borderline zone.
+
+3. **Volume spike gradient** — Replaced the binary ≥1.5×(+10) cliff with a 5-tier gradient: ≥2.5×(+15), ≥1.8×(+12), ≥1.5×(+10), ≥1.2×(+5); weak volume: <0.7×(-15), <0.8×(-10), <1.0×(-5). Eliminates discontinuous score jumps at the threshold boundary.
+
+4. **RSI pullback zones** — BUY RSI 42-50→+8, SELL RSI 50-58→+8. Previously these optimal pullback entry zones scored 0 because only the "ideal momentum" bands were rewarded.
+
+### SIGNAL.QUALITY.2 (commit `638452e`)
+
+1. **4h MACD histogram alignment** — `ind4h.macd.histogram` direction matching signal_type→+8; diverging→-6. Cross-timeframe MACD check was entirely absent from `detect_setup()`; when 1h and 4h MACD align it confirms higher-timeframe momentum backing the move.
+
+2. **4h RSI zone check** — BUY in 45-68→+8, >75→-8 (4h overbought = late entry); SELL in 32-55→+8, <25→-8. Ensures the higher timeframe has room to run and penalises extended entries on a non-ideal 4h cycle position.
+
+3. **Daily candle pattern bonus** — MORNING_STAR/THREE_WHITE_SOLDIERS on daily BUY→+20; EVENING_STAR/THREE_BLACK_CROWS on daily SELL→+20; HAMMER/SHOOTING_STAR/BULLISH_MARUBOZU/BEARISH_MARUBOZU→+12. Daily patterns represent multi-session price action conviction (4× the timeframe weight of 1h patterns). Uses the existing `BUY_PATTERNS`/`SELL_PATTERNS` sets defined in the 1h candlestick section.
+
+### Admin Trading Page improvements (both commits)
+- `fmtDistPct()` helper — directional TP%/SL% distance % from entry
+- `IntelligencePanel` — quality score bar, risk score, TP%/SL% distances, setup description, AI reasoning
+- **Bug fix**: `TradeStructureBar` was calling `.toFixed(4)` on entry price → now uses `fmtPx()`
+- **ADX badge** — extracted from `| ADX: 35` suffix in setup description before stripping, shown as emerald/blue/red badge
+- **Symbol search** — live filter input in SignalsTab
+- **Confidence distribution** strip — `90+: N · 85-89: N · 80-84: N · <80: N` counts above signal list
+- **BUY/SELL balance chips** — signal type split shown in both SignalsTab and OverviewTab recent signals header
+- **Regime implication** text — per-regime actionable trading advice shown on regime card in Overview and Regime tabs
+
+---
+
 ## File Map
 
 ```
@@ -305,7 +341,7 @@ backend/core/scanner/   ← PRIMARY scanner (Python) — all new features here
   models.py             ← Pydantic models; TechnicalIndicators has ema200, bb, candle_pattern, ema_cross
   indicators.py         ← RSI·MACD·EMA20/50/200·ATR·BB·volume·ADX·candlestick·EMA crossover
   market_structure.py   ← 7-filter market quality gate
-  signal_pipeline.py    ← detect_setup() scores EMA200/BB/daily/patterns/crossover/rel-strength/breakout
+  signal_pipeline.py    ← detect_setup() scores EMA200/BB/daily/patterns/crossover/rel-strength/breakout/ADX/4h-MACD/4h-RSI/daily-pattern; _find_structure_stop() for swing-anchored stops; trade_levels() with candles param
   orchestrator.py       ← run_scan(); CMC 200 coins; 3 timeframes (1h+4h+1d); btc_change_24h; Redis intel cache reader; gate_rejections dict per scan
   market_fetcher.py     ← reads Redis intelligence cache (populated by TS layer); CMC fallback via TS
   ai_validator.py       ← checks AISettings.enabled + setup_score < 78 → heuristic; semaphore(3)
