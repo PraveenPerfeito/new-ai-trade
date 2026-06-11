@@ -154,6 +154,8 @@ const GATE_REJECTION_LABELS: Record<string, string> = {
   CMC_REJECTION:         'CMC filter',
   REGIME_REJECTION:      'Regime',
   CONTRA_REGIME_REJECTION: 'Contra-regime v2',
+  KLINE_EMPTY:           'Kline empty',
+  KLINE_PARTIAL:         'Kline partial',
   // Inner pipeline gates (added PIPELINE.HARDENING.1)
   MTF_REJECTION:             'MTF analysis',
   VOLATILITY_REJECTION:      'Volatility',
@@ -605,6 +607,23 @@ export default function SystemPage() {
           />
         </div>
       </div>
+
+      {/* ── OUTPUT.COLLAPSE.ALERT.1 banner ─────────────────────────────────── */}
+      {monitor?.output_collapse?.active && (
+        <div className="rounded-xl border border-red-500/50 bg-red-900/25 p-4 flex items-start gap-3">
+          <span className="text-lg shrink-0">🚨</span>
+          <div className="flex-1">
+            <p className="font-semibold text-sm text-red-200">Signal Output Collapse</p>
+            <p className="text-xs text-red-300 mt-1">
+              Last 24h: <span className="font-mono font-bold">{monitor.output_collapse.signals_24h}</span> signals
+              vs 7-day average <span className="font-mono font-bold">{monitor.output_collapse.avg_daily_7d?.toFixed(0)}</span>/day
+              (threshold &lt;{monitor.output_collapse.threshold?.toFixed(0)}). Output has been below 25% of baseline
+              for {monitor.output_collapse.breach_streak} consecutive scan cycles. Check KLINE_EMPTY gate rejections,
+              intelligence cache freshness, and provider health below.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── Operational Monitoring ─────────────────────────────────────────── */}
       {monitor && (

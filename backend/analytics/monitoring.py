@@ -323,6 +323,7 @@ async def get_monitoring_snapshot() -> dict:
         "anomalies":     anomalies,
         "thresholds":    THRESHOLDS,
         "generated_at":  now.isoformat(),
+        "output_collapse": await read_output_collapse_status(),   # OUTPUT.COLLAPSE.ALERT.1
         "data_windows": {
             "signals_per_day": "rolling_24h_database_truth",
             "outcomes": "rolling_7d_database_truth",
@@ -376,3 +377,134 @@ def _detect_anomalies(
         })
 
     return anomalies
+
+
+# ── OUTPUT.COLLAPSE.ALERT.1 ───────────────────────────────────────────────────
+# The June 6–9 incident: signal output collapsed to 1–7/day (vs ~180 baseline)
+# while every infrastructure check stayed green.  This watches OUTPUT, not infra:
+# breach when signals_24h < 25% of the 7-day daily average, alert after 2
+# consecutive breaching scan cycles.
+
+_COLLAPSE_RATIO         = 0.25
+_COLLAPSE_MIN_BASELINE  = 3.0          # below ~3 signals/day the ratio is noise (cold start)
+_COLLAPSE_BREACH_KEY    = "monitor:output_collapse:breaches"
+_COLLAPSE_STATUS_KEY    = "monitor:output_collapse:status"
+_COLLAPSE_ALERTED_KEY   = "monitor:output_collapse:alerted"
+_COLLAPSE_BREACH_TTL    = 2 * 3600     # breach streak expires if scans stop entirely
+_COLLAPSE_STATUS_TTL    = 24 * 3600
+_COLLAPSE_ALERT_THROTTLE = 6 * 3600    # at most one Telegram alert per 6h
+
+
+def evaluate_output_collapse(
+    signals_24h: int,
+    avg_daily_7d: float,
+    *,
+    ratio: float = _COLLAPSE_RATIO,
+    min_baseline: float = _COLLAPSE_MIN_BASELINE,
+) -> bool:
+    """Pure breach decision: True when output has collapsed vs the 7d baseline."""
+    if avg_daily_7d < min_baseline:
+        return False   # baseline too thin to judge (cold start / fresh deploy)
+    return signals_24h < ratio * avg_daily_7d
+
+
+async def _read_db_signals_7d_avg(now: datetime) -> float | None:
+    try:
+        from backend.database.session import get_pool
+        pool = await get_pool()
+        value = await pool.fetchval(
+            "SELECT COUNT(*) FROM signals WHERE created_at > $1",
+            now - timedelta(days=7),
+        )
+        return (int(value) if value is not None else 0) / 7.0
+    except Exception as exc:
+        log.warning("collapse_check_7d_avg_failed", error=str(exc))
+        return None
+
+
+async def read_output_collapse_status() -> dict | None:
+    """Dashboard-facing status blob (None when healthy / never evaluated)."""
+    try:
+        import json as _json
+        from backend.cache.redis_cache import get_redis
+        redis = await get_redis()
+        raw = await redis.get(_COLLAPSE_STATUS_KEY)
+        return _json.loads(raw) if raw else None
+    except Exception:
+        return None
+
+
+async def check_output_collapse() -> dict:
+    """
+    Evaluate output collapse after a scan cycle.  Called from scan_task after
+    every completed scan.  Alerts (Telegram + log) after 2 consecutive breaches,
+    throttled to one alert per 6h.  Feature-flagged: FeatureFlags.output_collapse_alert.
+    """
+    try:
+        from backend.system_settings.service import get_settings_service
+        from backend.system_settings.groups import FeatureFlags
+        flags = await get_settings_service().get_group(FeatureFlags)
+        if not flags.output_collapse_alert:
+            return {"active": False, "reason": "flag_disabled"}
+    except Exception as exc:
+        log.warning("collapse_check_flag_read_failed", error=str(exc))
+        # Fail-open: the alert is observability — keep checking on flag errors.
+
+    now = datetime.now(timezone.utc)
+    signals_24h = await _read_db_generated_signals_24h(now)
+    avg_7d      = await _read_db_signals_7d_avg(now)
+    if signals_24h is None or avg_7d is None:
+        return {"active": False, "reason": "db_unavailable"}
+
+    breach = evaluate_output_collapse(signals_24h, avg_7d)
+
+    import json as _json
+    try:
+        from backend.cache.redis_cache import get_redis
+        redis = await get_redis()
+
+        if not breach:
+            await redis.delete(_COLLAPSE_BREACH_KEY)
+            await redis.delete(_COLLAPSE_STATUS_KEY)
+            return {"active": False, "signals_24h": signals_24h, "avg_daily_7d": round(avg_7d, 1)}
+
+        streak = await redis.incr(_COLLAPSE_BREACH_KEY)
+        await redis.expire(_COLLAPSE_BREACH_KEY, _COLLAPSE_BREACH_TTL)
+
+        status = {
+            "active":        streak >= 2,
+            "breach_streak": int(streak),
+            "signals_24h":   signals_24h,
+            "avg_daily_7d":  round(avg_7d, 1),
+            "threshold":     round(_COLLAPSE_RATIO * avg_7d, 1),
+            "detected_at":   now.isoformat(),
+        }
+        await redis.setex(_COLLAPSE_STATUS_KEY, _COLLAPSE_STATUS_TTL, _json.dumps(status))
+
+        if streak >= 2:
+            log.error(
+                "output_collapse_detected",
+                signals_24h=signals_24h,
+                avg_daily_7d=round(avg_7d, 1),
+                breach_streak=int(streak),
+            )
+            already = await redis.exists(_COLLAPSE_ALERTED_KEY)
+            if not already:
+                await redis.setex(_COLLAPSE_ALERTED_KEY, _COLLAPSE_ALERT_THROTTLE, "1")
+                try:
+                    from backend.core.scanner.telegram_notifier import send_output_collapse_alert
+                    send_output_collapse_alert(signals_24h, avg_7d)
+                except Exception as exc:
+                    log.warning("collapse_alert_send_failed", error=str(exc))
+        else:
+            log.warning(
+                "output_collapse_breach",
+                signals_24h=signals_24h,
+                avg_daily_7d=round(avg_7d, 1),
+                breach_streak=int(streak),
+            )
+        return status
+
+    except Exception as exc:
+        log.warning("collapse_check_failed", error=str(exc))
+        return {"active": False, "reason": "redis_unavailable"}

@@ -83,6 +83,8 @@ _PERSISTED_GATE_KEYS = (
     "CMC_REJECTION",
     "REGIME_REJECTION",
     "CONTRA_REGIME_REJECTION",   # REGIME.HARD.GATE.V2 — contra-regime reject (flag-gated)
+    "KLINE_EMPTY",     # KLINE.EMPTY.TELEMETRY.1 — all timeframes empty (API failure signature)
+    "KLINE_PARTIAL",   # KLINE.EMPTY.TELEMETRY.1 — insufficient candles (thin/new listing)
     # PIPELINE.HARDENING.1 — full pipeline accounting (6 additional inner-pipeline gates)
     "MTF_REJECTION",
     "VOLATILITY_REJECTION",

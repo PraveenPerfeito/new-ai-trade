@@ -293,6 +293,21 @@ def contra_regime_gate(
     return False
 
 
+def early_breakout_score_adj(
+    flag_on: bool,
+    signal_type: SignalType,
+    breakout_strength: str | None,
+) -> int:
+    """
+    EARLY.BREAKOUT.PENALTY.1 — setup-score adjustment for BUY-side EARLY breakouts.
+    Audited cohort (PHASE.9): EARLY BUY WR ≈17–27% vs EARLY SELL 68%.
+    Returns −8 only when the flag is ON, the signal is BUY, and strength is EARLY.
+    """
+    if flag_on and signal_type == SignalType.BUY and breakout_strength == "EARLY_BREAKOUT":
+        return -8
+    return 0
+
+
 def _null_setup_confidence_penalty(
     setup: SetupResult,
     signal_type: SignalType,
@@ -833,10 +848,46 @@ async def scan_coin(
     scanner_concurrency_active.inc()
 
     try:
+        # Feature flags — read once per coin (60s in-process cache → ~free).
+        # All flags default to legacy behavior when the read fails.
+        _flags = None
+        try:
+            from backend.system_settings.service import get_settings_service  # noqa: PLC0415
+            from backend.system_settings.groups import FeatureFlags  # noqa: PLC0415
+            _flags = await get_settings_service().get_group(FeatureFlags)
+        except Exception as exc:
+            log.warning("feature_flags_read_failed", symbol=coin.symbol, error=str(exc))
+
         is_futures = mode == ScannerMode.FUTURES
         candles_1h, candles_4h, candles_1d = await _fetch_all_timeframes(coin, is_futures)
 
+        # KLINE.EMPTY.TELEMETRY.1 — make silent kline failures visible.
+        # EMPTY (every timeframe returned nothing) is the API-outage signature
+        # that caused the June 6–9 silent output collapse; PARTIAL (<60 candles
+        # on a required timeframe) is usually a thin/new listing.
         if len(candles_1h) < 60 or len(candles_4h) < 60:
+            _exchange = "binance_futures" if is_futures else "binance_spot"
+            if not candles_1h and not candles_4h and not candles_1d:
+                _record_gate_rejection("KLINE_EMPTY", gate_rejections)
+                gate_rejections_total.labels(gate=f"kline_empty:{_exchange}").inc()
+                log.warning(
+                    "kline_empty",
+                    symbol=coin.symbol,
+                    exchange=_exchange,
+                    mode=mode.value,
+                )
+            else:
+                _record_gate_rejection("KLINE_PARTIAL", gate_rejections)
+                gate_rejections_total.labels(gate=f"kline_partial:{_exchange}").inc()
+                log.info(
+                    "kline_partial",
+                    symbol=coin.symbol,
+                    exchange=_exchange,
+                    mode=mode.value,
+                    candles_1h=len(candles_1h),
+                    candles_4h=len(candles_4h),
+                    candles_1d=len(candles_1d),
+                )
             return None
 
         # Step 2: Indicators (1h, 4h, daily)
@@ -995,14 +1046,7 @@ async def scan_coin(
         # REGIME.HARD.GATE.V2 (flag ON): symmetric contra-regime gate with
         # intelligence override paths (HIGH_MOMENTUM breakout / aligned OI).
         # Flag OFF: legacy behavior — unconditional BUY-in-bear reject only.
-        _gate_v2_enabled = False
-        try:
-            from backend.system_settings.service import get_settings_service  # noqa: PLC0415
-            from backend.system_settings.groups import FeatureFlags  # noqa: PLC0415
-            _flags = await get_settings_service().get_group(FeatureFlags)
-            _gate_v2_enabled = bool(_flags.regime_hard_gate_v2)
-        except Exception as exc:
-            log.warning("regime_gate_v2_flag_read_failed", symbol=coin.symbol, error=str(exc))
+        _gate_v2_enabled = bool(_flags.regime_hard_gate_v2) if _flags is not None else False
 
         if _gate_v2_enabled:
             _oi = futures_data.oi_interpretation.value if futures_data else None
@@ -1069,7 +1113,25 @@ async def scan_coin(
             futures_data=futures_data,
         )
 
-        effective_score = setup.pre_score + funding_score_adj   # Phase 7.3A.6 funding adjustment
+        # EARLY.BREAKOUT.PENALTY.1 (flag-gated) — BUY-side EARLY breakouts are the
+        # weakest cohort (audited WR ≈17–27% vs SELL-side 68%). Penalty applied to
+        # the setup score BEFORE confidence calculation so both the AI threshold
+        # and heuristic confidence see the demotion.
+        early_breakout_adj = early_breakout_score_adj(
+            bool(_flags.early_breakout_penalty_v1) if _flags is not None else False,
+            signal_type,
+            setup.breakout_strength,
+        )
+        if early_breakout_adj != 0:
+            draft.risk_warnings.append("EARLY_BREAKOUT BUY penalty −8 (early_breakout_penalty_v1)")
+            log.info(
+                "early_breakout_buy_penalty_applied",
+                symbol=coin.symbol,
+                breakout_type=setup.breakout_type,
+                adj=early_breakout_adj,
+            )
+
+        effective_score = setup.pre_score + funding_score_adj + early_breakout_adj   # Phase 7.3A.6 + EARLY.BREAKOUT.PENALTY.1
         ai = await validate_signal(draft, coin, ind4h, s1h * 0.4 + s4h * 0.6, volatility, setup_score=effective_score)
 
         # Phase 8.1B → SIGNAL.FACTOR.1: Regime gates.

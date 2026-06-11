@@ -101,4 +101,14 @@ BEAT_SCHEDULE = {
             "queue": "celery",
         },
     },
+    # ATTRIBUTION.SNAPSHOTS.1 — nightly per-dimension outcome aggregation: 00:15 UTC
+    # (~12 SQL queries/night; +1 CloudAMQP msg/day — negligible vs OPS budgets)
+    "attribution-snapshots-nightly": {
+        "task": "backend.workers.analytics_tasks.compute_attribution_snapshots",
+        "schedule": crontab(hour="0", minute="15"),
+        "options": {
+            "expires": 55 * 60,
+            "queue": "celery",
+        },
+    },
 }

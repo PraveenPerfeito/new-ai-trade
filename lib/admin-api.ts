@@ -442,6 +442,15 @@ export interface MonitorSnapshot {
   anomalies:  MonitorAnomaly[]
   thresholds: Record<string, Record<string, number | boolean>>
   data_windows?: Record<string, string>
+  /** OUTPUT.COLLAPSE.ALERT.1 — present while a collapse breach is recorded */
+  output_collapse?: {
+    active:        boolean
+    breach_streak?: number
+    signals_24h?:  number
+    avg_daily_7d?: number
+    threshold?:    number
+    detected_at?:  string
+  } | null
 }
 
 // ── Typed API surface ─────────────────────────────────────────────────────────

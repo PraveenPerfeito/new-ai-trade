@@ -143,3 +143,43 @@ async def _do_refresh() -> dict:
 
     await pool.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY mv_daily_outcome_summary")
     return {"refreshed": True}
+
+
+@shared_task(
+    bind=True,
+    name="backend.workers.analytics_tasks.compute_attribution_snapshots",
+    max_retries=1,
+    ignore_result=True,
+    default_retry_delay=10 * 60,
+    queue="celery",
+    soft_time_limit=5 * 60,
+    time_limit=6 * 60,
+)
+def compute_attribution_snapshots(self) -> dict:
+    """
+    ATTRIBUTION.SNAPSHOTS.1 — nightly aggregation of resolved outcomes into
+    attribution_snapshots (per-dimension WR/exp/PF over 7d + 30d windows).
+    Beat schedule: 00:15 UTC, after refresh_daily_view.
+    """
+    start = time.monotonic()
+    try:
+        from backend.analytics.outcome_learning import compute_snapshots
+        result = asyncio.run(compute_snapshots())
+
+        elapsed = time.monotonic() - start
+        celery_task_duration_seconds.labels(task_name="attribution_snapshots").observe(elapsed)
+        celery_tasks_total.labels(task_name="attribution_snapshots", status="success").inc()
+        logger.info(
+            "attribution_snapshots_complete",
+            skipped=result.get("skipped"),
+            cells=result.get("cells_inserted"),
+            elapsed_s=round(elapsed, 2),
+        )
+        return result
+
+    except Exception as exc:
+        elapsed = time.monotonic() - start
+        celery_task_duration_seconds.labels(task_name="attribution_snapshots").observe(elapsed)
+        celery_tasks_total.labels(task_name="attribution_snapshots", status="failure").inc()
+        logger.error("attribution_snapshots_failed", error=str(exc), elapsed_s=round(elapsed, 2))
+        raise self.retry(exc=exc)

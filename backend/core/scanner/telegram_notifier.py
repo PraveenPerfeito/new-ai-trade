@@ -162,6 +162,27 @@ def _grade_emoji(grade: str) -> str:
     return {"A": "🟢", "B": "🔵", "C": "🟡", "D": "🟠", "F": "🔴"}.get(grade, "⚪")
 
 
+def send_output_collapse_alert(signals_24h: int, avg_daily_7d: float) -> None:
+    """
+    OUTPUT.COLLAPSE.ALERT.1 — operational alert when signal output collapses
+    below 25% of the 7-day baseline for 2+ consecutive scan cycles.
+    Throttling is handled by the caller (monitoring.check_output_collapse).
+    """
+    if not _is_configured():
+        return
+    text = (
+        f"🚨 <b>Signal Output Collapse</b>\n\n"
+        f"Last 24h: <b>{signals_24h}</b> signals\n"
+        f"7-day average: <b>{avg_daily_7d:.0f}</b>/day\n"
+        f"Threshold: &lt;25% of baseline for 2 consecutive scan cycles\n\n"
+        f"Likely causes: intelligence cache cold, Binance kline failures (check "
+        f"KLINE_EMPTY in gate rejections), provider geo-block, or over-tight gates.\n\n"
+        f"<i>Admin → System for scan diagnostics.</i>"
+    )
+    _enqueue(text)
+    log.warning("output_collapse_alert_sent", signals_24h=signals_24h, avg_daily_7d=round(avg_daily_7d, 1))
+
+
 # ── Alert deduplication (Redis cooldown) ─────────────────────────────────────
 # Prevents the same symbol+direction from firing multiple Telegram alerts
 # within ALERT_COOLDOWN_HOURS. Same coin can alert again after cooldown expires,

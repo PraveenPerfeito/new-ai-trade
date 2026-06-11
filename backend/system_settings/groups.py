@@ -473,6 +473,9 @@ class FeatureFlags(BaseSettingsGroup):
     ai_validation:           bool = Field(True,  title='AI Validation',            description='Enable the Claude validation step (also controlled by AISettings.enabled)')
     rate_limiting:           bool = Field(True,  title='Rate Limiting',            description='Apply API rate limits via slowapi middleware')
     regime_hard_gate_v2:     bool = Field(False, title='Regime Hard Gate V2',      description='REGIME.HARD.GATE.V2 — symmetric contra-regime hard gate (BUY in bear, SELL in bull) with HIGH_MOMENTUM breakout / aligned-OI override paths. OFF = legacy behavior (unconditional BUY-in-bear gate only).')
+    early_breakout_penalty_v1: bool = Field(False, title='Early Breakout BUY Penalty', description='EARLY.BREAKOUT.PENALTY.1 — apply −8 setup-score penalty to BUY signals with EARLY_BREAKOUT strength before confidence calculation (audited BUY-side EARLY cohort WR ≈17–27%). OFF = current scoring.')
+    output_collapse_alert:   bool = Field(True,  title='Output Collapse Alert',    description='OUTPUT.COLLAPSE.ALERT.1 — alert when signals_24h < 25% of the 7-day daily average for 2 consecutive scan cycles (Telegram + dashboard + logs). Observability only; no trading impact.')
+    attribution_snapshots:   bool = Field(True,  title='Attribution Snapshots',    description='ATTRIBUTION.SNAPSHOTS.1 — nightly aggregation of signal_outcomes into attribution_snapshots (foundation for probability engine / grade calibration). Pure-additive analytics; no trading impact.')
     # ── Operational overrides (highest precedence) ────────────────────────────
     emergency_stop:          bool = Field(False, title='Emergency Stop',           description='Immediately halt all scans, signal generation, and Telegram output. Overrides every other switch.')
     maintenance_mode:        bool = Field(False, title='Maintenance Mode',         description='Allow read-only API calls; block all writes, scans, and Telegram sends.')

@@ -179,6 +179,12 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
                 )
             except Exception:
                 pass
+            # OUTPUT.COLLAPSE.ALERT.1 — evaluate signal output vs 7d baseline each cycle
+            try:
+                from backend.analytics.monitoring import check_output_collapse
+                await check_output_collapse()
+            except Exception as exc:
+                logger.warning(f"output_collapse_check_failed error={exc}")
             # Keep intelligence cache warm on Vercel after each scan cycle
             await _trigger_intelligence_refresh()
             return result

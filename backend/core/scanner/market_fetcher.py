@@ -146,12 +146,16 @@ _BINANCE_ERRORS_KEY  = "providers:metrics:binance:errors"
 _batch_successes: int   = 0
 _batch_latencies: list[int] = []
 _batch_errors:    list[str] = []
+# KLINE.EMPTY.TELEMETRY.1 — per-exchange kline timeout counters (flushed in same pipeline)
+_batch_timeouts: dict[str, int] = {"spot": 0, "futures": 0}
 _batch_flush_task: "asyncio.Task | None" = None
 _batch_lock = asyncio.Lock()
 _BATCH_WINDOW_S = 5.0
 
 
-async def _record_binance_kline_metric(latency_ms: float, success: bool) -> None:
+async def _record_binance_kline_metric(
+    latency_ms: float, success: bool, *, timeout: bool = False, futures: bool = False
+) -> None:
     """Accumulate per-kline metrics; a background task flushes them every 5 s."""
     global _batch_successes, _batch_flush_task
     async with _batch_lock:
@@ -160,6 +164,8 @@ async def _record_binance_kline_metric(latency_ms: float, success: bool) -> None
             _batch_latencies.append(round(latency_ms))
         else:
             _batch_errors.append(str(int(time.time() * 1000)))
+            if timeout:
+                _batch_timeouts["futures" if futures else "spot"] += 1
         if _batch_flush_task is None or _batch_flush_task.done():
             _batch_flush_task = asyncio.create_task(_flush_binance_metrics_after_delay())
             _batch_flush_task.add_done_callback(lambda t: _on_task_done(t, "flush_binance_metrics"))
@@ -177,9 +183,12 @@ async def _flush_binance_metrics() -> None:
         successes = _batch_successes
         latencies = list(_batch_latencies)
         errors    = list(_batch_errors)
+        timeouts  = dict(_batch_timeouts)
         _batch_successes = 0
         _batch_latencies.clear()
         _batch_errors.clear()
+        _batch_timeouts["spot"] = 0
+        _batch_timeouts["futures"] = 0
 
     if not successes and not errors:
         return
@@ -197,6 +206,11 @@ async def _flush_binance_metrics() -> None:
             pipe.hset(_BINANCE_META_KEY, mapping={"lastError": ts_ms})
             pipe.rpush(_BINANCE_ERRORS_KEY, *errors)
             pipe.ltrim(_BINANCE_ERRORS_KEY, -100, -1)
+        # KLINE.EMPTY.TELEMETRY.1 — per-exchange timeout counters (provider health hash)
+        if timeouts.get("spot"):
+            pipe.hincrby(_BINANCE_META_KEY, "klineTimeouts:spot", timeouts["spot"])
+        if timeouts.get("futures"):
+            pipe.hincrby(_BINANCE_META_KEY, "klineTimeouts:futures", timeouts["futures"])
         await pipe.execute()
     except Exception:
         pass
@@ -220,6 +234,11 @@ async def fetch_spot_klines(symbol: str, interval: str = "1h", limit: int = 100)
                 log.warning("binance_geo_blocked_trying_us", symbol=symbol)
                 continue
             log.warning("spot_klines_failed", symbol=symbol, error=str(exc))
+            return []
+        except httpx.TimeoutException as exc:
+            # KLINE.EMPTY.TELEMETRY.1 — timeouts counted separately per exchange
+            asyncio.create_task(_record_binance_kline_metric(0, success=False, timeout=True))
+            log.warning("spot_klines_timeout", symbol=symbol, error=str(exc))
             return []
         except Exception as exc:
             asyncio.create_task(_record_binance_kline_metric(0, success=False))
@@ -258,6 +277,16 @@ async def fetch_futures_klines(symbol: str, interval: str = "1h", limit: int = 1
             t.add_done_callback(lambda t: _on_task_done(t, "futures_geo_alert"))
         elif _futures_consecutive_failures >= 5:
             t = asyncio.create_task(_maybe_send_futures_geo_alert(status))
+            t.add_done_callback(lambda t: _on_task_done(t, "futures_geo_alert"))
+        return []
+    except httpx.TimeoutException as exc:
+        # KLINE.EMPTY.TELEMETRY.1 — timeouts counted separately per exchange
+        asyncio.create_task(_record_binance_kline_metric(0, success=False, timeout=True, futures=True))
+        _futures_consecutive_failures += 1
+        log.warning("futures_klines_timeout", symbol=symbol,
+                    consecutive=_futures_consecutive_failures, error=str(exc))
+        if _futures_consecutive_failures >= 5:
+            t = asyncio.create_task(_maybe_send_futures_geo_alert(None))
             t.add_done_callback(lambda t: _on_task_done(t, "futures_geo_alert"))
         return []
     except Exception as exc:
