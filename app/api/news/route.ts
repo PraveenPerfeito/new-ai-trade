@@ -11,6 +11,10 @@ const log = createLogger('api/news')
 const CACHE_KEY = 'news:intel:snapshot'
 const CACHE_TTL = 900
 
+// In-process cache — prevents Redis GET on every dashboard poll
+let _memCache: { data: NewsSnapshot; ts: number } | null = null
+const MEM_TTL_MS = 5 * 60 * 1000  // 5 min
+
 export interface NewsItem {
   title:       string
   url:         string
@@ -177,13 +181,20 @@ async function fetchAllRss(): Promise<NewsItem[]> {
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function GET() {
-  // Try Redis cache first
+  // 1. In-process cache (zero Redis ops)
+  if (_memCache && Date.now() - _memCache.ts < MEM_TTL_MS) {
+    return NextResponse.json({ success: true, ..._memCache.data })
+  }
+
+  // 2. Redis cache (one GET)
   try {
     const { getRedis } = await import('@/lib/redis')
     const redis = getRedis()
     const cached = await redis.get(CACHE_KEY)
     if (cached) {
-      return NextResponse.json({ success: true, ...(JSON.parse(cached as string) as NewsSnapshot) })
+      const data = JSON.parse(cached as string) as NewsSnapshot
+      _memCache = { data, ts: Date.now() }
+      return NextResponse.json({ success: true, ...data })
     }
   } catch {
     // Cache unavailable — fetch fresh
@@ -223,7 +234,9 @@ export async function GET() {
     informationalOnly: true,
   }
 
-  // Cache for 15 minutes
+  _memCache = { data: snapshot, ts: Date.now() }
+
+  // Cache for 15 minutes in Redis
   try {
     const { getRedis } = await import('@/lib/redis')
     const redis = getRedis()

@@ -7,6 +7,10 @@ export const dynamic     = 'force-dynamic'
 
 const log = createLogger('api/health/providers')
 
+// In-process cache — avoids Redis TTL calls on every dashboard poll
+let _cache: { providers: ProviderStatus[]; ts: number } | null = null
+const MEM_TTL_MS = 90_000  // 90s — aligns with 120s dashboard poll
+
 export interface ProviderStatus {
   name:      string
   healthy:   boolean
@@ -205,6 +209,10 @@ async function checkCloudAMQP(): Promise<ProviderStatus> {
 // ── Route handler ──────────────────────────────────────────────────────────────
 
 export async function GET() {
+  if (_cache && Date.now() - _cache.ts < MEM_TTL_MS) {
+    return NextResponse.json({ success: true, providers: _cache.providers, cached: true })
+  }
+
   log.info('8-provider health check requested')
 
   const results = await Promise.allSettled([
@@ -232,5 +240,6 @@ export async function GET() {
     'health check complete',
   )
 
+  _cache = { providers, ts: Date.now() }
   return NextResponse.json({ success: true, healthy: allHealthy, providers, checkedAt })
 }
