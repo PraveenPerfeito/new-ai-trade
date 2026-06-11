@@ -103,8 +103,16 @@ Include every headline.`,
 
   if (!res.ok) {
     const body = await res.text()
-    log.error({ status: res.status, body }, 'xai_api_error')
-    throw new Error(`xAI API ${res.status}: ${body.slice(0, 200)}`)
+    log.warn({ status: res.status, body: body.slice(0, 200) }, 'xai_api_error_fallback_neutral')
+    // Return headlines with neutral sentiment rather than failing the whole tab
+    return headlines.slice(0, 15).map(n => ({
+      title:       n.title,
+      url:         n.url,
+      source:      n.source,
+      publishedAt: n.pubDate ? new Date(n.pubDate).toISOString() : new Date().toISOString(),
+      sentiment:   'neutral' as const,
+      summary:     n.desc,
+    }))
   }
 
   const json    = await res.json() as { choices?: Array<{ message?: { content?: string } }> }
