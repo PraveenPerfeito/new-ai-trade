@@ -4,6 +4,7 @@ import { ProviderHealth, ProviderName, ProviderStatus, QuotaInfo } from './types
 const LATENCY_WINDOW = 100;  // keep last N latency samples
 const ERROR_WINDOW   = 100;  // keep last N error timestamps
 const KEY_PREFIX     = 'providers:metrics:';
+const FLUSH_INTERVAL = 60_000;  // flush in-memory buffer to Redis at most once per 60s
 
 function key(name: ProviderName, field: string): string {
   return `${KEY_PREFIX}${name}:${field}`;
@@ -12,17 +13,36 @@ function key(name: ProviderName, field: string): string {
 export class ProviderMetrics {
   constructor(private readonly name: ProviderName) {}
 
+  // ── In-memory buffer — accumulated between Redis flushes ────────────────────
+  private _buf = { successes: 0, latencies: [] as number[], lastSuccess: '' }
+  private _lastFlush = 0
+
   async recordSuccess(latencyMs: number): Promise<void> {
-    const redis = getRedis();
-    const now = Date.now();
-    await redis
-      .multi()
-      .lpush(key(this.name, 'latency'), latencyMs)
-      .ltrim(key(this.name, 'latency'), 0, LATENCY_WINDOW - 1)
-      .hset(key(this.name, 'meta'), 'lastSuccess', new Date(now).toISOString())
-      .hincrby(key(this.name, 'meta'), 'requestsToday', 1)
-      .hincrby(key(this.name, 'meta'), 'requestsTotal', 1)
-      .exec();
+    const now = Date.now()
+    this._buf.successes++
+    this._buf.latencies.push(latencyMs)
+    this._buf.lastSuccess = new Date(now).toISOString()
+
+    // Flush to Redis at most once per 60s instead of on every call
+    if (now - this._lastFlush < FLUSH_INTERVAL) return
+    this._lastFlush = now
+
+    const { successes, latencies, lastSuccess } = this._buf
+    this._buf = { successes: 0, latencies: [], lastSuccess: '' }
+
+    try {
+      const redis = getRedis()
+      const pipe = redis.multi()
+      for (const l of latencies) pipe.lpush(key(this.name, 'latency'), l)
+      pipe
+        .ltrim(key(this.name, 'latency'), 0, LATENCY_WINDOW - 1)
+        .hset(key(this.name, 'meta'), 'lastSuccess', lastSuccess)
+        .hincrby(key(this.name, 'meta'), 'requestsToday', successes)
+        .hincrby(key(this.name, 'meta'), 'requestsTotal', successes)
+      await pipe.exec()
+    } catch {
+      // non-fatal — metrics are best-effort
+    }
   }
 
   async recordError(errorMsg: string): Promise<void> {

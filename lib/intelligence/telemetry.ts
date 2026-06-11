@@ -5,7 +5,11 @@ import { getQuotaGuard } from './quota-guard';
 import { getWorkerStatuses } from './workers';
 import { IntelligenceTelemetry, CacheGroupMeta } from './types';
 
+let _telCache: { data: IntelligenceTelemetry; ts: number } | null = null
+const _TEL_TTL = 60_000  // 60s — Cache tab polls every 180s so this saves ~66% of Redis reads
+
 export async function getIntelligenceTelemetry(): Promise<IntelligenceTelemetry> {
+  if (_telCache && Date.now() - _telCache.ts < _TEL_TTL) return _telCache.data
   const redis = getRedis();
   const quota = await getQuotaGuard().getState();
 
@@ -53,13 +57,15 @@ export async function getIntelligenceTelemetry(): Promise<IntelligenceTelemetry>
   // Find the most recent preload timestamp from listings group (best proxy)
   const listingsMeta = groupMetas.find((g) => g.name === 'listings');
 
-  return {
+  const result: IntelligenceTelemetry = {
     groups:                groupMetas,
     quota,
     workers:               getWorkerStatuses(),
     overallHitRate:        0,
     lastPreloadAt:         listingsMeta?.lastRefreshedAt ?? null,
-    lastPreloadDurationMs: null, // populated by preloadIntelligence callers if needed
+    lastPreloadDurationMs: null,
     cmcEnabled:            Boolean(getEnv().COINMARKETCAP_API_KEY),
   };
+  _telCache = { data: result, ts: Date.now() }
+  return result;
 }
