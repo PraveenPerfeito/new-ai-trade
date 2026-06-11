@@ -153,6 +153,7 @@ const GATE_REJECTION_LABELS: Record<string, string> = {
   CONFIDENCE_REJECTION:  'Confidence',
   CMC_REJECTION:         'CMC filter',
   REGIME_REJECTION:      'Regime',
+  CONTRA_REGIME_REJECTION: 'Contra-regime v2',
   // Inner pipeline gates (added PIPELINE.HARDENING.1)
   MTF_REJECTION:             'MTF analysis',
   VOLATILITY_REJECTION:      'Volatility',

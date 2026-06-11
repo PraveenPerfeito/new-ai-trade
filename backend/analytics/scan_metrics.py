@@ -19,6 +19,7 @@ GATE_REJECTION_KEYS: tuple[str, ...] = (
     "CONFIDENCE_REJECTION",
     "CMC_REJECTION",
     "REGIME_REJECTION",
+    "CONTRA_REGIME_REJECTION",   # REGIME.HARD.GATE.V2 — contra-regime reject (flag-gated)
     # PIPELINE.HARDENING.1 — full inner-pipeline gate accounting
     "MTF_REJECTION",
     "VOLATILITY_REJECTION",
@@ -52,6 +53,8 @@ _GATE_ALIASES = {
     "cmc_rejection": "CMC_REJECTION",
     "regime": "REGIME_REJECTION",
     "regime_rejection": "REGIME_REJECTION",
+    "contra_regime": "CONTRA_REGIME_REJECTION",
+    "contra_regime_rejection": "CONTRA_REGIME_REJECTION",
     # PIPELINE.HARDENING.1 — lowercase aliases for pre-hardening rows
     "mtf": "MTF_REJECTION",
     "mtf_rejection": "MTF_REJECTION",

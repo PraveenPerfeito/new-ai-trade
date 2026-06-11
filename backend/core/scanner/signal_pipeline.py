@@ -253,6 +253,46 @@ def _early_breakout_confidence_adj(
     return -4
 
 
+# ── Regime contexts (shared by hard + soft regime gates) ─────────────────────
+
+_BULL_CONTEXTS = {"BULL_TREND", "EUPHORIA"}
+_BEAR_CONTEXTS = {"BEAR_TREND", "CAPITULATION"}
+
+
+def contra_regime_gate(
+    signal_type: SignalType,
+    btc_regime: str | None,
+    breakout_strength: str | None,
+    oi_interpretation: str | None,
+) -> bool:
+    """
+    REGIME.HARD.GATE.V2 — return True when the signal should be REJECTED.
+
+    Contra-regime signals are rejected unless backed by an intelligence override:
+      BUY  in BEAR_TREND/CAPITULATION → reject unless HIGH_MOMENTUM_BREAKOUT or OI NEW_LONGS
+      SELL in BULL_TREND/EUPHORIA     → reject unless HIGH_MOMENTUM_BREAKOUT or OI NEW_SHORTS
+
+    Data basis (PHASE.9.ALPHA.MAXIMIZATION.1, 30d clean cohort):
+      contra-regime BUY: N=200, WR=19.0%, Exp=−0.405R
+      aligned SELL×BEAR: N=792, WR=59.6%, Exp=+0.877R, PF=3.17
+      HIGH_MOMENTUM_BREAKOUT: WR=81.8%, Exp=+1.621R — earns the override.
+
+    NULL/unknown regime is NOT handled here — the ALPHA.TRUTH.1 NULL-regime
+    hard gate in scan_coin() owns that path.  SIDEWAYS/HIGH_VOLATILITY pass.
+    """
+    if signal_type == SignalType.BUY and btc_regime in _BEAR_CONTEXTS:
+        return not (
+            breakout_strength == "HIGH_MOMENTUM_BREAKOUT"
+            or oi_interpretation == "NEW_LONGS"
+        )
+    if signal_type == SignalType.SELL and btc_regime in _BULL_CONTEXTS:
+        return not (
+            breakout_strength == "HIGH_MOMENTUM_BREAKOUT"
+            or oi_interpretation == "NEW_SHORTS"
+        )
+    return False
+
+
 def _null_setup_confidence_penalty(
     setup: SetupResult,
     signal_type: SignalType,
@@ -952,18 +992,42 @@ async def scan_coin(
                 log.warning("futures_intelligence_failed", symbol=coin.symbol, error=str(exc))
 
         # Step 10.5: Regime hard gate — before AI to avoid wasting tokens.
-        _BULL_CONTEXTS = {"BULL_TREND", "EUPHORIA"}
-        _BEAR_CONTEXTS = {"BEAR_TREND", "CAPITULATION"}
-        # Hard gate: BEAR_TREND + BUY. Resolved data: N=200, WR=19%, avg_rr=-0.405.
-        if signal_type == SignalType.BUY and btc_regime in _BEAR_CONTEXTS:
-            _record_gate_rejection("REGIME_REJECTION", gate_rejections)
-            log.info(
-                "rejected_bear_trend_buy",
-                symbol=coin.symbol,
-                regime=btc_regime,
-                signal_type=signal_type.value,
-            )
-            return None
+        # REGIME.HARD.GATE.V2 (flag ON): symmetric contra-regime gate with
+        # intelligence override paths (HIGH_MOMENTUM breakout / aligned OI).
+        # Flag OFF: legacy behavior — unconditional BUY-in-bear reject only.
+        _gate_v2_enabled = False
+        try:
+            from backend.system_settings.service import get_settings_service  # noqa: PLC0415
+            from backend.system_settings.groups import FeatureFlags  # noqa: PLC0415
+            _flags = await get_settings_service().get_group(FeatureFlags)
+            _gate_v2_enabled = bool(_flags.regime_hard_gate_v2)
+        except Exception as exc:
+            log.warning("regime_gate_v2_flag_read_failed", symbol=coin.symbol, error=str(exc))
+
+        if _gate_v2_enabled:
+            _oi = futures_data.oi_interpretation.value if futures_data else None
+            if contra_regime_gate(signal_type, btc_regime, setup.breakout_strength, _oi):
+                _record_gate_rejection("CONTRA_REGIME_REJECTION", gate_rejections)
+                log.info(
+                    "rejected_contra_regime_v2",
+                    symbol=coin.symbol,
+                    regime=btc_regime,
+                    signal_type=signal_type.value,
+                    breakout_strength=setup.breakout_strength,
+                    oi_interpretation=_oi,
+                )
+                return None
+        else:
+            # Legacy hard gate: BEAR_TREND + BUY. Resolved data: N=200, WR=19%, avg_rr=-0.405.
+            if signal_type == SignalType.BUY and btc_regime in _BEAR_CONTEXTS:
+                _record_gate_rejection("REGIME_REJECTION", gate_rejections)
+                log.info(
+                    "rejected_bear_trend_buy",
+                    symbol=coin.symbol,
+                    regime=btc_regime,
+                    signal_type=signal_type.value,
+                )
+                return None
 
         # ALPHA.TRUTH.1: NULL regime hard gate — N=677, WR=14.9%, Exp=-0.543R.
         # Previous regime_adj=15 soft gate was bypassed by intelligence boosts

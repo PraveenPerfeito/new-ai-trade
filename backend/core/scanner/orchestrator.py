@@ -82,6 +82,7 @@ _PERSISTED_GATE_KEYS = (
     "CONFIDENCE_REJECTION",
     "CMC_REJECTION",
     "REGIME_REJECTION",
+    "CONTRA_REGIME_REJECTION",   # REGIME.HARD.GATE.V2 — contra-regime reject (flag-gated)
     # PIPELINE.HARDENING.1 — full pipeline accounting (6 additional inner-pipeline gates)
     "MTF_REJECTION",
     "VOLATILITY_REJECTION",

@@ -1453,6 +1453,86 @@ function RegimePreviewModal({ targetPreset, regimeLabel, onConfirm, onClose }: {
   )
 }
 
+/**
+ * REGIME.HARD.GATE.V2 — status + telemetry card.
+ * Contra-regime signals (BUY in bear, SELL in bull) are hard-rejected unless
+ * backed by HIGH_MOMENTUM_BREAKOUT or aligned OI. Avoided-loss estimate uses
+ * the audited contra-regime expectancy of −0.405R per trade (PHASE.9, n=200).
+ */
+function RegimeHardGateCard({ counts24h }: { counts24h: Record<string, number> }) {
+  const [enabled,  setEnabled]  = useState<boolean | null>(null)
+  const [patching, setPatching] = useState(false)
+  const [count7d,  setCount7d]  = useState<number | null>(null)
+
+  useEffect(() => {
+    adminApi.settings.group('features')
+      .then(res => {
+        const f = res.fields.find(f => f.key === 'regime_hard_gate_v2')
+        setEnabled(f ? Boolean(f.value) : false)
+      })
+      .catch(() => setEnabled(null))
+    adminApi.analytics.scans(168)
+      .then(res => setCount7d(res.gate_rejections?.['CONTRA_REGIME_REJECTION'] ?? 0))
+      .catch(() => setCount7d(null))
+  }, [])
+
+  async function toggle() {
+    if (enabled === null || patching) return
+    setPatching(true)
+    try {
+      await adminApi.settings.patch('features', { regime_hard_gate_v2: !enabled })
+      setEnabled(!enabled)
+    } catch { /* keep prior state on failure */ }
+    finally { setPatching(false) }
+  }
+
+  const rej24h = counts24h['CONTRA_REGIME_REJECTION'] ?? 0
+  const avoided7d = count7d != null ? count7d * 0.405 : null
+
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+      <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <ShieldAlert className="w-4 h-4 text-zinc-500"/>
+          <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">Regime Hard Gate V2</p>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${
+            enabled === null ? 'text-zinc-500 border-zinc-700'
+            : enabled ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+            : 'text-zinc-400 border-zinc-600 bg-zinc-800'}`}>
+            {enabled === null ? '…' : enabled ? 'Enabled' : 'Disabled'}
+          </span>
+        </div>
+        <button onClick={toggle} disabled={enabled === null || patching}
+          className={`text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
+            enabled ? 'border-zinc-600 text-zinc-300 hover:bg-zinc-800' : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25'}`}>
+          {patching ? 'Saving…' : enabled ? 'Disable' : 'Enable'}
+        </button>
+      </div>
+      <p className="text-xs text-zinc-500 leading-relaxed mb-3">
+        Rejects BUY in BEAR/CAPITULATION and SELL in BULL/EUPHORIA unless backed by a
+        high-momentum breakout or aligned OI flow. Contra-regime trades ran 19% WR / −0.405R (n=200, 30d audit).
+        When disabled, the legacy unconditional BUY-in-bear gate applies.
+      </p>
+      <div className="flex gap-6 flex-wrap">
+        <div>
+          <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">24h Rejections</p>
+          <p className="text-lg font-bold font-mono text-red-400">{rej24h}</p>
+        </div>
+        <div>
+          <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">7d Rejections</p>
+          <p className="text-lg font-bold font-mono text-red-400">{count7d ?? '—'}</p>
+        </div>
+        <div>
+          <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Est. Avoided Loss (7d)</p>
+          <p className="text-lg font-bold font-mono text-emerald-400">
+            {avoided7d != null ? `+${avoided7d.toFixed(1)}R` : '—'}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function RegimeTab({ regime, scanStats, regimePerfData }: {
   regime: RegimeData | null
   scanStats: ScanSummaryResponse | null
@@ -1583,6 +1663,9 @@ function RegimeTab({ regime, scanStats, regimePerfData }: {
             </div>
           </div>
         )}
+
+        {/* REGIME.HARD.GATE.V2 */}
+        <RegimeHardGateCard counts24h={gateRejections} />
 
         {/* Apply Regime Settings */}
         <div className="glass-card rounded-xl p-4 flex items-start sm:items-center justify-between gap-4 flex-col sm:flex-row">
