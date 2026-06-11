@@ -414,6 +414,45 @@ def detect_setup(
     elif 0 < adx < 18:
         score -= 8
 
+    # ── 4h MACD momentum confirmation (SIGNAL.QUALITY.2) ────────────────────────
+    # Cross-timeframe MACD: when 4h histogram confirms signal direction the move has
+    # higher-timeframe momentum backing it.  Divergence → mild penalty.
+    if signal_type == SignalType.BUY:
+        if ind4h.macd.histogram > 0:
+            score += 8
+            reasons.append("4h MACD positive — higher-TF momentum confirmed")
+        elif ind4h.macd.histogram < 0:
+            score -= 6
+    else:
+        if ind4h.macd.histogram < 0:
+            score += 8
+            reasons.append("4h MACD negative — higher-TF bearish momentum confirmed")
+        elif ind4h.macd.histogram > 0:
+            score -= 6
+
+    # ── 4h RSI zone confirmation (SIGNAL.QUALITY.2) ──────────────────────────────
+    # 4h RSI validates that the higher-timeframe has room to run without being
+    # extended.  BUY ideal: 45-68 (momentum building, not overbought on HTF).
+    # BUY risky: > 75 (4h overbought = late entry).
+    # SELL ideal: 32-55 (bearish momentum, not oversold on HTF).
+    # SELL risky: < 25 (4h oversold = late entry).
+    if signal_type == SignalType.BUY:
+        if 45 <= ind4h.rsi <= 68:
+            score += 8
+            reasons.append(f"4h RSI {ind4h.rsi:.1f} — bullish zone (45-68)")
+        elif ind4h.rsi > 75:
+            score -= 8   # 4h overbought = late BUY entry
+        elif ind4h.rsi < 35:
+            score -= 5   # 4h momentum not yet supporting BUY
+    else:
+        if 32 <= ind4h.rsi <= 55:
+            score += 8
+            reasons.append(f"4h RSI {ind4h.rsi:.1f} — bearish zone (32-55)")
+        elif ind4h.rsi < 25:
+            score -= 8   # 4h oversold = late SELL entry
+        elif ind4h.rsi > 65:
+            score -= 5
+
     # ── EMA200 convergence protection (Phase 7.3A.7) ─────────────────────────
     # EMA200 initialised from seed price has significant contamination at < 280
     # candles. See ema_convergence.py for the exact math.
@@ -513,6 +552,20 @@ def detect_setup(
             score -= 10  # conflicting pattern
         elif signal_type == SignalType.SELL and pat in BUY_PATTERNS:
             score -= 10
+
+    # ── Daily candle pattern bonus (SIGNAL.QUALITY.2) ───────────────────────────
+    # Daily patterns carry 4× the timeframe weight of 1h patterns — they represent
+    # multi-session price action conviction.  Only confirmed reversal patterns score.
+    if ind1d is not None and ind1d.candle_pattern:
+        daily_pat = ind1d.candle_pattern
+        if signal_type == SignalType.BUY and daily_pat in BUY_PATTERNS:
+            pts = 20 if daily_pat in {"MORNING_STAR", "THREE_WHITE_SOLDIERS"} else 12
+            score += pts
+            reasons.append(f"Daily bullish reversal: {daily_pat.replace('_', ' ').title()}")
+        elif signal_type == SignalType.SELL and daily_pat in SELL_PATTERNS:
+            pts = 20 if daily_pat in {"EVENING_STAR", "THREE_BLACK_CROWS"} else 12
+            score += pts
+            reasons.append(f"Daily bearish reversal: {daily_pat.replace('_', ' ').title()}")
 
     # ── EMA crossover freshness (+12) ─────────────────────────────────────────
     # Fresh EMA20/50 cross (within last 5 candles) = new momentum, not extended

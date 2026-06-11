@@ -252,6 +252,10 @@ function RegimeAlignDot({ alignment }: { alignment: 'aligned' | 'contra' | 'neut
 
 function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
   type IntelField = { label: string; value: string; color?: string }
+  // Extract ADX from setup description ("... | ADX: 35") before it gets stripped
+  const adxMatch = sig.setupDescription?.match(/\|\s*ADX:\s*(\d+(?:\.\d+)?)/i)
+  const adxValue = adxMatch ? parseFloat(adxMatch[1]) : null
+
   const fields: IntelField[] = [
     ...(sig.trendScore != null ? [{ label: 'TrendScore', value: trendScoreLabel(sig.trendScore), color: trendScoreColor(sig.trendScore) }] : []),
     ...(sig.sectorStatus ? [{ label: 'Sector', value: shortLabel(sig.sectorStatus) }] : []),
@@ -268,6 +272,7 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
     }] : []),
     ...(sig.positioningContext ? [{ label: 'Positioning', value: shortLabel(sig.positioningContext), color: posColor(sig.positioningContext) }] : []),
     ...(sig.marketRegime ? [{ label: 'Regime', value: shortLabel(sig.marketRegime) }] : []),
+    ...(adxValue != null ? [{ label: 'ADX', value: adxValue.toFixed(0), color: adxValue >= 40 ? 'text-emerald-400' : adxValue >= 30 ? 'text-blue-400' : adxValue < 18 ? 'text-red-400' : 'text-zinc-300' }] : []),
   ]
 
   const hasAI = !!(sig.aiReasoning)
@@ -626,7 +631,13 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
       {/* Recent signals */}
       {signals.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-2">Recent Signals</p>
+          <div className="flex items-center gap-3 mb-2">
+            <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Recent Signals</p>
+            <div className="flex items-center gap-1.5 ml-auto">
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/20 text-green-400">{signals.filter(s=>s.type==='BUY').length} BUY</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400">{signals.filter(s=>s.type==='SELL').length} SELL</span>
+            </div>
+          </div>
           <div className="space-y-1.5">
             {signals.slice(0,6).map((sig,i)=>{
               const alignment = computeRegimeAlignment(sig.type, currentRegime ?? sig.marketRegime)
@@ -896,9 +907,10 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
   const [modeFilter,  setModeFilter]  = useState<string>('all')
   const [sortBy,      setSortBy]      = useState<'confidence'|'grade'|'rr'|'time'>('confidence')
   const [expandedId,  setExpandedId]  = useState<string|null>(null)
+  const [search,      setSearch]      = useState('')
   const [page,        setPage]        = useState(0)
 
-  useEffect(() => { setPage(0) }, [typeFilter, modeFilter, sortBy])
+  useEffect(() => { setPage(0) }, [typeFilter, modeFilter, sortBy, search])
 
   const fetcher = useCallback(() =>
     fetch('/api/signals/tactical?limit=100&lifecycleStage=all')
@@ -907,7 +919,8 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
 
   const filtered = (signals??[]).filter(s=>
     (typeFilter==='all'||s.type===typeFilter) &&
-    (modeFilter==='all'||s.scannerMode===modeFilter)
+    (modeFilter==='all'||s.scannerMode===modeFilter) &&
+    (search===''||s.symbol.toUpperCase().includes(search.toUpperCase()))
   )
 
   const sorted = [...filtered].sort((a, b) => {
@@ -923,6 +936,13 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
     <div className="space-y-4 max-w-5xl">
       {/* Controls row */}
       <div className="flex flex-wrap gap-2 items-center">
+        {/* Symbol search */}
+        <input
+          type="text" placeholder="Symbol…" value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="text-xs px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-500 w-24"
+        />
+        <div className="w-px bg-zinc-800 h-4"/>
         {/* Sort */}
         <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Sort:</span>
         {(['confidence','grade','rr','time'] as const).map(s=>(
@@ -950,6 +970,29 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
       </div>
 
       <StageLegend />
+
+      {/* Confidence distribution + BUY/SELL balance */}
+      {sorted.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[10px]">
+          <div className="flex items-center gap-2 text-zinc-600">
+            <span className="uppercase tracking-wider">Confidence:</span>
+            {[{label:'90+',min:90,max:101,color:'text-emerald-400'},{label:'85-89',min:85,max:90,color:'text-blue-400'},{label:'80-84',min:80,max:85,color:'text-amber-400'},{label:'<80',min:0,max:80,color:'text-zinc-500'}]
+              .map(b=>({...b,n:sorted.filter(s=>s.confidence>=b.min&&s.confidence<b.max).length}))
+              .filter(b=>b.n>0)
+              .map(b=>(
+                <span key={b.label} className={`font-mono ${b.color}`}>{b.label}: {b.n}</span>
+              ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/20 text-green-400">
+              {sorted.filter(s=>s.type==='BUY').length} BUY
+            </span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400">
+              {sorted.filter(s=>s.type==='SELL').length} SELL
+            </span>
+          </div>
+        </div>
+      )}
 
       {loading && <div className="space-y-2">{Array.from({length:5}).map((_,i)=><div key={i} className="skeleton h-14 rounded-xl"/>)}</div>}
       {!loading && sorted.length === 0 && (
@@ -1152,7 +1195,7 @@ function TradeStructureBar({ sig }: { sig: TacticalSignalRow }) {
   return (
     <div className="mt-1.5 space-y-0.5">
       <div className="flex items-center gap-2 text-[10px] text-zinc-500">
-        <span>Entry <span className="text-zinc-300 font-mono">${entryPrice.toFixed(4)}</span></span>
+        <span>Entry <span className="text-zinc-300 font-mono">${fmtPx(entryPrice)}</span></span>
         <span className="text-emerald-400">TP +{tpDistPct.toFixed(1)}%</span>
         <span className="text-red-400">SL -{slDistPct.toFixed(1)}%</span>
       </div>
