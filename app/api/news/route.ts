@@ -54,84 +54,76 @@ async function fetchFearGreed(): Promise<Pick<NewsSnapshot, 'fearGreedValue' | '
   }
 }
 
-// ── CryptoPanic ───────────────────────────────────────────────────────────────
+// ── Keyword sentiment classifier ──────────────────────────────────────────────
 
-async function fetchCryptoPanic(): Promise<NewsItem[]> {
-  const token = process.env.CRYPTOPANIC_API_TOKEN
-  // Public endpoint works without token (limited but sufficient for headlines)
-  const url = token
-    ? `https://cryptopanic.com/api/v1/posts/?auth_token=${token}&kind=news&filter=hot&public=true`
-    : 'https://cryptopanic.com/api/v1/posts/?kind=news&filter=hot&public=true'
-  try {
-    const r = await fetch(url, {
-      signal: AbortSignal.timeout(5000),
-      headers: { 'User-Agent': 'SignalEdgeAI/1.0' },
-    })
-    if (!r.ok) return []
-    const json = await r.json() as {
-      results?: Array<{
-        title: string
-        url: string
-        source: { title: string }
-        published_at: string
-        votes?: { negative: number; positive: number; saved: number }
-      }>
-    }
-    return (json.results ?? []).slice(0, 15).map(item => {
-      const pos = item.votes?.positive ?? 0
-      const neg = item.votes?.negative ?? 0
-      const sentiment: NewsItem['sentiment'] =
-        pos > neg + 2 ? 'bullish' : neg > pos + 2 ? 'bearish' : 'neutral'
-      return {
-        title:      item.title,
-        url:        item.url,
-        source:     item.source?.title ?? 'CryptoPanic',
-        publishedAt: item.published_at,
-        sentiment,
-      }
-    })
-  } catch {
-    return []
-  }
+const BULLISH_WORDS = [
+  'rally', 'surge', 'soar', 'gain', 'rise', 'high', 'bull', 'ath', 'all-time',
+  'adoption', 'approve', 'launch', 'upgrade', 'institutional', 'inflow',
+  'recover', 'breakout', 'growth', 'milestone', 'record', 'etf', 'accumulate',
+  'partnership', 'integration', 'boom', 'positive', 'support',
+]
+const BEARISH_WORDS = [
+  'crash', 'dump', 'drop', 'fall', 'decline', 'bear', 'hack', 'exploit', 'ban',
+  'sec', 'lawsuit', 'fraud', 'scam', 'collapse', 'fear', 'outflow',
+  'liquidat', 'loss', 'concern', 'risk', 'warning', 'penalty', 'fine', 'arrest',
+  'suspend', 'delist', 'restrict', 'probe', 'investigat', 'plunge', 'tumble',
+]
+
+function classifySentiment(text: string): 'bullish' | 'bearish' | 'neutral' {
+  const lower = text.toLowerCase()
+  const b = BULLISH_WORDS.filter(w => lower.includes(w)).length
+  const s = BEARISH_WORDS.filter(w => lower.includes(w)).length
+  if (b > s) return 'bullish'
+  if (s > b) return 'bearish'
+  return 'neutral'
 }
 
-// ── CoinDesk RSS ──────────────────────────────────────────────────────────────
+// ── RSS feeds (free, no auth) ─────────────────────────────────────────────────
+
+const RSS_FEEDS = [
+  { url: 'https://www.coindesk.com/arc/outboundfeeds/rss/', source: 'CoinDesk'      },
+  { url: 'https://cointelegraph.com/rss',                   source: 'CoinTelegraph' },
+  { url: 'https://decrypt.co/feed',                         source: 'Decrypt'       },
+]
 
 function parseRssItems(xml: string, sourceName: string): NewsItem[] {
   const items: NewsItem[] = []
   const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/g
   let match: RegExpExecArray | null
   while ((match = itemRegex.exec(xml)) !== null && items.length < 8) {
-    const block = match[1]
-    const title = (/<title[^>]*><!\[CDATA\[(.*?)\]\]><\/title>/.exec(block) ??
-                   /<title[^>]*>(.*?)<\/title>/.exec(block))?.[1]?.trim() ?? ''
-    const link  = (/<link>(.*?)<\/link>/.exec(block) ??
-                   /<link[^>]*href="([^"]+)"/.exec(block))?.[1]?.trim() ?? ''
+    const block   = match[1]
+    const title   = (/<title[^>]*><!\[CDATA\[(.*?)\]\]><\/title>/.exec(block) ??
+                     /<title[^>]*>(.*?)<\/title>/.exec(block))?.[1]?.trim() ?? ''
+    const link    = (/<link>(.*?)<\/link>/.exec(block) ??
+                     /<link[^>]*href="([^"]+)"/.exec(block))?.[1]?.trim() ?? ''
     const pubDate = (/<pubDate>(.*?)<\/pubDate>/.exec(block))?.[1]?.trim() ?? ''
+    const desc    = (/<description[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/description>/.exec(block) ??
+                     /<description[^>]*>([\s\S]*?)<\/description>/.exec(block))?.[1]
+                      ?.replace(/<[^>]+>/g, '').trim().slice(0, 150) ?? ''
     if (!title || !link) continue
     items.push({
       title,
       url:         link,
       source:      sourceName,
       publishedAt: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
-      sentiment:   'neutral',
+      sentiment:   classifySentiment(title + ' ' + desc),
     })
   }
   return items
 }
 
-async function fetchCoinDeskRSS(): Promise<NewsItem[]> {
-  try {
-    const r = await fetch('https://www.coindesk.com/arc/outboundfeeds/rss/', {
-      signal: AbortSignal.timeout(5000),
-      headers: { 'User-Agent': 'SignalEdgeAI/1.0' },
-    })
-    if (!r.ok) return []
-    const xml = await r.text()
-    return parseRssItems(xml, 'CoinDesk')
-  } catch {
-    return []
-  }
+async function fetchAllRss(): Promise<NewsItem[]> {
+  const results = await Promise.allSettled(
+    RSS_FEEDS.map(async ({ url, source }) => {
+      const r = await fetch(url, {
+        signal:  AbortSignal.timeout(5_000),
+        headers: { 'User-Agent': 'SignalEdgeAI/1.0', Accept: 'application/rss+xml, text/xml' },
+      })
+      if (!r.ok) return [] as NewsItem[]
+      return parseRssItems(await r.text(), source)
+    }),
+  )
+  return results.flatMap(r => r.status === 'fulfilled' ? r.value : [])
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────
@@ -151,18 +143,13 @@ export async function GET() {
 
   log.info('fetching fresh news snapshot')
 
-  const [fearGreed, cryptoPanic, coinDesk] = await Promise.allSettled([
+  const [fearGreed, rssResult] = await Promise.allSettled([
     fetchFearGreed(),
-    fetchCryptoPanic(),
-    fetchCoinDeskRSS(),
+    fetchAllRss(),
   ])
 
-  const fg       = fearGreed.status === 'fulfilled' ? fearGreed.value : { fearGreedValue: null, fearGreedLabel: null, fearGreedTs: null }
-  const cpItems  = cryptoPanic.status === 'fulfilled' ? cryptoPanic.value : []
-  const cdItems  = coinDesk.status === 'fulfilled' ? coinDesk.value : []
-
-  // Merge headlines — CryptoPanic first (has sentiment votes), then CoinDesk RSS
-  const allHeadlines = [...cpItems, ...cdItems].slice(0, 20)
+  const fg           = fearGreed.status === 'fulfilled' ? fearGreed.value : { fearGreedValue: null, fearGreedLabel: null, fearGreedTs: null }
+  const allHeadlines = (rssResult.status === 'fulfilled' ? rssResult.value : []).slice(0, 20)
 
   const bullishCount = allHeadlines.filter(h => h.sentiment === 'bullish').length
   const bearishCount = allHeadlines.filter(h => h.sentiment === 'bearish').length
