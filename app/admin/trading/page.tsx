@@ -157,6 +157,14 @@ function fmtPx(p: number): string {
   if (p >= 0.01)  return p.toFixed(5)
   return p.toFixed(8)
 }
+/** Distance from entry to price as a signed percentage string (+3.1% / -1.8%). */
+function fmtDistPct(entry: number, price: number, dir: 'BUY' | 'SELL', role: 'tp' | 'sl'): string {
+  if (!entry || !price) return ''
+  const raw = role === 'tp'
+    ? (dir === 'BUY' ? (price - entry) / entry : (entry - price) / entry)
+    : (dir === 'BUY' ? (entry - price) / entry : (price - entry) / entry)
+  return `${raw >= 0 ? '+' : ''}${(raw * 100).toFixed(1)}%`
+}
 function nextFire(mode: string) {
   const mins = MODE_FIRE_MINUTES[mode] ?? [0,15,30,45]
   const now = new Date(), cur = now.getMinutes()
@@ -263,7 +271,18 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
   ]
 
   const hasAI = !!(sig.aiReasoning)
-  if (fields.length === 0 && !hasAI) {
+  const hasSetup = !!(sig.setupDescription)
+  const qs = sig.qualityScore
+  const rs = sig.riskScore
+
+  const slDistPct = sig.entryPrice && sig.stopLoss
+    ? fmtDistPct(sig.entryPrice, sig.stopLoss, sig.type as 'BUY' | 'SELL', 'sl')
+    : null
+  const tpDistPct = sig.entryPrice && sig.targetPrice
+    ? fmtDistPct(sig.entryPrice, sig.targetPrice, sig.type as 'BUY' | 'SELL', 'tp')
+    : null
+
+  if (fields.length === 0 && !hasAI && !hasSetup && qs == null) {
     return (
       <div className="border-t border-zinc-800 px-4 py-3 text-[11px] text-zinc-600">
         No intelligence data available for this signal.
@@ -273,6 +292,46 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
 
   return (
     <div className="border-t border-zinc-800 px-4 py-3 space-y-2.5">
+      {/* Quality + Risk scores + trade distances */}
+      {(qs != null || rs != null || slDistPct || tpDistPct) && (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+          {qs != null && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Quality</span>
+              <div className="flex items-center gap-1.5">
+                <div className="w-14 h-1 bg-zinc-700 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${qs >= 70 ? 'bg-emerald-400' : qs >= 50 ? 'bg-blue-400' : 'bg-amber-400'}`}
+                    style={{ width: `${Math.min(100, qs)}%` }} />
+                </div>
+                <span className={`text-[11px] font-mono font-semibold ${qs >= 70 ? 'text-emerald-400' : qs >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>
+                  {Math.round(qs)}/100
+                </span>
+              </div>
+            </div>
+          )}
+          {rs != null && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Risk</span>
+              <span className={`text-[11px] font-mono font-semibold ${rs <= 25 ? 'text-emerald-400' : rs <= 45 ? 'text-blue-400' : rs <= 60 ? 'text-amber-400' : 'text-red-400'}`}>
+                {Math.round(rs)}/100
+              </span>
+            </div>
+          )}
+          {tpDistPct && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">TP dist</span>
+              <span className="text-[11px] font-mono font-semibold text-emerald-400">{tpDistPct}</span>
+            </div>
+          )}
+          {slDistPct && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">SL dist</span>
+              <span className="text-[11px] font-mono font-semibold text-red-400">{slDistPct}</span>
+            </div>
+          )}
+        </div>
+      )}
+      {/* Intelligence fields */}
       {fields.length > 0 && (
         <div className="flex flex-wrap gap-x-5 gap-y-1.5">
           {fields.map((f, i) => (
@@ -283,6 +342,13 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
           ))}
         </div>
       )}
+      {/* Setup description */}
+      {hasSetup && (
+        <p className="text-[10px] text-zinc-500 leading-relaxed border-l-2 border-zinc-800 pl-2.5 font-mono">
+          {sig.setupDescription!.replace(/\s*\|\s*ADX:.*$/i, '')}
+        </p>
+      )}
+      {/* AI reasoning */}
       {hasAI && (
         <p className="text-[11px] text-zinc-400 leading-relaxed border-l-2 border-zinc-700 pl-2.5 italic">
           &ldquo;{sig.aiReasoning!.slice(0, 240)}{sig.aiReasoning!.length > 240 ? '…' : ''}&rdquo;
@@ -527,7 +593,12 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
               <Activity className="w-3.5 h-3.5 text-zinc-500"/>
               <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">Market Regime</span>
             </div>
-            <div className={`text-2xl font-bold mb-4 ${REGIME_COLOR[regime.regime]}`}>{REGIME_LABEL[regime.regime]}</div>
+            <div className={`text-2xl font-bold mb-1.5 ${REGIME_COLOR[regime.regime]}`}>{REGIME_LABEL[regime.regime]}</div>
+            {REGIME_META[regime.regime] && (
+              <p className="text-[10px] text-zinc-500 leading-snug mb-3">
+                {REGIME_META[regime.regime].implication}
+              </p>
+            )}
             <div className="grid grid-cols-3 gap-2">
               <div><p className="text-[9px] text-zinc-500 mb-0.5">RSI 4h</p><p className={`text-sm font-bold font-mono ${regime.btcRsi4h>70?'text-red-400':regime.btcRsi4h<30?'text-green-400':'text-white'}`}>{fmt(regime.btcRsi4h,1)}</p></div>
               <div><p className="text-[9px] text-zinc-500 mb-0.5">BTC 24h</p><p className={`text-sm font-bold font-mono ${regime.btc24hChange>=0?'text-green-400':'text-red-400'}`}>{regime.btc24hChange>=0?'+':''}{fmt(regime.btc24hChange,1)}%</p></div>
@@ -575,10 +646,20 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
                     </div>
                   </div>
                   {(sig.entryPrice > 0 || sig.targetPrice > 0 || sig.stopLoss > 0) && (
-                    <div className="flex items-center gap-4 mt-1 flex-wrap">
+                    <div className="flex items-center gap-3 mt-1 flex-wrap">
                       {sig.entryPrice  > 0 && <span className="text-[10px] text-zinc-600">Entry <span className="text-zinc-300 font-mono">${fmtPx(sig.entryPrice)}</span></span>}
-                      {sig.targetPrice > 0 && <span className="text-[10px] text-zinc-600">TP <span className="text-emerald-400 font-mono">${fmtPx(sig.targetPrice)}</span></span>}
-                      {sig.stopLoss    > 0 && <span className="text-[10px] text-zinc-600">SL <span className="text-red-400 font-mono">${fmtPx(sig.stopLoss)}</span></span>}
+                      {sig.targetPrice > 0 && (
+                        <span className="text-[10px] text-zinc-600">
+                          TP <span className="text-emerald-400 font-mono">${fmtPx(sig.targetPrice)}</span>
+                          {sig.entryPrice > 0 && <span className="text-emerald-600 ml-1">{fmtDistPct(sig.entryPrice, sig.targetPrice, sig.type as 'BUY'|'SELL', 'tp')}</span>}
+                        </span>
+                      )}
+                      {sig.stopLoss > 0 && (
+                        <span className="text-[10px] text-zinc-600">
+                          SL <span className="text-red-400 font-mono">${fmtPx(sig.stopLoss)}</span>
+                          {sig.entryPrice > 0 && <span className="text-red-600 ml-1">{fmtDistPct(sig.entryPrice, sig.stopLoss, sig.type as 'BUY'|'SELL', 'sl')}</span>}
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -908,10 +989,25 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
               </div>
               {/* Price levels — always visible */}
               {(sig.entryPrice > 0 || sig.targetPrice > 0 || sig.stopLoss > 0) && (
-                <div className="px-4 pb-2.5 flex items-center gap-4 flex-wrap">
+                <div className="px-4 pb-2.5 flex items-center gap-3 flex-wrap">
                   {sig.entryPrice  > 0 && <span className="text-[10px] text-zinc-600">Entry <span className="text-zinc-300 font-mono">${fmtPx(sig.entryPrice)}</span></span>}
-                  {sig.targetPrice > 0 && <span className="text-[10px] text-zinc-600">TP <span className="text-emerald-400 font-mono">${fmtPx(sig.targetPrice)}</span></span>}
-                  {sig.stopLoss    > 0 && <span className="text-[10px] text-zinc-600">SL <span className="text-red-400 font-mono">${fmtPx(sig.stopLoss)}</span></span>}
+                  {sig.targetPrice > 0 && (
+                    <span className="text-[10px] text-zinc-600">
+                      TP <span className="text-emerald-400 font-mono">${fmtPx(sig.targetPrice)}</span>
+                      {sig.entryPrice > 0 && <span className="text-emerald-600 ml-1">{fmtDistPct(sig.entryPrice, sig.targetPrice, sig.type as 'BUY'|'SELL', 'tp')}</span>}
+                    </span>
+                  )}
+                  {sig.stopLoss > 0 && (
+                    <span className="text-[10px] text-zinc-600">
+                      SL <span className="text-red-400 font-mono">${fmtPx(sig.stopLoss)}</span>
+                      {sig.entryPrice > 0 && <span className="text-red-600 ml-1">{fmtDistPct(sig.entryPrice, sig.stopLoss, sig.type as 'BUY'|'SELL', 'sl')}</span>}
+                    </span>
+                  )}
+                  {sig.rrRatio != null && sig.rrRatio > 0 && (
+                    <span className={`text-[10px] font-mono font-semibold ${sig.rrRatio >= 2.5 ? 'text-emerald-400' : sig.rrRatio >= 2.0 ? 'text-blue-400' : 'text-amber-400'}`}>
+                      RR {sig.rrRatio.toFixed(1)}:1
+                    </span>
+                  )}
                 </div>
               )}
               {isExpanded && <IntelligencePanel sig={sig} />}
@@ -1152,10 +1248,29 @@ function TacticalTab({ currentRegime }: { currentRegime: MarketRegime | null }) 
                 </div>
                 <div className="flex gap-4 mt-1.5 flex-wrap">
                   <span className="text-[11px] text-zinc-500">Conf: <span className="text-zinc-300 font-mono">{sig.confidence}%</span></span>
-                  <span className="text-[11px] text-zinc-500">RR: <span className="text-zinc-300 font-mono">{sig.rrRatio?.toFixed(1) ?? '—'}:1</span></span>
-                  {sig.entryPrice > 0 && <span className="text-[11px] text-zinc-500">Entry: <span className="text-zinc-300 font-mono">${sig.entryPrice.toFixed(4)}</span></span>}
-                  {sig.targetPrice > 0 && <span className="text-[11px] text-zinc-500">TP: <span className={`font-mono ${isBuy?'text-green-400':'text-red-400'}`}>${sig.targetPrice.toFixed(4)}</span></span>}
-                  {sig.stopLoss > 0 && <span className="text-[11px] text-zinc-500">SL: <span className="text-red-400 font-mono">${sig.stopLoss.toFixed(4)}</span></span>}
+                  <span className={`text-[11px] font-mono font-semibold ${(sig.rrRatio??0) >= 2.5 ? 'text-emerald-400' : (sig.rrRatio??0) >= 2.0 ? 'text-blue-400' : 'text-amber-400'}`}>
+                    RR {sig.rrRatio?.toFixed(1) ?? '—'}:1
+                  </span>
+                  {sig.qualityScore != null && (
+                    <span className="text-[11px] text-zinc-500">
+                      Q: <span className={`font-mono font-semibold ${sig.qualityScore >= 70 ? 'text-emerald-400' : sig.qualityScore >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>
+                        {Math.round(sig.qualityScore)}
+                      </span>
+                    </span>
+                  )}
+                  {sig.entryPrice > 0 && <span className="text-[11px] text-zinc-500">Entry: <span className="text-zinc-300 font-mono">${fmtPx(sig.entryPrice)}</span></span>}
+                  {sig.targetPrice > 0 && (
+                    <span className="text-[11px] text-zinc-500">
+                      TP: <span className={`font-mono ${isBuy?'text-green-400':'text-red-400'}`}>${fmtPx(sig.targetPrice)}</span>
+                      {sig.entryPrice > 0 && <span className={`ml-1 text-[10px] ${isBuy?'text-green-600':'text-red-600'}`}>{fmtDistPct(sig.entryPrice, sig.targetPrice, sig.type as 'BUY'|'SELL', 'tp')}</span>}
+                    </span>
+                  )}
+                  {sig.stopLoss > 0 && (
+                    <span className="text-[11px] text-zinc-500">
+                      SL: <span className="text-red-400 font-mono">${fmtPx(sig.stopLoss)}</span>
+                      {sig.entryPrice > 0 && <span className="text-red-600 ml-1 text-[10px]">{fmtDistPct(sig.entryPrice, sig.stopLoss, sig.type as 'BUY'|'SELL', 'sl')}</span>}
+                    </span>
+                  )}
                 </div>
                 {isActive && <TradeStructureBar sig={sig} />}
               </div>

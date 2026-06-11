@@ -299,6 +299,7 @@ def detect_setup(
     candle_count_4h: int = 0,          # Phase 7.4A.3 — 4h EMA200 convergence guard
     candles_1h: "list[Candle]" = [],   # Phase 7.4A.1 — breakout detection
     candles_1d: "list[Candle]" = [],   # Phase 7.4A.1 — breakout detection
+    adx: float = 0.0,                  # SIGNAL.QUALITY.1 — ADX trend strength from market structure gate
 ) -> SetupResult:
     """
     Pre-AI setup quality score. Threshold 72 (aligned with AI_MIN_SETUP_SCORE — eliminates
@@ -319,23 +320,40 @@ def detect_setup(
         if ind1h.trend == TrendDirection.BULLISH:
             score += 20
             reasons.append("1h bullish trend confirmed")
-        if 48 <= ind1h.rsi <= 70:
+        if 50 <= ind1h.rsi <= 68:
             score += 15
-            reasons.append(f"RSI {ind1h.rsi:.1f} in bullish zone (48-70)")
+            reasons.append(f"RSI {ind1h.rsi:.1f} in bullish zone (50-68)")
+        elif 42 <= ind1h.rsi < 50:
+            score += 8   # SIGNAL.QUALITY.1 — pullback entry zone; was 0 pts
+            reasons.append(f"RSI {ind1h.rsi:.1f} in pullback BUY zone (42-50)")
         elif ind1h.rsi > 78:
             score -= 25
         elif ind1h.rsi < 40:
-            score -= 5
+            score -= 8
         if ind1h.macd.histogram > 0:
             score += 15
             reasons.append("1h MACD histogram positive")
         else:
             score -= 10
-        if ind1h.volume_spike >= 1.5:
+        # SIGNAL.QUALITY.1 — volume spike: 5-tier gradient replaces cliff at 1.5×
+        _vs = ind1h.volume_spike
+        if _vs >= 2.5:
+            score += 15
+            reasons.append(f"High-conviction volume {_vs:.1f}×")
+        elif _vs >= 1.8:
+            score += 12
+            reasons.append(f"Volume spike {_vs:.1f}×")
+        elif _vs >= 1.5:
             score += 10
-            reasons.append(f"Volume spike {ind1h.volume_spike:.1f}×")
-        elif ind1h.volume_spike < 0.8:
+            reasons.append(f"Volume spike {_vs:.1f}×")
+        elif _vs >= 1.2:
+            score += 5
+        elif _vs < 0.7:
+            score -= 15
+        elif _vs < 0.8:
             score -= 10
+        elif _vs < 1.0:
+            score -= 5
     else:
         if ind4h.trend == TrendDirection.BEARISH:
             score += 30
@@ -343,28 +361,58 @@ def detect_setup(
         if ind1h.trend == TrendDirection.BEARISH:
             score += 20
             reasons.append("1h bearish trend confirmed")
-        if 30 <= ind1h.rsi <= 52:
+        if 32 <= ind1h.rsi <= 50:
             score += 15
-            reasons.append(f"RSI {ind1h.rsi:.1f} in bearish zone (30-52)")
+            reasons.append(f"RSI {ind1h.rsi:.1f} in bearish zone (32-50)")
+        elif 50 < ind1h.rsi <= 58:
+            score += 8   # SIGNAL.QUALITY.1 — pullback short entry zone; was 0 pts
+            reasons.append(f"RSI {ind1h.rsi:.1f} in pullback SELL zone (50-58)")
         elif ind1h.rsi < 22:
             score -= 25
-        elif ind1h.rsi > 60:
-            score -= 5
+        elif ind1h.rsi > 62:
+            score -= 8
         if ind1h.macd.histogram < 0:
             score += 15
             reasons.append("1h MACD histogram negative")
         else:
             score -= 10
-        if ind1h.volume_spike >= 1.5:
+        # SIGNAL.QUALITY.1 — volume spike: 5-tier gradient replaces cliff at 1.5×
+        _vs = ind1h.volume_spike
+        if _vs >= 2.5:
+            score += 15
+            reasons.append(f"High-conviction volume {_vs:.1f}×")
+        elif _vs >= 1.8:
+            score += 12
+            reasons.append(f"Volume spike {_vs:.1f}×")
+        elif _vs >= 1.5:
             score += 10
-            reasons.append(f"Volume spike {ind1h.volume_spike:.1f}×")
-        elif ind1h.volume_spike < 0.8:
+            reasons.append(f"Volume spike {_vs:.1f}×")
+        elif _vs >= 1.2:
+            score += 5
+        elif _vs < 0.7:
+            score -= 15
+        elif _vs < 0.8:
             score -= 10
+        elif _vs < 1.0:
+            score -= 5
 
     combined = strength_1h * 0.4 + strength_4h * 0.6
     if combined > 60:
         score += 10
         reasons.append(f"Strong trend score: {combined:.0f}/100")
+
+    # ── ADX trend strength (SIGNAL.QUALITY.1) ────────────────────────────────
+    # ADX measures directional intensity irrespective of direction.
+    # ADX > 30 = established trend; > 40 = powerful trend; < 18 = no trend.
+    # Market structure gate already rejects ADX < 16 as sideways — this adds
+    # a positive bonus for confirmed strong trends and a mild penalty for the
+    # 16–18 borderline zone that slipped through the sideways gate.
+    if adx >= 40:
+        score += 12
+    elif adx >= 30:
+        score += 8
+    elif 0 < adx < 18:
+        score -= 8
 
     # ── EMA200 convergence protection (Phase 7.3A.7) ─────────────────────────
     # EMA200 initialised from seed price has significant contamination at < 280
@@ -551,23 +599,78 @@ def detect_setup(
 
 # ── Trade levels ──────────────────────────────────────────────────────────────
 
+def _find_structure_stop(
+    candles: "list[Candle]",
+    signal_type: SignalType,
+    price: float,
+    atr: float,
+) -> "float | None":
+    """
+    Find a structure-aware stop loss anchored to the nearest swing low (BUY) or
+    swing high (SELL) in the last 12 candles.
+
+    Uses the lowest low / highest high of the 11 candles preceding the current one,
+    then adds a 0.15×ATR buffer beyond the structure level.  The result is only
+    accepted when the stop distance is between 0.4×ATR and 2.5×ATR — outside
+    that range we fall back to the flat 1×ATR stop so over-wide or noise-wide
+    stops are never produced.
+
+    BUY  → stop = min(low of candles[-12:-1]) − 0.15×ATR
+    SELL → stop = max(high of candles[-12:-1]) + 0.15×ATR
+    """
+    if len(candles) < 13 or atr == 0:
+        return None
+
+    lookback = candles[-12:-1]   # 11 confirmed candles before the current one
+
+    if signal_type == SignalType.BUY:
+        swing = min(c.low for c in lookback)
+        stop  = swing - atr * 0.15
+        sl_dist = price - stop
+        if atr * 0.4 <= sl_dist <= atr * 2.5:
+            return stop
+    else:
+        swing = max(c.high for c in lookback)
+        stop  = swing + atr * 0.15
+        sl_dist = stop - price
+        if atr * 0.4 <= sl_dist <= atr * 2.5:
+            return stop
+
+    return None
+
+
 def trade_levels(
     price: float,
     atr: float,
     signal_type: SignalType,
     mode: ScannerMode,
+    candles: "list[Candle] | None" = None,
 ) -> TradeLevels:
+    """
+    Compute entry / stop / target with structure-aware stop placement.
+
+    Stop priority:
+      1. Swing-structure stop (lowest low / highest high of last 11 candles ± 0.15×ATR)
+         — accepted when stop distance is 0.4–2.5×ATR
+      2. Flat 1×ATR stop (fallback)
+
+    Target is always stop_distance × target_mult so RR = target_mult exactly,
+    regardless of whether structure or ATR stop is used.  This keeps the RR gate
+    deterministic while the stop level itself reflects actual market structure.
+    """
     target_mult = _TARGET_MULT.get(mode, 2.0)
-    stop_mult   = 1.0
+
+    structure_stop = _find_structure_stop(candles, signal_type, price, atr) if candles else None
 
     if signal_type == SignalType.BUY:
-        target = price + atr * target_mult
-        stop   = price - atr * stop_mult
+        stop   = structure_stop if structure_stop is not None else price - atr
+        risk   = price - stop
+        target = price + risk * target_mult
     else:
-        target = price - atr * target_mult
-        stop   = price + atr * stop_mult
+        stop   = structure_stop if structure_stop is not None else price + atr
+        risk   = stop - price
+        target = price - risk * target_mult
 
-    risk   = abs(price - stop)
     reward = abs(target - price)
     rr     = reward / risk if risk > 0 else 0.0
 
@@ -655,7 +758,7 @@ async def scan_coin(
             log.info("rejected_market_structure", symbol=coin.symbol, reason=structure.rejection_reason)
             return None
 
-        # Step 7: Setup scoring (daily, EMA200, BB, candle patterns, EMA cross, rel strength)
+        # Step 7: Setup scoring (daily, EMA200, BB, candle patterns, EMA cross, rel strength, ADX)
         setup = detect_setup(
             ind1h, ind4h, signal_type, s1h, s4h, ind1d,
             coin_change_24h=coin.price_change_24h,
@@ -664,6 +767,7 @@ async def scan_coin(
             candle_count_4h=len(candles_4h),   # Phase 7.4A.3 — 4h EMA200 guard
             candles_1h=candles_1h,
             candles_1d=candles_1d,
+            adx=structure.adx,                 # SIGNAL.QUALITY.1 — ADX from market structure gate
         )
         if _should_block_buy_for_btc_context(signal_type, setup.description):
             _record_gate_rejection("BTC_DOWN_BUY", gate_rejections)
@@ -693,7 +797,7 @@ async def scan_coin(
         # Step 8: Trade levels + RR gate
         if ind1h.atr == 0:
             return None
-        levels = trade_levels(ind1h.current_price, ind1h.atr, signal_type, mode)
+        levels = trade_levels(ind1h.current_price, ind1h.atr, signal_type, mode, candles=candles_1h)
         if levels.rr_ratio < config.min_rr_ratio:
             _record_gate_rejection("RR_REJECTION", gate_rejections)
             return None
