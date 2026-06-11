@@ -990,6 +990,13 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400">
               {sorted.filter(s=>s.type==='SELL').length} SELL
             </span>
+            <div className="w-px bg-zinc-800 h-3"/>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400" title="Claude AI validated">
+              AI: {sorted.filter(s=>s.validationSource==='CLAUDE').length}
+            </span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/10 border border-sky-500/20 text-sky-400" title="Heuristic-validated — AI toggle disabled or setup score below the AI threshold (78)">
+              Screened: {sorted.filter(s=>s.validationSource==='HEURISTIC'||!s.validationSource).length}
+            </span>
           </div>
         </div>
       )}
@@ -1089,10 +1096,15 @@ function LifecycleFunnel({ signals }: { signals: TacticalSignalRow[] }) {
   for (const s of signals) counts[s.lifecycleStage] = (counts[s.lifecycleStage]??0)+1
 
   const generated = signals.length
-  const approved  = signals.filter(s => ['AI_APPROVED','SCREENED','TELEGRAM_SENT','ACTIVE','STALE','TP_HIT','SL_HIT','CLOSED','ANALYZED'].includes(s.lifecycleStage)).length
-  const sent      = signals.filter(s => ['TELEGRAM_SENT','ACTIVE','STALE','TP_HIT','SL_HIT','CLOSED','ANALYZED'].includes(s.lifecycleStage)).length
-  const active    = counts['ACTIVE'] ?? 0
-  const won       = (counts['TP_HIT']??0) + (counts['ANALYZED']??0)
+  // Every persisted signal is validated (AI or heuristic), so an "Approved" step
+  // is always ~100% — show the AI vs Screened split instead.
+  const aiCount   = signals.filter(s => s.validationSource === 'CLAUDE' || s.lifecycleStage === 'AI_APPROVED').length
+  const scrCount  = signals.filter(s => s.validationSource === 'HEURISTIC' || s.lifecycleStage === 'SCREENED').length
+  // Sent = actually delivered to Telegram. Outcomes register for ALL accepted
+  // signals, so inferring "sent" from outcome stages overcounts — use the boolean.
+  const sent      = signals.filter(s => s.telegramSent).length
+  const active    = (counts['ACTIVE'] ?? 0) + (counts['TELEGRAM_SENT'] ?? 0)
+  const won       = counts['TP_HIT'] ?? 0
   const lost      = counts['SL_HIT'] ?? 0
   const expired   = (counts['STALE']??0) + (counts['CLOSED']??0)
 
@@ -1107,22 +1119,30 @@ function LifecycleFunnel({ signals }: { signals: TacticalSignalRow[] }) {
 
   const steps = [
     { label: 'Generated', count: generated },
-    { label: 'Approved',  count: approved  },
     { label: 'Sent',      count: sent      },
     { label: 'Active',    count: active    },
   ]
-  const winRate = (won + lost) > 0 ? Math.round(won / (won + lost) * 100) : null
+  const resolved = won + lost
+  const winRate = resolved > 0 ? Math.round(won / resolved * 100) : null
 
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-y-1">
         <p className="text-[9px] text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
           <BarChart2 className="w-3 h-3"/>Pipeline · last {signals.length} signals
         </p>
-        {winRate !== null && (
-          <span className="text-xs font-mono font-bold text-emerald-400">{winRate}% Win Rate</span>
-        )}
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400" title="Claude AI validated">
+            AI: {aiCount}
+          </span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/10 border border-sky-500/20 text-sky-400" title="Heuristic-validated (AI disabled or setup score below AI threshold)">
+            Screened: {scrCount}
+          </span>
+          {winRate !== null && (
+            <span className="text-xs font-mono font-bold text-emerald-400">{winRate}% WR <span className="text-zinc-500 font-normal">(n={resolved})</span></span>
+          )}
+        </div>
       </div>
 
       {/* Funnel step cards */}
@@ -1185,12 +1205,18 @@ function TradeStructureBar({ sig }: { sig: TacticalSignalRow }) {
   if (!entryPrice || !targetPrice || !stopLoss) return null
 
   const isBuy = type === 'BUY'
-  const tpDistPct = isBuy
+  const tpDistPct = Math.max(0, isBuy
     ? ((targetPrice - entryPrice) / entryPrice * 100)
-    : ((entryPrice - targetPrice) / entryPrice * 100)
-  const slDistPct = isBuy
+    : ((entryPrice - targetPrice) / entryPrice * 100))
+  const slDistPct = Math.max(0, isBuy
     ? ((entryPrice - stopLoss) / entryPrice * 100)
-    : ((stopLoss - entryPrice) / entryPrice * 100)
+    : ((stopLoss - entryPrice) / entryPrice * 100))
+  const total = tpDistPct + slDistPct
+  if (total <= 0) return null
+
+  // Proportional scaling so the bar visually reflects the true RR ratio
+  const slW = (slDistPct / total) * 100
+  const tpW = (tpDistPct / total) * 100
 
   return (
     <div className="mt-1.5 space-y-0.5">
@@ -1198,20 +1224,20 @@ function TradeStructureBar({ sig }: { sig: TacticalSignalRow }) {
         <span>Entry <span className="text-zinc-300 font-mono">${fmtPx(entryPrice)}</span></span>
         <span className="text-emerald-400">TP +{tpDistPct.toFixed(1)}%</span>
         <span className="text-red-400">SL -{slDistPct.toFixed(1)}%</span>
+        {slDistPct > 0 && (
+          <span className="text-zinc-600 font-mono">RR {(tpDistPct / slDistPct).toFixed(1)}:1</span>
+        )}
       </div>
       <div className="relative h-1.5 bg-zinc-800 rounded-full overflow-hidden w-full">
-        {/* SL bar (red, from left) */}
+        {/* SL zone (red, from left) */}
         <div className="absolute left-0 top-0 h-full bg-red-500/50 rounded-l-full"
-          style={{ width: `${Math.min(35, slDistPct * 3)}%` }} />
+          style={{ width: `${slW}%` }} />
         {/* Entry marker */}
         <div className="absolute top-0 h-full w-0.5 bg-zinc-400"
-          style={{ left: `${Math.min(35, slDistPct * 3)}%` }} />
-        {/* TP bar (green, from entry) */}
+          style={{ left: `${slW}%` }} />
+        {/* TP zone (green, entry → right edge) */}
         <div className="absolute top-0 h-full bg-emerald-500/50 rounded-r-full"
-          style={{
-            left:  `${Math.min(35, slDistPct * 3)}%`,
-            width: `${Math.min(65, tpDistPct * 2)}%`,
-          }} />
+          style={{ left: `${slW}%`, width: `${tpW}%` }} />
       </div>
     </div>
   )
@@ -1222,7 +1248,7 @@ function TacticalTab({ currentRegime }: { currentRegime: MarketRegime | null }) 
 
   const stageMap: Record<string, SignalLifecycleStage[]> = {
     active:  ['ACTIVE','AI_APPROVED','SCREENED','TELEGRAM_SENT'],
-    won:     ['TP_HIT','ANALYZED'],
+    won:     ['TP_HIT'],
     lost:    ['SL_HIT'],
     expired: ['STALE','CLOSED'],
   }
@@ -1275,7 +1301,8 @@ function TacticalTab({ currentRegime }: { currentRegime: MarketRegime | null }) 
           const meta   = STAGE_META[sig.lifecycleStage]
           const isBuy  = sig.type==='BUY'
           const alignment = computeRegimeAlignment(sig.type, currentRegime ?? sig.marketRegime)
-          const isActive = sig.lifecycleStage === 'ACTIVE'
+          const isActive = sig.lifecycleStage === 'ACTIVE' || sig.lifecycleStage === 'TELEGRAM_SENT'
+          const isResolved = sig.lifecycleStage === 'TP_HIT' || sig.lifecycleStage === 'SL_HIT' || sig.lifecycleStage === 'CLOSED'
           return (
             <div key={sig.id??i} className={`bg-zinc-900 border rounded-xl overflow-hidden flex`}>
               <div className={`w-1 shrink-0 ${isBuy?'bg-green-500':'bg-red-500'}`}/>
@@ -1316,6 +1343,26 @@ function TacticalTab({ currentRegime }: { currentRegime: MarketRegime | null }) 
                   )}
                 </div>
                 {isActive && <TradeStructureBar sig={sig} />}
+                {isResolved && (sig.rrAchieved != null || sig.pnlPct != null) && (
+                  <div className="mt-1.5 flex items-center gap-3 text-[11px] flex-wrap">
+                    <span className="text-[9px] text-zinc-600 uppercase tracking-wider font-semibold">Result</span>
+                    {sig.rrAchieved != null && (
+                      <span className={`font-mono font-semibold ${sig.rrAchieved >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {sig.rrAchieved >= 0 ? '+' : ''}{sig.rrAchieved.toFixed(2)}R
+                      </span>
+                    )}
+                    {sig.pnlPct != null && (
+                      <span className={`font-mono ${sig.pnlPct >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                        {sig.pnlPct >= 0 ? '+' : ''}{sig.pnlPct.toFixed(2)}%
+                      </span>
+                    )}
+                    {sig.durationHours != null && (
+                      <span className="text-zinc-500">
+                        in <span className="text-zinc-400 font-mono">{sig.durationHours < 1 ? `${Math.round(sig.durationHours * 60)}m` : `${sig.durationHours.toFixed(1)}h`}</span>
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )

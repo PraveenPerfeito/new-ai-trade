@@ -27,7 +27,10 @@ export function computeLifecycleStage(
     const lifetime = LIFETIME_MS[signal.timeframe] ?? 8 * 3_600_000;
     const created  = signal.createdAt instanceof Date ? signal.createdAt : new Date(signal.createdAt as unknown as string);
     const ageMs    = Date.now() - created.getTime();
-    return ageMs < lifetime ? 'ACTIVE' : 'STALE';
+    if (ageMs > lifetime) return 'STALE';
+    // First 30 min after send: TELEGRAM_SENT badge (freshly fired alert)
+    if (ageMs < 30 * 60 * 1000) return 'TELEGRAM_SENT';
+    return 'ACTIVE';
   }
 
   if (signal.aiValidated) {

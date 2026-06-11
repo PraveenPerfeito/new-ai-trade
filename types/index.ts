@@ -626,6 +626,10 @@ export type SignalLifecycleStage =
 export interface TacticalSignalRow extends TradingSignal {
   lifecycleStage:  SignalLifecycleStage;
   outcomeStatus?:  SignalOutcome;
+  /** Realized result from signal_outcomes (present once resolved) */
+  rrAchieved?:     number | null;
+  pnlPct?:         number | null;
+  durationHours?:  number | null;
 }
 
 // ─── Phase 6.7 — Quant Outcome Attribution ───────────────────────────────────

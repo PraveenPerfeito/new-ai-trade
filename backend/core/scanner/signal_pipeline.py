@@ -14,6 +14,7 @@ from backend.core.scanner.ai_validator import validate_signal
 from backend.core.scanner.futures_intelligence import analyze_futures_intelligence
 from backend.core.scanner.indicators import (
     calculate_all_indicators,
+    calc_rsi,
     calc_trend_strength,
     calc_volatility_rating,
     confirm_multi_timeframe,
@@ -453,6 +454,34 @@ def detect_setup(
         elif ind4h.rsi > 65:
             score -= 5
 
+    # ── RSI divergence detection (SIGNAL.QUALITY.3) ──────────────────────────────
+    # Compares the last 6 closed candles against the prior 6 (swing windows) with
+    # RSI measured at both points.  Divergence AGAINST the signal direction is the
+    # strongest available early-reversal warning; divergence IN FAVOUR (classic
+    # reversal entry: lower low + higher RSI low for BUY) is rewarded.
+    if len(candles_1h) >= 40:
+        rsi_now  = ind1h.rsi
+        rsi_then = calc_rsi(candles_1h[:-6])
+        recent   = candles_1h[-6:]
+        prior    = candles_1h[-12:-6]
+        recent_high, prior_high = max(c.high for c in recent), max(c.high for c in prior)
+        recent_low,  prior_low  = min(c.low for c in recent),  min(c.low for c in prior)
+
+        if signal_type == SignalType.BUY:
+            if recent_high > prior_high and rsi_now < rsi_then - 2.0:
+                score -= 10  # bearish divergence — price higher high, RSI lower high
+                reasons.append("Bearish RSI divergence — momentum not confirming new highs")
+            elif recent_low < prior_low and rsi_now > rsi_then + 2.0:
+                score += 8   # bullish divergence — classic reversal BUY entry
+                reasons.append("Bullish RSI divergence — selling exhaustion at the lows")
+        else:
+            if recent_low < prior_low and rsi_now > rsi_then + 2.0:
+                score -= 10  # bullish divergence — fading downside momentum, bad SELL
+                reasons.append("Bullish RSI divergence — downside momentum fading")
+            elif recent_high > prior_high and rsi_now < rsi_then - 2.0:
+                score += 8   # bearish divergence — classic reversal SELL entry
+                reasons.append("Bearish RSI divergence — buying exhaustion at the highs")
+
     # ── EMA200 convergence protection (Phase 7.3A.7) ─────────────────────────
     # EMA200 initialised from seed price has significant contamination at < 280
     # candles. See ema_convergence.py for the exact math.
@@ -485,6 +514,13 @@ def detect_setup(
             elif signal_type == SignalType.SELL and price < ind1h.ema200:
                 score += 5
                 reasons.append("Price below EMA200 — long-term bearish")
+            # SIGNAL.QUALITY.3 — counter-EMA200 penalty: entering against the
+            # long-term trend reference was previously free (0 pts); the EMA200
+            # acts as resistance/support against the trade.
+            elif signal_type == SignalType.BUY and price < ind1h.ema200:
+                score -= 8
+            elif signal_type == SignalType.SELL and price > ind1h.ema200:
+                score -= 8
 
     # ── 4h EMA200 convergence protection (Phase 7.4A.3) ──────────────────────
     # Same convergence guards as 1h (Phase 7.3A.7) applied to the higher timeframe.

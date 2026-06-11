@@ -135,7 +135,12 @@ async def read_intelligence_listings(limit: int = 200) -> IntelligenceCacheResul
     except Exception as exc:
         log.warning("intel_cache_read_error", error=str(exc))
 
-    # ── Cache miss or read error: fall back to CoinGecko ─────────────────────
+    # ── Cache miss or read error: try CMC direct first, then CoinGecko ───────
+    from backend.config import get_settings as _get_settings  # noqa: PLC0415
+    if _get_settings().coinmarketcap_api_key:
+        result = await _fallback_cmc_direct(limit)
+        if result.coins:
+            return result
     return await _fallback_coingecko(limit)
 
 
@@ -251,6 +256,76 @@ async def _record_fallback_event(coin_count: int, reason: str = "cache_cold") ->
     return should_alert
 
 
+async def _fallback_cmc_direct(limit: int) -> IntelligenceCacheResult:
+    """
+    Last-resort fallback: call CMC listings API directly from Python when both
+    the Redis intelligence cache AND CoinGecko are unavailable.
+
+    Uses the same COINMARKETCAP_API_KEY env var available to the Python backend.
+    Returns empty result (not raising) so the scan can decide how to handle it.
+    """
+    from backend.config import get_settings  # noqa: PLC0415
+    import httpx as _httpx  # noqa: PLC0415
+
+    settings = get_settings()
+    api_key  = settings.coinmarketcap_api_key
+    if not api_key:
+        log.error("cmc_direct_fallback_skipped_no_api_key")
+        return IntelligenceCacheResult(
+            coins=[], cache_source="empty", cache_hit=False,
+            cache_age_seconds=0.0, is_fresh=False,
+        )
+
+    log.warning("cmc_direct_fallback_attempting", reason="coingecko_also_failed")
+    try:
+        async with _httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                "https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest",
+                params={"start": 1, "limit": min(limit, 200), "convert": "USD"},
+                headers={"X-CMC_PRO_API_KEY": api_key, "Accept": "application/json"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        coins_raw = data.get("data", [])
+        coins: list[CoinData] = []
+        for item in coins_raw:
+            try:
+                symbol = str(item.get("symbol", "")).upper()
+                quote  = (item.get("quote") or {}).get("USD", {})
+                coins.append(CoinData(
+                    id=str(item.get("id", "")),
+                    symbol=symbol,
+                    name=str(item.get("name", "")),
+                    rank=int(item.get("cmc_rank") or len(coins) + 1),
+                    price=float(quote.get("price") or 0),
+                    market_cap=float(quote.get("market_cap") or 0),
+                    volume_24h=float(quote.get("volume_24h") or 0),
+                    price_change_24h=float(quote.get("percent_change_24h") or 0),
+                    binance_symbol=f"{symbol}USDT",
+                    has_futures=False,
+                    image="",
+                ))
+            except Exception:
+                continue
+
+        log.info("cmc_direct_fallback_ok", count=len(coins))
+        intelligence_cache_hits_total.labels(source="cmc_direct").inc()
+        return IntelligenceCacheResult(
+            coins=coins,
+            cache_source="cmc_direct",
+            cache_hit=False,
+            cache_age_seconds=0.0,
+            is_fresh=True,
+        )
+    except Exception as exc:
+        log.error("cmc_direct_fallback_failed", error=str(exc))
+        return IntelligenceCacheResult(
+            coins=[], cache_source="empty", cache_hit=False,
+            cache_age_seconds=0.0, is_fresh=False,
+        )
+
+
 async def _fallback_coingecko(limit: int, reason: str = "cache_cold") -> IntelligenceCacheResult:
     """
     CoinGecko fallback when the Redis intelligence cache is cold or unreadable.
@@ -324,10 +399,5 @@ async def _fallback_coingecko(limit: int, reason: str = "cache_cold") -> Intelli
         )
     except Exception as exc:
         log.error("intel_coingecko_fallback_failed", error=str(exc))
-        return IntelligenceCacheResult(
-            coins=[],
-            cache_source="empty",
-            cache_hit=False,
-            cache_age_seconds=0.0,
-            is_fresh=False,
-        )
+        # Last resort: try CMC API directly from Python backend
+        return await _fallback_cmc_direct(limit)
