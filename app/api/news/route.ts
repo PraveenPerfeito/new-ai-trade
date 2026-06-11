@@ -12,11 +12,18 @@ const CACHE_KEY = 'news:intel:snapshot'
 const CACHE_TTL = 900
 
 export interface NewsItem {
-  title:      string
-  url:        string
-  source:     string
+  title:       string
+  url:         string
+  source:      string
   publishedAt: string
-  sentiment?: 'bullish' | 'bearish' | 'neutral'
+  sentiment?:  'bullish' | 'bearish' | 'neutral'
+  coins:       string[]
+}
+
+export interface CoinSentimentEntry {
+  bullish: number
+  bearish: number
+  net:     number
 }
 
 export interface NewsSnapshot {
@@ -27,6 +34,7 @@ export interface NewsSnapshot {
   bullishCount:    number
   bearishCount:    number
   neutralCount:    number
+  coinSentiment:   Record<string, CoinSentimentEntry>
   cachedAt:        string
   // IMPORTANT: informational only — never fed into signal pipeline
   informationalOnly: true
@@ -78,6 +86,44 @@ function classifySentiment(text: string): 'bullish' | 'bearish' | 'neutral' {
   return 'neutral'
 }
 
+// ── Coin extraction ───────────────────────────────────────────────────────────
+
+const COIN_MAP: Array<[RegExp, string]> = [
+  [/\bbitcoin\b/,    'BTC'], [/\bbtc\b/,        'BTC'],
+  [/\bethereum\b/,   'ETH'], [/\beth\b/,         'ETH'],
+  [/\bsolana\b/,     'SOL'], [/\bsol\b/,         'SOL'],
+  [/\bbinance\b/,    'BNB'], [/\bbnb\b/,         'BNB'],
+  [/\bxrp\b/,        'XRP'], [/\bripple\b/,      'XRP'],
+  [/\bcardano\b/,    'ADA'], [/\bada\b/,         'ADA'],
+  [/\bdogecoin\b/,  'DOGE'], [/\bdoge\b/,       'DOGE'],
+  [/\bshiba\b/,     'SHIB'], [/\bshib\b/,       'SHIB'],
+  [/\bavalanche\b/, 'AVAX'], [/\bavax\b/,       'AVAX'],
+  [/\bpolygon\b/,    'POL'], [/\bmatic\b/,       'POL'],
+  [/\bchainlink\b/, 'LINK'],
+  [/\buniswap\b/,    'UNI'],
+  [/\bpolkadot\b/,   'DOT'],
+  [/\btron\b/,       'TRX'], [/\btrx\b/,        'TRX'],
+  [/\blitecoin\b/,   'LTC'], [/\bltc\b/,        'LTC'],
+  [/\bsui\b/,        'SUI'],
+  [/\baptos\b/,      'APT'],
+  [/\bnear\b/,      'NEAR'],
+  [/\barbitrum\b/,   'ARB'],
+  [/\boptimism\b/,    'OP'],
+  [/\btoncoin\b/,    'TON'],
+  [/\bpepe\b/,      'PEPE'],
+  [/\binjective\b/,  'INJ'],
+  [/\bsei\b/,        'SEI'],
+]
+
+function extractCoins(text: string): string[] {
+  const lower = text.toLowerCase()
+  const found: Record<string, true> = {}
+  for (const [re, symbol] of COIN_MAP) {
+    if (re.test(lower)) found[symbol] = true
+  }
+  return Object.keys(found)
+}
+
 // ── RSS feeds (free, no auth) ─────────────────────────────────────────────────
 
 const RSS_FEEDS = [
@@ -101,12 +147,14 @@ function parseRssItems(xml: string, sourceName: string): NewsItem[] {
                      /<description[^>]*>([\s\S]*?)<\/description>/.exec(block))?.[1]
                       ?.replace(/<[^>]+>/g, '').trim().slice(0, 150) ?? ''
     if (!title || !link) continue
+    const combined = title + ' ' + desc
     items.push({
       title,
       url:         link,
       source:      sourceName,
       publishedAt: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
-      sentiment:   classifySentiment(title + ' ' + desc),
+      sentiment:   classifySentiment(combined),
+      coins:       extractCoins(combined),
     })
   }
   return items
@@ -155,12 +203,22 @@ export async function GET() {
   const bearishCount = allHeadlines.filter(h => h.sentiment === 'bearish').length
   const neutralCount = allHeadlines.filter(h => h.sentiment === 'neutral').length
 
+  const coinSentiment: Record<string, CoinSentimentEntry> = {}
+  for (const item of allHeadlines) {
+    for (const coin of item.coins) {
+      if (!coinSentiment[coin]) coinSentiment[coin] = { bullish: 0, bearish: 0, net: 0 }
+      if (item.sentiment === 'bullish') { coinSentiment[coin].bullish++; coinSentiment[coin].net++ }
+      if (item.sentiment === 'bearish') { coinSentiment[coin].bearish++; coinSentiment[coin].net-- }
+    }
+  }
+
   const snapshot: NewsSnapshot = {
     ...fg,
     headlines:   allHeadlines,
     bullishCount,
     bearishCount,
     neutralCount,
+    coinSentiment,
     cachedAt:    new Date().toISOString(),
     informationalOnly: true,
   }
