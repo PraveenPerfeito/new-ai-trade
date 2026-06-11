@@ -29,7 +29,31 @@ interface GrokNewsResponse {
 let _cache: { data: GrokNewsResponse; fetchedAt: number } | null = null
 const CACHE_TTL_MS = 5 * 60 * 1000  // 5 min
 
-// ── CoinGecko news feed (free, no key, live) ──────────────────────────────────
+// ── CryptoCompare news feed (free, no key required, live) ────────────────────
+
+interface CcNewsItem {
+  title:       string
+  url:         string
+  source_info: { name: string }
+  body:        string
+  published_on: number
+}
+
+async function fetchCryptoNews(): Promise<CgNewsItem[]> {
+  const res = await fetch(
+    'https://min-api.cryptocompare.com/data/v2/news/?lang=EN&sortOrder=latest&limit=25',
+    { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(8_000) },
+  )
+  if (!res.ok) throw new Error(`CryptoCompare news ${res.status}`)
+  const json = await res.json() as { Data?: CcNewsItem[] }
+  return (json.Data ?? []).map(n => ({
+    title:        n.title,
+    url:          n.url,
+    news_site:    n.source_info?.name ?? 'Unknown',
+    description:  n.body?.slice(0, 150),
+    published_at: n.published_on,
+  }))
+}
 
 interface CgNewsItem {
   title:        string
@@ -37,16 +61,6 @@ interface CgNewsItem {
   news_site:    string
   description?: string
   published_at: number
-}
-
-async function fetchCoinGeckoNews(): Promise<CgNewsItem[]> {
-  const res = await fetch(
-    'https://api.coingecko.com/api/v3/news?per_page=25&page=1',
-    { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(8_000) },
-  )
-  if (!res.ok) throw new Error(`CoinGecko news ${res.status}`)
-  const json = await res.json() as { data?: CgNewsItem[] }
-  return json.data ?? []
 }
 
 // ── Grok sentiment analysis ───────────────────────────────────────────────────
@@ -123,8 +137,8 @@ export async function GET(req: Request) {
 
   log.info({ force }, 'grok_news_fetch_start')
   try {
-    const headlines = await fetchCoinGeckoNews()
-    log.info({ count: headlines.length }, 'coingecko_headlines_fetched')
+    const headlines = await fetchCryptoNews()
+    log.info({ count: headlines.length }, 'cryptocompare_headlines_fetched')
 
     const news = await analyzeWithGrok(apiKey, headlines)
 
