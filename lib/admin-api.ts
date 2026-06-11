@@ -453,6 +453,50 @@ export interface MonitorSnapshot {
   } | null
 }
 
+// ── CONFIDENCE.CALIBRATION.2 (read-only analytics) ───────────────────────────
+
+export interface CalibrationBandStats {
+  n: number
+  wr: number | null
+  exp: number | null
+  pf: number | null
+  avg_winner: number | null
+  avg_loser: number | null
+  mean_stated: number | null
+  low_sample: boolean
+  empirical_confidence: number | null
+  drift: number | null
+}
+
+export interface ConfidenceCalibrationResponse {
+  enabled: boolean
+  window_hours?: number
+  generated_at?: string
+  bands?: Record<string, CalibrationBandStats>
+  bands_regime_known?: Record<string, CalibrationBandStats>
+  drift_by_regime?: Record<string, Record<string, CalibrationBandStats>>
+  drift_by_type?: Record<string, Record<string, CalibrationBandStats>>
+  drift_by_mode?: Record<string, Record<string, CalibrationBandStats>>
+  insights?: {
+    insufficient_data: boolean
+    most_overrated?:  CalibrationBandStats & { band: string }
+    most_underrated?: CalibrationBandStats & { band: string }
+    best_actual?:     CalibrationBandStats & { band: string }
+    worst_actual?:    CalibrationBandStats & { band: string }
+  }
+  trend_history?: Array<{ day: string; band: string; n: number; wr: number | null; exp: number | null }>
+  data_quality?: {
+    total_resolved: number
+    pending_outcomes: number
+    null_regime_pct: number
+    regimes_observed: string[]
+    snapshot_generations: number
+    min_reliable_n: number
+    warnings: string[]
+    low_sample_bands: string[]
+  }
+}
+
 // ── Typed API surface ─────────────────────────────────────────────────────────
 
 export const adminApi = {
@@ -468,6 +512,8 @@ export const adminApi = {
     ai:        (window_hours = 24)  => get<AiSummaryResponse>('/analytics/ai', { window_hours }),
     scans:     (window_hours = 24)  => get<ScanSummaryResponse>('/analytics/scans', { window_hours }),
     monitor:   ()                   => get<MonitorSnapshot>('/analytics/monitor'),
+    confidenceCalibration: (window_hours = 720) =>
+      get<ConfidenceCalibrationResponse>('/analytics/confidence-calibration', { window_hours }),
     edgeReport:    (hours = 720)  => get<EdgeReport>('/analytics/edge/report', { window_hours: hours }),
     calibration:   (hours = 720)  => get<Record<string, unknown>>('/analytics/edge/calibration', { window_hours: hours }),
     claude:        (hours = 720)  => get<Record<string, unknown>>('/analytics/edge/claude', { window_hours: hours }),

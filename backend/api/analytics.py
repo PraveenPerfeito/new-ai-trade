@@ -75,6 +75,31 @@ async def ai_effectiveness(
     return await get_ai_summary(window_hours)
 
 
+@router.get("/confidence-calibration")
+async def confidence_calibration_v2(
+    window_hours: int = Query(default=720, ge=24, le=2160),
+) -> dict[str, Any]:
+    """
+    CONFIDENCE.CALIBRATION.2 — READ-ONLY empirical confidence analytics.
+    Band stats, calibration drift (per regime/type/mode), founder insights,
+    trend history, data quality.  Gated by FeatureFlags.confidence_calibration_v2
+    (default OFF → returns {"enabled": false} and the UI section stays hidden).
+    Production confidence/scoring/gating are NEVER affected by this endpoint.
+    """
+    try:
+        from backend.system_settings.service import get_settings_service
+        from backend.system_settings.groups import FeatureFlags
+        flags = await get_settings_service().get_group(FeatureFlags)
+        if not flags.confidence_calibration_v2:
+            return {"enabled": False}
+    except Exception as exc:
+        log.warning("confidence_calibration_flag_read_failed", error=str(exc))
+        return {"enabled": False}
+
+    from backend.analytics.confidence_calibration import compute_confidence_calibration
+    return await compute_confidence_calibration(window_hours)
+
+
 @router.get("/scans")
 async def scan_performance(
     window_hours: int = Query(default=24, ge=1, le=168),

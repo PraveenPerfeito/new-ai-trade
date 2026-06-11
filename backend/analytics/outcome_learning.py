@@ -20,17 +20,18 @@ WINDOWS_DAYS = (7, 30)
 MIN_CELL_N   = 10      # cells below this sample size are statistically useless
 RETENTION_DAYS = 90    # snapshot rows older than this are pruned nightly
 
-# Confidence bands mirror PHASE.9 audit banding
-_CONF_BANDS = [(0, 80), (80, 83), (83, 86), (86, 89), (89, 92), (92, 95), (95, 101)]
+# Confidence bands — unified with CONFIDENCE.CALIBRATION.2 spec banding so
+# snapshot trend history keys match the calibration API forever.
+_CONF_BANDS = [(0, 80, "<80"), (80, 85, "80-84"), (85, 90, "85-89"), (90, 95, "90-94"), (95, 101, "95-100")]
 
 
 def conf_band(value) -> str:
     if value is None:
         return "NULL"
     v = float(value)
-    for lo, hi in _CONF_BANDS:
+    for lo, hi, label in _CONF_BANDS:
         if lo <= v < hi:
-            return f"{lo}-{hi - 1}"
+            return label
     return "out"
 
 
@@ -72,6 +73,9 @@ DIMENSION_SETS: dict[str, list[tuple[str, object]]] = {
     "grade|breakout":  [("risk_grade", _raw), ("breakout_strength", _raw)],
     "breakout|oi":     [("breakout_strength", _raw), ("oi_interpretation", _raw)],
     "regime|breakout": [("market_regime", _raw), ("breakout_strength", _raw)],
+    # CONFIDENCE.CALIBRATION.2 — per-mode / per-type drift trend history
+    "mode|conf_band":  [("scanner_mode", _raw), ("confidence", conf_band)],
+    "type|conf_band":  [("signal_type", _raw), ("confidence", conf_band)],
     # Triple — the probability-lookup primary key
     "regime|type|breakout": [("market_regime", _raw), ("signal_type", _raw), ("breakout_strength", _raw)],
 }

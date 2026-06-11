@@ -693,6 +693,159 @@ const CONFIDENCE_THRESHOLDS = [
   { tier: 'Low',      range: '< 70%',   description: 'Rejected — insufficient confirmation', color: 'text-red-400' },
 ]
 
+// ─── CONFIDENCE.CALIBRATION.2 — read-only empirical confidence analytics ─────
+// Rendered only when FeatureFlags.confidence_calibration_v2 is ON (API returns
+// enabled:false otherwise → section hidden, zero UI change). Never affects
+// scoring, gating, or delivery.
+
+function DriftChip({ drift }: { drift: number | null }) {
+  if (drift == null) return <span className="text-zinc-600 font-mono text-xs">—</span>
+  const cls = drift >= -5 ? 'text-emerald-400' : drift >= -25 ? 'text-amber-400' : 'text-red-400'
+  return <span className={`font-mono text-xs font-bold ${cls}`}>{drift > 0 ? '+' : ''}{drift.toFixed(0)}</span>
+}
+
+function CalBandRow({ band, s }: { band: string; s: import('@/lib/admin-api').CalibrationBandStats }) {
+  const wrW  = Math.min(100, s.wr ?? 0)
+  const stW  = Math.min(100, s.mean_stated ?? 0)
+  return (
+    <div className="flex items-center gap-3 py-1">
+      <span className="text-zinc-400 font-mono text-xs w-14 shrink-0">{band}</span>
+      <div className="flex-1 min-w-0 space-y-1">
+        <div className="flex items-center gap-2">
+          <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+            <div className="h-full bg-zinc-500 rounded-full" style={{ width: `${stW}%` }} />
+          </div>
+          <span className="text-[10px] text-zinc-500 font-mono w-20 text-right">stated {s.mean_stated?.toFixed(0) ?? '—'}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full ${(s.wr ?? 0) >= (s.mean_stated ?? 100) ? 'bg-emerald-500' : 'bg-purple-500'}`} style={{ width: `${wrW}%` }} />
+          </div>
+          <span className="text-[10px] text-purple-300 font-mono w-20 text-right">actual {s.wr?.toFixed(0) ?? '—'}%</span>
+        </div>
+      </div>
+      <DriftChip drift={s.drift} />
+      <span className={`text-[10px] font-mono w-14 text-right ${s.low_sample ? 'text-amber-500' : 'text-zinc-600'}`}>
+        n={s.n}{s.low_sample ? '⚠' : ''}
+      </span>
+      <span className="text-[10px] font-mono text-zinc-500 w-16 text-right hidden sm:block">
+        {s.exp != null ? `${s.exp > 0 ? '+' : ''}${s.exp.toFixed(2)}R` : '—'}
+      </span>
+      <span className="text-[10px] font-mono text-zinc-500 w-12 text-right hidden sm:block">
+        PF {s.pf?.toFixed(2) ?? '—'}
+      </span>
+    </div>
+  )
+}
+
+function ConfidenceCalibrationSection() {
+  const fetcher = useCallback(() => adminApi.analytics.confidenceCalibration().catch(() => null), [])
+  const { data: cal } = useAutoRefresh<import('@/lib/admin-api').ConfidenceCalibrationResponse | null>(fetcher, 300_000)
+
+  if (!cal || !cal.enabled) return null   // flag OFF → zero UI change
+
+  const insights = cal.insights
+  const dq = cal.data_quality
+  const insightCards = insights && !insights.insufficient_data ? [
+    { label: 'Most Overrated',  v: insights.most_overrated,  color: 'text-red-400',     desc: 'largest negative drift' },
+    { label: 'Most Underrated', v: insights.most_underrated, color: 'text-emerald-400', desc: 'largest positive drift' },
+    { label: 'Best Actual WR',  v: insights.best_actual,     color: 'text-emerald-400', desc: 'highest measured WR' },
+    { label: 'Worst Actual WR', v: insights.worst_actual,    color: 'text-red-400',     desc: 'lowest measured WR' },
+  ] : []
+
+  return (
+    <div className="space-y-5">
+      <p className="text-[9px] text-zinc-600 uppercase tracking-widest flex items-center gap-2">
+        <span className="h-px flex-1 bg-zinc-800"/>Confidence Calibration — Empirical (read-only)<span className="h-px flex-1 bg-zinc-800"/>
+      </p>
+
+      {/* Data quality warnings */}
+      {dq && dq.warnings.length > 0 && (
+        <div className="space-y-1.5">
+          {dq.warnings.map((w, i) => (
+            <div key={i} className="rounded-lg px-3 py-2 bg-amber-500/5 border border-amber-500/20 text-amber-300/90 text-xs flex items-start gap-2">
+              <span className="shrink-0">⚠</span><span>{w}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Founder insights */}
+      {insightCards.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          {insightCards.map(c => (
+            <div key={c.label} className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5">
+              <p className="text-[9px] text-zinc-500 uppercase tracking-wider">{c.label}</p>
+              <p className={`text-lg font-bold font-mono ${c.color}`}>{c.v?.band}</p>
+              <p className="text-[10px] text-zinc-500 font-mono">
+                WR {c.v?.wr?.toFixed(0)}% · drift {c.v?.drift != null && c.v.drift > 0 ? '+' : ''}{c.v?.drift?.toFixed(0)} · n={c.v?.n}
+              </p>
+              <p className="text-[9px] text-zinc-600 mt-0.5">{c.desc}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Stated vs actual — regime-known cohort (clean) */}
+      {cal.bands_regime_known && Object.keys(cal.bands_regime_known).length > 0 && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-1">
+            Stated vs Actual Win Rate — Regime-Known Cohort
+          </h2>
+          <p className="text-[10px] text-zinc-600 mb-3">
+            Grey bar = average stated confidence · purple bar = measured WR · drift = actual − stated · ⚠ = n &lt; {dq?.min_reliable_n ?? 30}
+          </p>
+          <div className="divide-y divide-zinc-800/60">
+            {Object.entries(cal.bands_regime_known).filter(([b]) => b !== 'NULL').map(([band, s]) => (
+              <CalBandRow key={band} band={band} s={s} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* All outcomes (incl. NULL-regime era) */}
+      {cal.bands && Object.keys(cal.bands).length > 0 && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-3">
+            All Outcomes (includes pre-fix NULL-regime era)
+          </h2>
+          <div className="divide-y divide-zinc-800/60">
+            {Object.entries(cal.bands).filter(([b]) => b !== 'NULL').map(([band, s]) => (
+              <CalBandRow key={band} band={band} s={s} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Drift by dimension */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {([['Regime', cal.drift_by_regime], ['Signal Type', cal.drift_by_type], ['Scanner Mode', cal.drift_by_mode]] as const).map(([title, dims]) => (
+          <div key={title} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+            <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Drift by {title}</p>
+            <div className="space-y-1.5">
+              {dims && Object.entries(dims).map(([value, bands]) => (
+                Object.entries(bands).map(([band, s]) => (
+                  <div key={`${value}-${band}`} className="flex items-center gap-2 text-[10px]">
+                    <span className="text-zinc-500 font-mono truncate flex-1">{value === 'None' ? 'NULL' : value} · {band}</span>
+                    <span className="text-zinc-400 font-mono">{s.wr?.toFixed(0) ?? '—'}%</span>
+                    <DriftChip drift={s.drift} />
+                    <span className="text-zinc-600 font-mono w-12 text-right">n={s.n}</span>
+                  </div>
+                ))
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <p className="text-zinc-700 text-[10px] font-mono">
+        {dq?.total_resolved ?? 0} resolved outcomes · {dq?.snapshot_generations ?? 0} snapshot generations ·
+        empirical confidence is measurement only — production scoring unchanged
+      </p>
+    </div>
+  )
+}
+
 function CalibrationTabContent({ ai, loading }: { ai: import('@/lib/admin-api').AiSummaryResponse | null; loading: boolean }) {
   function aiPct(v: number | null | undefined, d = 1) { return v != null ? `${(v * 100).toFixed(d)}%` : '—' }
   const verdicts  = ai?.verdicts ?? (ai as unknown as { verdict_distribution?: Record<string, number> })?.verdict_distribution ?? {}
@@ -751,6 +904,9 @@ function CalibrationTabContent({ ai, loading }: { ai: import('@/lib/admin-api').
         </div>
         <p className="text-zinc-700 text-[10px] mt-2">Full confidence calibration bands and Claude effectiveness: Edge Validation tab</p>
       </div>
+
+      {/* CONFIDENCE.CALIBRATION.2 — hidden unless confidence_calibration_v2 flag is ON */}
+      <ConfidenceCalibrationSection />
     </div>
   )
 }

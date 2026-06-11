@@ -151,9 +151,13 @@ class TestAttributionSnapshots:
         assert FeatureFlags().attribution_snapshots is True
 
     def test_conf_band(self):
+        # Unified with CONFIDENCE.CALIBRATION.2 spec banding
         from backend.analytics.outcome_learning import conf_band
         assert conf_band(None) == "NULL"
-        assert conf_band(84) == "83-85"
+        assert conf_band(79) == "<80"
+        assert conf_band(84) == "80-84"
+        assert conf_band(85) == "85-89"
+        assert conf_band(94) == "90-94"
         assert conf_band(95) == "95-100"
         assert conf_band(100) == "95-100"
 
