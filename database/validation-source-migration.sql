@@ -7,10 +7,18 @@ ALTER TABLE signals
 
 -- Back-fill existing rows: signals with ai_validated=true were Claude-validated;
 -- ai_validated=false means the heuristic path was taken.
+-- IMPORTANT: values must be UPPERCASE — Python writes "CLAUDE"/"HEURISTIC" and the
+-- UI (lib/signal-lifecycle.ts, admin trading page) compares uppercase.
 UPDATE signals
 SET validation_source = CASE
-  WHEN ai_validated = true  THEN 'claude'
-  WHEN ai_validated = false THEN 'heuristic'
+  WHEN ai_validated = true  THEN 'CLAUDE'
+  WHEN ai_validated = false THEN 'HEURISTIC'
   ELSE NULL
 END
 WHERE validation_source IS NULL;
+
+-- Corrective pass for any rows back-filled with lowercase values by an earlier
+-- run of this migration:
+UPDATE signals
+SET validation_source = UPPER(validation_source)
+WHERE validation_source IN ('claude', 'heuristic');
