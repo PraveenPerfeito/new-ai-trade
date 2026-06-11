@@ -29,30 +29,50 @@ interface GrokNewsResponse {
 let _cache: { data: GrokNewsResponse; fetchedAt: number } | null = null
 const CACHE_TTL_MS = 5 * 60 * 1000  // 5 min
 
-// ── xAI Agent Tools API fetch ─────────────────────────────────────────────────
+// ── CoinGecko news feed (free, no key, live) ──────────────────────────────────
 
-async function fetchFromGrok(apiKey: string): Promise<GrokNewsItem[]> {
+interface CgNewsItem {
+  title:        string
+  url:          string
+  news_site:    string
+  description?: string
+  published_at: number
+}
+
+async function fetchCoinGeckoNews(): Promise<CgNewsItem[]> {
+  const res = await fetch(
+    'https://api.coingecko.com/api/v3/news?per_page=25&page=1',
+    { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(8_000) },
+  )
+  if (!res.ok) throw new Error(`CoinGecko news ${res.status}`)
+  const json = await res.json() as { data?: CgNewsItem[] }
+  return json.data ?? []
+}
+
+// ── Grok sentiment analysis ───────────────────────────────────────────────────
+
+async function analyzeWithGrok(apiKey: string, headlines: CgNewsItem[]): Promise<GrokNewsItem[]> {
+  const lines = headlines.map(n =>
+    `TITLE: ${n.title}\nSOURCE: ${n.news_site}\nURL: ${n.url}\nDESC: ${n.description?.slice(0, 120) ?? ''}\nDATE: ${new Date(n.published_at * 1000).toISOString()}`,
+  ).join('\n---\n')
+
   const res = await fetch('https://api.x.ai/v1/chat/completions', {
     method:  'POST',
-    headers: {
-      'Content-Type':  'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model:    'grok-3-latest',
-      // Agent Tools API — replaces deprecated search_parameters
-      tools: [{ type: 'live_search', sources: [{ type: 'news' }, { type: 'web' }] }],
       messages: [{
         role:    'user',
-        content: `Search for the latest cryptocurrency and crypto market news from the last 6 hours.
-Return a valid JSON object (no markdown fences, no extra text) with exactly this shape:
-{"news":[{"title":"...","url":"...","source":"publication name","publishedAt":"ISO datetime or relative string","sentiment":"bullish|bearish|neutral","summary":"one sentence max"}]}
-Find 12-15 real articles from reputable sources (CoinDesk, The Block, Reuters, Bloomberg, Decrypt, CryptoSlate, etc).
-Focus on: BTC/ETH price action, regulation, exchange news, major protocol updates, macro impact on crypto.
-sentiment rules — bullish: positive price/adoption impact; bearish: negative price/regulatory risk; neutral: informational/mixed.`,
+        content: `You are a crypto market analyst. Analyze these news headlines and classify each as bullish, bearish, or neutral for crypto markets. Write a one-sentence summary focused on market impact.
+
+${lines}
+
+Return ONLY valid JSON (no markdown fences):
+{"news":[{"title":"exact title","url":"exact url","source":"news_site","publishedAt":"ISO date","sentiment":"bullish|bearish|neutral","summary":"one sentence market impact"}]}
+Include every headline.`,
       }],
     }),
-    signal: AbortSignal.timeout(25_000),
+    signal: AbortSignal.timeout(20_000),
   })
 
   if (!res.ok) {
@@ -61,57 +81,26 @@ sentiment rules — bullish: positive price/adoption impact; bearish: negative p
     throw new Error(`xAI API ${res.status}: ${body.slice(0, 200)}`)
   }
 
-  const json = await res.json() as {
-    choices?: Array<{
-      message?: {
-        content?:    string
-        tool_calls?: Array<{
-          id:       string
-          type:     string
-          function: { name: string; arguments: string }
-        }>
-        citations?: Array<{ url: string; title: string; excerpt?: string }>
-      }
-      finish_reason?: string
-    }>
+  const json    = await res.json() as { choices?: Array<{ message?: { content?: string } }> }
+  const content = json.choices?.[0]?.message?.content ?? ''
+
+  try {
+    const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+    const parsed  = JSON.parse(cleaned) as { news?: GrokNewsItem[] }
+    if (Array.isArray(parsed.news) && parsed.news.length > 0) return parsed.news.slice(0, 20)
+  } catch {
+    log.warn({ contentLength: content.length }, 'grok_json_parse_failed')
   }
 
-  const message   = json.choices?.[0]?.message
-  const content   = message?.content ?? ''
-  const citations = message?.citations ?? []
-
-  // If the model returned tool_calls but no content yet, it means the search
-  // step needs a follow-up. For simplicity, fall through to citations fallback.
-  if (message?.tool_calls?.length && !content) {
-    log.warn({ toolCalls: message.tool_calls.length }, 'grok_tool_calls_no_content')
-  }
-
-  // Primary: parse JSON from content
-  if (content) {
-    try {
-      const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-      const parsed  = JSON.parse(cleaned) as { news?: GrokNewsItem[] }
-      if (Array.isArray(parsed.news) && parsed.news.length > 0) {
-        return parsed.news.slice(0, 15)
-      }
-    } catch {
-      log.warn({ contentLength: content.length }, 'grok_json_parse_failed_trying_citations')
-    }
-  }
-
-  // Fallback: build items from citations
-  if (citations.length > 0) {
-    return citations.slice(0, 15).map(c => ({
-      title:       c.title ?? 'Untitled',
-      url:         c.url,
-      source:      (() => { try { return new URL(c.url).hostname.replace('www.', '') } catch { return 'Unknown' } })(),
-      publishedAt: new Date().toISOString(),
-      sentiment:   'neutral' as const,
-      summary:     c.excerpt?.slice(0, 120) ?? '',
-    }))
-  }
-
-  throw new Error('No parseable news in Grok response')
+  // Fallback: return headlines with neutral sentiment if Grok fails to parse
+  return headlines.slice(0, 15).map(n => ({
+    title:       n.title,
+    url:         n.url,
+    source:      n.news_site,
+    publishedAt: new Date(n.published_at * 1000).toISOString(),
+    sentiment:   'neutral' as const,
+    summary:     n.description?.slice(0, 120) ?? '',
+  }))
 }
 
 // ── Route ─────────────────────────────────────────────────────────────────────
@@ -127,7 +116,6 @@ export async function GET(req: Request) {
     )
   }
 
-  // Return in-process cache if still fresh and not forced
   if (!force && _cache && Date.now() - _cache.fetchedAt < CACHE_TTL_MS) {
     log.info({ ageMs: Date.now() - _cache.fetchedAt }, 'grok_news_cache_hit')
     return NextResponse.json({ success: true, ..._cache.data, cached: true })
@@ -135,7 +123,10 @@ export async function GET(req: Request) {
 
   log.info({ force }, 'grok_news_fetch_start')
   try {
-    const news = await fetchFromGrok(apiKey)
+    const headlines = await fetchCoinGeckoNews()
+    log.info({ count: headlines.length }, 'coingecko_headlines_fetched')
+
+    const news = await analyzeWithGrok(apiKey, headlines)
 
     const data: GrokNewsResponse = {
       news,
@@ -144,7 +135,6 @@ export async function GET(req: Request) {
     }
 
     _cache = { data, fetchedAt: Date.now() }
-
     log.info({ count: news.length }, 'grok_news_fetch_complete')
     return NextResponse.json({ success: true, ...data, cached: false })
   } catch (e) {
