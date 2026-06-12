@@ -78,6 +78,11 @@ DIMENSION_SETS: dict[str, list[tuple[str, object]]] = {
     "type|conf_band":  [("signal_type", _raw), ("confidence", conf_band)],
     # Triple — the probability-lookup primary key
     "regime|type|breakout": [("market_regime", _raw), ("signal_type", _raw), ("breakout_strength", _raw)],
+    # PHASE.9.P1.PROBABILITY.ENGINE.1 — global fallback level + Edge Matrix pairs
+    "global":              [("outcome", lambda v: "ALL")],
+    "trend_tier|breakout": [("trend_score", trend_tier), ("breakout_strength", _raw)],
+    "sector|funding":      [("sector_status", _raw), ("funding_trend", _raw)],
+    "oi|positioning":      [("oi_interpretation", _raw), ("positioning_context", _raw)],
 }
 
 

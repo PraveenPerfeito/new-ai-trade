@@ -138,6 +138,11 @@ class ScannerSettings(BaseSettingsGroup):
         title='Min Empirical Win Rate %',
         description='PHASE.9.1 probability gate — Telegram delivery is suppressed for signals whose historical cohort win rate (attribution snapshots, n≥30) is below this. Only enforced when the Probability Gate feature flag is ON.',
     )
+    min_empirical_exp: float = Field(
+        0.0, ge=-2.0, le=5.0,
+        title='Min Empirical Expectancy (R)',
+        description='PHASE.9.P1 — additional delivery floor on cohort expectancy (mean realized R). Only enforced when BOTH Probability Gate and the Expectancy Filter flags are ON. Unknown expectancy never gates.',
+    )
     max_coins_per_run: int = Field(
         100, ge=10, le=200,
         title='Max Coins Per Run',
@@ -485,6 +490,8 @@ class FeatureFlags(BaseSettingsGroup):
     apply_founder_thresholds: bool = Field(False, title='Apply Founder Thresholds', description='SETTINGS.WIRE.1 — apply the founder Quick Controls (min confidence, alert confidence, min R:R, scan coverage) as FLOORS on the audited per-mode scanner configs. Floors can only tighten — they never loosen below the per-mode minimums tuned in ALPHA.TRUTH.1. OFF = scanner uses hardcoded CONFIGS only (legacy behavior).')
     high_confidence_mode_enabled: bool = Field(True, title='High-Confidence Mode', description='Run the high_confidence scan cycle (every 30 min). Audit: this mode underperforms (26.8% WR 30d global, 0/9 last measured week) and is a retirement candidate — turn OFF to skip its scans; futures mode covers the same universe with better selection.')
     probability_gate_enabled: bool = Field(False, title='Probability Gate (Telegram)', description='PHASE.9.1 — suppress Telegram delivery for signals whose empirical win probability (from attribution snapshots, n≥30 cohort) is below scanner.min_empirical_wr. Signals are still generated, persisted, and outcome-tracked — only the alert is withheld. OFF = deliver on confidence threshold alone (legacy).')
+    probability_gate_v1:      bool = Field(False, title='Probability Gate — Expectancy Filter', description='PHASE.9.P1 — additionally require cohort expectancy ≥ scanner.min_empirical_exp for Telegram delivery (AND-combined with the win-rate gate). Needs Probability Gate ON to have any effect. Unknown expectancy never gates.')
+    riskgrade_v2:             bool = Field(False, title='RiskGrade 2.0 (empirical grades)', description='PHASE.9.P1 — display outcome-derived grades (A+/A/B+/B/C/D from cohort expectancy) as the primary grade in dashboards. Heuristic A–F grades remain computed and stored regardless; this flag only switches what is displayed.')
     # ── Operational overrides (highest precedence) ────────────────────────────
     emergency_stop:          bool = Field(False, title='Emergency Stop',           description='Immediately halt all scans, signal generation, and Telegram output. Overrides every other switch.')
     maintenance_mode:        bool = Field(False, title='Maintenance Mode',         description='Allow read-only API calls; block all writes, scans, and Telegram sends.')

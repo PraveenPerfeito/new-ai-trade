@@ -515,6 +515,46 @@ export interface TelegramDeliveryResponse {
   d7: TelegramDeliveryWindow
 }
 
+// ── PHASE.9.P1 — Edge Matrix + Track Record ──────────────────────────────────
+
+export interface EdgeMatrixCell {
+  dim_key: string
+  dim_value: string
+  n: number
+  wr: number
+  exp: number | null
+  pf: number | null
+  ci: [number, number]
+}
+
+export interface EdgeMatrixResponse {
+  min_n: number
+  total_cells: number
+  top: EdgeMatrixCell[]
+  bottom: EdgeMatrixCell[]
+}
+
+export interface TrackRecordWindow {
+  resolved: number
+  wins: number
+  losses: number
+  expectancy: number | null
+  pf: number | null
+  win_rate: number | null
+}
+
+export interface TrackRecordResponse {
+  windows: { d7: TrackRecordWindow; d30: TrackRecordWindow; d90: TrackRecordWindow }
+  by_mode_30d: Array<{ scanner_mode: string; n: number; wr: number | null; exp: number | null }>
+  probability_accuracy: {
+    n: number
+    avg_predicted_wr: number | null
+    realized_wr: number | null
+    mean_abs_error: number | null
+  } | null
+  source: string
+}
+
 // ── Typed API surface ─────────────────────────────────────────────────────────
 
 export const adminApi = {
@@ -533,6 +573,9 @@ export const adminApi = {
     confidenceCalibration: (window_hours = 720) =>
       get<ConfidenceCalibrationResponse>('/analytics/confidence-calibration', { window_hours }),
     telegramDelivery: () => get<TelegramDeliveryResponse>('/analytics/telegram-delivery'),
+    edgeMatrix: (min_n = 20, limit = 50) =>
+      get<EdgeMatrixResponse>('/analytics/edge-matrix', { min_n, limit }),
+    trackRecord: () => get<TrackRecordResponse>('/analytics/track-record'),
     edgeReport:    (hours = 720)  => get<EdgeReport>('/analytics/edge/report', { window_hours: hours }),
     calibration:   (hours = 720)  => get<Record<string, unknown>>('/analytics/edge/calibration', { window_hours: hours }),
     claude:        (hours = 720)  => get<Record<string, unknown>>('/analytics/edge/claude', { window_hours: hours }),

@@ -278,12 +278,17 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
 
     # PHASE.9.1 — probability delivery gate config (flag default OFF)
     prob_gate_enabled, min_empirical_wr = False, 45.0
+    exp_filter_enabled, min_empirical_exp = False, 0.0
     try:
         from backend.system_settings.service import get_settings_service  # noqa: PLC0415
         from backend.system_settings.groups import FeatureFlags, ScannerSettings  # noqa: PLC0415
         _svc = get_settings_service()
-        prob_gate_enabled = bool((await _svc.get_group(FeatureFlags)).probability_gate_enabled)
-        min_empirical_wr  = float((await _svc.get_group(ScannerSettings)).min_empirical_wr)
+        _ff  = await _svc.get_group(FeatureFlags)
+        _sc  = await _svc.get_group(ScannerSettings)
+        prob_gate_enabled  = bool(_ff.probability_gate_enabled)
+        exp_filter_enabled = bool(getattr(_ff, "probability_gate_v1", False))
+        min_empirical_wr   = float(_sc.min_empirical_wr)
+        min_empirical_exp  = float(getattr(_sc, "min_empirical_exp", 0.0))
     except Exception as exc:
         log.warning("probability_gate_config_read_failed", error=str(exc))
     scan_id    = str(uuid.uuid4())
@@ -471,18 +476,26 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                 signal.market_regime = btc_regime   # Phase 8.1B — store macro regime on signal
                 signal.scan_run_id = scan_run_id
 
-                # PHASE.9.1 — stamp empirical cohort probability (shadow data; the
-                # delivery gate below only acts on it when the flag is ON)
+                # PHASE.9.1/P1 — stamp empirical cohort probability + grade
+                # (shadow data; the delivery gate below only acts when flags ON)
+                _cohort = None
                 try:
                     from backend.analytics.probability import (  # noqa: PLC0415
-                        get_probability_lookup, lookup_empirical,
+                        get_probability_lookup, evaluate, empirical_grade,
                     )
                     _plookup = await get_probability_lookup()
                     if _plookup:
-                        signal.empirical_wr, signal.empirical_n = lookup_empirical(
-                            _plookup, signal.market_regime, signal.type.value,
-                            signal.breakout_strength,
+                        _cohort = evaluate(
+                            _plookup,
+                            market_regime=signal.market_regime,
+                            signal_type=signal.type.value,
+                            breakout_strength=signal.breakout_strength,
+                            confidence=signal.confidence,
                         )
+                        if _cohort is not None:
+                            signal.empirical_wr = _cohort.wr
+                            signal.empirical_n  = _cohort.n
+                            signal.empirical_grade = empirical_grade(_cohort.exp, _cohort.n)
                 except Exception as exc:
                     log.debug("empirical_stamp_failed", symbol=signal.symbol, error=str(exc))
 
@@ -526,18 +539,25 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                     try:
                         from backend.analytics.probability import persist_empirical  # noqa: PLC0415
                         t = asyncio.create_task(
-                            persist_empirical(sig_id, signal.empirical_wr, signal.empirical_n)
+                            persist_empirical(sig_id, signal.empirical_wr, signal.empirical_n,
+                                              signal.empirical_grade)
                         )
                         t.add_done_callback(lambda t: _on_task_done(t, "persist_empirical"))
                     except Exception:
                         pass
 
                 if signal.confidence >= alert_thr:
-                    # PHASE.9.1 — probability delivery gate: suppress the Telegram
-                    # send (signal stays persisted + outcome-tracked) when the
-                    # cohort win rate is known and below threshold.
+                    # PHASE.9.1/P1 — probability delivery gate: suppress the
+                    # Telegram send (signal stays persisted + outcome-tracked)
+                    # when cohort WR is below floor — or, with the v1 expectancy
+                    # filter ON, when cohort expectancy is below floor.
                     from backend.analytics.probability import should_suppress_send  # noqa: PLC0415
-                    if should_suppress_send(prob_gate_enabled, signal.empirical_wr, min_empirical_wr):
+                    if should_suppress_send(
+                        prob_gate_enabled, signal.empirical_wr, min_empirical_wr,
+                        expectancy_filter=exp_filter_enabled,
+                        empirical_exp=(_cohort.exp if _cohort is not None else None),
+                        min_expectancy=min_empirical_exp,
+                    ):
                         gate_rejections_total.labels(gate="probability_send_gate").inc()
                         log.info(
                             "probability_gate_suppressed_send",
@@ -545,7 +565,9 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                             type=signal.type.value,
                             empirical_wr=signal.empirical_wr,
                             empirical_n=signal.empirical_n,
+                            empirical_exp=(_cohort.exp if _cohort is not None else None),
                             threshold=min_empirical_wr,
+                            min_expectancy=min_empirical_exp if exp_filter_enabled else None,
                         )
                     else:
                         sent = await send_signal_alert(signal)

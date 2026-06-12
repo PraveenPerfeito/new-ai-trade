@@ -1081,6 +1081,15 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
                 )}
                 <div className="ml-auto flex items-center gap-2.5 shrink-0">
                   <RegimeAlignDot alignment={alignment} />
+                  {sig.empiricalWr != null && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded border font-mono hidden md:inline ${
+                      sig.empiricalWr >= 55 ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/5'
+                      : sig.empiricalWr >= 45 ? 'text-blue-400 border-blue-500/30 bg-blue-500/5'
+                      : 'text-red-400 border-red-500/30 bg-red-500/5'}`}
+                      title={`Outcome-derived probability: this signal's cohort won ${sig.empiricalWr.toFixed(0)}% historically (n=${sig.empiricalN}). Primary over stated confidence.`}>
+                      P {sig.empiricalWr.toFixed(0)}%
+                    </span>
+                  )}
                   <ConfBar confidence={sig.confidence} />
                   <span className="text-xs font-mono text-zinc-300 hidden sm:block w-8 text-right">{sig.confidence}%</span>
                   <span className="text-xs font-mono text-zinc-500 hidden sm:block">{sig.rrRatio?.toFixed(1) ?? '—'}:1</span>
@@ -1371,6 +1380,12 @@ function TacticalTab({ currentRegime }: { currentRegime: MarketRegime | null }) 
                 </div>
                 <div className="flex gap-4 mt-1.5 flex-wrap">
                   <span className="text-[11px] text-zinc-500">Conf: <span className="text-zinc-300 font-mono">{sig.confidence}%</span></span>
+                  {sig.empiricalWr != null && (
+                    <span className="text-[11px] text-zinc-500" title={`Cohort win rate (n=${sig.empiricalN})${sig.empiricalGrade ? ` · empirical grade ${sig.empiricalGrade}` : ''}`}>
+                      Prob: <span className={`font-mono font-semibold ${sig.empiricalWr >= 55 ? 'text-emerald-400' : sig.empiricalWr >= 45 ? 'text-blue-400' : 'text-red-400'}`}>{sig.empiricalWr.toFixed(0)}%</span>
+                      {sig.empiricalGrade && <span className="ml-1 text-purple-300 font-mono">{sig.empiricalGrade}</span>}
+                    </span>
+                  )}
                   <span className={`text-[11px] font-mono font-semibold ${(sig.rrRatio??0) >= 2.5 ? 'text-emerald-400' : (sig.rrRatio??0) >= 2.0 ? 'text-blue-400' : 'text-amber-400'}`}>
                     RR {sig.rrRatio?.toFixed(1) ?? '—'}:1
                   </span>

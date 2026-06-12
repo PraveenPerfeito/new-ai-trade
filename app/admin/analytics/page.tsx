@@ -913,14 +913,108 @@ function CalibrationTabContent({ ai, loading }: { ai: import('@/lib/admin-api').
 
 // ─── Page root ────────────────────────────────────────────────────────────────
 
-type Tab = 'edge' | 'attribution' | 'calibration'
+type Tab = 'edge' | 'attribution' | 'calibration' | 'probability'
+
+// ─── PHASE.9.P1 — Probability tab ─────────────────────────────────────────────
+
+function EdgeCellRow({ c }: { c: import('@/lib/admin-api').EdgeMatrixCell }) {
+  const expCls = (c.exp ?? 0) >= 0.6 ? 'text-emerald-400' : (c.exp ?? 0) >= 0.15 ? 'text-blue-400' : (c.exp ?? 0) >= 0 ? 'text-amber-400' : 'text-red-400'
+  return (
+    <tr className="border-b border-zinc-800/40 hover:bg-zinc-800/20">
+      <td className="py-1.5 px-3 font-mono text-[10px] text-zinc-500">{c.dim_key}</td>
+      <td className="py-1.5 px-3 font-mono text-xs text-zinc-200">{c.dim_value.replace(/\|/g, ' · ')}</td>
+      <td className="py-1.5 px-3 font-mono text-xs text-right text-zinc-300">{c.wr.toFixed(1)}%</td>
+      <td className="py-1.5 px-3 font-mono text-[10px] text-right text-zinc-600">[{c.ci[0]}–{c.ci[1]}]</td>
+      <td className={`py-1.5 px-3 font-mono text-xs text-right font-semibold ${expCls}`}>{c.exp != null ? `${c.exp >= 0 ? '+' : ''}${c.exp.toFixed(3)}R` : '—'}</td>
+      <td className="py-1.5 px-3 font-mono text-xs text-right text-zinc-400">{c.pf?.toFixed(2) ?? '—'}</td>
+      <td className="py-1.5 px-3 font-mono text-xs text-right text-zinc-500">{c.n}</td>
+    </tr>
+  )
+}
+
+function ProbabilityTabContent() {
+  const edgeFetcher  = useCallback(() => adminApi.analytics.edgeMatrix().catch(() => null), [])
+  const trackFetcher = useCallback(() => adminApi.analytics.trackRecord().catch(() => null), [])
+  const { data: matrix } = useAutoRefresh<import('@/lib/admin-api').EdgeMatrixResponse | null>(edgeFetcher, 300_000)
+  const { data: track }  = useAutoRefresh<import('@/lib/admin-api').TrackRecordResponse | null>(trackFetcher, 300_000)
+
+  const acc = track?.probability_accuracy
+
+  return (
+    <div className="space-y-6 max-w-5xl">
+      {/* Track record (Phase G foundation) */}
+      {track && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {([['7d', track.windows.d7], ['30d', track.windows.d30], ['90d', track.windows.d90]] as const).map(([label, w]) => (
+            <div key={label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+              <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1">Track Record · {label}</p>
+              <p className="text-xl font-bold font-mono text-white">{w.win_rate != null ? `${w.win_rate.toFixed(1)}%` : '—'} <span className="text-xs text-zinc-500 font-normal">WR</span></p>
+              <p className="text-[11px] font-mono text-zinc-400 mt-1">
+                {w.expectancy != null ? `${w.expectancy >= 0 ? '+' : ''}${Number(w.expectancy).toFixed(3)}R` : '—'} · PF {w.pf != null ? Number(w.pf).toFixed(2) : '—'} · n={w.resolved}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Probability accuracy — predicted vs realized */}
+      {acc && acc.n > 0 && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+          <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Probability Accuracy — stamped prediction vs realized outcome</p>
+          <div className="flex gap-6 flex-wrap text-sm font-mono">
+            <span className="text-zinc-400">Predicted avg: <span className="text-purple-300 font-bold">{acc.avg_predicted_wr?.toFixed(1)}%</span></span>
+            <span className="text-zinc-400">Realized: <span className="text-emerald-400 font-bold">{acc.realized_wr?.toFixed(1)}%</span></span>
+            <span className="text-zinc-400">Mean abs error: <span className="text-zinc-200 font-bold">{acc.mean_abs_error != null ? Number(acc.mean_abs_error).toFixed(3) : '—'}</span></span>
+            <span className="text-zinc-600">n={acc.n} resolved stamped signals</span>
+          </div>
+        </div>
+      )}
+
+      {/* Edge Matrix */}
+      {matrix && matrix.top.length > 0 ? (
+        <>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 overflow-x-auto">
+            <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">
+              Edge Matrix — Top combinations by expectancy (30d snapshots, n ≥ {matrix.min_n}, Wilson 95% CI)
+            </p>
+            <table className="w-full text-xs min-w-[640px]">
+              <thead>
+                <tr className="border-b border-zinc-700 text-[9px] uppercase tracking-wider text-zinc-500">
+                  <th className="text-left py-1.5 px-3">Dimension</th><th className="text-left py-1.5 px-3">Cohort</th>
+                  <th className="text-right py-1.5 px-3">WR</th><th className="text-right py-1.5 px-3">CI</th>
+                  <th className="text-right py-1.5 px-3">Exp</th><th className="text-right py-1.5 px-3">PF</th>
+                  <th className="text-right py-1.5 px-3">n</th>
+                </tr>
+              </thead>
+              <tbody>{matrix.top.slice(0, 25).map((c, i) => <EdgeCellRow key={i} c={c} />)}</tbody>
+            </table>
+          </div>
+          <div className="bg-zinc-900 border border-red-900/30 rounded-xl p-4 overflow-x-auto">
+            <p className="text-[9px] text-red-400/70 uppercase tracking-widest mb-2">Worst cohorts — avoid / gate these</p>
+            <table className="w-full text-xs min-w-[640px]">
+              <tbody>{matrix.bottom.map((c, i) => <EdgeCellRow key={i} c={c} />)}</tbody>
+            </table>
+          </div>
+        </>
+      ) : (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-8 text-center text-zinc-600 text-sm">
+          Edge Matrix populates from nightly attribution snapshots — first generation after 00:15 UTC.
+        </div>
+      )}
+
+      <p className="text-zinc-700 text-[10px] font-mono">
+        Derived entirely from signal_outcomes via attribution snapshots · no ML · empirical grades: A+ ≥1.0R · A ≥0.6 · B+ ≥0.35 · B ≥0.15 · C ≥0 · D &lt;0
+      </p>
+    </div>
+  )
+}
 
 export default function AnalyticsPage() {
   const [tab, setTab] = useState<Tab>('edge')
 
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tab') as Tab | null
-    if (t && ['edge', 'attribution', 'calibration'].includes(t)) setTab(t)
+    if (t && ['edge', 'attribution', 'calibration', 'probability'].includes(t)) setTab(t)
   }, [])
 
   const edgeFetcher  = useCallback(() => adminApi.analytics.edgeReport(), [])
@@ -943,6 +1037,7 @@ export default function AnalyticsPage() {
     { id: 'edge',        label: 'Edge Validation' },
     { id: 'attribution', label: 'Attribution'     },
     { id: 'calibration', label: 'AI Calibration'  },
+    { id: 'probability', label: 'Probability'     },
   ]
 
   return (
@@ -972,6 +1067,7 @@ export default function AnalyticsPage() {
       {tab === 'edge'        && <EdgeValidationTab edge={edge ?? null} loading={edgeLoading} intel={intel ?? null} intelLoading={intelLoading} />}
       {tab === 'attribution' && <AttributionTab data={attribution ?? null} loading={attrLoading} />}
       {tab === 'calibration' && <CalibrationTabContent ai={aiData ?? null} loading={aiLoading} />}
+      {tab === 'probability' && <ProbabilityTabContent />}
     </div>
   )
 }

@@ -75,6 +75,122 @@ async def ai_effectiveness(
     return await get_ai_summary(window_hours)
 
 
+@router.get("/edge-matrix")
+async def edge_matrix(
+    min_n: int = Query(default=20, ge=5, le=200),
+    limit: int = Query(default=50, ge=5, le=200),
+) -> dict[str, Any]:
+    """
+    PHASE.9.P1 Edge Matrix — top combinations from the latest attribution
+    snapshot generation (30d window), ranked by expectancy.  Includes Wilson
+    95% CI per cell.  Pure SQL aggregation over signal_outcomes — no ML.
+    """
+    from backend.analytics.probability import wilson_interval
+    from backend.database.session import get_pool
+    pool = await get_pool()
+
+    pair_keys = [
+        "regime|type", "regime|grade", "regime|conf_band", "grade|breakout",
+        "breakout|oi", "regime|breakout", "mode|conf_band", "type|conf_band",
+        "regime|type|breakout", "trend_tier|breakout", "sector|funding", "oi|positioning",
+    ]
+    rows = await pool.fetch(
+        """
+        SELECT DISTINCT ON (dim_key, dim_value) dim_key, dim_value, n, tp, sl, wr, exp, pf
+        FROM attribution_snapshots
+        WHERE window_days = 30 AND dim_key = ANY($1::text[])
+          AND computed_at > NOW() - INTERVAL '48 hours'
+        ORDER BY dim_key, dim_value, computed_at DESC
+        """,
+        pair_keys,
+    )
+    cells = []
+    for r in rows:
+        if r["n"] is None or r["n"] < min_n or r["wr"] is None:
+            continue
+        lo, hi = wilson_interval(float(r["wr"]), int(r["n"]))
+        cells.append({
+            "dim_key": r["dim_key"], "dim_value": r["dim_value"],
+            "n": int(r["n"]), "wr": float(r["wr"]),
+            "exp": float(r["exp"]) if r["exp"] is not None else None,
+            "pf": float(r["pf"]) if r["pf"] is not None else None,
+            "ci": [lo, hi],
+        })
+    cells.sort(key=lambda c: (c["exp"] if c["exp"] is not None else -99), reverse=True)
+    return {
+        "min_n": min_n,
+        "total_cells": len(cells),
+        "top": cells[:limit],
+        "bottom": sorted(cells, key=lambda c: (c["exp"] if c["exp"] is not None else 99))[:10],
+    }
+
+
+@router.get("/track-record")
+async def track_record() -> dict[str, Any]:
+    """
+    PHASE.9.P1 Phase G — monetization foundation: verifiable track record
+    derived ENTIRELY from signal_outcomes (no manual claims).  Includes
+    probability accuracy: stamped cohort WR vs realized outcomes.
+    Admin-proxied only — no public UI yet.
+    """
+    from backend.database.session import get_pool
+    pool = await get_pool()
+
+    async def _window(days: int) -> dict:
+        row = await pool.fetchrow(
+            """
+            SELECT count(*)                                  AS resolved,
+                   count(*) FILTER (WHERE outcome='TP_HIT')  AS wins,
+                   count(*) FILTER (WHERE outcome='SL_HIT')  AS losses,
+                   round(avg(rr_achieved)::numeric, 4)       AS expectancy,
+                   round((sum(rr_achieved) FILTER (WHERE rr_achieved > 0)
+                     / NULLIF(abs(sum(rr_achieved) FILTER (WHERE rr_achieved < 0)), 0))::numeric, 4) AS pf
+            FROM signal_outcomes
+            WHERE outcome IN ('TP_HIT','SL_HIT')
+              AND created_at > NOW() - make_interval(days => $1)
+            """,
+            days,
+        )
+        d = dict(row)
+        total = (d["wins"] or 0) + (d["losses"] or 0)
+        d["win_rate"] = round((d["wins"] or 0) / total * 100, 2) if total else None
+        return d
+
+    by_mode = await pool.fetch(
+        """
+        SELECT scanner_mode, count(*) AS n,
+               round(count(*) FILTER (WHERE outcome='TP_HIT')::numeric
+                 / NULLIF(count(*), 0) * 100, 1) AS wr,
+               round(avg(rr_achieved)::numeric, 3) AS exp
+        FROM signal_outcomes
+        WHERE outcome IN ('TP_HIT','SL_HIT') AND created_at > NOW() - INTERVAL '30 days'
+        GROUP BY 1 ORDER BY 2 DESC
+        """
+    )
+
+    # Probability accuracy — stamped prediction vs realized outcome (signals
+    # carrying empirical_wr that have since resolved)
+    acc = await pool.fetchrow(
+        """
+        SELECT count(*) AS n,
+               round(avg(s.empirical_wr)::numeric, 1) AS avg_predicted_wr,
+               round(count(*) FILTER (WHERE o.outcome='TP_HIT')::numeric
+                 / NULLIF(count(*), 0) * 100, 1)      AS realized_wr,
+               round(avg(abs(s.empirical_wr / 100.0
+                 - (o.outcome='TP_HIT')::int))::numeric, 4) AS mean_abs_error
+        FROM signals s JOIN signal_outcomes o ON o.signal_id = s.id
+        WHERE s.empirical_wr IS NOT NULL AND o.outcome IN ('TP_HIT','SL_HIT')
+        """
+    )
+
+    return {
+        "windows": {"d7": await _window(7), "d30": await _window(30), "d90": await _window(90)},
+        "by_mode_30d": [dict(r) for r in by_mode],
+        "probability_accuracy": dict(acc) if acc else None,
+        "source": "signal_outcomes (database-derived; no manual adjustments)",
+    }
+
+
 @router.get("/telegram-delivery")
 async def telegram_delivery() -> dict[str, Any]:
     """

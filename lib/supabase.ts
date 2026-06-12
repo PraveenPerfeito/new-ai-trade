@@ -460,5 +460,9 @@ function rowToSignal(row: Record<string, unknown>): TradingSignal {
     trendScore:         row.trend_score  != null ? Number(row.trend_score) : undefined,
     sectorStatus:       row.sector_status        as string | undefined ?? undefined,
     validationSource:   row.validation_source    as 'CLAUDE' | 'HEURISTIC' | undefined ?? undefined,
+    // PHASE.9.P1 — outcome-derived probability + RiskGrade 2.0 (NULL pre-migration)
+    empiricalWr:        row.empirical_wr    != null ? Number(row.empirical_wr) : null,
+    empiricalN:         row.empirical_n     != null ? Number(row.empirical_n)  : null,
+    empiricalGrade:     (row.empirical_grade as string | null) ?? null,
   };
 }

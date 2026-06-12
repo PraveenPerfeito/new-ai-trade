@@ -351,6 +351,8 @@ class Signal(BaseModel):
     # PHASE.9.1 — empirical probability stamp (attribution-snapshot cohort WR %, n≥30)
     empirical_wr:            float | None = None
     empirical_n:             int | None = None
+    # PHASE.9.P1 — RiskGrade 2.0 shadow grade (A+/A/B+/B/C/D from cohort expectancy)
+    empirical_grade:         str | None = None
 
 
 # ── Scan orchestration models ─────────────────────────────────────────────────

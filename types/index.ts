@@ -190,6 +190,10 @@ export interface TradingSignal {
   trendScore?:             number;   // 0-100 TrendScore (TRENDING mode only)
   sectorStatus?:           string;   // STRONGEST | ACCELERATING | NEUTRAL | WEAKENING | OVERCROWDED
   validationSource?:       'CLAUDE' | 'HEURISTIC';  // Phase 7.2B.9 — which validator approved
+  // PHASE.9.P1 — outcome-derived probability (cohort WR %, n≥30) + RiskGrade 2.0
+  empiricalWr?:            number | null;
+  empiricalN?:             number | null;
+  empiricalGrade?:         string | null;
 }
 
 export interface ScanRun {
