@@ -38,10 +38,42 @@ const GROUP_DESCRIPTIONS: Record<string, string> = {
   infra:    'Infrastructure limits, pool sizes, and cache TTLs',
 }
 
-// Groups to hide from the UI (removed features + unwired groups).
-// anomaly: anomaly_detector.py uses its own constants — the DB overrides in
-// this group are never read, so exposing them is dead UI.
-const HIDDEN_GROUPS = new Set(['paper_trading', 'anomaly'])
+// Groups to hide from the UI (removed features)
+const HIDDEN_GROUPS = new Set(['paper_trading'])
+
+// ── Wiring truth (verified against backend consumers, June 2026) ─────────────
+// 'live'    — read by the backend at runtime (get_group call or propagation hook)
+// 'floors'  — applied as a FLOOR on the audited per-mode CONFIGS when the
+//             features.apply_founder_thresholds flag is ON (can tighten, never loosen)
+// 'display' — no backend consumer reads this value (legacy/placebo)
+type WiredState = 'live' | 'floors' | 'display'
+
+const GROUP_WIRED_DEFAULT: Record<string, WiredState> = {
+  features: 'live', ai: 'live', telegram: 'live', anomaly: 'live',
+  scanner: 'display', signals: 'display', risk: 'display', infra: 'display',
+}
+
+const FIELD_WIRED: Record<string, WiredState> = {
+  'scanner.trending_watchlist': 'live',
+  'scanner.min_confidence':     'floors',
+  'scanner.alert_confidence':   'floors',
+  'scanner.max_coins_per_run':  'floors',
+  'signals.min_rr_ratio':       'floors',
+}
+
+function wiredState(group: string, key: string): WiredState {
+  return FIELD_WIRED[`${group}.${key}`] ?? GROUP_WIRED_DEFAULT[group] ?? 'display'
+}
+
+// ── Recommended values (ALPHA.TRUTH.1 + PHASE.9 audited) ─────────────────────
+const RECOMMENDED: Record<string, boolean | number> = {
+  'scanner.min_confidence':    85,    // 80–85 band ran negative expectancy (30d audit)
+  'scanner.alert_confidence':  85,
+  'scanner.max_coins_per_run': 80,    // production scan universe
+  'signals.min_rr_ratio':      2.0,
+  'ai.enabled':                true,
+  'telegram.alerts_enabled':   true,
+}
 
 // ── Operating Modes ───────────────────────────────────────────────────────────
 
@@ -254,6 +286,19 @@ function Toggle({ value, onChange, disabled }: {
       <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform
         ${value ? 'translate-x-4' : 'translate-x-0.5'}`} />
     </button>
+  )
+}
+
+function WiredChip({ state }: { state: WiredState }) {
+  const cfg = {
+    live:    { label: 'live',         cls: 'text-bull-default border-bull-default/30 bg-bull-default/5',     title: 'Read by the backend at runtime' },
+    floors:  { label: 'floor',        cls: 'text-blue-400 border-blue-500/30 bg-blue-500/5',                 title: 'Applied as a floor on the audited per-mode config when "Apply Founder Thresholds" is ON — tightens only, never loosens' },
+    display: { label: 'display only', cls: 'text-terminal-muted/50 border-terminal-border/60 bg-transparent', title: 'No backend consumer reads this value — changing it has no effect on the scanner' },
+  }[state]
+  return (
+    <span title={cfg.title} className={`text-[8px] px-1 py-0.5 rounded border font-mono uppercase tracking-wider ${cfg.cls}`}>
+      {cfg.label}
+    </span>
   )
 }
 
@@ -713,8 +758,9 @@ export default function SettingsPage() {
 
   // Daily on/off switches (bool entries rendered as toggle cards)
   const quickToggleKeys = [
-    { group: 'ai',       key: 'enabled' },           // Claude validation on/off
-    { group: 'telegram', key: 'alerts_enabled' },    // signal alert delivery
+    { group: 'ai',       key: 'enabled' },                  // Claude validation on/off
+    { group: 'telegram', key: 'alerts_enabled' },           // signal alert delivery
+    { group: 'features', key: 'apply_founder_thresholds' }, // floors on/off (SETTINGS.WIRE.1)
   ]
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -755,7 +801,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Daily toggles */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {quickToggleKeys.map(({ group: g, key: kk }) => {
             const entry = getTacticalEntry(g, kk)
             if (!entry) return null
@@ -767,6 +813,11 @@ export default function SettingsPage() {
             )
           })}
         </div>
+        <p className="text-[10px] text-terminal-muted/40 leading-relaxed">
+          The four numbers below act as <span className="text-blue-400">floors</span> on the audited per-mode scanner
+          configs when <span className="font-mono">Apply Founder Thresholds</span> is ON — they can tighten selection
+          but never loosen it below the ALPHA.TRUTH.1 per-mode minimums.
+        </p>
 
         {/* Daily numbers */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
@@ -984,13 +1035,27 @@ export default function SettingsPage() {
                                 errMsg ? 'bg-bear-default/5' : isFieldDirty ? 'bg-signal-medium/5' : 'hover:bg-terminal-bright/5'
                               }`}>
                                 <td className="py-2.5 px-4">
-                                  <p className="text-terminal-text font-mono">{entry.label}</p>
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="text-terminal-text font-mono">{entry.label}</p>
+                                    <WiredChip state={wiredState(entry.category, entry.key)} />
+                                  </div>
                                   <p className="text-terminal-muted/50 text-xs font-mono">{entry.key}</p>
                                   {entry.requires_restart && <span className="text-xs text-signal-high">↻ restart</span>}
                                 </td>
                                 <td className="py-2.5 px-4">
                                   <SettingInput entry={entry} value={currentVal} onChange={v => handleChange(entry, v)} disabled={isSaving} />
                                   {errMsg && <p className="text-bear-default text-xs mt-1 flex items-center gap-1"><AlertCircle size={9} />{errMsg}</p>}
+                                  {(() => {
+                                    const rec = RECOMMENDED[`${entry.category}.${entry.key}`]
+                                    if (rec === undefined || valEq(currentVal, rec)) return null
+                                    return (
+                                      <button onClick={() => handleChange(entry, rec)} disabled={isSaving}
+                                        title="Audited recommendation (ALPHA.TRUTH.1 / PHASE.9) — click to apply"
+                                        className="mt-1 text-[10px] px-1.5 py-0.5 rounded border border-signal-medium/40 text-signal-medium hover:bg-signal-medium/10 font-mono transition-colors">
+                                        Rec: {String(rec)} — apply
+                                      </button>
+                                    )
+                                  })()}
                                 </td>
                                 <td className="py-2.5 px-4 hidden sm:table-cell">
                                   <SourceBadge value={entry.value} defaultVal={entry.default} />

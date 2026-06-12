@@ -198,6 +198,72 @@ def _prioritize(coins: list[CoinData]) -> list[CoinData]:
     return sorted(coins, key=key)
 
 
+# ── Founder threshold floors (SETTINGS.WIRE.1) ───────────────────────────────
+
+def apply_founder_floors(
+    config: ScannerConfig,
+    alert_thr: int,
+    *,
+    min_confidence: int,
+    alert_confidence: int,
+    min_rr_ratio: float,
+    max_coins: int,
+) -> "tuple[ScannerConfig, int]":
+    """
+    Apply founder Quick Controls as FLOORS on the audited per-mode config.
+    Floors can only tighten: confidence/RR use max(), coin coverage uses min().
+    They can never loosen below the ALPHA.TRUTH.1-tuned per-mode minimums —
+    e.g. an 'Aggressive' preset writing min_confidence=72 still scans at the
+    mode's audited 85 for spot.
+    """
+    floored = config.model_copy(update={
+        "min_confidence":    max(config.min_confidence, min_confidence),
+        "min_rr_ratio":      max(config.min_rr_ratio, min_rr_ratio),
+        "max_coins_to_scan": min(config.max_coins_to_scan, max_coins),
+    })
+    return floored, max(alert_thr, alert_confidence)
+
+
+async def _maybe_apply_founder_floors(
+    config: ScannerConfig, alert_thr: int, mode: ScannerMode
+) -> "tuple[ScannerConfig, int]":
+    """Read flags + founder settings once per scan; no-op when flag OFF or on error."""
+    try:
+        from backend.system_settings.service import get_settings_service  # noqa: PLC0415
+        from backend.system_settings.groups import (  # noqa: PLC0415
+            FeatureFlags, ScannerSettings, SignalThresholdSettings,
+        )
+        svc = get_settings_service()
+        flags = await svc.get_group(FeatureFlags)
+        if not flags.apply_founder_thresholds:
+            return config, alert_thr
+        scanner_cfg = await svc.get_group(ScannerSettings)
+        signal_cfg  = await svc.get_group(SignalThresholdSettings)
+        floored, floored_alert = apply_founder_floors(
+            config, alert_thr,
+            min_confidence=scanner_cfg.min_confidence,
+            alert_confidence=scanner_cfg.alert_confidence,
+            min_rr_ratio=signal_cfg.min_rr_ratio,
+            max_coins=scanner_cfg.max_coins_per_run,
+        )
+        if (floored.min_confidence != config.min_confidence
+                or floored.min_rr_ratio != config.min_rr_ratio
+                or floored.max_coins_to_scan != config.max_coins_to_scan
+                or floored_alert != alert_thr):
+            log.info(
+                "founder_floors_applied",
+                mode=mode.value,
+                min_confidence=floored.min_confidence,
+                min_rr=floored.min_rr_ratio,
+                max_coins=floored.max_coins_to_scan,
+                alert_thr=floored_alert,
+            )
+        return floored, floored_alert
+    except Exception as exc:
+        log.warning("founder_floors_read_failed", error=str(exc))
+        return config, alert_thr
+
+
 # ── Main orchestrator ─────────────────────────────────────────────────────────
 
 async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
@@ -207,6 +273,8 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
     config     = CONFIGS[mode]
     settings   = get_settings()
     alert_thr  = settings.scanner_min_confidence_alert
+    # SETTINGS.WIRE.1 — founder Quick Controls as floors (flag-gated, default OFF)
+    config, alert_thr = await _maybe_apply_founder_floors(config, alert_thr, mode)
     scan_id    = str(uuid.uuid4())
     t0         = time.monotonic()
     t0_wall    = datetime.now(timezone.utc)
