@@ -38,8 +38,10 @@ const GROUP_DESCRIPTIONS: Record<string, string> = {
   infra:    'Infrastructure limits, pool sizes, and cache TTLs',
 }
 
-// Groups to hide from the UI (removed features)
-const HIDDEN_GROUPS = new Set(['paper_trading'])
+// Groups to hide from the UI (removed features + unwired groups).
+// anomaly: anomaly_detector.py uses its own constants — the DB overrides in
+// this group are never read, so exposing them is dead UI.
+const HIDDEN_GROUPS = new Set(['paper_trading', 'anomaly'])
 
 // ── Operating Modes ───────────────────────────────────────────────────────────
 
@@ -517,40 +519,6 @@ function FounderSummaryCard({ activeMode, settings, dirty }: {
   )
 }
 
-// ── ActiveSettingsSummary ─────────────────────────────────────────────────────
-
-function ActiveSettingsSummary({ settings, dirty, activeMode }: {
-  settings: SettingsData
-  dirty: Record<string, boolean | number | string>
-  activeMode: ModeId | null
-}) {
-  const get = (grp: string, key: string) => {
-    const k = `${grp}.${key}`
-    return dirty[k] !== undefined ? dirty[k] : settings[grp]?.fields.find(f => f.key === key)?.value
-  }
-  const mode = activeMode ? OPERATING_MODES.find(m => m.id === activeMode) : null
-  const conf = get('scanner', 'min_confidence')
-  const rr   = get('signals', 'min_rr_ratio')
-  const rows = [
-    { label: 'Active Mode',          value: mode ? mode.label : 'Custom' },
-    { label: 'Confidence Threshold', value: conf != null ? `${conf}%` : '—' },
-    { label: 'Minimum R:R',          value: rr   != null ? `${Number(rr).toFixed(1)}×` : '—' },
-  ]
-  return (
-    <div className="glass-card rounded-xl border border-terminal-border/40 px-5 py-4">
-      <p className="text-[10px] text-terminal-muted/50 uppercase tracking-widest mb-3">Current Active Settings</p>
-      <div className="grid grid-cols-3 gap-4">
-        {rows.map(({ label, value }) => (
-          <div key={label}>
-            <p className="text-[9px] text-terminal-muted/45 uppercase tracking-wider mb-0.5">{label}</p>
-            <p className="text-sm font-mono font-semibold text-terminal-text">{String(value)}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -569,9 +537,7 @@ export default function SettingsPage() {
   const [saveWarnings,        setSaveWarnings]        = useState<Record<string, string[]>>({})
   const [applyingMode,        setApplyingMode]        = useState<ModeId | null>(null)
   const [activeMode,          setActiveMode]          = useState<ModeId | null>(null)
-  const [advancedOpen,        setAdvancedOpen]        = useState(false)
-  const [advancedPresetsOpen, setAdvancedPresetsOpen] = useState(false)
-  const [advancedControlsOpen, setAdvancedControlsOpen] = useState(false)
+  const [allSettingsOpen,     setAllSettingsOpen]     = useState(false)
 
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
@@ -731,22 +697,25 @@ export default function SettingsPage() {
     )
   }
 
-  // ── Primary tactical controls (top 4) ─────────────────────────────────────
+  // ── Quick controls ─────────────────────────────────────────────────────────
+  // The audited "daily" set — everything the founder actually touches weekly+.
+  // All other fields live in the All Settings browser below (one accordion).
 
-  const primaryControlKeys = [
-    { group: 'scanner', key: 'min_confidence' },
-    { group: 'scanner', key: 'max_coins_per_run' },
-    { group: 'risk',    key: 'max_portfolio_risk_pct' },
-    { group: 'signals', key: 'min_rr_ratio' },
+  const quickNumberKeys = [
+    { group: 'scanner', key: 'min_confidence' },     // signal strictness
+    { group: 'scanner', key: 'alert_confidence' },   // Telegram alert floor
+    { group: 'signals', key: 'min_rr_ratio' },       // min risk/reward
+    { group: 'scanner', key: 'max_coins_per_run' },  // scan coverage
   ]
-
-  const primaryControls = primaryControlKeys
+  const quickNumberControls = quickNumberKeys
     .map(({ group: g, key: k }) => TACTICAL_CONTROLS.find(d => d.group === g && d.key === k))
     .filter((d): d is TacticalControlDef => d !== undefined)
 
-  const advancedControls = TACTICAL_CONTROLS.filter(d =>
-    !primaryControls.some(p => p.group === d.group && p.key === d.key)
-  )
+  // Daily on/off switches (bool entries rendered as toggle cards)
+  const quickToggleKeys = [
+    { group: 'ai',       key: 'enabled' },           // Claude validation on/off
+    { group: 'telegram', key: 'alerts_enabled' },    // signal alert delivery
+  ]
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -776,44 +745,32 @@ export default function SettingsPage() {
       {/* Founder Summary Card */}
       <FounderSummaryCard activeMode={activeMode} settings={settings} dirty={dirty} />
 
-      {/* ── Operating Mode ───────────────────────────────────────────────── */}
+      {/* ── Quick Controls — the audited daily set, always visible ───────── */}
       <div className="space-y-3">
-        <p className="text-terminal-text text-sm font-semibold">Operating Mode</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {OPERATING_MODES.filter(m => ['conservative', 'balanced', 'aggressive'].includes(m.id)).map(mode => (
-            <ModeCard key={mode.id} mode={mode} isActive={activeMode === mode.id}
-              isApplying={applyingMode === mode.id} disabled={!!applyingMode} onApply={applyMode} />
-          ))}
+        <div className="flex items-baseline justify-between gap-3 flex-wrap">
+          <p className="text-terminal-text text-sm font-semibold">Quick Controls</p>
+          <p className="text-[10px] text-terminal-muted/50">
+            Emergency Stop · Maintenance · Scheduler live in <a href="/admin/trading?tab=scanner" className="underline hover:text-terminal-text">Trading → Scanner</a>
+          </p>
         </div>
 
-        {/* Advanced Presets accordion */}
-        <div className="border border-terminal-border/40 rounded-xl overflow-hidden">
-          <button type="button" onClick={() => setAdvancedPresetsOpen(v => !v)}
-            className="w-full flex items-center justify-between px-4 py-3 hover:bg-terminal-bright/5 transition-colors">
-            <span className="text-xs font-semibold text-terminal-muted">Advanced Presets</span>
-            <div className="flex items-center gap-2">
-              <span className="text-[9px] text-terminal-muted/40 font-mono hidden sm:block">Institutional · Sniper · Futures Tactical · Rotation Hunter</span>
-              <ChevronDown size={13} className={`text-terminal-muted/50 transition-transform ${advancedPresetsOpen ? 'rotate-180' : ''}`} />
-            </div>
-          </button>
-          {advancedPresetsOpen && (
-            <div className="border-t border-terminal-border/30 p-4">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {OPERATING_MODES.filter(m => !['conservative', 'balanced', 'aggressive'].includes(m.id)).map(mode => (
-                  <ModeCard key={mode.id} mode={mode} isActive={activeMode === mode.id}
-                    isApplying={applyingMode === mode.id} disabled={!!applyingMode} onApply={applyMode} />
-                ))}
-              </div>
-            </div>
-          )}
+        {/* Daily toggles */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {quickToggleKeys.map(({ group: g, key: kk }) => {
+            const entry = getTacticalEntry(g, kk)
+            if (!entry) return null
+            const k = `${g}.${kk}`
+            return (
+              <FeatureFlagCard key={k} entry={entry} value={getTacticalValue(g, kk) as boolean}
+                onChange={v => handleChange(entry, v)} isSaving={saving.has(k)}
+                isSaved={saved.has(k)} error={errors[k]} />
+            )
+          })}
         </div>
-      </div>
 
-      {/* ── Key Controls ─────────────────────────────────────────────────── */}
-      <div className="space-y-3">
-        <p className="text-terminal-text text-sm font-semibold">Key Controls</p>
+        {/* Daily numbers */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-          {primaryControls.map(def => {
+          {quickNumberControls.map(def => {
             const entry = getTacticalEntry(def.group, def.key)
             if (!entry) return null
             const k = `${def.group}.${def.key}`
@@ -826,58 +783,65 @@ export default function SettingsPage() {
             )
           })}
         </div>
-
-        {/* Advanced Settings accordion */}
-        <div className="border border-terminal-border/40 rounded-xl overflow-hidden">
-          <button type="button" onClick={() => setAdvancedControlsOpen(v => !v)}
-            className="w-full flex items-center justify-between px-4 py-3 hover:bg-terminal-bright/5 transition-colors">
-            <span className="text-xs font-semibold text-terminal-muted">Advanced Settings</span>
-            <ChevronDown size={13} className={`text-terminal-muted/50 transition-transform ${advancedControlsOpen ? 'rotate-180' : ''}`} />
-          </button>
-          {advancedControlsOpen && (
-            <div className="border-t border-terminal-border/30 p-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-                {advancedControls.map(def => {
-                  const entry = getTacticalEntry(def.group, def.key)
-                  if (!entry) return null
-                  const k = `${def.group}.${def.key}`
-                  const value = getTacticalValue(def.group, def.key)
-                  return (
-                    <TacticalControlCard key={k} def={def} entry={entry} value={value}
-                      isSaving={saving.has(k)} isSaved={saved.has(k)}
-                      isDirty={dirty[k] !== undefined} error={errors[k]}
-                      onChange={v => handleChange(entry, v)} onSave={() => handleManualSave(entry)} />
-                  )
-                })}
-              </div>
-            </div>
-          )}
-        </div>
       </div>
 
-      {/* Active Settings Summary */}
-      <ActiveSettingsSummary settings={settings} dirty={dirty} activeMode={activeMode} />
+      {/* ── Operating Mode — one section, no accordion ────────────────────── */}
+      <div className="space-y-3">
+        <p className="text-terminal-text text-sm font-semibold">Operating Mode</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {OPERATING_MODES.filter(m => ['conservative', 'balanced', 'aggressive'].includes(m.id)).map(mode => (
+            <ModeCard key={mode.id} mode={mode} isActive={activeMode === mode.id}
+              isApplying={applyingMode === mode.id} disabled={!!applyingMode} onApply={applyMode} />
+          ))}
+        </div>
+        {/* Specialist presets — compact chips instead of a hidden accordion */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] text-terminal-muted/50 uppercase tracking-wider shrink-0">Specialist:</span>
+          {OPERATING_MODES.filter(m => !['conservative', 'balanced', 'aggressive'].includes(m.id)).map(mode => (
+            <button key={mode.id} type="button" title={mode.description}
+              onClick={() => applyMode(mode)} disabled={!!applyingMode}
+              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
+                activeMode === mode.id
+                  ? 'border-bull-default/50 bg-bull-default/10 text-terminal-text'
+                  : 'border-terminal-border text-terminal-muted hover:text-terminal-text hover:border-terminal-border/80'
+              }`}>
+              <span style={{ color: mode.color }}>{mode.icon}</span>
+              {applyingMode === mode.id ? 'Applying…' : mode.label}
+              <span className="text-terminal-muted/40 font-mono hidden sm:inline">RR {mode.rrExpected}</span>
+            </button>
+          ))}
+        </div>
+        <p className="text-[10px] text-terminal-muted/40 leading-relaxed">
+          ⚠ Presets that set confidence below 85 (Aggressive, Futures Tactical, Rotation Hunter) conflict with the
+          ALPHA.TRUTH.1 audit — the 80–85 band ran negative expectancy over 30d. Prefer Balanced/Conservative for live capital.
+        </p>
+      </div>
 
-      {/* ── All Settings Groups ──────────────────────────────────────────── */}
+      {/* ── All Settings Groups — single collapsed accordion ─────────────── */}
       <div className="glass-card rounded-xl overflow-hidden border border-terminal-border/50">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-terminal-border/40">
+        {/* Header (click to expand) */}
+        <button type="button" onClick={() => setAllSettingsOpen(v => !v)}
+          className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-terminal-bright/5 transition-colors">
           <div className="flex items-center gap-2">
             <Database size={14} className="text-terminal-muted/60" />
-            <span className="text-sm font-semibold text-terminal-text">All Settings</span>
+            <span className="text-sm font-semibold text-terminal-text">All Settings &amp; Audit Log</span>
             <span className="text-[10px] text-terminal-muted/40 font-mono hidden sm:block">
-              · auto-save · toggles instant · numbers 0.8s
+              · every group · auto-save · change history
             </span>
           </div>
-          {Object.values(dirty).length > 0 && (
-            <span className="text-xs text-signal-medium font-semibold">
-              {Object.keys(dirty).length} unsaved
-            </span>
-          )}
-        </div>
+          <div className="flex items-center gap-3">
+            {Object.values(dirty).length > 0 && (
+              <span className="text-xs text-signal-medium font-semibold">
+                {Object.keys(dirty).length} unsaved
+              </span>
+            )}
+            <ChevronDown size={14} className={`text-terminal-muted/50 transition-transform ${allSettingsOpen ? 'rotate-180' : ''}`} />
+          </div>
+        </button>
 
         {/* Two-column layout: left nav + right content */}
-        <div className="flex min-h-[400px]">
+        {allSettingsOpen && (
+        <div className="flex min-h-[400px] border-t border-terminal-border/40">
 
           {/* ── Left sidebar navigation ── */}
           <div className="w-44 sm:w-52 shrink-0 border-r border-terminal-border/40 py-2">
@@ -1133,7 +1097,8 @@ export default function SettingsPage() {
               </>
             )}
           </div>
-        </div>{/* end two-column flex */}
+        </div>
+        )}{/* end two-column flex */}
       </div>{/* end glass-card */}
     </div>
   )
