@@ -34,22 +34,41 @@ async def record_ai_call(
     confidence: int,
     used_fallback: bool = False,
     error: str | None = None,
+    symbol: str | None = None,
+    setup_score: int | None = None,
 ) -> None:
     """Persist one AI validation call. Fire-and-forget — never raises."""
     pool = await _pool()
     if pool is None:
         return
     try:
-        await pool.execute(
-            """
-            INSERT INTO ai_call_log (
+        # CLAUDE.OPTIMIZATION.1: symbol + setup_score make Claude's kill-gate
+        # value measurable against outcomes.  Falls back to the legacy insert
+        # when ai-call-log-trace-migration.sql has not been run yet.
+        try:
+            await pool.execute(
+                """
+                INSERT INTO ai_call_log (
+                    signal_id, model, latency_ms, prompt_tokens, completion_tokens,
+                    validated, confidence, used_fallback, error, symbol, setup_score
+                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+                """,
                 signal_id, model, latency_ms, prompt_tokens, completion_tokens,
-                validated, confidence, used_fallback, error
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-            """,
-            signal_id, model, latency_ms, prompt_tokens, completion_tokens,
-            validated, confidence, used_fallback, error,
-        )
+                validated, confidence, used_fallback, error, symbol, setup_score,
+            )
+        except Exception as col_exc:
+            if "symbol" not in str(col_exc) and "setup_score" not in str(col_exc):
+                raise
+            await pool.execute(
+                """
+                INSERT INTO ai_call_log (
+                    signal_id, model, latency_ms, prompt_tokens, completion_tokens,
+                    validated, confidence, used_fallback, error
+                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+                """,
+                signal_id, model, latency_ms, prompt_tokens, completion_tokens,
+                validated, confidence, used_fallback, error,
+            )
     except Exception as exc:
         log.warning("record_ai_call_failed", error=str(exc))
 

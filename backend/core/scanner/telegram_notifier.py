@@ -44,12 +44,14 @@ _QUEUE_MAX    = 64    # drop oldest if queue is full (prevents memory build-up)
 #              check-time, which poisoned the cooldown when the send was lost)
 
 class _QueueItem:
-    __slots__ = ("text", "signal_id", "dedup_key")
+    __slots__ = ("text", "signal_id", "dedup_key", "confidence")
 
-    def __init__(self, text: str, signal_id: str | None = None, dedup_key: str | None = None):
-        self.text      = text
-        self.signal_id = signal_id
-        self.dedup_key = dedup_key
+    def __init__(self, text: str, signal_id: str | None = None,
+                 dedup_key: str | None = None, confidence: int | None = None):
+        self.text       = text
+        self.signal_id  = signal_id
+        self.dedup_key  = dedup_key
+        self.confidence = confidence
 
 
 # ── Internal queue singleton (per event loop) ─────────────────────────────────
@@ -106,7 +108,7 @@ async def _drain_queue() -> None:
 
             # WS3: dedup cooldown marked ONLY after confirmed delivery
             if delivered and item.dedup_key:
-                await _mark_alert_cooldown(item.dedup_key)
+                await _mark_alert_cooldown(item.dedup_key, item.confidence)
             # WS2: delivery ground truth (best-effort, migration-tolerant)
             if item.signal_id:
                 await _record_delivery(item.signal_id, delivered)
@@ -150,12 +152,16 @@ async def _record_delivery(signal_id: str, delivered: bool, error: str | None = 
         log.debug("record_delivery_failed", signal_id=signal_id, error=str(exc))
 
 
-async def _mark_alert_cooldown(dedup_key: str) -> None:
-    """Set the 1h symbol+direction cooldown — only after a confirmed delivery."""
+async def _mark_alert_cooldown(dedup_key: str, confidence: int | None = None) -> None:
+    """
+    Set the 1h symbol+direction cooldown — only after a confirmed delivery.
+    Stores the delivered confidence so a later duplicate can qualify as an
+    UPGRADE (quality-aware dedup, TELEGRAM.RELIABILITY.1 P1-4).
+    """
     try:
         from backend.cache.redis_cache import get_redis  # noqa: PLC0415
         redis = await get_redis()
-        await redis.setex(dedup_key, ALERT_COOLDOWN_HOURS * 3600, "1")
+        await redis.setex(dedup_key, ALERT_COOLDOWN_HOURS * 3600, str(int(confidence or 0) or 999))
     except Exception as exc:
         log.warning("alert_cooldown_mark_failed", key=dedup_key, error=str(exc))
 
@@ -218,7 +224,8 @@ def _is_configured() -> bool:
     return bool(s.telegram_bot_token and s.telegram_chat_id)
 
 
-def _enqueue(text: str, signal_id: str | None = None, dedup_key: str | None = None) -> None:
+def _enqueue(text: str, signal_id: str | None = None, dedup_key: str | None = None,
+             confidence: int | None = None) -> None:
     """Push message to send queue; drops oldest if queue is full."""
     try:
         q = _get_queue()
@@ -230,7 +237,7 @@ def _enqueue(text: str, signal_id: str | None = None, dedup_key: str | None = No
                             dropped_signal_id=getattr(dropped, "signal_id", None))
             except asyncio.QueueEmpty:
                 pass
-        q.put_nowait(_QueueItem(text, signal_id, dedup_key))
+        q.put_nowait(_QueueItem(text, signal_id, dedup_key, confidence))
     except Exception as exc:
         log.warning("telegram_enqueue_failed", error=str(exc))
 
@@ -272,6 +279,14 @@ def _dedup_key(symbol: str, direction: str) -> str:
     return f"tg:alert:{symbol.upper()}:{direction.upper()}"
 
 
+# Quality-aware dedup (TELEGRAM.RELIABILITY.1 P1-4): a duplicate within the
+# cooldown is allowed through as an UPGRADE when its confidence exceeds the
+# already-delivered alert by at least this delta. Audited: high-confidence
+# duplicates (conf 90-98) were being shadowed by earlier lower-conf sends
+# purely on mode arrival order.
+DEDUP_UPGRADE_DELTA = 5
+
+
 async def _is_duplicate_alert(symbol: str, direction: str) -> bool:
     """
     Check-only cooldown test (TELEGRAM.RELIABILITY.1 WS3).
@@ -279,13 +294,29 @@ async def _is_duplicate_alert(symbol: str, direction: str) -> bool:
     (_mark_alert_cooldown) — previously it was set here at check-time, so a
     send that was later lost or failed still suppressed the symbol for 1h.
     """
+    return await _get_cooldown_confidence(symbol, direction) is not None
+
+
+async def _get_cooldown_confidence(symbol: str, direction: str) -> int | None:
+    """
+    Return the confidence of the alert that opened the active cooldown, or
+    None when no cooldown is active.  Legacy/unparseable values block
+    unconditionally (returned as 999).  Fails open (None) on Redis errors.
+    """
     try:
         from backend.cache.redis_cache import get_redis
         redis = await get_redis()
-        return bool(await redis.exists(_dedup_key(symbol, direction)))
+        raw = await redis.get(_dedup_key(symbol, direction))
+        if raw is None:
+            return None
+        try:
+            value = int(raw if isinstance(raw, str) else raw.decode())
+            return value if value > 1 else 999   # legacy "1" → block
+        except (ValueError, AttributeError):
+            return 999
     except Exception as exc:
         log.warning("alert_dedup_check_failed", error=str(exc))
-        return False  # fail open — send the alert if Redis is down
+        return None  # fail open — send the alert if Redis is down
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -336,12 +367,21 @@ async def send_signal_alert(signal: Signal) -> bool:
 
     # Deduplication FIRST — must check before rate counter so duplicates
     # do NOT waste hourly quota slots (the previous bug: counter incremented
-    # on every duplicate attempt, exhausting 20/hr in minutes)
+    # on every duplicate attempt, exhausting 20/hr in minutes).
+    # P1-4 quality-aware: a duplicate with confidence ≥ previous + DELTA is
+    # delivered as an UPGRADE instead of silently shadowed.
     direction_key = "LONG" if signal.type.value == "BUY" else "SHORT"
-    if await _is_duplicate_alert(signal.symbol, direction_key):
-        log.info("telegram_alert_skipped_duplicate", symbol=signal.symbol, direction=direction_key,
-                 cooldown_hours=ALERT_COOLDOWN_HOURS)
-        return False
+    prev_conf  = await _get_cooldown_confidence(signal.symbol, direction_key)
+    is_upgrade = False
+    if prev_conf is not None:
+        if signal.confidence >= prev_conf + DEDUP_UPGRADE_DELTA:
+            is_upgrade = True
+            log.info("telegram_alert_upgrade", symbol=signal.symbol, direction=direction_key,
+                     prev_confidence=prev_conf, new_confidence=signal.confidence)
+        else:
+            log.info("telegram_alert_skipped_duplicate", symbol=signal.symbol, direction=direction_key,
+                     cooldown_hours=ALERT_COOLDOWN_HOURS, prev_confidence=prev_conf)
+            return False
 
     # Hourly rate cap — only counted AFTER dedup passes (unique alerts only)
     try:
@@ -387,6 +427,7 @@ async def send_signal_alert(signal: Signal) -> bool:
 
     lines = [
         f"<b>{direction} — {signal.symbol}/USDT</b>",
+        *( [f"⬆️ <b>UPGRADE</b> — confidence {prev_conf}% → {signal.confidence}%"] if is_upgrade else [] ),
         f"Mode: <b>{mode.upper()}</b>  |  Confidence: <b>{signal.confidence}% {conf_label}</b>",
         f"Grade: {grade_icon} <b>{signal.risk_grade.value}</b>  |  R:R: <b>1:{signal.rr_ratio:.1f}</b>  |  {_val_label}",
         f"Regime: {_regime_icon} <b>{_regime_disp}</b>",
@@ -470,11 +511,13 @@ async def send_signal_alert(signal: Signal) -> bool:
     ]
 
     # WS2/WS3: queue item carries the signal id (delivery receipt) and the
-    # dedup key (cooldown marked only after confirmed delivery).
+    # dedup key + confidence (cooldown marked only after confirmed delivery;
+    # confidence stored so later duplicates can qualify as upgrades).
     _enqueue(
         "\n".join(lines),
         signal_id=signal.id,
         dedup_key=_dedup_key(signal.symbol, direction_key),
+        confidence=signal.confidence,
     )
     # Monitoring counter (fire-and-forget)
     try:

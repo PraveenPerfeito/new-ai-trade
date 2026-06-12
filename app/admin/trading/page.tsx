@@ -961,10 +961,12 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
 
   useEffect(() => { setPage(0) }, [typeFilter, modeFilter, sortBy, search])
 
+  // REDIS.OPTIMIZATION.2: one shared tactical feed for SignalsTab + TacticalTab
+  // + Overview (was 3 separate polls of the same endpoint at 60-120s)
   const fetcher = useCallback(() =>
     fetch('/api/signals/tactical?limit=100&lifecycleStage=all')
       .then(r=>r.json()).then(j=>j.signals??[]).catch(()=>[]), [])
-  const { data: signals, loading } = useAutoRefresh<TacticalSignalRow[]>(fetcher, 120_000)
+  const { data: signals, loading } = useSharedPolling<TacticalSignalRow[]>('trading:tactical-feed', fetcher, 120_000)
 
   const filtered = (signals??[]).filter(s=>
     (typeFilter==='all'||s.type===typeFilter) &&
@@ -1302,9 +1304,11 @@ function TacticalTab({ currentRegime }: { currentRegime: MarketRegime | null }) 
     expired: ['STALE','CLOSED'],
   }
 
+  // REDIS.OPTIMIZATION.2: shares the SignalsTab feed (same key, same fetcher)
   const fetcher = useCallback(()=>
-    fetch(`/api/signals/tactical?limit=80&lifecycleStage=all`).then(r=>r.json()).then(j=>j.signals??[]), [])
-  const { data: allSigs, loading } = useAutoRefresh<TacticalSignalRow[]>(fetcher, 60_000)
+    fetch('/api/signals/tactical?limit=100&lifecycleStage=all')
+      .then(r=>r.json()).then(j=>j.signals??[]).catch(()=>[]), [])
+  const { data: allSigs, loading } = useSharedPolling<TacticalSignalRow[]>('trading:tactical-feed', fetcher, 120_000)
 
   const stages = preset==='all' ? null : (stageMap[preset] ?? null)
   const signals = (allSigs??[]).filter(s=>!stages||stages.includes(s.lifecycleStage))
@@ -1792,7 +1796,8 @@ export default function TradingOperationsPage() {
   const countsFetcher  = useCallback(()=>fetch('/api/signals/counts').then(r=>r.json()), [])
   const cacheFetcher   = useCallback(()=>fetch('/api/cache/intelligence').then(r=>r.json()).then(j=>j.telemetry??null), [])
   const provFetcher    = useCallback(()=>fetch('/api/health/providers').then(r=>r.json()).then(j=>j.providers??[]).catch(()=>[]), [])
-  const sigFetcher     = useCallback(()=>fetch('/api/signals/tactical?limit=6&lifecycleStage=all').then(r=>r.json()).then(j=>j.signals??[]).catch(()=>[]), [])
+  // REDIS.OPTIMIZATION.2: same shared feed as SignalsTab/TacticalTab; overview slices 6
+  const sigFetcher     = useCallback(()=>fetch('/api/signals/tactical?limit=100&lifecycleStage=all').then(r=>r.json()).then(j=>j.signals??[]).catch(()=>[]), [])
   const flagsFetcher   = useCallback(async ()=>{
     const [featRes,aiRes] = await Promise.all([adminApi.settings.group('features'),adminApi.settings.group('ai')])
     const field = (res: { fields: {key:string;value:unknown}[] }, k: string) => res.fields.find(f=>f.key===k)?.value
@@ -1814,7 +1819,8 @@ export default function TradingOperationsPage() {
   const { data: signalCounts }                          = useSharedPolling<SignalCounts|null>('trading:counts',      countsFetcher,       120_000)
   const { data: cache }                                 = useSharedPolling<CacheTelemetry|null>('trading:cache',     cacheFetcher,        120_000)
   const { data: providers }                             = useSharedPolling<ProviderStatus[]> ('trading:providers',   provFetcher,         120_000)
-  const { data: recentSignals }                         = useSharedPolling<TacticalSignalRow[]>('trading:recent-sigs',sigFetcher,         120_000)
+  const { data: recentFeed }                            = useSharedPolling<TacticalSignalRow[]>('trading:tactical-feed',sigFetcher,       120_000)
+  const recentSignals = recentFeed ? recentFeed.slice(0, 6) : null
   const { data: flagsData,  refresh: refreshFlags }     = useSharedPolling<{emergency_stop:boolean;maintenance_mode:boolean;telegram:boolean;ai_validation:boolean;_aiEnabled:boolean}|null>('trading:flags', flagsFetcher, 120_000)
   const { data: scanStats }                             = useSharedPolling<ScanSummaryResponse|null>('trading:scans',scansFetcher,        120_000)
   const { data: auditEntries }                          = useSharedPolling<AuditEntry[]|null>('trading:audit',       auditFetcher,        120_000)

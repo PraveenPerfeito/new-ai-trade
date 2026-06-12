@@ -228,6 +228,70 @@ def _extract_json_block(text: str) -> str:
     return text                   # return as-is; json.loads raises JSONDecodeError
 
 
+def _repair_json(text: str) -> "dict | None":
+    """
+    CLAUDE.OPTIMIZATION.1 — second-chance repair for almost-valid responses.
+    Audited failure mode: 6 json_parse_failed/week, primarily truncation (avg
+    completion ≈625 tokens vs a hard cap).  Repairs, in order:
+      1. strip markdown code fences
+      2. remove trailing commas before } / ]
+      3. balance unclosed strings/braces/brackets (truncation recovery)
+    Returns the parsed dict or None when unrecoverable.
+    """
+    t = text.strip()
+    if t.startswith("```"):
+        t = re.sub(r"^```(?:json)?\s*", "", t)
+        t = re.sub(r"\s*```$", "", t)
+    t = _extract_json_block(t)
+    t = re.sub(r",\s*([}\]])", r"\1", t)
+
+    # Truncation recovery: close an unterminated string, then balance brackets.
+    depth_obj = depth_arr = 0
+    in_str = esc = False
+    for ch in t:
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            depth_obj += 1
+        elif ch == "}":
+            depth_obj -= 1
+        elif ch == "[":
+            depth_arr += 1
+        elif ch == "]":
+            depth_arr -= 1
+    if in_str:
+        t += '"'
+    t = t.rstrip().rstrip(",")
+    t += "]" * max(0, depth_arr) + "}" * max(0, depth_obj)
+
+    try:
+        parsed = json.loads(t)
+        return parsed if isinstance(parsed, dict) else None
+    except json.JSONDecodeError:
+        return None
+
+
+def _parse_claude_json(raw_text: str) -> dict:
+    """Parse Claude's response; try direct extraction, then repair. Raises JSONDecodeError."""
+    text = _extract_json_block(raw_text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        repaired = _repair_json(raw_text)
+        if repaired is not None:
+            log.info("ai_json_repaired")
+            return repaired
+        raise
+
+
 # ── Enhancement 5: Indicator sanitization ────────────────────────────────────
 
 def _sf(value: float, decimals: int = 4) -> str:
@@ -258,11 +322,13 @@ async def validate_signal(
     if setup_score < AI_MIN_SETUP_SCORE:
         log.info("ai_validation_skipped_low_score", symbol=signal.symbol, setup_score=setup_score, threshold=AI_MIN_SETUP_SCORE)
         result = _heuristic(signal, ind4h, trend_strength, volatility)
-        _record(signal.id, "heuristic", 0, result.confidence, result.validated, used_fallback=True)
+        _record(signal.id, "heuristic", 0, result.confidence, result.validated, used_fallback=True,
+                symbol=signal.symbol, setup_score=setup_score)
         return result
 
     # Check admin toggle and daily call limit
     ai_cfg_daily_limit = 0
+    ai_max_tokens = 768
     try:
         from backend.system_settings.service import get_settings_service
         from backend.system_settings.groups import AISettings
@@ -270,24 +336,31 @@ async def validate_signal(
         if not ai_cfg.enabled:
             log.info("ai_validation_disabled_by_settings", symbol=signal.symbol)
             result = _heuristic(signal, ind4h, trend_strength, volatility)
-            _record(signal.id, "heuristic", 0, result.confidence, result.validated, used_fallback=True)
+            _record(signal.id, "heuristic", 0, result.confidence, result.validated, used_fallback=True,
+                    symbol=signal.symbol, setup_score=setup_score)
             _record_call_outcome(is_fallback=True)
             return result
         ai_cfg_daily_limit = getattr(ai_cfg, "daily_call_limit", 0)
+        # CLAUDE.OPTIMIZATION.1: wire ai.max_tokens (was hardcoded 768) with a
+        # 768 floor — avg completion is ~625 tokens, so lower budgets truncate
+        # the JSON mid-object (the audited json_parse_failed cause).
+        ai_max_tokens = max(768, int(getattr(ai_cfg, "max_tokens", 768) or 768))
     except Exception as exc:
         log.warning("ai_settings_check_failed", error=str(exc))
 
     # Enhancement 1: daily call limit guard (Redis-backed — survives worker restarts)
     if await _check_and_increment_daily_redis(ai_cfg_daily_limit):
         result = _heuristic(signal, ind4h, trend_strength, volatility)
-        _record(signal.id, "heuristic", 0, result.confidence, result.validated, used_fallback=True)
+        _record(signal.id, "heuristic", 0, result.confidence, result.validated, used_fallback=True,
+                symbol=signal.symbol, setup_score=setup_score)
         _record_call_outcome(is_fallback=True)
         return result
 
     client = _get_client()
     if not client:
         result = _heuristic(signal, ind4h, trend_strength, volatility)
-        _record(signal.id, "heuristic", 0, result.confidence, result.validated, used_fallback=True)
+        _record(signal.id, "heuristic", 0, result.confidence, result.validated, used_fallback=True,
+                symbol=signal.symbol, setup_score=setup_score)
         _record_call_outcome(is_fallback=True)
         return result
 
@@ -304,7 +377,7 @@ async def validate_signal(
                         asyncio.to_thread(
                             client.messages.create,
                             model="claude-haiku-4-5",
-                            max_tokens=768,
+                            max_tokens=ai_max_tokens,
                             messages=[{"role": "user", "content": prompt}],
                             timeout=15.0,
                         ),
@@ -323,9 +396,8 @@ async def validate_signal(
         ai_validation_duration_seconds.observe(elapsed)
 
         text = msg.content[0].text.strip() if msg.content[0].type == "text" else ""
-        # Enhancement 4: safer JSON extraction — find/rfind instead of greedy regex
-        text   = _extract_json_block(text)
-        parsed = json.loads(text)
+        # CLAUDE.OPTIMIZATION.1: direct extraction, then truncation-aware repair
+        parsed = _parse_claude_json(text)
         confidence = _clamp(float(parsed.get("confidence") or 0), 0, 100)
 
         expl: AIExplainability | None = None
@@ -348,6 +420,7 @@ async def validate_signal(
             signal.id, "claude-haiku-4-5", latency_ms, confidence, validated,
             prompt_tokens=msg.usage.input_tokens if msg.usage else None,
             completion_tokens=msg.usage.output_tokens if msg.usage else None,
+            symbol=signal.symbol, setup_score=setup_score,
         )
 
         _record_call_outcome(is_fallback=False)   # Enhancement 2: track success
@@ -366,7 +439,8 @@ async def validate_signal(
         ai_validation_total.labels(outcome="error").inc()
         result = _heuristic(signal, ind4h, trend_strength, volatility)
         _record(signal.id, "claude-haiku-4-5", int((time.perf_counter() - t0) * 1000),
-                result.confidence, result.validated, error="json_parse_failed")
+                result.confidence, result.validated, error="json_parse_failed",
+                symbol=signal.symbol, setup_score=setup_score)
         _record_call_outcome(is_fallback=True)   # Enhancement 2
         return result
     except Exception as exc:
@@ -374,7 +448,8 @@ async def validate_signal(
         ai_validation_total.labels(outcome="fallback").inc()
         result = _heuristic(signal, ind4h, trend_strength, volatility)
         _record(signal.id, "claude-haiku-4-5", int((time.perf_counter() - t0) * 1000),
-                result.confidence, result.validated, used_fallback=True, error=str(exc))
+                result.confidence, result.validated, used_fallback=True, error=str(exc),
+                symbol=signal.symbol, setup_score=setup_score)
         _record_call_outcome(is_fallback=True)   # Enhancement 2
         return result
 
@@ -480,6 +555,8 @@ def _record(
     completion_tokens: int | None = None,
     used_fallback: bool = False,
     error: str | None = None,
+    symbol: str | None = None,
+    setup_score: int | None = None,
 ) -> None:
     """Non-blocking DB write — best effort, never raises."""
     try:
@@ -499,6 +576,8 @@ def _record(
                 confidence=confidence,
                 used_fallback=used_fallback,
                 error=error,
+                symbol=symbol,
+                setup_score=setup_score,
             ))
     except Exception:
         pass

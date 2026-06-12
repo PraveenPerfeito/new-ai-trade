@@ -369,8 +369,8 @@ function getAnomalyMeta(type: string) {
 function AnomaliesTab() {
   const anomalyFetcher = useCallback(() => adminApi.burnin.anomalies(96), [])
   const statusFetcher  = useCallback(() => adminApi.burnin.status(),      [])
-  const { data: anomalies, loading: al, refresh } = useAutoRefresh<AnomalyRecord[]>(anomalyFetcher, 60_000)
-  const { data: status }                           = useAutoRefresh<BurninStatus>(statusFetcher, 60_000)
+  const { data: anomalies, loading: al, refresh } = useAutoRefresh<AnomalyRecord[]>(anomalyFetcher, 120_000)
+  const { data: status }                           = useAutoRefresh<BurninStatus>(statusFetcher, 120_000)
 
   const [storedStates, setStoredStates]   = useState<Record<string, StoredAnomaly>>({})
   const [selectedAnomaly, setSelectedAnomaly] = useState<AnomalyRecord | null>(null)

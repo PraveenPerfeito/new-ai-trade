@@ -29,6 +29,42 @@ def _reset_queue_state():
 
 # ── WS4: per-loop concurrency primitives ──────────────────────────────────────
 
+class TestClaudeJsonRepair:
+    """CLAUDE.OPTIMIZATION.1 — json_parse_failed hardening."""
+
+    def test_direct_json_passes_through(self):
+        from backend.core.scanner.ai_validator import _parse_claude_json
+        assert _parse_claude_json('{"confidence": 85, "validated": true}') == {
+            "confidence": 85, "validated": True,
+        }
+
+    def test_markdown_fenced_json(self):
+        from backend.core.scanner.ai_validator import _parse_claude_json
+        text = '```json\n{"confidence": 70, "validated": false}\n```'
+        assert _parse_claude_json(text)["confidence"] == 70
+
+    def test_trailing_comma_repaired(self):
+        from backend.core.scanner.ai_validator import _parse_claude_json
+        text = '{"confidence": 90, "risks": ["a", "b",],}'
+        parsed = _parse_claude_json(text)
+        assert parsed["risks"] == ["a", "b"]
+
+    def test_truncated_json_repaired(self):
+        # The audited failure mode: completion hits the token cap mid-object
+        from backend.core.scanner.ai_validator import _parse_claude_json
+        text = '{"confidence": 82, "validated": true, "risks": ["liquidity", "fund'
+        parsed = _parse_claude_json(text)
+        assert parsed["confidence"] == 82
+        assert parsed["validated"] is True
+
+    def test_unrecoverable_raises(self):
+        import json as _json
+        import pytest as _pytest
+        from backend.core.scanner.ai_validator import _parse_claude_json
+        with _pytest.raises(_json.JSONDecodeError):
+            _parse_claude_json("I cannot evaluate this signal.")
+
+
 class TestPerLoopPrimitives:
     def test_semaphore_recreated_across_loops(self):
         from backend.core.scanner import ai_validator as av
@@ -109,6 +145,9 @@ class _FakeRedis:
     async def exists(self, key):
         return 1 if key in self.store else 0
 
+    async def get(self, key):
+        return self.store.get(key)
+
     async def setex(self, key, ttl, value):
         self.store[key] = value
         self.setex_calls.append((key, ttl, value))
@@ -154,11 +193,12 @@ class TestDeliveryAndDedup:
         monkeypatch.setattr(tn, "_MIN_INTERVAL", 0.0)
 
         async def scenario():
-            tn._enqueue("msg", signal_id="sig-1", dedup_key="tg:alert:BTC:LONG")
+            tn._enqueue("msg", signal_id="sig-1", dedup_key="tg:alert:BTC:LONG", confidence=87)
             await tn.flush_queue(timeout_s=5.0)
 
         asyncio.run(scenario())
-        assert ("tg:alert:BTC:LONG", tn.ALERT_COOLDOWN_HOURS * 3600, "1") in fake.setex_calls
+        # P1-4: the cooldown now stores the delivered confidence (upgrade baseline)
+        assert ("tg:alert:BTC:LONG", tn.ALERT_COOLDOWN_HOURS * 3600, "87") in fake.setex_calls
         assert receipts == [("sig-1", True, None)]
 
     def test_failed_delivery_no_cooldown_and_failure_receipt(self, monkeypatch):
@@ -190,6 +230,34 @@ class TestDeliveryAndDedup:
         # WS3 guarantee: failed delivery must NOT suppress future signals
         assert fake.setex_calls == []
         assert receipts == [("sig-2", False)]
+
+    def test_cooldown_confidence_parsing(self, monkeypatch):
+        """P1-4 quality-aware dedup — getter semantics."""
+        fake = _FakeRedis()
+
+        async def fake_get_redis():
+            return fake
+
+        import backend.cache.redis_cache as rc
+        monkeypatch.setattr(rc, "get_redis", fake_get_redis)
+
+        async def get(symbol="BTC", direction="LONG"):
+            return await tn._get_cooldown_confidence(symbol, direction)
+
+        # No cooldown → None (send proceeds)
+        assert asyncio.run(get()) is None
+        # Stored confidence → returned (upgrade comparison possible)
+        fake.store["tg:alert:BTC:LONG"] = "86"
+        assert asyncio.run(get()) == 86
+        # Legacy "1" marker → block unconditionally
+        fake.store["tg:alert:BTC:LONG"] = "1"
+        assert asyncio.run(get()) == 999
+        # Garbage → block unconditionally
+        fake.store["tg:alert:BTC:LONG"] = "high"
+        assert asyncio.run(get()) == 999
+
+    def test_upgrade_delta_constant(self):
+        assert tn.DEDUP_UPGRADE_DELTA == 5
 
     def test_ops_alert_enqueue_backward_compatible(self, monkeypatch):
         sent: list[str] = []
