@@ -13,6 +13,7 @@ import {
   AuditEntry,
   AuditChangedField,
 } from '@/lib/admin-api'
+import { settingTier, DANGEROUS_FLAGS } from '@/lib/settings-tiers'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -494,6 +495,70 @@ function TacticalControlCard({ def, entry, value, isSaving, isSaved, isDirty, er
   )
 }
 
+// ── SafetyStatusCard (SETTINGS.CENTER.2) ─────────────────────────────────────
+// Green when every safety-relevant switch is in its normal state; lists every
+// dangerous condition in red otherwise. Doubles as the dangerous-changes warning.
+
+function SafetyStatusCard({ settings, dirty }: {
+  settings: SettingsData
+  dirty: Record<string, boolean | number | string>
+}) {
+  const val = (grp: string, key: string): unknown => {
+    const k = `${grp}.${key}`
+    return dirty[k] !== undefined ? dirty[k] : settings[grp]?.fields.find(f => f.key === key)?.value
+  }
+
+  const issues = Object.entries(DANGEROUS_FLAGS)
+    .map(([path, cfg]) => {
+      const [grp, key] = path.split('.')
+      const v = val(grp, key)
+      if (v === undefined) return null
+      return Boolean(v) === cfg.dangerousWhen ? cfg : null
+    })
+    .filter((c): c is NonNullable<typeof c> => c !== null)
+
+  const conf = Number(val('scanner', 'min_confidence') ?? 0)
+  const floorsOn = Boolean(val('features', 'apply_founder_thresholds'))
+  if (conf > 0 && conf < 85 && floorsOn) {
+    issues.push({
+      dangerousWhen: true,
+      label: `Min confidence ${conf} is below the audited 85 floor`,
+      detail: 'The 80–85 band ran negative expectancy over 30d (ALPHA.TRUTH.1).',
+    })
+  }
+
+  if (issues.length === 0) {
+    return (
+      <div className="rounded-xl border border-bull-default/25 bg-bull-default/5 px-4 py-3 flex items-center gap-3">
+        <span className="w-2.5 h-2.5 rounded-full bg-bull-default shrink-0" />
+        <div>
+          <p className="text-sm font-semibold text-terminal-text">Safety status: normal</p>
+          <p className="text-[11px] text-terminal-muted/60">AI validation, Telegram delivery, and operational switches are all in their expected states.</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-xl border border-bear-default/40 bg-bear-default/5 px-4 py-3">
+      <div className="flex items-center gap-2 mb-2">
+        <AlertTriangle size={14} className="text-bear-default shrink-0" />
+        <p className="text-sm font-semibold text-bear-default">
+          {issues.length} safety condition{issues.length !== 1 ? 's' : ''} need attention
+        </p>
+      </div>
+      <div className="space-y-1.5">
+        {issues.map((iss, i) => (
+          <div key={i} className="text-xs">
+            <span className="text-bear-default/90 font-semibold">{iss.label}</span>
+            <span className="text-terminal-muted/60"> — {iss.detail}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── FounderSummaryCard ────────────────────────────────────────────────────────
 
 function FounderSummaryCard({ activeMode, settings, dirty }: {
@@ -560,6 +625,21 @@ function FounderSummaryCard({ activeMode, settings, dirty }: {
           <p className="text-sm font-mono font-bold text-terminal-text">{rr.toFixed(1)}×</p>
         </div>
       </div>
+      {(() => {
+        // SETTINGS.CENTER.2 — most recent change across all groups
+        const metas = Object.values(settings)
+          .map(g => g?.meta)
+          .filter((m): m is NonNullable<typeof m> => !!m?.updated_at)
+          .sort((a, b) => new Date(b.updated_at ?? 0).getTime() - new Date(a.updated_at ?? 0).getTime())
+        const last = metas[0]
+        if (!last) return null
+        return (
+          <p className="text-[10px] text-terminal-muted/40 font-mono mt-3 flex items-center gap-1.5">
+            <Clock size={9} />
+            Last change {formatRelative(last.updated_at)} by {last.updated_by} · full history in Advanced Settings → Audit Log
+          </p>
+        )
+      })()}
     </div>
   )
 }
@@ -608,9 +688,14 @@ export default function SettingsPage() {
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
-  const tabs   = [...Object.keys(settings).filter(g => !HIDDEN_GROUPS.has(g)), 'audit']
+  // SETTINGS.CENTER.2: infra is read-only in System → Infrastructure; features
+  // is rendered on-page. Dead + engineering fields are hidden from the browser.
+  const tabs   = [...Object.keys(settings).filter(g => !HIDDEN_GROUPS.has(g) && g !== 'infra' && g !== 'features'), 'audit']
   const group  = settings[activeTab] as SettingsGroupResponse | undefined
-  const fields = group?.fields ?? []
+  const fields = (group?.fields ?? []).filter(f => {
+    const tier = settingTier(activeTab, f.key)
+    return tier !== 'dead' && tier !== 'engineering'
+  })
   const meta   = group?.meta
 
   const getValue   = (entry: SettingEntry) => {
@@ -782,16 +867,19 @@ export default function SettingsPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-terminal-text text-xl font-semibold">Founder Control Center</h1>
-          <p className="text-terminal-muted text-sm mt-0.5">One-click modes · key controls · advanced configuration</p>
+          <h1 className="text-terminal-text text-xl font-semibold">Founder Settings</h1>
+          <p className="text-terminal-muted text-sm mt-0.5">Quick controls · signal quality · operating mode · feature flags</p>
         </div>
         <Settings2 size={20} className="text-terminal-muted/40 mt-0.5" />
       </div>
 
-      {/* Founder Summary Card */}
+      {/* Safety Status + dangerous-changes warning (SETTINGS.CENTER.2) */}
+      <SafetyStatusCard settings={settings} dirty={dirty} />
+
+      {/* Active Configuration Summary */}
       <FounderSummaryCard activeMode={activeMode} settings={settings} dirty={dirty} />
 
-      {/* ── Quick Controls — the audited daily set, always visible ───────── */}
+      {/* ── Quick Controls — daily toggles, always visible ────────────────── */}
       <div className="space-y-3">
         <div className="flex items-baseline justify-between gap-3 flex-wrap">
           <p className="text-terminal-text text-sm font-semibold">Quick Controls</p>
@@ -799,8 +887,6 @@ export default function SettingsPage() {
             Emergency Stop · Maintenance · Scheduler live in <a href="/admin/trading?tab=scanner" className="underline hover:text-terminal-text">Trading → Scanner</a>
           </p>
         </div>
-
-        {/* Daily toggles */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {quickToggleKeys.map(({ group: g, key: kk }) => {
             const entry = getTacticalEntry(g, kk)
@@ -813,13 +899,16 @@ export default function SettingsPage() {
             )
           })}
         </div>
-        <p className="text-[10px] text-terminal-muted/40 leading-relaxed">
-          The four numbers below act as <span className="text-blue-400">floors</span> on the audited per-mode scanner
-          configs when <span className="font-mono">Apply Founder Thresholds</span> is ON — they can tighten selection
-          but never loosen it below the ALPHA.TRUTH.1 per-mode minimums.
-        </p>
+      </div>
 
-        {/* Daily numbers */}
+      {/* ── Signal Quality — daily numbers, always visible ────────────────── */}
+      <div className="space-y-3">
+        <p className="text-terminal-text text-sm font-semibold">Signal Quality</p>
+        <p className="text-[10px] text-terminal-muted/40 leading-relaxed -mt-1">
+          These act as <span className="text-blue-400">floors</span> on the audited per-mode scanner configs when{' '}
+          <span className="font-mono">Apply Founder Thresholds</span> is ON — they can tighten selection but never
+          loosen it below the ALPHA.TRUTH.1 per-mode minimums.
+        </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           {quickNumberControls.map(def => {
             const entry = getTacticalEntry(def.group, def.key)
@@ -868,16 +957,33 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      {/* ── All Settings Groups — single collapsed accordion ─────────────── */}
+      {/* ── Feature Flags — always visible (SETTINGS.CENTER.2) ────────────── */}
+      <div className="space-y-3">
+        <p className="text-terminal-text text-sm font-semibold">Feature Flags</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {(settings['features']?.fields ?? [])
+            .filter(entry => !quickToggleKeys.some(q => q.group === 'features' && q.key === entry.key))
+            .map(entry => {
+              const k = `features.${entry.key}`
+              return (
+                <FeatureFlagCard key={entry.key} entry={entry} value={getValue(entry) as boolean}
+                  onChange={v => handleChange(entry, v)} isSaving={saving.has(k)}
+                  isSaved={saved.has(k)} error={errors[k]} />
+              )
+            })}
+        </div>
+      </div>
+
+      {/* ── Advanced Settings — single collapsed accordion ────────────────── */}
       <div className="glass-card rounded-xl overflow-hidden border border-terminal-border/50">
         {/* Header (click to expand) */}
         <button type="button" onClick={() => setAllSettingsOpen(v => !v)}
           className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-terminal-bright/5 transition-colors">
           <div className="flex items-center gap-2">
             <Database size={14} className="text-terminal-muted/60" />
-            <span className="text-sm font-semibold text-terminal-text">All Settings &amp; Audit Log</span>
+            <span className="text-sm font-semibold text-terminal-text">Advanced Settings &amp; Audit Log</span>
             <span className="text-[10px] text-terminal-muted/40 font-mono hidden sm:block">
-              · every group · auto-save · change history
+              · tuning-phase knobs · change history · engineering config is read-only in System
             </span>
           </div>
           <div className="flex items-center gap-3">
@@ -993,19 +1099,6 @@ export default function SettingsPage() {
                     </div>
                     <button onClick={() => setSaveWarnings(p => { const n = { ...p }; delete n[activeTab]; return n })}
                       className="ml-auto text-signal-high/50 hover:text-signal-high shrink-0 font-mono text-xs">✕</button>
-                  </div>
-                )}
-
-                {activeTab === 'features' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                    {fields.map(entry => {
-                      const k = `${entry.category}.${entry.key}`
-                      return (
-                        <FeatureFlagCard key={entry.key} entry={entry} value={getValue(entry) as boolean}
-                          onChange={v => handleChange(entry, v)} isSaving={saving.has(k)}
-                          isSaved={saved.has(k)} error={errors[k]} />
-                      )
-                    })}
                   </div>
                 )}
 

@@ -9,7 +9,89 @@ import { AnomalyBadge } from '@/components/admin/anomaly-badge'
 import { ProviderHealthTable, type ProviderCheckResult } from '@/components/admin/provider-health-table'
 import { analyticsWindowLabel } from '@/lib/window-label'
 import { formatTs } from '@/lib/utils'
-import { Server, Database, Cpu, Activity, RefreshCw, CheckCircle2, BellOff, Shield, Eye, X, Clock, AlertTriangle } from 'lucide-react'
+import { Server, Database, Cpu, Activity, RefreshCw, CheckCircle2, BellOff, Shield, Eye, X, Clock, AlertTriangle, ChevronDown, Lock } from 'lucide-react'
+import { settingTier } from '@/lib/settings-tiers'
+
+// ── Infrastructure Configuration (SETTINGS.CENTER.2) ─────────────────────────
+// Engineering-only settings relocated from the Founder Settings page.
+// READ-ONLY by design: these are set-once / env-adjacent values; editing them
+// during normal operations is how outages happen. Change path: settings API or
+// a code change — never the dashboard.
+
+interface InfraConfigRow {
+  group: string; key: string; label: string
+  value: unknown; description: string; restart: boolean
+}
+
+function InfraConfigSection() {
+  const [open,     setOpen]     = useState(false)
+  const [rows,     setRows]     = useState<InfraConfigRow[] | null>(null)
+  const [loadErr,  setLoadErr]  = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open || rows !== null) return
+    adminApi.settings.all()
+      .then(all => {
+        const collected: InfraConfigRow[] = []
+        for (const [group, grp] of Object.entries(all)) {
+          for (const f of grp?.fields ?? []) {
+            if (settingTier(group, f.key) === 'engineering') {
+              collected.push({
+                group, key: f.key, label: f.label, value: f.value,
+                description: f.description, restart: f.requires_restart,
+              })
+            }
+          }
+        }
+        setRows(collected.sort((a, b) => a.group.localeCompare(b.group) || a.key.localeCompare(b.key)))
+      })
+      .catch(e => setLoadErr(String(e)))
+  }, [open, rows])
+
+  return (
+    <div className="glass-card rounded-xl overflow-hidden border border-terminal-border/50">
+      <button type="button" onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-terminal-bright/5 transition-colors">
+        <div className="flex items-center gap-2">
+          <Lock size={13} className="text-terminal-muted/60" />
+          <span className="text-sm font-semibold text-terminal-text">Infrastructure Configuration</span>
+          <span className="text-[10px] text-terminal-muted/40 font-mono hidden sm:block">· read-only · engineering settings · change via settings API only</span>
+        </div>
+        <ChevronDown size={14} className={`text-terminal-muted/50 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="border-t border-terminal-border/40">
+          {loadErr && <p className="px-5 py-4 text-bear-default text-xs">Failed to load: {loadErr}</p>}
+          {!loadErr && rows === null && <p className="px-5 py-4 text-terminal-muted text-xs">Loading…</p>}
+          {rows !== null && (
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-terminal-border">
+                  {['Group', 'Setting', 'Value', 'Description'].map(h => (
+                    <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-4">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={`${r.group}.${r.key}`} className="border-b border-terminal-border/30">
+                    <td className="py-2 px-4 font-mono text-terminal-muted/60">{r.group}</td>
+                    <td className="py-2 px-4">
+                      <p className="text-terminal-text font-mono">{r.label}</p>
+                      <p className="text-terminal-muted/40 font-mono text-[10px]">{r.key}{r.restart ? ' · ↻ restart' : ''}</p>
+                    </td>
+                    <td className="py-2 px-4 font-mono text-terminal-text">{String(r.value)}</td>
+                    <td className="py-2 px-4 text-terminal-muted/60 hidden md:table-cell">{r.description}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function ServiceCard({ name, status, detail }: { name: string; status: string; detail?: string }) {
   const ok = ['ok', 'ready', 'not_configured'].includes(status)
@@ -693,6 +775,9 @@ export default function SystemPage() {
         counts24h={scans?.gate_rejections}
         counts7d={scans7d?.gate_rejections}
       />
+
+      {/* Infrastructure Configuration — read-only (SETTINGS.CENTER.2) */}
+      <InfraConfigSection />
 
       {/* Diagnostics section label */}
       <p className="text-[9px] text-terminal-muted/40 uppercase tracking-widest flex items-center gap-2">
