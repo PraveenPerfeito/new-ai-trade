@@ -173,7 +173,7 @@ def _sync_watcher_loop(service) -> None:
         try:
             kw: dict = {
                 "decode_responses": True,
-                "socket_timeout": 60,
+                "socket_timeout": 30,
                 "socket_connect_timeout": 5,
             }
             # Upstash (rediss://) — use string "none" not Python None (see redis_cache.py).
@@ -185,8 +185,19 @@ def _sync_watcher_loop(service) -> None:
             backoff = 1.0
             log.info("celery_settings_watcher_subscribed")
 
-            for message in pubsub.listen():
-                if message["type"] != "message":
+            while True:
+                # WATCHER.IDLE.FIX: poll with a bounded timeout instead of the
+                # blocking listen() — a quiet channel previously hit the client's
+                # socket_timeout, raising "Timeout reading from socket" and forcing
+                # a warn+reconnect cycle every 60s (log spam + missed-message gaps).
+                # get_message timeout (25s) < socket_timeout (30s) → idle returns
+                # None cleanly; real connection failures still raise to the outer
+                # reconnect handler.
+                try:
+                    message = pubsub.get_message(ignore_subscribe_messages=True, timeout=25.0)
+                except sync_redis.exceptions.TimeoutError:
+                    continue   # idle socket, not a failure — keep listening
+                if message is None or message["type"] != "message":
                     continue
                 group_name: str = message["data"]
 
