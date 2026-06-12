@@ -75,6 +75,47 @@ async def ai_effectiveness(
     return await get_ai_summary(window_hours)
 
 
+@router.get("/telegram-delivery")
+async def telegram_delivery() -> dict[str, Any]:
+    """
+    TELEGRAM.RELIABILITY.1 WS5 — delivery funnel ground truth (24h + 7d).
+    generated → eligible (conf ≥ 85) → queued (telegram_sent) → delivered /
+    failed / unresolved, plus suppression visibility: shadowed (dedup within
+    1h of a sent twin) and other (rate-cap / gates / tail-loss era).
+    """
+    from backend.database.session import get_pool
+    pool = await get_pool()
+
+    async def _window(hours: int) -> dict:
+        row = await pool.fetchrow(
+            """
+            SELECT count(*)                                              AS generated,
+                   count(*) FILTER (WHERE confidence >= 85)              AS eligible,
+                   count(*) FILTER (WHERE telegram_sent)                 AS queued,
+                   count(*) FILTER (WHERE telegram_delivered IS TRUE)    AS delivered,
+                   count(*) FILTER (WHERE telegram_delivered IS FALSE)   AS failed,
+                   count(*) FILTER (WHERE telegram_sent
+                                    AND telegram_delivered IS NULL)      AS unresolved,
+                   count(*) FILTER (WHERE confidence >= 85 AND NOT telegram_sent
+                     AND EXISTS (
+                       SELECT 1 FROM signals p
+                       WHERE p.symbol = signals.symbol AND p.type = signals.type
+                         AND p.telegram_sent AND p.id != signals.id
+                         AND p.created_at BETWEEN signals.created_at - INTERVAL '60 minutes'
+                                              AND signals.created_at
+                     ))                                                  AS shadowed
+            FROM signals
+            WHERE created_at > NOW() - make_interval(hours => $1)
+            """,
+            hours,
+        )
+        d = dict(row)
+        d["suppressed_other"] = max(0, (d["eligible"] - d["queued"]) - d["shadowed"])
+        return d
+
+    return {"h24": await _window(24), "d7": await _window(168)}
+
+
 @router.get("/confidence-calibration")
 async def confidence_calibration_v2(
     window_hours: int = Query(default=720, ge=24, le=2160),

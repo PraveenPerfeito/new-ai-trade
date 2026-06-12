@@ -497,6 +497,24 @@ export interface ConfidenceCalibrationResponse {
   }
 }
 
+// ── TELEGRAM.RELIABILITY.1 — delivery funnel ─────────────────────────────────
+
+export interface TelegramDeliveryWindow {
+  generated: number
+  eligible: number
+  queued: number
+  delivered: number
+  failed: number
+  unresolved: number
+  shadowed: number
+  suppressed_other: number
+}
+
+export interface TelegramDeliveryResponse {
+  h24: TelegramDeliveryWindow
+  d7: TelegramDeliveryWindow
+}
+
 // ── Typed API surface ─────────────────────────────────────────────────────────
 
 export const adminApi = {
@@ -514,6 +532,7 @@ export const adminApi = {
     monitor:   ()                   => get<MonitorSnapshot>('/analytics/monitor'),
     confidenceCalibration: (window_hours = 720) =>
       get<ConfidenceCalibrationResponse>('/analytics/confidence-calibration', { window_hours }),
+    telegramDelivery: () => get<TelegramDeliveryResponse>('/analytics/telegram-delivery'),
     edgeReport:    (hours = 720)  => get<EdgeReport>('/analytics/edge/report', { window_hours: hours }),
     calibration:   (hours = 720)  => get<Record<string, unknown>>('/analytics/edge/calibration', { window_hours: hours }),
     claude:        (hours = 720)  => get<Record<string, unknown>>('/analytics/edge/claude', { window_hours: hours }),

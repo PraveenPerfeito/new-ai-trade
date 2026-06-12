@@ -162,19 +162,40 @@ class _SlidingWindowRateLimiter:
 
 
 _rate_limiter: _SlidingWindowRateLimiter | None = None
+_rate_limiter_loop: "asyncio.AbstractEventLoop | None" = None
+_ai_semaphore_loop: "asyncio.AbstractEventLoop | None" = None
 
 
 def _get_rate_limiter() -> _SlidingWindowRateLimiter:
-    global _rate_limiter
-    if _rate_limiter is None:
+    """
+    Per-event-loop rate limiter (TELEGRAM.RELIABILITY.1 WS4).
+    Celery runs each task in a fresh asyncio.run() loop; an asyncio.Lock
+    created in a previous task's loop raises 'bound to a different event loop'
+    when contended.  Recreate when the running loop changes (same pattern as
+    the asyncpg pool fix).  The 60s sliding window resets with it — acceptable,
+    since the Semaphore still caps in-flight calls and tasks are minutes apart.
+    """
+    global _rate_limiter, _rate_limiter_loop
+    loop = asyncio.get_running_loop()
+    if _rate_limiter is None or _rate_limiter_loop is not loop:
         _rate_limiter = _SlidingWindowRateLimiter(_REQUESTS_PER_MINUTE)
+        _rate_limiter_loop = loop
     return _rate_limiter
 
 
 def _get_semaphore() -> asyncio.Semaphore:
-    global _ai_semaphore
-    if _ai_semaphore is None:
+    """
+    Per-event-loop semaphore (TELEGRAM.RELIABILITY.1 WS4).
+    The module-level Semaphore survived across Celery tasks but stayed bound
+    to the first task's (closed) loop — audited: 3 Claude calls in 7d died
+    with 'Semaphore is bound to a different event loop' and fell back to
+    heuristic.  Recreate when the running loop changes.
+    """
+    global _ai_semaphore, _ai_semaphore_loop
+    loop = asyncio.get_running_loop()
+    if _ai_semaphore is None or _ai_semaphore_loop is not loop:
         _ai_semaphore = asyncio.Semaphore(3)
+        _ai_semaphore_loop = loop
     return _ai_semaphore
 
 

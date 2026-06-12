@@ -18,6 +18,22 @@ from backend.metrics.prometheus import celery_tasks_total, celery_task_duration_
 logger = get_logger(__name__)
 
 
+async def _with_telegram_flush(coro):
+    """
+    TELEGRAM.RELIABILITY.1 WS1 — run a task coroutine, then drain any Telegram
+    alerts it enqueued before asyncio.run() closes the event loop (anomaly /
+    degradation alerts ride the same queue as signal alerts).
+    """
+    try:
+        return await coro
+    finally:
+        try:
+            from backend.core.scanner.telegram_notifier import flush_queue
+            await flush_queue(timeout_s=15.0)
+        except Exception as exc:
+            logger.warning("telegram_flush_failed", error=str(exc))
+
+
 @shared_task(
     bind=True,
     name="backend.workers.analytics_tasks.daily_analytics_snapshot",
@@ -36,7 +52,7 @@ def daily_analytics_snapshot(self) -> dict:
     start = time.monotonic()
     try:
         from backend.analytics.burn_in import generate_daily_snapshot
-        result = asyncio.run(generate_daily_snapshot())
+        result = asyncio.run(_with_telegram_flush(generate_daily_snapshot()))
 
         elapsed = time.monotonic() - start
         celery_task_duration_seconds.labels(task_name="daily_analytics_snapshot").observe(elapsed)
@@ -76,7 +92,7 @@ def hourly_anomaly_check(self) -> dict:
     start = time.monotonic()
     try:
         from backend.analytics.burn_in import run_hourly_anomaly_check
-        result = asyncio.run(run_hourly_anomaly_check())
+        result = asyncio.run(_with_telegram_flush(run_hourly_anomaly_check()))
 
         elapsed = time.monotonic() - start
         celery_task_duration_seconds.labels(task_name="hourly_anomaly_check").observe(elapsed)

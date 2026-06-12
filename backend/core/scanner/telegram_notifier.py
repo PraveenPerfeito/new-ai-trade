@@ -38,24 +38,49 @@ _MAX_RETRIES  = 3
 _QUEUE_MAX    = 64    # drop oldest if queue is full (prevents memory build-up)
 
 
-# ── Internal queue singleton ──────────────────────────────────────────────────
+# ── Queue item (TELEGRAM.RELIABILITY.1 WS2/WS3) ───────────────────────────────
+# signal_id  → delivery receipt written to signals.telegram_delivered post-send
+# dedup_key  → 1h cooldown key set ONLY after confirmed delivery (was set at
+#              check-time, which poisoned the cooldown when the send was lost)
 
-_queue: asyncio.Queue[str] | None = None
+class _QueueItem:
+    __slots__ = ("text", "signal_id", "dedup_key")
+
+    def __init__(self, text: str, signal_id: str | None = None, dedup_key: str | None = None):
+        self.text      = text
+        self.signal_id = signal_id
+        self.dedup_key = dedup_key
+
+
+# ── Internal queue singleton (per event loop) ─────────────────────────────────
+# TELEGRAM.RELIABILITY.1 WS1: Celery runs each task in a fresh asyncio.run()
+# loop.  The queue + drain worker must be recreated when the loop changes —
+# a worker task from a closed loop is dead, and messages left behind would be
+# orphaned.  flush_queue() (called before every loop exit) guarantees the
+# queue is empty at recreation time, so nothing is lost across loops.
+
+_queue: "asyncio.Queue[_QueueItem] | None" = None
+_queue_loop: "asyncio.AbstractEventLoop | None" = None
 _worker_task: asyncio.Task | None = None
 _last_sent_at: float = 0.0
 
 
-def _get_queue() -> asyncio.Queue[str]:
-    global _queue, _worker_task
-    if _queue is None:
+def _get_queue() -> "asyncio.Queue[_QueueItem]":
+    global _queue, _queue_loop, _worker_task
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if _queue is None or (loop is not None and _queue_loop is not loop):
+        if _queue is not None and not _queue.empty():
+            log.warning("telegram_queue_recreated_with_pending", pending=_queue.qsize())
         _queue = asyncio.Queue(maxsize=_QUEUE_MAX)
+        _queue_loop = loop
+        _worker_task = None
     # Spawn the drain worker lazily in the running event loop
     if _worker_task is None or _worker_task.done():
-        try:
-            loop = asyncio.get_running_loop()
+        if loop is not None:
             _worker_task = loop.create_task(_drain_queue())
-        except RuntimeError:
-            pass   # not inside an event loop — queue will drain when one exists
     return _queue
 
 
@@ -64,7 +89,7 @@ async def _drain_queue() -> None:
     global _last_sent_at
     while True:
         try:
-            text = await asyncio.wait_for(_queue.get(), timeout=60.0)
+            item = await asyncio.wait_for(_queue.get(), timeout=60.0)
         except asyncio.TimeoutError:
             continue
         except asyncio.CancelledError:
@@ -76,12 +101,63 @@ async def _drain_queue() -> None:
             if elapsed < _MIN_INTERVAL:
                 await asyncio.sleep(_MIN_INTERVAL - elapsed)
 
-            await _send_with_retry(text)
+            delivered = await _send_with_retry(item.text)
             _last_sent_at = time.monotonic()
+
+            # WS3: dedup cooldown marked ONLY after confirmed delivery
+            if delivered and item.dedup_key:
+                await _mark_alert_cooldown(item.dedup_key)
+            # WS2: delivery ground truth (best-effort, migration-tolerant)
+            if item.signal_id:
+                await _record_delivery(item.signal_id, delivered)
         except Exception as exc:
             log.warning("telegram_drain_error", error=str(exc))
+            if item.signal_id:
+                await _record_delivery(item.signal_id, False, str(exc)[:200])
         finally:
             _queue.task_done()
+
+
+async def flush_queue(timeout_s: float = 20.0) -> bool:
+    """
+    Drain all queued Telegram messages before the event loop exits
+    (TELEGRAM.RELIABILITY.1 WS1).  Call at the end of every Celery task that
+    can enqueue alerts — without this, messages still queued when asyncio.run()
+    returns are silently destroyed (audited tail-loss on multi-signal scans).
+    Returns True when fully drained, False on timeout (remaining are logged).
+    """
+    if _queue is None or _queue.empty() and _queue._unfinished_tasks == 0:  # noqa: SLF001
+        return True
+    _get_queue()   # ensure a live worker on the current loop
+    try:
+        await asyncio.wait_for(_queue.join(), timeout=timeout_s)
+        return True
+    except asyncio.TimeoutError:
+        log.error("telegram_flush_timeout", remaining=_queue.qsize(), timeout_s=timeout_s)
+        return False
+
+
+async def _record_delivery(signal_id: str, delivered: bool, error: str | None = None) -> None:
+    """Persist delivery ground truth. Tolerates the migration not being run."""
+    try:
+        from backend.database.session import get_pool  # noqa: PLC0415
+        pool = await get_pool()
+        await pool.execute(
+            "UPDATE signals SET telegram_delivered = $1, telegram_delivery_error = $2 WHERE id = $3::uuid",
+            delivered, error, signal_id,
+        )
+    except Exception as exc:
+        log.debug("record_delivery_failed", signal_id=signal_id, error=str(exc))
+
+
+async def _mark_alert_cooldown(dedup_key: str) -> None:
+    """Set the 1h symbol+direction cooldown — only after a confirmed delivery."""
+    try:
+        from backend.cache.redis_cache import get_redis  # noqa: PLC0415
+        redis = await get_redis()
+        await redis.setex(dedup_key, ALERT_COOLDOWN_HOURS * 3600, "1")
+    except Exception as exc:
+        log.warning("alert_cooldown_mark_failed", key=dedup_key, error=str(exc))
 
 
 async def _send_with_retry(text: str) -> bool:
@@ -142,18 +218,19 @@ def _is_configured() -> bool:
     return bool(s.telegram_bot_token and s.telegram_chat_id)
 
 
-def _enqueue(text: str) -> None:
+def _enqueue(text: str, signal_id: str | None = None, dedup_key: str | None = None) -> None:
     """Push message to send queue; drops oldest if queue is full."""
     try:
         q = _get_queue()
         if q.full():
             try:
-                q.get_nowait()       # discard oldest
+                dropped = q.get_nowait()       # discard oldest
                 q.task_done()
+                log.warning("telegram_queue_full_dropped_oldest",
+                            dropped_signal_id=getattr(dropped, "signal_id", None))
             except asyncio.QueueEmpty:
                 pass
-            log.warning("telegram_queue_full_dropped_oldest")
-        q.put_nowait(text)
+        q.put_nowait(_QueueItem(text, signal_id, dedup_key))
     except Exception as exc:
         log.warning("telegram_enqueue_failed", error=str(exc))
 
@@ -191,16 +268,21 @@ def send_output_collapse_alert(signals_24h: int, avg_daily_7d: float) -> None:
 ALERT_COOLDOWN_HOURS = 1
 
 
+def _dedup_key(symbol: str, direction: str) -> str:
+    return f"tg:alert:{symbol.upper()}:{direction.upper()}"
+
+
 async def _is_duplicate_alert(symbol: str, direction: str) -> bool:
-    """Return True if this symbol+direction was already alerted within the cooldown window."""
+    """
+    Check-only cooldown test (TELEGRAM.RELIABILITY.1 WS3).
+    The cooldown key is now set in the drain worker AFTER a confirmed delivery
+    (_mark_alert_cooldown) — previously it was set here at check-time, so a
+    send that was later lost or failed still suppressed the symbol for 1h.
+    """
     try:
         from backend.cache.redis_cache import get_redis
         redis = await get_redis()
-        key = f"tg:alert:{symbol.upper()}:{direction.upper()}"
-        exists = await redis.exists(key)
-        if not exists:
-            await redis.setex(key, ALERT_COOLDOWN_HOURS * 3600, "1")
-        return bool(exists)
+        return bool(await redis.exists(_dedup_key(symbol, direction)))
     except Exception as exc:
         log.warning("alert_dedup_check_failed", error=str(exc))
         return False  # fail open — send the alert if Redis is down
@@ -387,7 +469,13 @@ async def send_signal_alert(signal: Signal) -> bool:
         f"🕐 <code>{now_str}</code>  |  Next alert in {ALERT_COOLDOWN_HOURS}h",
     ]
 
-    _enqueue("\n".join(lines))
+    # WS2/WS3: queue item carries the signal id (delivery receipt) and the
+    # dedup key (cooldown marked only after confirmed delivery).
+    _enqueue(
+        "\n".join(lines),
+        signal_id=signal.id,
+        dedup_key=_dedup_key(signal.symbol, direction_key),
+    )
     # Monitoring counter (fire-and-forget)
     try:
         from backend.analytics.monitoring import record_telegram_send as _mon_tg  # noqa: PLC0415

@@ -169,29 +169,40 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
                 logger.debug(f"intelligence_refresh_skipped error={exc}")
 
         async def _run_and_record():
-            result = await run_scan(scanner_mode)
             try:
-                from backend.analytics.scan_metrics import record_scan
-                await record_scan(
-                    scan_id=result.scan_run_id or mode,
-                    mode=mode,
-                    coins_scanned=result.coins_scanned,
-                    signals_found=result.signals_found,
-                    duration_ms=result.duration_ms,
-                    errors=result.errors,
-                    gate_rejections=result.gate_rejections,
-                )
-            except Exception:
-                pass
-            # OUTPUT.COLLAPSE.ALERT.1 — evaluate signal output vs 7d baseline each cycle
-            try:
-                from backend.analytics.monitoring import check_output_collapse
-                await check_output_collapse()
-            except Exception as exc:
-                logger.warning(f"output_collapse_check_failed error={exc}")
-            # Keep intelligence cache warm on Vercel after each scan cycle
-            await _trigger_intelligence_refresh()
-            return result
+                result = await run_scan(scanner_mode)
+                try:
+                    from backend.analytics.scan_metrics import record_scan
+                    await record_scan(
+                        scan_id=result.scan_run_id or mode,
+                        mode=mode,
+                        coins_scanned=result.coins_scanned,
+                        signals_found=result.signals_found,
+                        duration_ms=result.duration_ms,
+                        errors=result.errors,
+                        gate_rejections=result.gate_rejections,
+                    )
+                except Exception:
+                    pass
+                # OUTPUT.COLLAPSE.ALERT.1 — evaluate signal output vs 7d baseline each cycle
+                try:
+                    from backend.analytics.monitoring import check_output_collapse
+                    await check_output_collapse()
+                except Exception as exc:
+                    logger.warning(f"output_collapse_check_failed error={exc}")
+                # Keep intelligence cache warm on Vercel after each scan cycle
+                await _trigger_intelligence_refresh()
+                return result
+            finally:
+                # TELEGRAM.RELIABILITY.1 WS1 — drain queued alerts BEFORE this
+                # event loop exits.  Without this, messages enqueued during the
+                # scan (rate-limited to ~1/1.1s) are destroyed when asyncio.run()
+                # returns — the audited tail-loss on multi-signal scans.
+                try:
+                    from backend.core.scanner.telegram_notifier import flush_queue
+                    await flush_queue(timeout_s=30.0)
+                except Exception as exc:
+                    logger.warning(f"telegram_flush_failed error={exc}")
 
         scan_result = asyncio.run(_run_and_record())
         result: dict = {

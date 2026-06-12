@@ -719,6 +719,52 @@ function LastChangeAudit({ entries }: { entries: AuditEntry[] | null | undefined
   )
 }
 
+/**
+ * TELEGRAM.RELIABILITY.1 WS5 — delivery funnel ground truth.
+ * Shadowed = dedup-suppressed (same coin+direction already alerted within 1h
+ * by another scan mode) — visible here so it stops reading as "lost signals".
+ */
+function TelegramDeliveryCard() {
+  const fetcher = useCallback(() => adminApi.analytics.telegramDelivery().catch(() => null), [])
+  const { data } = useAutoRefresh<import('@/lib/admin-api').TelegramDeliveryResponse | null>(fetcher, 120_000)
+  if (!data) return null
+
+  const rows: Array<[string, import('@/lib/admin-api').TelegramDeliveryWindow]> = [
+    ['24h', data.h24], ['7d', data.d7],
+  ]
+  return (
+    <div className="glass-card rounded-xl p-4 sm:p-5">
+      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3 font-semibold flex items-center gap-2">
+        <Send className="w-3.5 h-3.5" />Telegram Delivery
+      </p>
+      <div className="space-y-2">
+        {rows.map(([label, w]) => (
+          <div key={label} className="flex items-center gap-2 flex-wrap text-[11px]">
+            <span className="text-zinc-500 font-mono w-8 shrink-0">{label}</span>
+            <span className="px-2 py-0.5 rounded border border-zinc-700 text-zinc-300 font-mono">Gen {w.generated}</span>
+            <span className="px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 font-mono" title="Confidence ≥ 85">Elig {w.eligible}</span>
+            <span className="px-2 py-0.5 rounded border border-blue-500/30 bg-blue-500/10 text-blue-300 font-mono" title="Enqueued for delivery (telegram_sent)">Queued {w.queued}</span>
+            <span className="px-2 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 font-mono" title="Telegram API confirmed 200">✓ Delivered {w.delivered}</span>
+            {w.failed > 0 && (
+              <span className="px-2 py-0.5 rounded border border-red-500/40 bg-red-500/10 text-red-300 font-mono" title="Send failed after retries">✗ Failed {w.failed}</span>
+            )}
+            {w.unresolved > 0 && (
+              <span className="px-2 py-0.5 rounded border border-zinc-600 text-zinc-500 font-mono" title="Queued before delivery receipts existed (pre-migration) or still draining">? {w.unresolved}</span>
+            )}
+            <span className="px-2 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-300 font-mono"
+              title="Dedup-suppressed: same coin+direction already alerted within 1h by another scan mode — intentional, not lost">
+              Shadowed {w.shadowed}
+            </span>
+            {w.suppressed_other > 0 && (
+              <span className="px-2 py-0.5 rounded border border-zinc-600 text-zinc-400 font-mono" title="Rate cap / probability gate / pre-fix tail loss">Other {w.suppressed_other}</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function ScannerTab({ celery, flags, aiEnabled, loading, error, scanning, scanDone, scanMode,
   setScanMode, onEnable, onDisable, onScanNow, onPatchFlag, onClearError, countdown, scanStats,
   auditEntries, healthReady }: {
@@ -810,6 +856,9 @@ function ScannerTab({ celery, flags, aiEnabled, loading, error, scanning, scanDo
           </div>
         </div>
       </div>
+
+      {/* Telegram delivery funnel (TELEGRAM.RELIABILITY.1) */}
+      <TelegramDeliveryCard />
 
       {/* NORMAL CONTROLS */}
       <div>
