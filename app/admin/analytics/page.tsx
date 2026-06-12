@@ -1002,9 +1002,158 @@ function ProbabilityTabContent() {
         </div>
       )}
 
+      {/* PERFORMANCE.VERIFICATION.1 — read-only validation */}
+      <PerformanceVerificationSection />
+
       <p className="text-zinc-700 text-[10px] font-mono">
         Derived entirely from signal_outcomes via attribution snapshots · no ML · empirical grades: A+ ≥1.0R · A ≥0.6 · B+ ≥0.35 · B ≥0.15 · C ≥0 · D &lt;0
       </p>
+    </div>
+  )
+}
+
+// ─── PERFORMANCE.VERIFICATION.1 ───────────────────────────────────────────────
+
+type VerifyResponse = {
+  accuracy: {
+    overall: { n: number; predicted_wr: number; actual_wr: number; drift: number; mean_abs_error: number } | null
+    by_regime: Array<{ value: string; n: number; predicted_wr: number; actual_wr: number; drift: number; ci: [number, number]; calibrated: boolean; low_sample: boolean }>
+    by_grade: VerifyResponse['accuracy']['by_regime']
+    by_breakout: VerifyResponse['accuracy']['by_regime']
+    by_type: VerifyResponse['accuracy']['by_regime']
+    by_mode: VerifyResponse['accuracy']['by_regime']
+  }
+  grades: {
+    empirical: Array<{ grade: string; n: number; wr: number | null; exp: number | null; pf: number | null }>
+    empirical_inversions_wr: string[]
+    empirical_inversions_exp: string[]
+    heuristic: VerifyResponse['grades']['empirical']
+    heuristic_inversions_wr: string[]
+  }
+  stability: {
+    overlap_7v30: { jaccard: number | null; top3_retained: number }
+    overlap_30v90: { jaccard: number | null; top3_retained: number }
+    regime_distribution: Record<string, Record<string, number>>
+  }
+  sample_quality: { stamped_total: number; stamped_resolved: number; graded_total: number; warnings: string[] }
+}
+
+function GradeValidationTable({ title, rows, inversions }: {
+  title: string
+  rows: VerifyResponse['grades']['empirical']
+  inversions: string[]
+}) {
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <p className="text-[9px] text-zinc-500 uppercase tracking-widest">{title}</p>
+        {inversions.length === 0
+          ? <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">monotonic ✓</span>
+          : <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400">{inversions.length} inversion{inversions.length > 1 ? 's' : ''}</span>}
+      </div>
+      <div className="space-y-1">
+        {rows.map(g => (
+          <div key={g.grade} className="flex items-center gap-3 text-xs font-mono">
+            <span className="text-purple-300 font-bold w-7">{g.grade}</span>
+            <span className="text-zinc-300 w-14">{g.wr?.toFixed(1)}%</span>
+            <span className={`w-18 ${((g.exp ?? 0) >= 0) ? 'text-emerald-400' : 'text-red-400'}`}>{g.exp != null ? `${g.exp >= 0 ? '+' : ''}${g.exp.toFixed(3)}R` : '—'}</span>
+            <span className="text-zinc-500 w-14">PF {g.pf?.toFixed(2) ?? '—'}</span>
+            <span className="text-zinc-600">n={g.n}</span>
+          </div>
+        ))}
+      </div>
+      {inversions.map((v, i) => <p key={i} className="text-[10px] text-red-400/80 mt-1.5 font-mono">⚠ {v}</p>)}
+    </div>
+  )
+}
+
+function PerformanceVerificationSection() {
+  const fetcher = useCallback(() =>
+    adminApi.analytics.performanceVerification<VerifyResponse>().catch(() => null), [])
+  const { data: v } = useAutoRefresh<VerifyResponse | null>(fetcher, 300_000)
+  if (!v) return null
+
+  const acc = v.accuracy.overall
+  const dims: Array<[string, VerifyResponse['accuracy']['by_regime']]> = [
+    ['Regime', v.accuracy.by_regime], ['Grade', v.accuracy.by_grade],
+    ['Breakout', v.accuracy.by_breakout], ['Type', v.accuracy.by_type], ['Mode', v.accuracy.by_mode],
+  ]
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[9px] text-zinc-600 uppercase tracking-widest flex items-center gap-2">
+        <span className="h-px flex-1 bg-zinc-800"/>Performance Verification — read-only<span className="h-px flex-1 bg-zinc-800"/>
+      </p>
+
+      {v.sample_quality.warnings.map((w, i) => (
+        <div key={i} className="rounded-lg px-3 py-2 bg-amber-500/5 border border-amber-500/20 text-amber-300/90 text-xs flex items-start gap-2">
+          <span className="shrink-0">⚠</span><span>{w}</span>
+        </div>
+      ))}
+
+      {/* Probability accuracy */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+        <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Probability Accuracy — predicted vs realized (out-of-sample, accumulating)</p>
+        {acc ? (
+          <>
+            <div className="flex gap-5 flex-wrap text-sm font-mono mb-3">
+              <span className="text-zinc-400">Predicted: <span className="text-purple-300 font-bold">{acc.predicted_wr}%</span></span>
+              <span className="text-zinc-400">Actual: <span className="text-emerald-400 font-bold">{acc.actual_wr}%</span></span>
+              <span className="text-zinc-400">Drift: <span className={`font-bold ${Math.abs(acc.drift) <= 10 ? 'text-emerald-400' : 'text-amber-400'}`}>{acc.drift > 0 ? '+' : ''}{acc.drift}</span></span>
+              <span className="text-zinc-400">MAE: <span className="text-zinc-200 font-bold">{acc.mean_abs_error}</span></span>
+              <span className="text-zinc-600">n={acc.n} / 200 target</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+              {dims.map(([label, rows]) => rows.length > 0 && (
+                <div key={label} className="rounded-lg border border-zinc-800/60 p-2.5">
+                  <p className="text-[9px] text-zinc-600 uppercase tracking-wider mb-1">{label}</p>
+                  {rows.map(r => (
+                    <div key={r.value} className="flex items-center gap-2 text-[10px] font-mono">
+                      <span className="text-zinc-400 truncate flex-1">{r.value}</span>
+                      <span className="text-purple-300">{r.predicted_wr}%</span>
+                      <span className="text-zinc-500">→</span>
+                      <span className="text-zinc-200">{r.actual_wr}%</span>
+                      <span className={r.calibrated ? 'text-emerald-500' : 'text-red-400'}>{r.calibrated ? '✓' : '✗'}</span>
+                      <span className={`${r.low_sample ? 'text-amber-500' : 'text-zinc-600'}`}>n={r.n}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </>
+        ) : <p className="text-zinc-600 text-xs">No resolved stamped signals yet — predictions began accumulating with the Probability Engine deploy.</p>}
+      </div>
+
+      {/* Grade validation */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <GradeValidationTable title="RiskGrade 2.0 (empirical) — actual performance"
+          rows={v.grades.empirical}
+          inversions={[...v.grades.empirical_inversions_wr, ...v.grades.empirical_inversions_exp]} />
+        <GradeValidationTable title="Heuristic A–F — actual performance"
+          rows={v.grades.heuristic}
+          inversions={v.grades.heuristic_inversions_wr} />
+      </div>
+
+      {/* Edge stability */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+        <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Edge Stability — top-cohort retention across windows</p>
+        <div className="flex gap-6 flex-wrap text-xs font-mono mb-2">
+          <span className="text-zinc-400">7d vs 30d: <span className="text-zinc-200 font-bold">J={v.stability.overlap_7v30.jaccard ?? '—'}</span> · top3 kept {v.stability.overlap_7v30.top3_retained}/3</span>
+          <span className="text-zinc-400">30d vs 90d: <span className="text-zinc-200 font-bold">J={v.stability.overlap_30v90.jaccard ?? '—'}</span> · top3 kept {v.stability.overlap_30v90.top3_retained}/3</span>
+        </div>
+        <div className="flex gap-4 flex-wrap">
+          {Object.entries(v.stability.regime_distribution).map(([win, dist]) => (
+            <div key={win} className="text-[10px] font-mono text-zinc-500">
+              <span className="text-zinc-400 uppercase">{win}:</span>{' '}
+              {Object.entries(dist).map(([r, n]) => `${r} ${n}`).join(' · ')}
+            </div>
+          ))}
+        </div>
+        <p className="text-[10px] text-zinc-600 mt-2 leading-relaxed">
+          Low 7d-vs-30d overlap reflects the regime mix shifting (cohort rankings are regime-conditional by design) —
+          not cohort decay. 30d-vs-90d is trivially identical until outcome history exceeds 30 days.
+        </p>
+      </div>
     </div>
   )
 }

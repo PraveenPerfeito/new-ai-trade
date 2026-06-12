@@ -576,6 +576,9 @@ export const adminApi = {
     edgeMatrix: (min_n = 20, limit = 50) =>
       get<EdgeMatrixResponse>('/analytics/edge-matrix', { min_n, limit }),
     trackRecord: () => get<TrackRecordResponse>('/analytics/track-record'),
+    /** PERFORMANCE.VERIFICATION.1 — consumer casts to its local view type */
+    performanceVerification: <T = unknown>() =>
+      get<T>('/analytics/performance-verification'),
     edgeReport:    (hours = 720)  => get<EdgeReport>('/analytics/edge/report', { window_hours: hours }),
     calibration:   (hours = 720)  => get<Record<string, unknown>>('/analytics/edge/calibration', { window_hours: hours }),
     claude:        (hours = 720)  => get<Record<string, unknown>>('/analytics/edge/claude', { window_hours: hours }),

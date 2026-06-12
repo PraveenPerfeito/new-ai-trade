@@ -75,6 +75,17 @@ async def ai_effectiveness(
     return await get_ai_summary(window_hours)
 
 
+@router.get("/performance-verification")
+async def performance_verification() -> dict[str, Any]:
+    """
+    PERFORMANCE.VERIFICATION.1 — read-only validation of probability accuracy,
+    RiskGrade rankings (inversion detection), and Edge Matrix stability across
+    7/30/90d windows.  No scanner changes, no filtering, no gating.
+    """
+    from backend.analytics.performance_verification import compute_performance_verification
+    return await compute_performance_verification()
+
+
 @router.get("/edge-matrix")
 async def edge_matrix(
     min_n: int = Query(default=20, ge=5, le=200),
