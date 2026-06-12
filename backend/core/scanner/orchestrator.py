@@ -275,6 +275,17 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
     alert_thr  = settings.scanner_min_confidence_alert
     # SETTINGS.WIRE.1 — founder Quick Controls as floors (flag-gated, default OFF)
     config, alert_thr = await _maybe_apply_founder_floors(config, alert_thr, mode)
+
+    # PHASE.9.1 — probability delivery gate config (flag default OFF)
+    prob_gate_enabled, min_empirical_wr = False, 45.0
+    try:
+        from backend.system_settings.service import get_settings_service  # noqa: PLC0415
+        from backend.system_settings.groups import FeatureFlags, ScannerSettings  # noqa: PLC0415
+        _svc = get_settings_service()
+        prob_gate_enabled = bool((await _svc.get_group(FeatureFlags)).probability_gate_enabled)
+        min_empirical_wr  = float((await _svc.get_group(ScannerSettings)).min_empirical_wr)
+    except Exception as exc:
+        log.warning("probability_gate_config_read_failed", error=str(exc))
     scan_id    = str(uuid.uuid4())
     t0         = time.monotonic()
     t0_wall    = datetime.now(timezone.utc)
@@ -396,6 +407,25 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
         filtered = _filter_coins(all_coins, config, futures_syms, mode)
         log.info("coins_filtered", count=len(filtered), mode=mode.value)
 
+        # 2b. INTEL.PROPAGATE.1 — sector/trend maps for non-TRENDING modes.
+        # Cache-only (no API calls); TRENDING already built richer maps above.
+        # Audit basis: sector_status was NULL on 100% and trend_score on 98.7%
+        # of outcomes because these were TRENDING-only.
+        if mode != ScannerMode.TRENDING and not trend_score_map:
+            try:
+                from backend.core.scanner.trending_universe import build_intelligence_maps  # noqa: PLC0415
+                trend_score_map, sector_status_map = await build_intelligence_maps(
+                    filtered, btc_change_24h,
+                )
+                log.info(
+                    "intelligence_maps_built",
+                    mode=mode.value,
+                    trend_scores=len(trend_score_map),
+                    sector_statuses=len(sector_status_map),
+                )
+            except Exception as exc:
+                log.warning("intelligence_maps_failed", mode=mode.value, error=str(exc))
+
         # 3. Cache coin list in DB (non-blocking, best-effort)
         t = asyncio.create_task(upsert_coins(all_coins))
         t.add_done_callback(lambda t: _on_task_done(t, "upsert_coins"))
@@ -441,6 +471,21 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                 signal.market_regime = btc_regime   # Phase 8.1B — store macro regime on signal
                 signal.scan_run_id = scan_run_id
 
+                # PHASE.9.1 — stamp empirical cohort probability (shadow data; the
+                # delivery gate below only acts on it when the flag is ON)
+                try:
+                    from backend.analytics.probability import (  # noqa: PLC0415
+                        get_probability_lookup, lookup_empirical,
+                    )
+                    _plookup = await get_probability_lookup()
+                    if _plookup:
+                        signal.empirical_wr, signal.empirical_n = lookup_empirical(
+                            _plookup, signal.market_regime, signal.type.value,
+                            signal.breakout_strength,
+                        )
+                except Exception as exc:
+                    log.debug("empirical_stamp_failed", symbol=signal.symbol, error=str(exc))
+
                 if await has_recent_signal(signal.symbol, signal.type.value, mode.value, cooldown_minutes=240):
                     _record_persisted_gate(gate_rejections, "SIGNAL_COOLDOWN")
                     gate_rejections_total.labels(gate="signal_cooldown").inc()
@@ -475,14 +520,41 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                 except Exception:
                     pass
 
+                # PHASE.9.1 — persist the probability stamp (best-effort; tolerates
+                # the migration not having run yet)
+                if signal.empirical_wr is not None:
+                    try:
+                        from backend.analytics.probability import persist_empirical  # noqa: PLC0415
+                        t = asyncio.create_task(
+                            persist_empirical(sig_id, signal.empirical_wr, signal.empirical_n)
+                        )
+                        t.add_done_callback(lambda t: _on_task_done(t, "persist_empirical"))
+                    except Exception:
+                        pass
+
                 if signal.confidence >= alert_thr:
-                    sent = await send_signal_alert(signal)
-                    signal.telegram_sent = sent
-                    if sent:
-                        try:
-                            await mark_signal_telegram_sent(signal.id)
-                        except Exception as exc:
-                            log.warning("mark_telegram_sent_failed", signal_id=signal.id, error=str(exc))
+                    # PHASE.9.1 — probability delivery gate: suppress the Telegram
+                    # send (signal stays persisted + outcome-tracked) when the
+                    # cohort win rate is known and below threshold.
+                    from backend.analytics.probability import should_suppress_send  # noqa: PLC0415
+                    if should_suppress_send(prob_gate_enabled, signal.empirical_wr, min_empirical_wr):
+                        gate_rejections_total.labels(gate="probability_send_gate").inc()
+                        log.info(
+                            "probability_gate_suppressed_send",
+                            symbol=signal.symbol,
+                            type=signal.type.value,
+                            empirical_wr=signal.empirical_wr,
+                            empirical_n=signal.empirical_n,
+                            threshold=min_empirical_wr,
+                        )
+                    else:
+                        sent = await send_signal_alert(signal)
+                        signal.telegram_sent = sent
+                        if sent:
+                            try:
+                                await mark_signal_telegram_sent(signal.id)
+                            except Exception as exc:
+                                log.warning("mark_telegram_sent_failed", signal_id=signal.id, error=str(exc))
 
                 # Analytics: register outcome tracker (best-effort)
                 t = asyncio.create_task(_register_analytics(signal))

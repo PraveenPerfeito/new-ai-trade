@@ -348,6 +348,9 @@ class Signal(BaseModel):
     market_regime:           str | None = None   # BULL_TREND | BEAR_TREND | SIDEWAYS | HIGH_VOLATILITY | EUPHORIA | CAPITULATION
     # Phase 7.2B.9 — validation method
     validation_source:       str | None = None   # "CLAUDE" | "HEURISTIC"
+    # PHASE.9.1 — empirical probability stamp (attribution-snapshot cohort WR %, n≥30)
+    empirical_wr:            float | None = None
+    empirical_n:             int | None = None
 
 
 # ── Scan orchestration models ─────────────────────────────────────────────────

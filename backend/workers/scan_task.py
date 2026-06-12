@@ -69,9 +69,9 @@ def _send_failure_alert(mode: str, error: str, attempt: int) -> None:
         logger.warning(f"telegram_failure_alert_failed error={exc}")
 
 
-def _check_operational_flags() -> str | None:
+def _check_operational_flags(mode: str = "standard") -> str | None:
     """
-    Synchronously check emergency_stop and maintenance_mode feature flags.
+    Synchronously check emergency_stop / maintenance_mode / per-mode feature flags.
     Returns a non-empty reason string if the scan should be blocked, else None.
     Called before acquiring the scan lock so queued tasks respect operator toggles.
     """
@@ -84,6 +84,10 @@ def _check_operational_flags() -> str | None:
             return "emergency_stop"
         if flags.maintenance_mode:
             return "maintenance_mode"
+        # Retirement candidate (PHASE.9 audit: 26.8% WR 30d, 0/9 last week) —
+        # founder can disable this mode's scans without touching the beat schedule.
+        if mode == "high_confidence" and not flags.high_confidence_mode_enabled:
+            return "high_confidence_mode_disabled"
     except Exception as exc:
         logger.warning(f"operational_flag_check_failed error={exc} — proceeding")
     return None
@@ -115,7 +119,7 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
         celery_tasks_total.labels(task_name=task_label, status="skipped").inc()
         return {"skipped": True, "reason": "scheduler_disabled", "mode": mode}
 
-    block_reason = _check_operational_flags()
+    block_reason = _check_operational_flags(mode)
     if block_reason:
         logger.warning(f"scan_blocked reason={block_reason} mode={mode}")
         celery_tasks_total.labels(task_name=task_label, status="skipped").inc()

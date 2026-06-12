@@ -76,7 +76,14 @@ async def _get_ls(symbol: str) -> dict:
 FUNDING_HIST_KEY     = "futures:funding_trend:{}"  # format with symbol
 FUNDING_HIST_TTL     = 8 * 60 * 60   # 8 hours — matches Binance funding interval
 FUNDING_HIST_MAX     = 3             # keep last 3 readings
-FUNDING_TREND_DELTA  = 0.0002        # min absolute change to classify as RISING/FALLING
+# FUNDING.TREND.FIX.1 — the original 0.0002 absolute delta was unreachable:
+# readings are taken ~30-60 min apart (scan cadence) while typical funding
+# LEVELS are only ~0.0001, so the classifier emitted STABLE 100% of the time
+# over 30d of audited outcomes. New rule: |delta| must exceed the LARGER of a
+# small absolute floor and 25% of the starting magnitude — sensitive at normal
+# funding levels, noise-proof when rates are already extreme.
+FUNDING_TREND_DELTA_ABS = 0.00003    # absolute floor (0.003%)
+FUNDING_TREND_DELTA_REL = 0.25       # 25% of |oldest reading|, whichever is larger
 
 
 async def _update_funding_history(symbol: str, rate: float) -> list[float]:
@@ -104,18 +111,19 @@ def _classify_funding_trend(history: list[float]) -> FundingTrend:
     """
     Classify the direction of funding rate change from a list of readings.
 
-    Requires at least 2 readings (oldest to newest).
-    Uses the absolute delta between oldest and latest:
-      delta > +FUNDING_TREND_DELTA  → RISING
-      delta < -FUNDING_TREND_DELTA  → FALLING
-      else                          → STABLE
+    Requires at least 2 readings (oldest to newest).  FUNDING.TREND.FIX.1:
+    threshold = max(FUNDING_TREND_DELTA_ABS, |oldest| × FUNDING_TREND_DELTA_REL)
+      delta > +threshold → RISING
+      delta < -threshold → FALLING
+      else               → STABLE
     """
     if len(history) < 2:
         return FundingTrend.STABLE
     delta = history[-1] - history[0]
-    if delta > FUNDING_TREND_DELTA:
+    threshold = max(FUNDING_TREND_DELTA_ABS, abs(history[0]) * FUNDING_TREND_DELTA_REL)
+    if delta > threshold:
         return FundingTrend.RISING
-    if delta < -FUNDING_TREND_DELTA:
+    if delta < -threshold:
         return FundingTrend.FALLING
     return FundingTrend.STABLE
 

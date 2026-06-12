@@ -423,3 +423,85 @@ async def build_trending_universe(
         rising_sectors=rising_sectors,
         sector_report=sector_report,
     )
+
+
+# ── INTEL.PROPAGATE.1 — sector/trend maps for ALL scan modes ──────────────────
+# The audit found sector_status was NULL on 100% and trend_score on 98.7% of
+# resolved outcomes because these maps were built only in TRENDING mode.
+# This builder is cache-only (Redis intelligence keys + coin metadata already
+# in hand) — zero external API calls, safe to run for every mode.
+
+def _intelligence_maps_core(
+    coins: list[CoinData],
+    trending_raw: list[dict],
+    category_symbol_map: dict[str, str],
+    category_avg_change_map: dict[str, float],
+    sector_report,
+    btc_change_24h: float,
+    btc_4h_change: float = 0.0,
+) -> "tuple[dict[str, float], dict[str, str]]":
+    """Pure map builder: (trend_score_map, sector_status_map) keyed by symbol."""
+    trending_rank_map: dict[str, int] = {
+        t.get("symbol", "").upper(): idx + 1 for idx, t in enumerate(trending_raw)
+    }
+    trending_1h_map: dict[str, float] = {
+        t.get("symbol", "").upper(): float(t.get("priceChange1h") or 0)
+        for t in trending_raw if t.get("priceChange1h") is not None
+    }
+
+    trend_score_map:   dict[str, float] = {}
+    sector_status_map: dict[str, str]   = {}
+    btc_ref = btc_4h_change if btc_4h_change != 0.0 else btc_change_24h / 6.0
+
+    for coin in coins:
+        symbol = coin.symbol.upper()
+        sector = category_symbol_map.get(symbol)
+        sector_analysis = sector_report.get(sector) if (sector_report and sector) else None
+        if sector_analysis:
+            sector_status_map[symbol] = sector_analysis.status.value
+
+        p1h = trending_1h_map.get(symbol)
+        if p1h is not None:
+            rs = proxy_from_cmc_1h(p1h, btc_ref)
+        else:
+            rs = proxy_from_cmc_24h(coin.price_change_24h, btc_ref)
+
+        ts = compute_trend_score(
+            trending_list_rank = trending_rank_map.get(symbol),
+            relative_strength  = rs.rs_4h,
+            sector_avg_change  = category_avg_change_map.get(symbol),
+            volume_24h         = coin.volume_24h,
+            market_cap         = coin.market_cap,
+            price_change_1h    = p1h,
+            has_futures        = coin.has_futures,
+            sector_status      = sector_analysis.status.value if sector_analysis else None,
+        )
+        trend_score_map[symbol] = round(ts.total, 2)
+
+    return trend_score_map, sector_status_map
+
+
+async def build_intelligence_maps(
+    coins: list[CoinData],
+    btc_change_24h: float,
+    btc_4h_change: float = 0.0,
+) -> "tuple[dict[str, float], dict[str, str]]":
+    """
+    Build per-symbol trend_score + sector_status maps for any scan mode.
+    Cache-only; returns empty maps on any failure (signals then carry NULL,
+    exactly as before this fix).
+    """
+    try:
+        trending_raw, (categories_raw, categories_refreshed_at) = await asyncio.gather(
+            read_trending_coins(),
+            read_categories(),
+        )
+        sector_report = await analyze_sectors(categories_raw, refreshed_at=categories_refreshed_at)
+        _, category_symbol_map, category_avg_change_map = _parse_rising_sectors(categories_raw)
+        return _intelligence_maps_core(
+            coins, trending_raw, category_symbol_map, category_avg_change_map,
+            sector_report, btc_change_24h, btc_4h_change,
+        )
+    except Exception as exc:
+        log.warning("intelligence_maps_build_failed", error=str(exc))
+        return {}, {}
