@@ -415,11 +415,11 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
                 </tr>
               </thead>
               <tbody>
-                {edge.coin_performance.best_by_expectancy.slice(0, 10).map(sym => {
+                {(edge.coin_performance.best_by_expectancy ?? []).slice(0, 10).map(sym => {
                   const c = edge.coin_performance!.coins[sym]
                   if (!c) return null
-                  const isBestWR  = edge.coin_performance!.best_by_win_rate.includes(sym)
-                  const isWorstDD = edge.coin_performance!.worst_by_drawdown.includes(sym)
+                  const isBestWR  = (edge.coin_performance!.best_by_win_rate ?? []).includes(sym)
+                  const isWorstDD = (edge.coin_performance!.worst_by_drawdown ?? []).includes(sym)
                   return (
                     <tr key={sym} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
                       <td className="py-2 px-3 font-medium font-mono">
@@ -1268,7 +1268,7 @@ function TrackRecordTab({ data, loading }: { data: import('@/lib/admin-api').Tra
       </div>
 
       {/* By mode (30d) */}
-      {data.by_mode_30d.length > 0 && (
+      {(data.by_mode_30d ?? []).length > 0 && (
         <div className="glass-card rounded-xl p-5">
           <p className="text-terminal-muted text-xs uppercase tracking-widest mb-4 font-semibold">30d by Mode</p>
           <div className="overflow-x-auto">
@@ -1282,7 +1282,7 @@ function TrackRecordTab({ data, loading }: { data: import('@/lib/admin-api').Tra
                 </tr>
               </thead>
               <tbody>
-                {data.by_mode_30d.map(m => (
+                {(data.by_mode_30d ?? []).map(m => (
                   <tr key={m.scanner_mode} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
                     <td className="py-2.5 px-3 font-mono text-terminal-text">{modeLabel(m.scanner_mode)}</td>
                     <td className="py-2.5 px-3 font-mono text-terminal-muted">{m.n}</td>

@@ -339,11 +339,11 @@ function FounderCommandCenter({ trackRecord }: { trackRecord: TrackRecordRespons
           </div>
         ))}
       </div>
-      {trackRecord.by_mode_30d.length > 0 && (
+      {(trackRecord.by_mode_30d ?? []).length > 0 && (
         <div className="mb-3">
           <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">By Mode · 30d</p>
           <div className="flex flex-wrap gap-2">
-            {trackRecord.by_mode_30d.map(m => (
+            {(trackRecord.by_mode_30d ?? []).map(m => (
               <div key={m.scanner_mode} className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded border bg-zinc-800/40 ${MODE_COLORS[m.scanner_mode] ?? 'text-zinc-400 border-zinc-700'}`}>
                 <span className="font-semibold">{modeDisplayLabel(m.scanner_mode)}</span>
                 <span className="text-zinc-600">·</span>
