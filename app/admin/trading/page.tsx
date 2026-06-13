@@ -659,6 +659,27 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
           )}
         </div>
       )}
+      {/* Liquidation Zones */}
+      {hasFutures && fd && fd.liquidationZones && fd.liquidationZones.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Liquidation Zones</p>
+          <div className="flex flex-wrap gap-1.5">
+            {fd.liquidationZones.slice(0, 4).map((z, i) => (
+              <span
+                key={i}
+                className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                  z.side === 'LONG_LIQ'
+                    ? 'text-red-400 border-red-500/20 bg-red-500/5'
+                    : 'text-emerald-400 border-emerald-500/20 bg-emerald-500/5'
+                }`}
+              >
+                {z.side === 'LONG_LIQ' ? '↓' : '↑'} ${z.price.toFixed(2)} · {z.distancePct.toFixed(1)}% away
+                {z.strength !== 'WEAK' && <span className="ml-1 opacity-60">({z.strength.toLowerCase()})</span>}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       {/* Extended Technical Context — ema200 position, candle pattern, BB squeeze */}
       {hasExtTech && (
         <div className="flex flex-wrap gap-x-5 gap-y-1.5 items-center">

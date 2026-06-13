@@ -261,8 +261,32 @@ export interface EdgeReport {
     recommended_avoid: string[]
     regimes: Record<string, EdgeModeStats>
   }
+  coin_performance?: {
+    insufficient_data: boolean
+    total_resolved: number
+    total_symbols_seen: number
+    coins: Record<string, CoinStats>
+    best_by_win_rate:   string[]
+    best_by_expectancy: string[]
+    worst_by_drawdown:  string[]
+    warning?: string
+  }
   window_hours: number
   generated_at: string
+}
+
+export interface CoinStats {
+  label: string
+  total: number
+  tp_hits?: number
+  sl_hits?: number
+  win_rate: number | null
+  expectancy: number | null
+  profit_factor: number | null
+  max_drawdown_r: number | null
+  sharpe_ratio: number | null
+  avg_duration_hours?: number | null
+  insufficient_data?: boolean
 }
 
 export interface EdgeModeStats {

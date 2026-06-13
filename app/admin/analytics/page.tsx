@@ -396,6 +396,71 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
         </div>
       )}
 
+      {/* Per-Coin Performance */}
+      {edge?.coin_performance && !edge.coin_performance.insufficient_data && (
+        <div>
+          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">
+            Top Coins by Expectancy — {analyticsWindowLabel(edge.window_hours)}
+            <span className="ml-2 text-terminal-muted/50 normal-case font-normal">
+              {edge.coin_performance.total_symbols_seen} symbols seen
+            </span>
+          </p>
+          <div className="glass-card rounded-lg overflow-hidden overflow-x-auto">
+            <table className="w-full text-xs min-w-[420px]">
+              <thead>
+                <tr className="border-b border-terminal-border">
+                  {['Coin', 'Resolved', 'Win Rate', 'Expectancy', 'PF', 'Max DD'].map(h => (
+                    <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {edge.coin_performance.best_by_expectancy.slice(0, 10).map(sym => {
+                  const c = edge.coin_performance!.coins[sym]
+                  if (!c) return null
+                  const isBestWR  = edge.coin_performance!.best_by_win_rate.includes(sym)
+                  const isWorstDD = edge.coin_performance!.worst_by_drawdown.includes(sym)
+                  return (
+                    <tr key={sym} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
+                      <td className="py-2 px-3 font-medium font-mono">
+                        <span className="text-terminal-text">{sym}</span>
+                        {isBestWR  && <span className="ml-1.5 text-[9px] text-bull-default/70 border border-bull-default/20 px-1 rounded">top WR</span>}
+                        {isWorstDD && <span className="ml-1.5 text-[9px] text-bear-default/70 border border-bear-default/20 px-1 rounded">high DD</span>}
+                      </td>
+                      <td className="py-2 px-3 font-mono text-terminal-muted">{c.total}</td>
+                      <td className="py-2 px-3 font-mono">
+                        {c.win_rate != null
+                          ? <span className={c.win_rate >= 0.55 ? 'text-bull-default' : c.win_rate >= 0.45 ? 'text-signal-high' : 'text-bear-default'}>
+                              {(c.win_rate * 100).toFixed(1)}%
+                            </span>
+                          : <span className="text-terminal-muted/40">—</span>}
+                      </td>
+                      <td className="py-2 px-3 font-mono">
+                        {c.expectancy != null
+                          ? <span className={c.expectancy > 0 ? 'text-bull-default' : 'text-bear-default'}>
+                              {c.expectancy > 0 ? '+' : ''}{c.expectancy.toFixed(2)}R
+                            </span>
+                          : <span className="text-terminal-muted/40">—</span>}
+                      </td>
+                      <td className="py-2 px-3 font-mono text-terminal-muted">
+                        {c.profit_factor != null ? c.profit_factor.toFixed(2) : '—'}
+                      </td>
+                      <td className="py-2 px-3 font-mono">
+                        {c.max_drawdown_r != null
+                          ? <span className={c.max_drawdown_r > 2 ? 'text-bear-default' : 'text-terminal-muted'}>
+                              {c.max_drawdown_r.toFixed(2)}R
+                            </span>
+                          : <span className="text-terminal-muted/40">—</span>}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Intelligence Performance */}
       <IntelligenceSection data={intel} loading={intelLoading} />
 
