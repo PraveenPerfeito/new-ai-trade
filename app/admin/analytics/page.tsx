@@ -1033,9 +1033,134 @@ function CalibrationTabContent({
   )
 }
 
+// ─── Phase D — Track Record tab ───────────────────────────────────────────────
+
+function TrackRecordTab({ data, loading }: { data: import('@/lib/admin-api').TrackRecordResponse | null; loading: boolean }) {
+  if (loading) return <div className="text-terminal-muted text-sm py-8 text-center">Loading track record…</div>
+  if (!data)   return <div className="text-terminal-muted text-sm py-8 text-center">No track record data available.</div>
+
+  const w = (wr: number | null) => wr == null ? '—' : `${wr}%`
+  const e = (exp: number | null) => exp == null ? '—' : `${exp > 0 ? '+' : ''}${exp.toFixed(2)}R`
+  const p = (pf: number | null) => pf == null ? '—' : pf.toFixed(2)
+  const wrCls = (wr: number | null) => wr == null ? 'text-terminal-muted' : wr >= 50 ? 'text-bull-default' : wr >= 40 ? 'text-blue-400' : wr >= 30 ? 'text-amber-400' : 'text-bear-default'
+  const expCls = (exp: number | null) => exp == null ? 'text-terminal-muted' : exp >= 0.5 ? 'text-bull-default' : exp >= 0.2 ? 'text-blue-400' : exp >= 0 ? 'text-amber-400' : 'text-bear-default'
+  const pfCls  = (pf: number | null)  => pf  == null ? 'text-terminal-muted' : pf  >= 2.0 ? 'text-bull-default' : pf  >= 1.5 ? 'text-blue-400' : pf  >= 1.0 ? 'text-amber-400' : 'text-bear-default'
+  const modeLabel = (m: string) => m === 'high_confidence' ? 'High Conf' : m.charAt(0).toUpperCase() + m.slice(1)
+
+  const windows = [
+    { label: '7d',  w: data.windows.d7  },
+    { label: '30d', w: data.windows.d30 },
+    { label: '90d', w: data.windows.d90 },
+  ] as const
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-terminal-text font-semibold mb-0.5">Verified Track Record</h2>
+        <p className="text-terminal-muted text-xs">Source: {data.source} · Outcome-resolved signals only</p>
+      </div>
+
+      {/* Performance windows */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {windows.map(({ label, w: win }) => (
+          <div key={label} className="glass-card rounded-xl p-5">
+            <p className="text-terminal-muted text-xs uppercase tracking-widest mb-3 font-semibold">{label} Window · {win.resolved} resolved</p>
+            <div className="space-y-2.5">
+              <div className="flex justify-between items-center">
+                <span className="text-terminal-muted text-xs">Win Rate</span>
+                <span className={`font-mono font-bold text-base ${wrCls(win.win_rate)}`}>{w(win.win_rate)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-terminal-muted text-xs">Expectancy</span>
+                <span className={`font-mono font-bold text-base ${expCls(win.expectancy)}`}>{e(win.expectancy)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-terminal-muted text-xs">Profit Factor</span>
+                <span className={`font-mono font-bold text-base ${pfCls(win.pf)}`}>{p(win.pf)}</span>
+              </div>
+              <div className="flex justify-between items-center border-t border-terminal-border/40 pt-2">
+                <span className="text-terminal-muted text-xs">Wins / Losses</span>
+                <span className="font-mono text-xs text-terminal-muted">{win.wins}W / {win.losses}L</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* By mode (30d) */}
+      {data.by_mode_30d.length > 0 && (
+        <div className="glass-card rounded-xl p-5">
+          <p className="text-terminal-muted text-xs uppercase tracking-widest mb-4 font-semibold">30d by Mode</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-terminal-border">
+                  <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Mode</th>
+                  <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">n</th>
+                  <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Win Rate</th>
+                  <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Expectancy</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.by_mode_30d.map(m => (
+                  <tr key={m.scanner_mode} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
+                    <td className="py-2.5 px-3 font-mono text-terminal-text">{modeLabel(m.scanner_mode)}</td>
+                    <td className="py-2.5 px-3 font-mono text-terminal-muted">{m.n}</td>
+                    <td className={`py-2.5 px-3 font-mono font-semibold ${wrCls(m.wr)}`}>{w(m.wr)}</td>
+                    <td className={`py-2.5 px-3 font-mono font-semibold ${expCls(m.exp)}`}>{e(m.exp)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Probability accuracy */}
+      {data.probability_accuracy && (
+        <div className="glass-card rounded-xl p-5">
+          <p className="text-terminal-muted text-xs uppercase tracking-widest mb-4 font-semibold">Probability Engine Accuracy</p>
+          {data.probability_accuracy.n < 10 ? (
+            <p className="text-terminal-muted text-sm">Insufficient data — need ≥ 10 stamped outcomes (current: {data.probability_accuracy.n})</p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div>
+                <p className="text-terminal-muted text-xs mb-1">Sample</p>
+                <p className="font-mono text-base text-terminal-text font-bold">n={data.probability_accuracy.n}</p>
+              </div>
+              <div>
+                <p className="text-terminal-muted text-xs mb-1">Predicted WR</p>
+                <p className="font-mono text-base text-terminal-text font-bold">
+                  {data.probability_accuracy.avg_predicted_wr != null ? `${data.probability_accuracy.avg_predicted_wr.toFixed(1)}%` : '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-terminal-muted text-xs mb-1">Actual WR</p>
+                <p className={`font-mono text-base font-bold ${wrCls(data.probability_accuracy.realized_wr)}`}>
+                  {data.probability_accuracy.realized_wr != null ? `${data.probability_accuracy.realized_wr.toFixed(1)}%` : '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-terminal-muted text-xs mb-1">Mean Abs Error</p>
+                <p className={`font-mono text-base font-bold ${
+                  data.probability_accuracy.mean_abs_error == null ? 'text-terminal-muted'
+                  : data.probability_accuracy.mean_abs_error <= 0.1 ? 'text-bull-default'
+                  : data.probability_accuracy.mean_abs_error <= 0.2 ? 'text-amber-400'
+                  : 'text-bear-default'}`}>
+                  {data.probability_accuracy.mean_abs_error != null ? `${(data.probability_accuracy.mean_abs_error * 100).toFixed(0)}pp` : '—'}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Page root ────────────────────────────────────────────────────────────────
 
-type Tab = 'edge' | 'attribution' | 'calibration' | 'probability'
+type Tab = 'edge' | 'attribution' | 'calibration' | 'probability' | 'track-record'
 
 // ─── PHASE.9.P1 — Probability tab ─────────────────────────────────────────────
 
@@ -1285,7 +1410,7 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tab') as Tab | null
-    if (t && ['edge', 'attribution', 'calibration', 'probability'].includes(t)) setTab(t)
+    if (t && ['edge', 'attribution', 'calibration', 'probability', 'track-record'].includes(t)) setTab(t)
   }, [])
 
   const edgeFetcher  = useCallback(() => adminApi.analytics.edgeReport(), [])
@@ -1304,11 +1429,15 @@ export default function AnalyticsPage() {
   )
   const { data: attribution, loading: attrLoading } = useAutoRefresh<AttributionReport | null>(attrFetcher, 300_000)
 
+  const trackRecordFetcher = useCallback(() => adminApi.analytics.trackRecord(), [])
+  const { data: trackRecord, loading: trackLoading } = useAutoRefresh<import('@/lib/admin-api').TrackRecordResponse>(trackRecordFetcher, 300_000)
+
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'edge',        label: 'Edge Validation' },
-    { id: 'attribution', label: 'Attribution'     },
-    { id: 'calibration', label: 'AI Calibration'  },
-    { id: 'probability', label: 'Probability'     },
+    { id: 'edge',         label: 'Edge Validation' },
+    { id: 'attribution',  label: 'Attribution'     },
+    { id: 'calibration',  label: 'AI Calibration'  },
+    { id: 'probability',  label: 'Probability'     },
+    { id: 'track-record', label: 'Track Record'    },
   ]
 
   return (
@@ -1335,10 +1464,11 @@ export default function AnalyticsPage() {
         ))}
       </div>
 
-      {tab === 'edge'        && <EdgeValidationTab edge={edge ?? null} loading={edgeLoading} intel={intel ?? null} intelLoading={intelLoading} />}
-      {tab === 'attribution' && <AttributionTab data={attribution ?? null} loading={attrLoading} />}
-      {tab === 'calibration' && <CalibrationTabContent ai={aiData ?? null} loading={aiLoading} edge={edge ?? null} attribution={attribution} />}
-      {tab === 'probability' && <ProbabilityTabContent />}
+      {tab === 'edge'         && <EdgeValidationTab edge={edge ?? null} loading={edgeLoading} intel={intel ?? null} intelLoading={intelLoading} />}
+      {tab === 'attribution'  && <AttributionTab data={attribution ?? null} loading={attrLoading} />}
+      {tab === 'calibration'  && <CalibrationTabContent ai={aiData ?? null} loading={aiLoading} edge={edge ?? null} attribution={attribution} />}
+      {tab === 'probability'  && <ProbabilityTabContent />}
+      {tab === 'track-record' && <TrackRecordTab data={trackRecord ?? null} loading={trackLoading} />}
     </div>
   )
 }

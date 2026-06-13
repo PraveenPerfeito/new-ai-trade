@@ -9,7 +9,7 @@ import {
   ChevronDown, BarChart2,
 } from 'lucide-react'
 import { adminApi } from '@/lib/admin-api'
-import type { AuditEntry, HealthReady, ScanSummaryResponse } from '@/lib/admin-api'
+import type { AuditEntry, HealthReady, ScanSummaryResponse, TrackRecordResponse } from '@/lib/admin-api'
 import { useSharedPolling } from '@/lib/use-shared-polling'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
 import { cn } from '@/lib/utils'
@@ -216,6 +216,29 @@ function posColor(pos: string) {
 function shortLabel(s: string) { return s.replace(/_/g,' ') }
 function gradeRank(g: RiskGrade | undefined): number { return g ? (GRADE_RANK[g] ?? 5) : 5 }
 
+// ── Track record helpers ───────────────────────────────────────────────────────
+
+function wrColor(wr: number | null): string {
+  if (wr == null) return 'text-zinc-500'
+  return wr >= 50 ? 'text-emerald-400' : wr >= 40 ? 'text-blue-400' : wr >= 30 ? 'text-amber-400' : 'text-red-400'
+}
+function expColor(exp: number | null): string {
+  if (exp == null) return 'text-zinc-500'
+  return exp >= 0.5 ? 'text-emerald-400' : exp >= 0.2 ? 'text-blue-400' : exp >= 0 ? 'text-amber-400' : 'text-red-400'
+}
+function pfColor(pf: number | null): string {
+  if (pf == null) return 'text-zinc-500'
+  return pf >= 2 ? 'text-emerald-400' : pf >= 1.5 ? 'text-blue-400' : pf >= 1.0 ? 'text-amber-400' : 'text-red-400'
+}
+function modeDisplayLabel(m: string): string {
+  if (m === 'high_confidence') return 'High Conf'
+  return m.charAt(0).toUpperCase() + m.slice(1)
+}
+
+// ── Signal freshness window (matches signal-lifecycle.ts LIFETIME_MS) ─────────
+
+const FRESHNESS_WINDOW_H: Record<string, number> = { '15m': 2, '1h': 8, '4h': 24, '1d': 72 }
+
 // ── Micro components ───────────────────────────────────────────────────────────
 
 function GradeBadge({ grade }: { grade: RiskGrade }) {
@@ -250,6 +273,149 @@ function RegimeAlignDot({ alignment }: { alignment: 'aligned' | 'contra' | 'neut
   return <span className="w-3 h-3 shrink-0 hidden sm:block" />
 }
 
+// ── Phase J — Signal freshness for ACTIVE signals ────────────────────────────
+
+function FreshnessTag({ sig }: { sig: TacticalSignalRow }) {
+  if (sig.lifecycleStage !== 'ACTIVE') return null
+  const windowH = FRESHNESS_WINDOW_H[sig.timeframe] ?? 8
+  const createdMs = sig.createdAt ? new Date(String(sig.createdAt)).getTime() : null
+  if (!createdMs) return null
+  const elapsedH = (Date.now() - createdMs) / 3_600_000
+  const remainH  = Math.max(0, windowH - elapsedH)
+  if (remainH <= 0) return null
+  const pct   = remainH / windowH
+  const color = pct > 0.5 ? 'text-green-400 border-green-500/30 bg-green-500/5'
+    : pct > 0.25 ? 'text-amber-400 border-amber-500/30 bg-amber-500/5'
+    : 'text-red-400 border-red-500/30 bg-red-500/5'
+  const label = remainH >= 1 ? `${remainH.toFixed(0)}h left` : `${Math.round(remainH * 60)}m left`
+  return (
+    <span className={`text-[10px] px-1.5 py-0.5 rounded border font-mono shrink-0 hidden sm:inline ${color}`}
+      title={`Signal active — ${windowH}h window`}>
+      ⏱ {label}
+    </span>
+  )
+}
+
+// ── Phase A — Founder Command Center ─────────────────────────────────────────
+
+function FounderCommandCenter({ trackRecord }: { trackRecord: TrackRecordResponse | null }) {
+  if (!trackRecord) return null
+  const windows = [
+    { label: '7d',  w: trackRecord.windows.d7  },
+    { label: '30d', w: trackRecord.windows.d30 },
+    { label: '90d', w: trackRecord.windows.d90 },
+  ] as const
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-4">
+      <div className="flex items-center gap-2 mb-3">
+        <BarChart2 className="w-3.5 h-3.5 text-zinc-500" />
+        <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">Verified Performance</span>
+        <span className="text-[10px] text-zinc-600 font-mono ml-auto">{trackRecord.source}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        {windows.map(({ label, w }) => (
+          <div key={label} className="bg-zinc-800/50 rounded-lg px-3 py-2.5">
+            <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">{label} · {w.resolved} resolved</p>
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] text-zinc-500">Win Rate</span>
+                <span className={`text-[11px] font-mono font-bold ${wrColor(w.win_rate)}`}>
+                  {w.win_rate != null ? `${w.win_rate}%` : '—'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] text-zinc-500">Expectancy</span>
+                <span className={`text-[11px] font-mono font-bold ${expColor(w.expectancy)}`}>
+                  {w.expectancy != null ? `${w.expectancy > 0 ? '+' : ''}${w.expectancy.toFixed(2)}R` : '—'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] text-zinc-500">Prof Factor</span>
+                <span className={`text-[11px] font-mono font-bold ${pfColor(w.pf)}`}>
+                  {w.pf != null ? w.pf.toFixed(2) : '—'}
+                </span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {trackRecord.by_mode_30d.length > 0 && (
+        <div className="mb-3">
+          <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">By Mode · 30d</p>
+          <div className="flex flex-wrap gap-2">
+            {trackRecord.by_mode_30d.map(m => (
+              <div key={m.scanner_mode} className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded border bg-zinc-800/40 ${MODE_COLORS[m.scanner_mode] ?? 'text-zinc-400 border-zinc-700'}`}>
+                <span className="font-semibold">{modeDisplayLabel(m.scanner_mode)}</span>
+                <span className="text-zinc-600">·</span>
+                <span className={wrColor(m.wr)}>{m.wr != null ? `${m.wr}% WR` : '—'}</span>
+                {m.exp != null && <span className={expColor(m.exp)}>{m.exp > 0 ? '+' : ''}{m.exp.toFixed(2)}R</span>}
+                <span className="text-zinc-600">n={m.n}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {trackRecord.probability_accuracy != null && trackRecord.probability_accuracy.n >= 10 && (
+        <div className="border-t border-zinc-800 pt-2 mt-1 flex flex-wrap gap-x-5 gap-y-1 text-[10px]">
+          <span className="text-zinc-500">Probability Engine · n={trackRecord.probability_accuracy.n}</span>
+          {trackRecord.probability_accuracy.avg_predicted_wr != null && (
+            <span>Predicted <span className="text-zinc-300 font-mono">{trackRecord.probability_accuracy.avg_predicted_wr.toFixed(0)}%</span></span>
+          )}
+          {trackRecord.probability_accuracy.realized_wr != null && (
+            <span>Actual <span className="text-zinc-300 font-mono">{trackRecord.probability_accuracy.realized_wr.toFixed(0)}%</span></span>
+          )}
+          {trackRecord.probability_accuracy.mean_abs_error != null && (
+            <span>MAE <span className={`font-mono ${trackRecord.probability_accuracy.mean_abs_error <= 0.1 ? 'text-emerald-400' : trackRecord.probability_accuracy.mean_abs_error <= 0.2 ? 'text-amber-400' : 'text-red-400'}`}>
+              {(trackRecord.probability_accuracy.mean_abs_error * 100).toFixed(0)}pp
+            </span></span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Phase F — Grade Validation Strip ─────────────────────────────────────────
+
+function GradeValidationStrip() {
+  type GradeRow = { grade: string; n: number; wr: number | null; exp: number | null; pf: number | null }
+  type VerifyData = { grades?: { heuristic?: GradeRow[]; empirical?: GradeRow[] } }
+  const fetcher = useCallback(() => adminApi.analytics.performanceVerification<VerifyData>().catch(() => null), [])
+  const { data } = useAutoRefresh<VerifyData | null>(fetcher, 300_000)
+  const empirical = (data?.grades?.empirical ?? []).filter(g => g.n >= 10)
+  const heuristic = (data?.grades?.heuristic ?? []).filter(g => g.n >= 10)
+  if (empirical.length === 0 && heuristic.length === 0) return null
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3">
+      <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2.5">Grade Validation · Historical Win Rates</p>
+      <div className="space-y-2">
+        {empirical.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[9px] text-emerald-500 uppercase tracking-wider shrink-0 w-14">Empirical</span>
+            {empirical.map(g => (
+              <span key={g.grade} className={cn('text-[10px] px-2 py-0.5 rounded border font-mono', GRADE_STYLE[g.grade.charAt(0)] ?? 'text-zinc-400 border-zinc-700 bg-zinc-800')}
+                title={`n=${g.n} · Exp: ${g.exp != null ? (g.exp > 0 ? '+' : '') + g.exp.toFixed(2) + 'R' : '—'} · PF: ${g.pf?.toFixed(1) ?? '—'}`}>
+                {g.grade} {g.wr != null ? `${g.wr.toFixed(0)}% WR` : '—'}
+              </span>
+            ))}
+          </div>
+        )}
+        {heuristic.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[9px] text-zinc-500 uppercase tracking-wider shrink-0 w-14">Heuristic</span>
+            {heuristic.map(g => (
+              <span key={g.grade} className="text-[10px] px-2 py-0.5 rounded border font-mono text-zinc-400 border-zinc-700"
+                title={`n=${g.n} · Exp: ${g.exp != null ? (g.exp > 0 ? '+' : '') + g.exp.toFixed(2) + 'R' : '—'}`}>
+                {g.grade} {g.wr != null ? `${g.wr.toFixed(0)}% WR` : '—'}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
   type IntelField = { label: string; value: string; color?: string }
   // Extract ADX from setup description ("... | ADX: 35") before it gets stripped
@@ -280,6 +446,26 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
   const qs = sig.qualityScore
   const rs = sig.riskScore
 
+  // Phase B: why this signal
+  const contProb = sig.continuation?.continuationProbability ?? null
+  const contCase = sig.continuation?.reasons?.[0] ?? null
+  const iq       = sig.entryQualityScore
+  const iScore   = sig.institutionalScore
+  const ras      = sig.regimeAlignmentScore
+  const hasWhySection = contProb != null || iq != null || iScore != null || ras != null
+
+  // Phase C: empirical trust
+  const hasEmpiricalData = sig.empiricalWr != null
+
+  // Phase G: technical indicators
+  const rsi         = sig.indicators?.rsi
+  const volumeSpike = sig.indicators?.volumeSpike
+  const hasTechnical = (rsi != null && rsi > 0) || (volumeSpike != null && volumeSpike > 0)
+
+  // Phase H: futures data
+  const fd           = sig.futuresData
+  const hasFutures   = !!fd && (sig.scannerMode === 'futures' || sig.scannerMode === 'high_confidence')
+
   const slDistPct = sig.entryPrice && sig.stopLoss
     ? fmtDistPct(sig.entryPrice, sig.stopLoss, sig.type as 'BUY' | 'SELL', 'sl')
     : null
@@ -287,7 +473,7 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
     ? fmtDistPct(sig.entryPrice, sig.targetPrice, sig.type as 'BUY' | 'SELL', 'tp')
     : null
 
-  if (fields.length === 0 && !hasAI && !hasSetup && qs == null) {
+  if (fields.length === 0 && !hasAI && !hasSetup && qs == null && !hasEmpiricalData) {
     return (
       <div className="border-t border-zinc-800 px-4 py-3 text-[11px] text-zinc-600">
         No intelligence data available for this signal.
@@ -297,6 +483,25 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
 
   return (
     <div className="border-t border-zinc-800 px-4 py-3 space-y-2.5">
+      {/* Phase C — Empirical Trust Layer */}
+      {hasEmpiricalData && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 rounded-lg bg-zinc-800/40 border border-zinc-700/50">
+          <span className="text-[10px] text-zinc-500 uppercase tracking-widest shrink-0">Empirical</span>
+          {sig.empiricalWr != null && (
+            <span className={`text-[11px] font-mono font-bold ${sig.empiricalWr >= 55 ? 'text-emerald-400' : sig.empiricalWr >= 45 ? 'text-blue-400' : 'text-amber-400'}`}>
+              {sig.empiricalWr.toFixed(0)}% WR
+            </span>
+          )}
+          {sig.empiricalN != null && (
+            <span className="text-[10px] text-zinc-500 font-mono">n={sig.empiricalN}</span>
+          )}
+          {sig.empiricalGrade && (
+            <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded border', GRADE_STYLE[sig.empiricalGrade.charAt(0)] ?? 'text-zinc-500 border-zinc-700 bg-zinc-800')}>
+              Emp {sig.empiricalGrade}
+            </span>
+          )}
+        </div>
+      )}
       {/* Quality + Risk scores + trade distances */}
       {(qs != null || rs != null || slDistPct || tpDistPct) && (
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
@@ -347,16 +552,112 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
           ))}
         </div>
       )}
+      {/* Phase G — Technical Context */}
+      {hasTechnical && (
+        <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+          {rsi != null && rsi > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">RSI 1h</span>
+              <span className={`text-[11px] font-mono font-semibold ${rsi >= 70 ? 'text-red-400' : rsi >= 60 ? 'text-amber-400' : rsi <= 30 ? 'text-green-400' : rsi <= 40 ? 'text-emerald-400' : 'text-zinc-300'}`}>
+                {rsi.toFixed(1)}
+              </span>
+            </div>
+          )}
+          {volumeSpike != null && volumeSpike > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Vol Spike</span>
+              <span className={`text-[11px] font-mono font-semibold ${volumeSpike >= 2.5 ? 'text-emerald-400' : volumeSpike >= 1.5 ? 'text-blue-400' : volumeSpike < 0.8 ? 'text-red-400' : 'text-zinc-300'}`}>
+                {volumeSpike.toFixed(1)}×
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+      {/* Phase H — Futures Intelligence */}
+      {hasFutures && fd && (
+        <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+          {fd.fundingRate != null && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Funding Rate</span>
+              <span className={`text-[11px] font-mono font-semibold ${Math.abs(fd.fundingRate) > 0.0005 ? 'text-amber-400' : 'text-zinc-300'}`}>
+                {fd.fundingRate >= 0 ? '+' : ''}{(fd.fundingRate * 100).toFixed(4)}%
+              </span>
+            </div>
+          )}
+          {fd.oiTrend && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">OI Trend</span>
+              <span className={`text-[11px] font-mono font-semibold ${fd.oiTrend === 'RISING' ? 'text-emerald-400' : fd.oiTrend === 'FALLING' ? 'text-red-400' : 'text-zinc-400'}`}>
+                {fd.oiTrend}
+              </span>
+            </div>
+          )}
+          {fd.longShortRatio != null && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">L/S Ratio</span>
+              <span className="text-[11px] font-mono font-semibold text-zinc-300">{fd.longShortRatio.toFixed(2)}</span>
+            </div>
+          )}
+          {sig.maxSafeLeverage != null && sig.maxSafeLeverage > 0 && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Max Lev</span>
+              <span className="text-[11px] font-mono font-semibold text-zinc-300">{sig.maxSafeLeverage}×</span>
+            </div>
+          )}
+        </div>
+      )}
+      {/* Phase B — Why This Signal */}
+      {hasWhySection && (
+        <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+          {contProb != null && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Continuation</span>
+              <span className={`text-[11px] font-mono font-semibold ${contProb >= 60 ? 'text-emerald-400' : contProb >= 40 ? 'text-amber-400' : 'text-red-400'}`}>
+                {contProb}%
+              </span>
+            </div>
+          )}
+          {iq != null && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Entry Quality</span>
+              <span className={`text-[11px] font-mono font-semibold ${iq >= 70 ? 'text-emerald-400' : iq >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>
+                {Math.round(iq)}/100
+              </span>
+            </div>
+          )}
+          {iScore != null && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Institutional</span>
+              <span className={`text-[11px] font-mono font-semibold ${iScore >= 70 ? 'text-emerald-400' : iScore >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>
+                {Math.round(iScore)}/100
+              </span>
+            </div>
+          )}
+          {ras != null && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Regime Adj</span>
+              <span className={`text-[11px] font-mono font-semibold ${ras >= 5 ? 'text-emerald-400' : ras >= 0 ? 'text-zinc-300' : 'text-amber-400'}`}>
+                {ras > 0 ? '+' : ''}{Math.round(ras)}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+      {contCase && (
+        <p className="text-[10px] text-zinc-500 leading-relaxed border-l-2 border-zinc-800 pl-2.5 italic">
+          {contCase}
+        </p>
+      )}
       {/* Setup description */}
       {hasSetup && (
         <p className="text-[10px] text-zinc-500 leading-relaxed border-l-2 border-zinc-800 pl-2.5 font-mono">
           {sig.setupDescription!.replace(/\s*\|\s*ADX:.*$/i, '')}
         </p>
       )}
-      {/* AI reasoning */}
+      {/* AI reasoning — full, no truncation (Phase B) */}
       {hasAI && (
         <p className="text-[11px] text-zinc-400 leading-relaxed border-l-2 border-zinc-700 pl-2.5 italic">
-          &ldquo;{sig.aiReasoning!.slice(0, 240)}{sig.aiReasoning!.length > 240 ? '…' : ''}&rdquo;
+          &ldquo;{sig.aiReasoning!}&rdquo;
         </p>
       )}
     </div>
@@ -524,11 +825,11 @@ function ProviderHealthRow({ providers }: { providers: ProviderStatus[] }) {
 
 // ── Overview tab ───────────────────────────────────────────────────────────────
 
-function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, countdown, flags, onPause, pausing }: {
+function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, countdown, flags, onPause, pausing, trackRecord }: {
   celery: CeleryStatus | null; regime: RegimeData | null; signalCounts: SignalCounts | null
   providers: ProviderStatus[]; cache: CacheTelemetry | null; flags: OpsFlags | null
   signals: TacticalSignalRow[]; countdown: number | null
-  onPause: () => void; pausing: boolean
+  onPause: () => void; pausing: boolean; trackRecord: TrackRecordResponse | null
 }) {
   const lc = signals.reduce<Record<string,number>>((a,s)=>{ a[s.lifecycleStage]=(a[s.lifecycleStage]??0)+1; return a }, {})
   const currentRegime = regime?.regime ?? null
@@ -625,6 +926,12 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
       {/* Signal Quality Scorecard */}
       <SignalQualityScorecard counts={signalCounts} gradeAPct={gradeAPct} />
 
+      {/* Phase A — Founder Command Center */}
+      <FounderCommandCenter trackRecord={trackRecord} />
+
+      {/* Phase F — Grade Validation Strip */}
+      <GradeValidationStrip />
+
       {/* Provider Health Row */}
       <ProviderHealthRow providers={providers} />
 
@@ -648,6 +955,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
                     <span className={`text-xs font-semibold w-8 shrink-0 ${sig.type==='BUY'?'text-green-400':'text-red-400'}`}>{sig.type}</span>
                     {sig.riskGrade && <GradeBadge grade={sig.riskGrade} />}
                     <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>{STAGE_META[sig.lifecycleStage]?.label ?? (sig.lifecycleStage??'').replace(/_/g,' ')}</span>
+                    <FreshnessTag sig={sig} />
                     <div className="ml-auto flex items-center gap-3">
                       <RegimeAlignDot alignment={alignment} />
                       <ConfBar confidence={sig.confidence} />
@@ -1074,6 +1382,7 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
                 <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>
                   {STAGE_META[sig.lifecycleStage]?.label ?? (sig.lifecycleStage??'').replace(/_/g,' ')}
                 </span>
+                <FreshnessTag sig={sig} />
                 {sig.scannerMode && (
                   <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 hidden sm:inline ${MODE_COLORS[sig.scannerMode]??'text-zinc-400 border-zinc-600'}`}>
                     {sig.scannerMode.replace('_',' ')}
@@ -1142,6 +1451,69 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
               Next
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Phase I — Alpha Watchlist */}
+      <AlphaWatchlist />
+    </div>
+  )
+}
+
+// ── Phase I — Alpha Promotion Watchlist ────────────────────────────────────────
+
+interface WatchlistSignal {
+  id: string; symbol: string; type: string; scanner_mode: string; timeframe: string
+  confidence: number; rr_ratio: number; risk_grade: string | null
+  empirical_wr: number | null; empirical_n: number | null; empirical_grade: string | null
+  market_regime: string | null; breakout_strength: string | null; created_at: string
+}
+
+function AlphaWatchlist() {
+  const fetcher = useCallback(
+    () => fetch('/api/signals/watchlist?limit=15&hours=48').then(r=>r.json()).then(j=>j.signals??[]).catch(()=>[]),
+    []
+  )
+  const { data, loading } = useAutoRefresh<WatchlistSignal[]>(fetcher, 120_000)
+  const signals = data ?? []
+
+  return (
+    <div className="mt-2">
+      <div className="flex items-center gap-2 mb-2">
+        <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Alpha Watchlist</p>
+        <span className="text-[10px] text-zinc-600">Validated · not yet alerted · sorted by empirical WR</span>
+        {signals.length > 0 && (
+          <span className="ml-auto text-[10px] text-zinc-600">{signals.length} signals</span>
+        )}
+      </div>
+      {loading && <div className="text-xs text-zinc-600 py-2">Loading…</div>}
+      {!loading && signals.length === 0 && (
+        <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-3 text-xs text-zinc-600">
+          No near-miss signals in the last 48h.
+        </div>
+      )}
+      {signals.length > 0 && (
+        <div className="space-y-1">
+          {signals.map(s => (
+            <div key={s.id} className="bg-zinc-900/60 border border-zinc-800/70 rounded-lg px-4 py-2 flex items-center gap-3 flex-wrap text-[11px]">
+              <span className="font-semibold text-white w-20 shrink-0">{s.symbol}</span>
+              <span className={`font-semibold w-8 shrink-0 ${s.type==='BUY'?'text-green-400':'text-red-400'}`}>{s.type}</span>
+              {s.risk_grade && (
+                <span className={cn('px-1.5 py-0.5 rounded border font-bold text-[10px]', GRADE_STYLE[s.risk_grade] ?? 'text-zinc-500 border-zinc-700 bg-zinc-800')}>{s.risk_grade}</span>
+              )}
+              <span className="font-mono text-zinc-300">{s.confidence}%</span>
+              {s.empirical_wr != null && (
+                <span className={`px-1.5 py-0.5 rounded border font-mono text-[10px] ${s.empirical_wr >= 55 ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/5' : s.empirical_wr >= 45 ? 'text-blue-400 border-blue-500/30 bg-blue-500/5' : 'text-amber-400 border-amber-500/30 bg-amber-500/5'}`}
+                  title={`Empirical WR (n=${s.empirical_n ?? '?'})`}>
+                  P {s.empirical_wr.toFixed(0)}%
+                </span>
+              )}
+              {s.breakout_strength && (
+                <span className={`text-[10px] ${breakoutColor(s.breakout_strength)}`}>{shortLabel(s.breakout_strength)}</span>
+              )}
+              <span className="ml-auto text-[10px] text-zinc-600 tabular-nums">{s.created_at ? timeAgo(s.created_at) : '—'}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -1824,10 +2196,11 @@ export default function TradingOperationsPage() {
       _aiEnabled:       Boolean(field(aiRes,'enabled')),
     }
   }, [])
-  const scansFetcher      = useCallback(()=>adminApi.analytics.scans(24).catch(()=>null), [])
-  const auditFetcher      = useCallback(()=>adminApi.settings.audit(5).then(r=>r.entries).catch(()=>null), [])
-  const healthReadyFetcher= useCallback(()=>adminApi.health.ready().catch(()=>null), [])
-  const regimePerfFetcher = useCallback(()=>adminApi.analytics.regime(168).catch(()=>null), [])
+  const scansFetcher       = useCallback(()=>adminApi.analytics.scans(24).catch(()=>null), [])
+  const auditFetcher       = useCallback(()=>adminApi.settings.audit(5).then(r=>r.entries).catch(()=>null), [])
+  const healthReadyFetcher = useCallback(()=>adminApi.health.ready().catch(()=>null), [])
+  const regimePerfFetcher  = useCallback(()=>adminApi.analytics.regime(168).catch(()=>null), [])
+  const trackRecordFetcher = useCallback(()=>adminApi.analytics.trackRecord().catch(()=>null), [])
 
   const { data: celery,      refresh: refreshCelery  } = useSharedPolling<CeleryStatus|null>('trading:celery',      celeryFetcher,       120_000)
   const { data: regime }                                = useSharedPolling<RegimeData|null>  ('trading:regime',      regimeFetcher,       120_000)
@@ -1841,6 +2214,7 @@ export default function TradingOperationsPage() {
   const { data: auditEntries }                          = useSharedPolling<AuditEntry[]|null>('trading:audit',       auditFetcher,        120_000)
   const { data: healthReady }                           = useSharedPolling<HealthReady|null> ('trading:health-ready',healthReadyFetcher,  120_000)
   const { data: regimePerfData }                        = useSharedPolling<Record<string,unknown>|null>('trading:regime-perf', regimePerfFetcher, 120_000)
+  const { data: trackRecord }                           = useSharedPolling<TrackRecordResponse|null>('trading:track-record',  trackRecordFetcher,  300_000)
 
   // ── Scanner countdown ──────────────────────────────────────────────────────
   const [countdown, setCountdown] = useState<number|null>(null)
@@ -1923,6 +2297,7 @@ export default function TradingOperationsPage() {
           celery={celery??null} regime={regime??null} signalCounts={signalCounts??null}
           providers={providers??[]} cache={cache??null} signals={recentSignals??[]}
           flags={flags} countdown={countdown} onPause={handlePause} pausing={pausing}
+          trackRecord={trackRecord??null}
         />
       )}
       {tab==='scanner' && (

@@ -425,11 +425,20 @@ async def send_signal_alert(signal: Signal) -> bool:
     _vsource   = (getattr(signal, "validation_source", None) or "HEURISTIC").upper()
     _val_label = "🤖 <b>AI Approved</b>" if _vsource == "CLAUDE" else "🔍 <b>Screened</b>"
 
+    # Phase E — empirical WR suffix on Grade line
+    _emp_wr  = getattr(signal, "empirical_wr", None)
+    _emp_n   = getattr(signal, "empirical_n", None)
+    _hist_str = f"  |  Hist: <b>{_emp_wr:.0f}% WR (n={_emp_n})</b>" if _emp_wr is not None and _emp_n is not None else ""
+
+    # Phase E — continuation probability
+    _cont_prob = getattr(signal, "continuation_probability", None)
+    _cont_str  = f"  |  Cont: <b>{_cont_prob:.0f}%</b>" if _cont_prob is not None else ""
+
     lines = [
         f"<b>{direction} — {signal.symbol}/USDT</b>",
         *( [f"⬆️ <b>UPGRADE</b> — confidence {prev_conf}% → {signal.confidence}%"] if is_upgrade else [] ),
         f"Mode: <b>{mode.upper()}</b>  |  Confidence: <b>{signal.confidence}% {conf_label}</b>",
-        f"Grade: {grade_icon} <b>{signal.risk_grade.value}</b>  |  R:R: <b>1:{signal.rr_ratio:.1f}</b>  |  {_val_label}",
+        f"Grade: {grade_icon} <b>{signal.risk_grade.value}</b>{_hist_str}  |  R:R: <b>1:{signal.rr_ratio:.1f}</b>{_cont_str}  |  {_val_label}",
         f"Regime: {_regime_icon} <b>{_regime_disp}</b>",
         "",
         "📊 <b>Trade Levels</b>",
