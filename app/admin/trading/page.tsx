@@ -138,6 +138,13 @@ function fmt(n: number | null | undefined, d = 2) {
   if (n == null || isNaN(n as number)) return '—'
   return n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })
 }
+// asyncpg/Pydantic v2 serialises PostgreSQL NUMERIC columns as JSON strings.
+// toNum() coerces safely so .toFixed() / arithmetic never crash.
+function toNum(v: unknown): number | null {
+  if (v == null) return null
+  const n = Number(v)
+  return isNaN(n) ? null : n
+}
 function timeAgo(ts: number | null | string) {
   if (!ts) return '—'
   const ms = typeof ts === 'string' ? new Date(ts).getTime() : ts * 1000
@@ -319,62 +326,72 @@ function FounderCommandCenter({ trackRecord }: { trackRecord: TrackRecordRespons
         <span className="text-[10px] text-zinc-600 font-mono ml-auto">{trackRecord.source}</span>
       </div>
       <div className="grid grid-cols-3 gap-3 mb-4">
-        {windows.map(({ label, w }) => (
+        {windows.map(({ label, w }) => {
+          const exp = toNum(w.expectancy)
+          const pf  = toNum(w.pf)
+          const wr  = toNum(w.win_rate)
+          return (
           <div key={label} className="bg-zinc-800/50 rounded-lg px-3 py-2.5">
             <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">{label} · {w.resolved} resolved</p>
             <div className="space-y-1.5">
               <div className="flex justify-between items-center">
                 <span className="text-[10px] text-zinc-500">Win Rate</span>
-                <span className={`text-[11px] font-mono font-bold ${wrColor(w.win_rate)}`}>
-                  {w.win_rate != null ? `${w.win_rate}%` : '—'}
+                <span className={`text-[11px] font-mono font-bold ${wrColor(wr)}`}>
+                  {wr != null ? `${wr}%` : '—'}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-[10px] text-zinc-500">Expectancy</span>
-                <span className={`text-[11px] font-mono font-bold ${expColor(w.expectancy)}`}>
-                  {w.expectancy != null ? `${w.expectancy > 0 ? '+' : ''}${w.expectancy.toFixed(2)}R` : '—'}
+                <span className={`text-[11px] font-mono font-bold ${expColor(exp)}`}>
+                  {exp != null ? `${exp > 0 ? '+' : ''}${exp.toFixed(2)}R` : '—'}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-[10px] text-zinc-500">Prof Factor</span>
-                <span className={`text-[11px] font-mono font-bold ${pfColor(w.pf)}`}>
-                  {w.pf != null ? w.pf.toFixed(2) : '—'}
+                <span className={`text-[11px] font-mono font-bold ${pfColor(pf)}`}>
+                  {pf != null ? pf.toFixed(2) : '—'}
                 </span>
               </div>
             </div>
           </div>
-        ))}
+        )})}
       </div>
       {(trackRecord.by_mode_30d ?? []).length > 0 && (
         <div className="mb-3">
           <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">By Mode · 30d</p>
           <div className="flex flex-wrap gap-2">
-            {(trackRecord.by_mode_30d ?? []).map(m => (
+            {(trackRecord.by_mode_30d ?? []).map(m => {
+              const mExp = toNum(m.exp)
+              const mWr  = toNum(m.wr)
+              return (
               <div key={m.scanner_mode} className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded border bg-zinc-800/40 ${MODE_COLORS[m.scanner_mode] ?? 'text-zinc-400 border-zinc-700'}`}>
                 <span className="font-semibold">{modeDisplayLabel(m.scanner_mode)}</span>
                 <span className="text-zinc-600">·</span>
-                <span className={wrColor(m.wr)}>{m.wr != null ? `${m.wr}% WR` : '—'}</span>
-                {m.exp != null && <span className={expColor(m.exp)}>{m.exp > 0 ? '+' : ''}{m.exp.toFixed(2)}R</span>}
+                <span className={wrColor(mWr)}>{mWr != null ? `${mWr}% WR` : '—'}</span>
+                {mExp != null && <span className={expColor(mExp)}>{mExp > 0 ? '+' : ''}{mExp.toFixed(2)}R</span>}
                 <span className="text-zinc-600">n={m.n}</span>
               </div>
-            ))}
+            )})}
           </div>
         </div>
       )}
       {trackRecord.probability_accuracy != null && trackRecord.probability_accuracy.n >= 10 && (
         <div className="border-t border-zinc-800 pt-2 mt-1 flex flex-wrap gap-x-5 gap-y-1 text-[10px]">
           <span className="text-zinc-500">Probability Engine · n={trackRecord.probability_accuracy.n}</span>
-          {trackRecord.probability_accuracy.avg_predicted_wr != null && (
-            <span>Predicted <span className="text-zinc-300 font-mono">{trackRecord.probability_accuracy.avg_predicted_wr.toFixed(0)}%</span></span>
+          {toNum(trackRecord.probability_accuracy.avg_predicted_wr) != null && (
+            <span>Predicted <span className="text-zinc-300 font-mono">{toNum(trackRecord.probability_accuracy.avg_predicted_wr)!.toFixed(0)}%</span></span>
           )}
-          {trackRecord.probability_accuracy.realized_wr != null && (
-            <span>Actual <span className="text-zinc-300 font-mono">{trackRecord.probability_accuracy.realized_wr.toFixed(0)}%</span></span>
+          {toNum(trackRecord.probability_accuracy.realized_wr) != null && (
+            <span>Actual <span className="text-zinc-300 font-mono">{toNum(trackRecord.probability_accuracy.realized_wr)!.toFixed(0)}%</span></span>
           )}
-          {trackRecord.probability_accuracy.mean_abs_error != null && (
-            <span>MAE <span className={`font-mono ${trackRecord.probability_accuracy.mean_abs_error <= 0.1 ? 'text-emerald-400' : trackRecord.probability_accuracy.mean_abs_error <= 0.2 ? 'text-amber-400' : 'text-red-400'}`}>
-              {(trackRecord.probability_accuracy.mean_abs_error * 100).toFixed(0)}pp
-            </span></span>
-          )}
+          {toNum(trackRecord.probability_accuracy.mean_abs_error) != null && (() => {
+            const mae = toNum(trackRecord.probability_accuracy.mean_abs_error)!
+            return (
+              <span>MAE <span className={`font-mono ${mae <= 0.1 ? 'text-emerald-400' : mae <= 0.2 ? 'text-amber-400' : 'text-red-400'}`}>
+                {(mae * 100).toFixed(0)}pp
+              </span></span>
+            )
+          })()}
         </div>
       )}
     </div>
