@@ -164,9 +164,206 @@ Added to: Overview tab recent signal rows + SignalsTab signal rows.
 
 ---
 
-## Follow-On Opportunities (Not Implemented)
+---
 
-- **Phase K**: UX audit — documented opportunities in `docs/VALUE_MAXIMIZATION_1.md`
+## VALUE.SURFACING.2 — Remaining 15 Hidden Fields
+
+**Date:** June 2026  
+**Commit:** `d637674`  
+**Rule:** Same constraint as SURFACING.1 — zero scanner/signal-generation changes.
+
+### Overview
+
+After SURFACING.1 landed, a second pass against the `docs/VALUE_MAXIMIZATION_1.md` audit table found 15 additional fields that were computed and typed but never rendered, plus two orphaned edge sub-analyses already embedded in the `/analytics/edge/report` payload.
+
+### Phase K — Extended Technical (Python-side fields)
+
+**Problem:** `TechnicalIndicators` TypeScript interface only declares `rsi, macd, ema20, ema50, atr, volumeSpike, currentPrice, trend`. Three Python-side fields (`ema200`, `candle_pattern`, `bb.squeeze`) exist on the runtime object but are absent from the TS type.
+
+**Solution:** Safe double-cast pattern — `sig.indicators as unknown as Record<string, unknown>` — reads the runtime values without modifying `types/index.ts`.
+
+Fields surfaced:
+- **EMA200 ABOVE/BELOW** — computed as `currentPrice > ema200Raw ? 'ABOVE' : 'BELOW'`; shown as emerald/red chip
+- **Candle Pattern** — `candle_pattern` string (e.g. `BULLISH_ENGULFING`); shown in technical row when not `'NONE'`
+- **BB SQUEEZE** — `bb.squeeze` boolean; shown as `⚡ BB SQUEEZE` amber chip when true
+
+### Phase L — Extended Futures (4 hidden fields)
+
+**Fields:** `futuresData.fundingRateAnnualized`, `futuresData.fundingBias`, `futuresData.oiChange24h`, `futuresData.momentumScore`
+
+These were typed on `FuturesData` in `types/index.ts` but absent from the Phase H futures row added in SURFACING.1.
+
+Rendered below the existing 4 fields (funding rate, OI trend, L/S ratio, max leverage):
+```
+Fund Bias  BEARISH      Fund Ann  -16.4%/yr      OI 24h  +12.3%      Momentum  74
+```
+
+### Phase M — AI Explainability (3 fields)
+
+**Fields:** `signal.aiExplainability.summary`, `.continuationCase`, `.cautionCase`
+
+All three were typed on `AIExplainability` in `types/index.ts` and set by `ai_validator.py` during Claude validation, but never rendered anywhere in the UI (the existing AI section only showed `rationale`).
+
+Rendered as a dedicated sub-section in the expanded signal card:
+- `summary` — one-line trade thesis (zinc-300, medium weight)
+- `continuationCase` — the bull case (emerald-400/75, left-border quote, `↗` prefix)
+- `cautionCase` — the bear case / caution (amber-400/75, left-border quote, `⚠` prefix)
+
+### Phase N — Risks / Strengths Arrays
+
+**Fields:** `signal.risks[]`, `signal.strengths[]`
+
+Typed as `string[]` on `TradingSignal`, populated by the scanner pipeline, never rendered.
+
+Rendered as compact chip rows below the AI explainability section:
+- Strengths: emerald chips with `✓` prefix (up to 3)
+- Risks: red chips with `⚠` prefix (up to 3)
+
+### Phase O — MCap Tier / Extension Risk / Pullback Quality
+
+**Fields:** `signal.mcapTier`, `signal.extensionRisk`, `signal.pullbackQuality`
+
+Added to the intelligence `fields[]` row in IntelligencePanel:
+- `mcapTier` — title-cased label (e.g. `Large`)
+- `extensionRisk` — only shown when not `'LOW'`; red for `'HIGH'`, amber for `'MEDIUM'`
+- `pullbackQuality` — short-labelled via existing `shortLabel()` helper
+
+### Phase P — Orphaned Edge Sub-Analyses
+
+**Problem:** `/analytics/edge/report` (the full EdgeReport payload) already contains `scanner_mode_analysis` and `market_regime_analysis` objects. The TypeScript `EdgeReport` interface in `lib/admin-api.ts` didn't declare them, so they were silently dropped during JSON deserialization and never shown.
+
+**Solution:** Extended the `EdgeReport` interface to add both sub-analyses, plus a new `EdgeModeStats` interface:
+
+```typescript
+export interface EdgeModeStats {
+  label: string
+  total: number
+  wins: number
+  losses: number
+  win_rate: number | null
+  expectancy: number | null
+  profit_factor: number | null
+  insufficient_data: boolean
+  signals_per_day?: number | null
+}
+```
+
+**Rendered in Analytics → Edge tab:**
+- **Scanner Mode Performance** table — ranked by expectancy, columns: WR, Exp, PF, per-day; insufficient-data rows grayed
+- **Market Regime Performance** table — ranked by expectancy; PREFER/AVOID tags on top/bottom regimes
+
+No new API calls — data was already in the existing payload.
+
+---
+
+## Files Changed (SURFACING.2)
+
+| File | Change |
+|------|--------|
+| `app/admin/trading/page.tsx` | +90 lines — Phases K–N |
+| `lib/admin-api.ts` | +32 lines — `EdgeModeStats` type + `EdgeReport` extension |
+| `app/admin/analytics/page.tsx` | +80 lines — Phase P scanner-mode + regime tables |
+
+---
+
+## Complete Hidden Fields Resolution
+
+All 23 items from the `docs/VALUE_MAXIMIZATION_1.md` Hidden Fields Audit are now resolved across the two sprints:
+
+| Field | Sprint |
+|-------|--------|
+| `empiricalWr` / `empiricalN` / `empiricalGrade` | SURFACING.1 Phase C |
+| `continuationProbability` | SURFACING.1 Phase B |
+| `entryQualityScore` | SURFACING.1 Phase B |
+| `institutionalScore` | SURFACING.1 Phase B |
+| `regimeAlignmentScore` | SURFACING.1 Phase B |
+| `continuation.reasons[0]` | SURFACING.1 Phase B |
+| AI reasoning (untruncated) | SURFACING.1 Phase B |
+| `indicators.rsi` | SURFACING.1 Phase G |
+| `indicators.volumeSpike` | SURFACING.1 Phase G |
+| `futuresData.fundingRate` | SURFACING.1 Phase H |
+| `futuresData.oiTrend` | SURFACING.1 Phase H |
+| `futuresData.longShortRatio` | SURFACING.1 Phase H |
+| `maxSafeLeverage` | SURFACING.1 Phase H |
+| Track Record endpoint (`/analytics/track-record`) | SURFACING.1 Phase D |
+| `ema200` (Python-side) | SURFACING.2 Phase K |
+| `candle_pattern` (Python-side) | SURFACING.2 Phase K |
+| `bb.squeeze` (Python-side) | SURFACING.2 Phase K |
+| `futuresData.fundingRateAnnualized` | SURFACING.2 Phase L |
+| `futuresData.fundingBias` | SURFACING.2 Phase L |
+| `futuresData.oiChange24h` | SURFACING.2 Phase L |
+| `futuresData.momentumScore` | SURFACING.2 Phase L |
+| `aiExplainability.summary/continuationCase/cautionCase` | SURFACING.2 Phase M |
+| `risks[]` / `strengths[]` | SURFACING.2 Phase N |
+| `mcapTier` / `extensionRisk` / `pullbackQuality` | SURFACING.2 Phase O |
+| Scanner mode + regime edge analysis | SURFACING.2 Phase P |
+
+---
+
+---
+
+## VALUE.SURFACING.3 — Final Gaps
+
+**Date:** June 2026  
+**Commit:** `cc3a63f`
+
+### Liquidation Zones (IntelligencePanel)
+
+`futuresData.liquidationZones[]` was typed on `FuturesData` in `types/index.ts` but never rendered in any sprint. Each `LiquidationZone` has `price`, `side` (`LONG_LIQ` / `SHORT_LIQ`), `strength` (`WEAK` / `MODERATE` / `STRONG`), `distancePct`.
+
+Rendered as directional chips below the existing futures row:
+```
+↓ $94,200 · 2.1% away (strong)    ↑ $88,500 · 4.8% away
+```
+- `LONG_LIQ` → red chip with `↓` (price below = longs get liquidated)
+- `SHORT_LIQ` → emerald chip with `↑` (price above = shorts get liquidated)
+- Strength shown when not WEAK; up to 4 zones
+
+### Per-Coin Performance Table (Analytics → Edge)
+
+`coin_performance` was already returned inside the full `/analytics/edge/report` payload (Python `generate_edge_validation_report()` collects it via `asyncio.gather`) but `EdgeReport` in `lib/admin-api.ts` didn't declare the field, so it was silently dropped.
+
+Added to `lib/admin-api.ts`:
+- `EdgeReport.coin_performance` field
+- New `CoinStats` interface (total, win_rate, expectancy, profit_factor, max_drawdown_r, sharpe_ratio, avg_duration_hours)
+
+Table in Analytics → Edge tab: top-10 coins by expectancy, columns: Resolved / Win Rate / Expectancy / PF / Max DD. `top WR` badge for coins in `best_by_win_rate[]`; `high DD` badge for coins in `worst_by_drawdown[]`.
+
+### Confirmed: `edge/calibration` is NOT orphaned
+
+The audit listed it as orphaned. Investigation found it IS wired — `/analytics/edge/report` (the full report endpoint) calls `confidence_calibration()` and returns it as `EdgeReport.confidence_calibration`. The Analytics → Calibration tab already consumes this field. No gap.
+
+---
+
+## Files Changed (SURFACING.3)
+
+| File | Change |
+|------|--------|
+| `app/admin/trading/page.tsx` | +25 lines — liquidation zones chip row |
+| `lib/admin-api.ts` | +20 lines — `CoinStats` interface + `EdgeReport.coin_performance` |
+| `app/admin/analytics/page.tsx` | +55 lines — Per-Coin Performance table |
+
+---
+
+## Pending DB Migrations (all idempotent — IF NOT EXISTS)
+
+Run these 6 files in Supabase SQL Editor before next deploy:
+
+| File | Adds |
+|------|------|
+| `probability-gate-migration.sql` | `empirical_wr`, `empirical_n` on `signals` + `signal_outcomes` |
+| `probability-engine-migration.sql` | `empirical_grade` on `signals` + `signal_outcomes` |
+| `telegram-delivery-migration.sql` | `telegram_delivered`, `telegram_delivery_error` on `signals` |
+| `validation-source-migration.sql` | `validation_source` on `signals` |
+| `ai-call-log-trace-migration.sql` | `symbol`, `setup_score` on `ai_call_log` |
+| `attribution-snapshots-migration.sql` | New `attribution_snapshots` table + index |
+
+---
+
+## Follow-On Opportunities (Remaining)
+
 - **Continuation scoring in DB**: `continuation.continuationProbability` is computed but not persisted; if DB column added, full historical analysis becomes possible
 - **Watchlist promotions**: add one-click "promote to alert" button when founder manually reviews a watchlist signal above a confidence floor
 - **Empirical grade display-primary** (`riskgrade_v2` flag): once promoted, swap Grade badge display to empirical grade — currently A+ empirical grades are hidden behind heuristic A/B/C display
+- **Telegram upgrade context**: diff new signal vs cached cooldown object to show what changed when a DEDUP_UPGRADE alert fires
+- **`telegram_delivered` per-signal**: surface in IntelligencePanel once `getRecentSignals()` selects the `telegram_delivered` column
