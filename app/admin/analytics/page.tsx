@@ -281,6 +281,121 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
         </div>
       )}
 
+      {/* Scanner Mode Performance */}
+      {edge?.scanner_mode_analysis && !edge.scanner_mode_analysis.insufficient_data && (
+        <div>
+          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">
+            Scanner Mode Performance — {analyticsWindowLabel(edge.window_hours)}
+          </p>
+          <div className="glass-card rounded-lg overflow-hidden overflow-x-auto">
+            <table className="w-full text-xs min-w-[380px]">
+              <thead>
+                <tr className="border-b border-terminal-border">
+                  {['Mode', 'Resolved', 'Win Rate', 'Expectancy', 'PF', 'Per Day'].map(h => (
+                    <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {edge.scanner_mode_analysis.ranked_by_expectancy.map(mode => {
+                  const m = edge.scanner_mode_analysis!.modes[mode]
+                  if (!m) return null
+                  const modeLabel = mode === 'high_confidence' ? 'High Conf' : mode.charAt(0).toUpperCase() + mode.slice(1)
+                  return (
+                    <tr key={mode} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
+                      <td className="py-2 px-3 font-medium text-terminal-text">{modeLabel}</td>
+                      <td className="py-2 px-3 font-mono text-terminal-muted">{m.total}</td>
+                      <td className="py-2 px-3 font-mono">
+                        {m.win_rate != null
+                          ? <span className={m.win_rate >= 0.55 ? 'text-bull-default' : m.win_rate >= 0.45 ? 'text-signal-high' : 'text-bear-default'}>
+                              {(m.win_rate * 100).toFixed(1)}%
+                            </span>
+                          : <span className="text-terminal-muted/40">—</span>}
+                      </td>
+                      <td className="py-2 px-3 font-mono">
+                        {m.expectancy != null
+                          ? <span className={m.expectancy > 0 ? 'text-bull-default' : 'text-bear-default'}>
+                              {m.expectancy > 0 ? '+' : ''}{m.expectancy.toFixed(2)}R
+                            </span>
+                          : <span className="text-terminal-muted/40">—</span>}
+                      </td>
+                      <td className="py-2 px-3 font-mono text-terminal-muted">
+                        {m.profit_factor != null ? m.profit_factor.toFixed(2) : '—'}
+                      </td>
+                      <td className="py-2 px-3 font-mono text-terminal-muted">
+                        {m.signals_per_day != null ? m.signals_per_day.toFixed(1) : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Market Regime Performance */}
+      {edge?.market_regime_analysis && !edge.market_regime_analysis.insufficient_data && (
+        <div>
+          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">
+            Regime Performance — {analyticsWindowLabel(edge.window_hours)}
+            {edge.market_regime_analysis.recommended_avoid.length > 0 && (
+              <span className="ml-2 text-bear-default normal-case">
+                Avoid: {edge.market_regime_analysis.recommended_avoid.join(', ')}
+              </span>
+            )}
+          </p>
+          <div className="glass-card rounded-lg overflow-hidden overflow-x-auto">
+            <table className="w-full text-xs min-w-[340px]">
+              <thead>
+                <tr className="border-b border-terminal-border">
+                  {['Regime', 'Resolved', 'Win Rate', 'Expectancy', 'PF'].map(h => (
+                    <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {edge.market_regime_analysis.ranked_by_expectancy.map(regime => {
+                  const r = edge.market_regime_analysis!.regimes[regime]
+                  if (!r) return null
+                  const isAvoid  = edge.market_regime_analysis!.recommended_avoid.includes(regime)
+                  const isPrefer = edge.market_regime_analysis!.recommended_prefer.includes(regime)
+                  return (
+                    <tr key={regime} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
+                      <td className="py-2 px-3 font-medium flex items-center gap-1.5">
+                        <span className={isAvoid ? 'text-bear-default' : isPrefer ? 'text-bull-default' : 'text-terminal-text'}>
+                          {regime.toUpperCase()}
+                        </span>
+                        {isAvoid  && <span className="text-[9px] text-bear-default/70 border border-bear-default/20 px-1 rounded">avoid</span>}
+                        {isPrefer && <span className="text-[9px] text-bull-default/70 border border-bull-default/20 px-1 rounded">prefer</span>}
+                      </td>
+                      <td className="py-2 px-3 font-mono text-terminal-muted">{r.total}</td>
+                      <td className="py-2 px-3 font-mono">
+                        {r.win_rate != null
+                          ? <span className={r.win_rate >= 0.55 ? 'text-bull-default' : r.win_rate >= 0.45 ? 'text-signal-high' : 'text-bear-default'}>
+                              {(r.win_rate * 100).toFixed(1)}%
+                            </span>
+                          : <span className="text-terminal-muted/40">—</span>}
+                      </td>
+                      <td className="py-2 px-3 font-mono">
+                        {r.expectancy != null
+                          ? <span className={r.expectancy > 0 ? 'text-bull-default' : 'text-bear-default'}>
+                              {r.expectancy > 0 ? '+' : ''}{r.expectancy.toFixed(2)}R
+                            </span>
+                          : <span className="text-terminal-muted/40">—</span>}
+                      </td>
+                      <td className="py-2 px-3 font-mono text-terminal-muted">
+                        {r.profit_factor != null ? r.profit_factor.toFixed(2) : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Intelligence Performance */}
       <IntelligenceSection data={intel} loading={intelLoading} />
 

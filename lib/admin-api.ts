@@ -247,8 +247,34 @@ export interface EdgeReport {
     total_with_ai_log: number
     heuristic?: Record<string, number>
   }
+  scanner_mode_analysis?: {
+    insufficient_data: boolean
+    total_resolved: number
+    ranked_by_expectancy: string[]
+    modes: Record<string, EdgeModeStats>
+  }
+  market_regime_analysis?: {
+    insufficient_data: boolean
+    total_resolved: number
+    ranked_by_expectancy: string[]
+    recommended_prefer: string[]
+    recommended_avoid: string[]
+    regimes: Record<string, EdgeModeStats>
+  }
   window_hours: number
   generated_at: string
+}
+
+export interface EdgeModeStats {
+  label: string
+  total: number
+  wins: number
+  losses: number
+  win_rate: number | null
+  expectancy: number | null
+  profit_factor: number | null
+  insufficient_data: boolean
+  signals_per_day?: number | null
 }
 
 
