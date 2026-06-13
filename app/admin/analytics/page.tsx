@@ -31,7 +31,8 @@ function rr(n: number | null): string {
 
 // ─── Edge Validation tab ──────────────────────────────────────────────────────
 
-function CalibrationTable({ bands }: { bands: EdgeReport['confidence_calibration']['bands'] }) {
+function CalibrationTable({ bands }: { bands: EdgeReport['confidence_calibration']['bands'] | null | undefined }) {
+  if (!bands) return null
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs min-w-[380px]">
@@ -297,7 +298,7 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
                 </tr>
               </thead>
               <tbody>
-                {edge.scanner_mode_analysis.ranked_by_expectancy.map(mode => {
+                {(edge.scanner_mode_analysis.ranked_by_expectancy ?? []).map(mode => {
                   const m = edge.scanner_mode_analysis!.modes[mode]
                   if (!m) return null
                   const modeLabel = mode === 'high_confidence' ? 'High Conf' : mode.charAt(0).toUpperCase() + mode.slice(1)
@@ -339,9 +340,9 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
         <div>
           <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">
             Regime Performance — {analyticsWindowLabel(edge.window_hours)}
-            {edge.market_regime_analysis.recommended_avoid.length > 0 && (
+            {(edge.market_regime_analysis.recommended_avoid ?? []).length > 0 && (
               <span className="ml-2 text-bear-default normal-case">
-                Avoid: {edge.market_regime_analysis.recommended_avoid.join(', ')}
+                Avoid: {(edge.market_regime_analysis.recommended_avoid ?? []).join(', ')}
               </span>
             )}
           </p>
@@ -355,11 +356,11 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
                 </tr>
               </thead>
               <tbody>
-                {edge.market_regime_analysis.ranked_by_expectancy.map(regime => {
+                {(edge.market_regime_analysis.ranked_by_expectancy ?? []).map(regime => {
                   const r = edge.market_regime_analysis!.regimes[regime]
                   if (!r) return null
-                  const isAvoid  = edge.market_regime_analysis!.recommended_avoid.includes(regime)
-                  const isPrefer = edge.market_regime_analysis!.recommended_prefer.includes(regime)
+                  const isAvoid  = (edge.market_regime_analysis!.recommended_avoid ?? []).includes(regime)
+                  const isPrefer = (edge.market_regime_analysis!.recommended_prefer ?? []).includes(regime)
                   return (
                     <tr key={regime} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
                       <td className="py-2 px-3 font-medium flex items-center gap-1.5">

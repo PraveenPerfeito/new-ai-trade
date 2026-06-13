@@ -293,7 +293,7 @@ function CacheTab({ data, onForceRefresh, onRefreshGroup, onRefreshAll, refreshi
       {/* Intel sections quick-refresh */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
         {INTEL_SECTIONS.map(s => {
-          const group = data?.groups.find(g => g.name === s.key)
+          const group = (data?.groups ?? []).find(g => g.name === s.key)
           const stale = group ? group.isStale : false
           const age   = group ? formatAge(group.ageSeconds) : `every ${s.ttlMin}m`
           return (
@@ -328,7 +328,7 @@ function CacheTab({ data, onForceRefresh, onRefreshGroup, onRefreshAll, refreshi
                   { label: 'Credits Used',   value: q.creditsUsed.toLocaleString(),                                   sub: `of ${q.monthlyBudget.toLocaleString()} monthly`,                     cls: 'text-white'                    },
                   { label: 'Budget Used',    value: `${q.pctUsed}%`,                                                   sub: q.warningLevel,                                                        cls: warningColor(q.warningLevel)     },
                   { label: 'Req / Minute',   value: String(q.requestsLastMinute),                                      sub: `of ${q.perMinuteLimit} limit`,                                        cls: q.requestsLastMinute >= q.perMinuteLimit ? 'text-red-400' : 'text-white' },
-                  { label: 'Cache Freshness',value: `${data.groups.filter(g => !g.isStale).length}/${data.groups.length}`, sub: 'groups fresh',                                                  cls: data.groups.every(g => !g.isStale) ? 'text-emerald-400' : 'text-amber-400' },
+                  { label: 'Cache Freshness',value: `${(data.groups ?? []).filter(g => !g.isStale).length}/${(data.groups ?? []).length}`, sub: 'groups fresh',                                cls: (data.groups ?? []).every(g => !g.isStale) ? 'text-emerald-400' : 'text-amber-400' },
                 ].map(c => (
                   <div key={c.label} className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
                     <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">{c.label}</p>
@@ -377,12 +377,12 @@ function CacheTab({ data, onForceRefresh, onRefreshGroup, onRefreshAll, refreshi
             <div className="flex items-center justify-between mb-3">
               <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Cache Groups</p>
               <span className="text-[10px] text-zinc-600 font-mono">
-                {data.groups.filter(g => !g.isStale).length}/{data.groups.length} fresh
+                {(data.groups ?? []).filter(g => !g.isStale).length}/{(data.groups ?? []).length} fresh
                 {data.overallHitRate > 0 && ` · ${Math.round(data.overallHitRate * 100)}% hit rate`}
               </span>
             </div>
             <div className="space-y-2">
-              {data.groups.map(group => {
+              {(data.groups ?? []).map(group => {
                 const hitPct = Math.round((group.hitRate ?? 0) * 100)
                 const total  = (group.hitCount ?? 0) + (group.missCount ?? 0)
                 return (
@@ -418,11 +418,11 @@ function CacheTab({ data, onForceRefresh, onRefreshGroup, onRefreshAll, refreshi
           </div>
 
           {/* Background workers */}
-          {data.workers.length > 0 && (
+          {(data.workers ?? []).length > 0 && (
             <div>
               <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2.5">Background Workers</p>
               <div className="space-y-1.5">
-                {data.workers.map(w => (
+                {(data.workers ?? []).map(w => (
                   <div key={w.name} className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 flex items-center gap-3">
                     <span className={`w-2 h-2 rounded-full shrink-0 ${w.state === 'running' ? 'bg-blue-400 animate-pulse' : w.state === 'error' ? 'bg-red-400 animate-pulse' : w.state === 'stopped' ? 'bg-zinc-600' : 'bg-emerald-400'}`}/>
                     <span className="text-xs font-mono text-zinc-300 flex-1 min-w-0 truncate">{w.name}</span>
@@ -563,9 +563,9 @@ function SectorsTab({ data, error }: { data: SectorsResponse | null; error: stri
                     }`}>{st.label}</span>
                     <span className="text-[9px] font-mono text-zinc-600">{fmtB(cat.volume24h)} vol</span>
                   </div>
-                  {cat.coins.length > 0 && (
+                  {(cat.coins ?? []).length > 0 && (
                     <div className="flex flex-wrap gap-1">
-                      {cat.coins.slice(0, 8).map(c => (
+                      {(cat.coins ?? []).slice(0, 8).map(c => (
                         <span key={c} className="text-[9px] font-mono text-zinc-400 px-1.5 py-0.5 rounded bg-zinc-800/80 border border-zinc-700/40">{c}</span>
                       ))}
                     </div>

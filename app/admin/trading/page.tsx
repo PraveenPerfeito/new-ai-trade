@@ -1134,7 +1134,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
       {/* Cache strip — moved below fold, compact */}
       {cache && (
         <div className="flex items-center gap-3 text-[10px] text-zinc-600">
-          <span>Cache: {cache.groups.filter(g=>!g.isStale).length}/{cache.groups.length} fresh</span>
+          <span>Cache: {(cache.groups ?? []).filter(g=>!g.isStale).length}/{(cache.groups ?? []).length} fresh</span>
           {cache.quota && <span>CMC {Math.round(cache.quota.pctUsed)}% quota</span>}
         </div>
       )}
