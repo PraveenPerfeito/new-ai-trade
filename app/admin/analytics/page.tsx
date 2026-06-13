@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useCallback, useState, useEffect } from 'react'
 import { adminApi, EdgeReport, IntelligenceSummary, IntelligencePerfRow } from '@/lib/admin-api'
@@ -7,7 +7,7 @@ import { formatTs } from '@/lib/utils'
 import { analyticsWindowLabel, explicitWindowNote } from '@/lib/window-label'
 import type { AttributionReport, AttributionDimension, EdgePattern, ThresholdRecommendation } from '@/types'
 
-// ─── Shared primitives ────────────────────────────────────────────────────────
+// â”€â”€â”€ Shared primitives â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // asyncpg/Pydantic v2 serialises PostgreSQL NUMERIC columns as JSON strings.
 function toNum(v: unknown): number | null {
@@ -27,19 +27,19 @@ function StatPair({ label, value, accent = '' }: { label: string; value: string;
 
 function pct(n: unknown): string {
   const v = toNum(n)
-  return v != null ? `${(v * 100).toFixed(1)}%` : '—'
+  return v != null ? `${(v * 100).toFixed(1)}%` : 'â€”'
 }
 function exp(n: unknown): string {
   const v = toNum(n)
-  if (v == null) return '—'
+  if (v == null) return 'â€”'
   return v > 0 ? `+${v.toFixed(2)}R` : `${v.toFixed(2)}R`
 }
 function rr(n: unknown): string {
   const v = toNum(n)
-  return v != null ? `${v.toFixed(2)}R` : '—'
+  return v != null ? `${v.toFixed(2)}R` : 'â€”'
 }
 
-// ─── Edge Validation tab ──────────────────────────────────────────────────────
+// â”€â”€â”€ Edge Validation tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function CalibrationTable({ bands }: { bands: EdgeReport['confidence_calibration']['bands'] | null | undefined }) {
   if (!bands) return null
@@ -62,7 +62,7 @@ function CalibrationTable({ bands }: { bands: EdgeReport['confidence_calibration
               <td className="py-2.5 px-3 font-mono text-terminal-muted">{b.total}</td>
               <td className="py-2.5 px-3 font-mono">
                 {b.insufficient_data || b.win_rate == null
-                  ? <span className="text-terminal-muted/40">—</span>
+                  ? <span className="text-terminal-muted/40">â€”</span>
                   : <span className={b.win_rate >= 0.55 ? 'text-bull-default' : 'text-bear-default'}>
                       {(b.win_rate * 100).toFixed(1)}%
                     </span>
@@ -70,7 +70,7 @@ function CalibrationTable({ bands }: { bands: EdgeReport['confidence_calibration
               </td>
               <td className="py-2.5 px-3 font-mono hidden sm:table-cell">
                 {b.insufficient_data || b.expectancy == null
-                  ? <span className="text-terminal-muted/40">—</span>
+                  ? <span className="text-terminal-muted/40">â€”</span>
                   : <span className={Number(b.expectancy) > 0 ? 'text-bull-default' : 'text-bear-default'}>
                       {Number(b.expectancy) > 0 ? '+' : ''}{Number(b.expectancy).toFixed(2)}R
                     </span>
@@ -90,7 +90,7 @@ function CalibrationTable({ bands }: { bands: EdgeReport['confidence_calibration
   )
 }
 
-// ─── Intelligence Performance section ────────────────────────────────────────
+// â”€â”€â”€ Intelligence Performance section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function IntelRow({ label, row }: { label: string; row: IntelligencePerfRow | null }) {
   if (!row) return (
@@ -106,10 +106,10 @@ function IntelRow({ label, row }: { label: string; row: IntelligencePerfRow | nu
       <span className="text-terminal-text text-xs font-medium flex-1 min-w-0 truncate">{row.label}</span>
       <div className="flex items-center gap-4 shrink-0">
         <span className={`font-mono text-xs font-bold ${wr != null && wr >= 0.4 ? 'text-bull-default' : wr != null && wr >= 0.3 ? 'text-signal-high' : 'text-bear-default'}`}>
-          {wr != null ? `${(wr * 100).toFixed(1)}%` : '—'}
+          {wr != null ? `${(wr * 100).toFixed(1)}%` : 'â€”'}
         </span>
         <span className="text-terminal-muted text-xs font-mono">
-          {row.avg_rr != null ? `${Number(row.avg_rr).toFixed(2)}R` : '—'}
+          {row.avg_rr != null ? `${Number(row.avg_rr).toFixed(2)}R` : 'â€”'}
         </span>
         <span className="text-terminal-muted/50 text-xs font-mono">n={row.n}</span>
       </div>
@@ -128,14 +128,14 @@ function IntelligenceSection({ data, loading }: { data: IntelligenceSummary | nu
     <div className="glass-card rounded-lg p-5">
       <p className="text-terminal-muted text-xs uppercase tracking-wider mb-2">Intelligence Performance</p>
       <p className="text-terminal-muted/60 text-xs leading-relaxed">
-        Intelligence breakdowns require at least 5 resolved outcomes per tier. Warming up — data populates as signals resolve.
+        Intelligence breakdowns require at least 5 resolved outcomes per tier. Warming up â€” data populates as signals resolve.
         {data && ` Total resolved: ${data.total}.`}
       </p>
     </div>
   )
   return (
     <div>
-      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Intelligence Performance — Best Tier per Dimension</p>
+      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Intelligence Performance â€” Best Tier per Dimension</p>
       <div className="glass-card rounded-lg p-5">
         <div className="flex items-center gap-4 mb-4 text-terminal-muted/50 text-[10px] font-mono uppercase tracking-wider">
           <span className="w-44 shrink-0">Dimension</span>
@@ -159,332 +159,8 @@ function IntelligenceSection({ data, loading }: { data: IntelligenceSummary | nu
   )
 }
 
-function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
-  edge: EdgeReport | null; loading: boolean
-  intel: IntelligenceSummary | null; intelLoading: boolean
-}) {
-  const overall = edge?.overall
-  const verdict = edge?.edge_verdict
-  const cal     = edge?.confidence_calibration
 
-  const confidenceLevelColor: Record<string, string> = {
-    strong: 'text-bull-default', moderate: 'text-signal-high', weak: 'text-signal-medium',
-    none: 'text-bear-default', insufficient_data: 'text-terminal-muted',
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* Edge verdict */}
-      <div className="glass-card rounded-lg p-5">
-        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-4">Edge Verdict</p>
-        {loading ? (
-          <div className="space-y-2">
-            <div className="skeleton h-6 w-48 rounded" />
-            <div className="skeleton h-3 w-full rounded" />
-          </div>
-        ) : verdict?.confidence_level === 'insufficient_data' || !verdict ? (
-          <div className="flex flex-col gap-2">
-            <p className="text-signal-medium text-sm font-semibold">◌ Edge analytics warming up</p>
-            <p className="text-terminal-muted text-xs leading-relaxed">
-              Statistical edge verdicts require a minimum of 30 resolved signals (TP hit, SL hit, or timeout). Keep running scans — outcomes are resolved automatically as price reaches target or stop levels.
-            </p>
-            {edge && (
-              <p className="text-terminal-muted/50 text-xs font-mono mt-1">
-                {explicitWindowNote(edge.window_hours)} - Total signals tracked: {edge.overall?.total ?? 0}
-              </p>
-            )}
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center gap-3 mb-3 flex-wrap">
-              <span className={`font-mono font-bold text-xl uppercase ${confidenceLevelColor[verdict.confidence_level]}`}>
-                {verdict.confidence_level.replace(/_/g, ' ')}
-              </span>
-              {verdict.has_edge != null && (
-                <span className={`text-xs px-2 py-0.5 rounded border font-bold uppercase ${
-                  verdict.has_edge ? 'bg-bull-default/10 text-bull-default border-bull-default/20' : 'bg-bear-default/10 text-bear-default border-bear-default/20'
-                }`}>
-                  {verdict.has_edge ? 'EDGE CONFIRMED' : 'NO EDGE'}
-                </span>
-              )}
-            </div>
-            <p className="text-terminal-muted text-xs">{verdict.summary}</p>
-          </>
-        )}
-      </div>
-
-      {/* Overall stats */}
-      <div>
-        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">
-          Overall Statistics - {analyticsWindowLabel(edge?.window_hours ?? 720)}
-        </p>
-        <div className="glass-card rounded-lg p-5">
-          {loading ? (
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-4">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="space-y-1">
-                  <div className="skeleton h-2.5 w-16 rounded" />
-                  <div className="skeleton h-6 w-12 rounded" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-4">
-              <StatPair label="Signals"      value={String(overall?.total ?? 0)} />
-              <StatPair label="Win Rate"     value={overall?.win_rate != null ? `${(Number(overall.win_rate) * 100).toFixed(1)}%` : '—'} accent={overall?.win_rate && Number(overall.win_rate) >= 0.55 ? 'text-bull-default' : 'text-bear-default'} />
-              <StatPair label="Expectancy"   value={overall?.expectancy != null ? `${Number(overall.expectancy) > 0 ? '+' : ''}${Number(overall.expectancy).toFixed(2)}R` : '—'} accent={overall?.expectancy && Number(overall.expectancy) > 0 ? 'text-bull-default' : 'text-bear-default'} />
-              <StatPair label="Profit Factor" value={overall?.profit_factor != null ? Number(overall.profit_factor).toFixed(2) : '—'} accent={overall?.profit_factor && Number(overall.profit_factor) >= 1.5 ? 'text-bull-default' : 'text-terminal-text'} />
-              <StatPair label="Max DD"       value={overall?.max_drawdown_r != null ? `${Number(overall.max_drawdown_r).toFixed(1)}R` : '—'} accent="text-bear-default" />
-              <StatPair label="Sharpe"       value={overall?.sharpe != null ? Number(overall.sharpe).toFixed(2) : '—'} accent={overall?.sharpe && Number(overall.sharpe) > 1 ? 'text-bull-default' : 'text-terminal-text'} />
-            </div>
-          )}
-          {!loading && (!overall || overall.total === 0) && (
-            <p className="text-terminal-muted/50 text-xs mt-4 pt-4 border-t border-terminal-border/50">
-              No resolved signals yet — statistics will appear after signals reach their TP / SL targets.
-            </p>
-          )}
-          {overall && overall.total > 0 && (
-            <div className="mt-4 pt-4 border-t border-terminal-border/50 flex gap-6 text-xs font-mono text-terminal-muted">
-              <span>TP: <span className="text-bull-default">{overall.tp_hits}</span></span>
-              <span>SL: <span className="text-bear-default">{overall.sl_hits}</span></span>
-              <span>TO: <span className="text-terminal-text">{overall.timeouts}</span></span>
-              {overall.win_rate_ci && (
-                <span>95% CI: [{(overall.win_rate_ci[0] * 100).toFixed(1)}%, {(overall.win_rate_ci[1] * 100).toFixed(1)}%]</span>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Calibration */}
-      {!loading && (!cal || !cal.calibration) && (
-        <div className="glass-card rounded-lg p-5">
-          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Confidence Calibration</p>
-          <p className="text-terminal-muted/60 text-xs leading-relaxed">
-            Calibration bands require resolved signals across multiple confidence tiers (70–100). Run scans in different modes to build a diverse signal pool.
-          </p>
-        </div>
-      )}
-      {cal && cal.calibration && (
-        <div>
-          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Confidence Calibration</p>
-          <div className="glass-card rounded-lg overflow-hidden">
-            <div className="px-5 py-3 border-b border-terminal-border flex items-center gap-4 flex-wrap">
-              <span className="text-terminal-muted text-xs">ECE:</span>
-              <span className={`font-mono text-sm font-bold ${Number(cal.calibration.ece) < 0.05 ? 'text-bull-default' : Number(cal.calibration.ece) < 0.12 ? 'text-signal-high' : 'text-bear-default'}`}>
-                {Number(cal.calibration.ece).toFixed(4)}
-              </span>
-              <span className="text-terminal-muted text-xs">Label:</span>
-              <span className="text-terminal-text text-xs font-mono">{cal.calibration.label.replace(/_/g, ' ')}</span>
-              <span className="text-terminal-muted text-xs">Monotone:</span>
-              <span className={`text-xs font-mono ${cal.calibration.is_monotone ? 'text-bull-default' : 'text-bear-default'}`}>
-                {cal.calibration.is_monotone === null ? '—' : cal.calibration.is_monotone ? 'yes' : 'no'}
-              </span>
-              {cal.optimal_threshold != null && (
-                <>
-                  <span className="text-terminal-muted text-xs">Optimal threshold:</span>
-                  <span className="text-signal-high font-mono text-xs">{cal.optimal_threshold}</span>
-                </>
-              )}
-            </div>
-            <CalibrationTable bands={cal.bands} />
-          </div>
-        </div>
-      )}
-
-      {/* Scanner Mode Performance */}
-      {edge?.scanner_mode_analysis && !edge.scanner_mode_analysis.insufficient_data && (
-        <div>
-          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">
-            Scanner Mode Performance — {analyticsWindowLabel(edge.window_hours)}
-          </p>
-          <div className="glass-card rounded-lg overflow-hidden overflow-x-auto">
-            <table className="w-full text-xs min-w-[380px]">
-              <thead>
-                <tr className="border-b border-terminal-border">
-                  {['Mode', 'Resolved', 'Win Rate', 'Expectancy', 'PF', 'Per Day'].map(h => (
-                    <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {(edge.scanner_mode_analysis.ranked_by_expectancy ?? []).map(mode => {
-                  const m = edge.scanner_mode_analysis!.modes[mode]
-                  if (!m) return null
-                  const modeLabel = mode === 'high_confidence' ? 'High Conf' : mode.charAt(0).toUpperCase() + mode.slice(1)
-                  return (
-                    <tr key={mode} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
-                      <td className="py-2 px-3 font-medium text-terminal-text">{modeLabel}</td>
-                      <td className="py-2 px-3 font-mono text-terminal-muted">{m.total}</td>
-                      <td className="py-2 px-3 font-mono">
-                        {m.win_rate != null
-                          ? <span className={m.win_rate >= 0.55 ? 'text-bull-default' : m.win_rate >= 0.45 ? 'text-signal-high' : 'text-bear-default'}>
-                              {(m.win_rate * 100).toFixed(1)}%
-                            </span>
-                          : <span className="text-terminal-muted/40">—</span>}
-                      </td>
-                      <td className="py-2 px-3 font-mono">
-                        {m.expectancy != null
-                          ? <span className={Number(m.expectancy) > 0 ? 'text-bull-default' : 'text-bear-default'}>
-                              {Number(m.expectancy) > 0 ? '+' : ''}{Number(m.expectancy).toFixed(2)}R
-                            </span>
-                          : <span className="text-terminal-muted/40">—</span>}
-                      </td>
-                      <td className="py-2 px-3 font-mono text-terminal-muted">
-                        {m.profit_factor != null ? Number(m.profit_factor).toFixed(2) : '—'}
-                      </td>
-                      <td className="py-2 px-3 font-mono text-terminal-muted">
-                        {m.signals_per_day != null ? Number(m.signals_per_day).toFixed(1) : '—'}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Market Regime Performance */}
-      {edge?.market_regime_analysis && !edge.market_regime_analysis.insufficient_data && (
-        <div>
-          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">
-            Regime Performance — {analyticsWindowLabel(edge.window_hours)}
-            {(edge.market_regime_analysis.recommended_avoid ?? []).length > 0 && (
-              <span className="ml-2 text-bear-default normal-case">
-                Avoid: {(edge.market_regime_analysis.recommended_avoid ?? []).join(', ')}
-              </span>
-            )}
-          </p>
-          <div className="glass-card rounded-lg overflow-hidden overflow-x-auto">
-            <table className="w-full text-xs min-w-[340px]">
-              <thead>
-                <tr className="border-b border-terminal-border">
-                  {['Regime', 'Resolved', 'Win Rate', 'Expectancy', 'PF'].map(h => (
-                    <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {(edge.market_regime_analysis.ranked_by_expectancy ?? []).map(regime => {
-                  const r = edge.market_regime_analysis!.regimes[regime]
-                  if (!r) return null
-                  const isAvoid  = (edge.market_regime_analysis!.recommended_avoid ?? []).includes(regime)
-                  const isPrefer = (edge.market_regime_analysis!.recommended_prefer ?? []).includes(regime)
-                  return (
-                    <tr key={regime} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
-                      <td className="py-2 px-3 font-medium flex items-center gap-1.5">
-                        <span className={isAvoid ? 'text-bear-default' : isPrefer ? 'text-bull-default' : 'text-terminal-text'}>
-                          {regime.toUpperCase()}
-                        </span>
-                        {isAvoid  && <span className="text-[9px] text-bear-default/70 border border-bear-default/20 px-1 rounded">avoid</span>}
-                        {isPrefer && <span className="text-[9px] text-bull-default/70 border border-bull-default/20 px-1 rounded">prefer</span>}
-                      </td>
-                      <td className="py-2 px-3 font-mono text-terminal-muted">{r.total}</td>
-                      <td className="py-2 px-3 font-mono">
-                        {r.win_rate != null
-                          ? <span className={r.win_rate >= 0.55 ? 'text-bull-default' : r.win_rate >= 0.45 ? 'text-signal-high' : 'text-bear-default'}>
-                              {(r.win_rate * 100).toFixed(1)}%
-                            </span>
-                          : <span className="text-terminal-muted/40">—</span>}
-                      </td>
-                      <td className="py-2 px-3 font-mono">
-                        {r.expectancy != null
-                          ? <span className={Number(r.expectancy) > 0 ? 'text-bull-default' : 'text-bear-default'}>
-                              {Number(r.expectancy) > 0 ? '+' : ''}{Number(r.expectancy).toFixed(2)}R
-                            </span>
-                          : <span className="text-terminal-muted/40">—</span>}
-                      </td>
-                      <td className="py-2 px-3 font-mono text-terminal-muted">
-                        {r.profit_factor != null ? Number(r.profit_factor).toFixed(2) : '—'}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Per-Coin Performance */}
-      {edge?.coin_performance && !edge.coin_performance.insufficient_data && (
-        <div>
-          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">
-            Top Coins by Expectancy — {analyticsWindowLabel(edge.window_hours)}
-            <span className="ml-2 text-terminal-muted/50 normal-case font-normal">
-              {edge.coin_performance.total_symbols_seen} symbols seen
-            </span>
-          </p>
-          <div className="glass-card rounded-lg overflow-hidden overflow-x-auto">
-            <table className="w-full text-xs min-w-[420px]">
-              <thead>
-                <tr className="border-b border-terminal-border">
-                  {['Coin', 'Resolved', 'Win Rate', 'Expectancy', 'PF', 'Max DD'].map(h => (
-                    <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {(edge.coin_performance.best_by_expectancy ?? []).slice(0, 10).map(sym => {
-                  const c = edge.coin_performance!.coins[sym]
-                  if (!c) return null
-                  const isBestWR  = (edge.coin_performance!.best_by_win_rate ?? []).includes(sym)
-                  const isWorstDD = (edge.coin_performance!.worst_by_drawdown ?? []).includes(sym)
-                  return (
-                    <tr key={sym} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
-                      <td className="py-2 px-3 font-medium font-mono">
-                        <span className="text-terminal-text">{sym}</span>
-                        {isBestWR  && <span className="ml-1.5 text-[9px] text-bull-default/70 border border-bull-default/20 px-1 rounded">top WR</span>}
-                        {isWorstDD && <span className="ml-1.5 text-[9px] text-bear-default/70 border border-bear-default/20 px-1 rounded">high DD</span>}
-                      </td>
-                      <td className="py-2 px-3 font-mono text-terminal-muted">{c.total}</td>
-                      <td className="py-2 px-3 font-mono">
-                        {c.win_rate != null
-                          ? <span className={c.win_rate >= 0.55 ? 'text-bull-default' : c.win_rate >= 0.45 ? 'text-signal-high' : 'text-bear-default'}>
-                              {(c.win_rate * 100).toFixed(1)}%
-                            </span>
-                          : <span className="text-terminal-muted/40">—</span>}
-                      </td>
-                      <td className="py-2 px-3 font-mono">
-                        {c.expectancy != null
-                          ? <span className={Number(c.expectancy) > 0 ? 'text-bull-default' : 'text-bear-default'}>
-                              {Number(c.expectancy) > 0 ? '+' : ''}{Number(c.expectancy).toFixed(2)}R
-                            </span>
-                          : <span className="text-terminal-muted/40">—</span>}
-                      </td>
-                      <td className="py-2 px-3 font-mono text-terminal-muted">
-                        {c.profit_factor != null ? Number(c.profit_factor).toFixed(2) : '—'}
-                      </td>
-                      <td className="py-2 px-3 font-mono">
-                        {c.max_drawdown_r != null
-                          ? <span className={Number(c.max_drawdown_r) > 2 ? 'text-bear-default' : 'text-terminal-muted'}>
-                              {Number(c.max_drawdown_r).toFixed(2)}R
-                            </span>
-                          : <span className="text-terminal-muted/40">—</span>}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Intelligence Performance */}
-      <IntelligenceSection data={intel} loading={intelLoading} />
-
-      {edge && (
-        <p className="text-terminal-muted/40 text-xs font-mono">
-          Generated {formatTs(edge.generated_at)} - {explicitWindowNote(edge.window_hours)}
-        </p>
-      )}
-    </div>
-  )
-}
-
-// ─── Attribution tab ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Attribution tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function DimTable({ title, rows }: { title: string; rows: AttributionDimension[] }) {
   if (!rows.length) return null
@@ -510,14 +186,14 @@ function DimTable({ title, rows }: { title: string; rows: AttributionDimension[]
                 <td className="py-2 px-3 font-mono">
                   {d.winRate != null
                     ? <span className={d.winRate >= 0.55 ? 'text-bull-default' : d.winRate >= 0.45 ? 'text-signal-high' : 'text-bear-default'}>{pct(d.winRate)}</span>
-                    : <span className="text-terminal-muted/40">—</span>
+                    : <span className="text-terminal-muted/40">â€”</span>
                   }
                 </td>
                 <td className="py-2 px-3 font-mono text-terminal-muted hidden sm:table-cell">{rr(d.avgRRAchieved)}</td>
                 <td className="py-2 px-3 font-mono hidden sm:table-cell">
                   {d.expectancy != null
                     ? <span className={d.expectancy > 0 ? 'text-bull-default' : 'text-bear-default'}>{exp(d.expectancy)}</span>
-                    : <span className="text-terminal-muted/40">—</span>
+                    : <span className="text-terminal-muted/40">â€”</span>
                   }
                 </td>
               </tr>
@@ -572,7 +248,7 @@ const impactColor: Record<string, string> = {
   MEDIUM: 'text-signal-high border-signal-high/30',
   LOW: 'text-terminal-muted border-terminal-border',
 }
-const dirIcon: Record<string, string> = { RAISE: '↑', LOWER: '↓', MONITOR: '◎' }
+const dirIcon: Record<string, string> = { RAISE: 'â†‘', LOWER: 'â†“', MONITOR: 'â—Ž' }
 
 function RecommendationsSection({ recs }: { recs: ThresholdRecommendation[] }) {
   return (
@@ -629,10 +305,10 @@ function AIEffectivenessSection({ ai }: { ai: AttributionReport['aiEffectiveness
         {aiEdgeDelta != null && aiApproved.total >= 5 && heuristic.total >= 5 && (
           <div className="mt-4 pt-4 border-t border-terminal-border/50">
             <span className={`text-xs font-mono font-bold ${aiEdgeDelta > 0 ? 'text-bull-default' : 'text-bear-default'}`}>
-              {aiEdgeDelta > 0 ? '▲' : '▼'} AI {aiEdgeDelta > 0 ? '+' : ''}{(aiEdgeDelta * 100).toFixed(1)}% vs heuristic
+              {aiEdgeDelta > 0 ? 'â–²' : 'â–¼'} AI {aiEdgeDelta > 0 ? '+' : ''}{(aiEdgeDelta * 100).toFixed(1)}% vs heuristic
             </span>
             <span className="text-terminal-muted/50 text-xs ml-3">
-              {aiEdgeDelta > 0.05 ? 'AI validation adding measurable edge' : aiEdgeDelta < -0.05 ? 'Heuristic outperforming — review AI prompt' : 'No significant difference'}
+              {aiEdgeDelta > 0.05 ? 'AI validation adding measurable edge' : aiEdgeDelta < -0.05 ? 'Heuristic outperforming â€” review AI prompt' : 'No significant difference'}
             </span>
           </div>
         )}
@@ -656,7 +332,7 @@ function RiskGradeAnalysis({ rows }: { rows: AttributionDimension[] }) {
   const sorted = [...rows].sort((a, b) => a.key.localeCompare(b.key))
   return (
     <div>
-      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Risk Grade Analysis — RISKGRADE.FIX.1 Validation</p>
+      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Risk Grade Analysis â€” RISKGRADE.FIX.1 Validation</p>
       <div className="glass-card rounded-lg overflow-hidden overflow-x-auto">
         <table className="w-full text-xs min-w-[360px]">
           <thead>
@@ -672,7 +348,7 @@ function RiskGradeAnalysis({ rows }: { rows: AttributionDimension[] }) {
           <tbody>
             {sorted.map(d => {
               const gradeColor = GRADE_COLOR[d.label] ?? 'text-terminal-text'
-              const targets: Record<string, string> = { 'Grade A': 'WR ≥ 42%', 'Grade B': 'WR ≥ 43%', 'Grade C': 'WR ≥ 50%' }
+              const targets: Record<string, string> = { 'Grade A': 'WR â‰¥ 42%', 'Grade B': 'WR â‰¥ 43%', 'Grade C': 'WR â‰¥ 50%' }
               const target = targets[d.label] ?? ''
               const wrOk = d.winRate != null && d.winRate >= 0.42
               return (
@@ -682,12 +358,12 @@ function RiskGradeAnalysis({ rows }: { rows: AttributionDimension[] }) {
                   <td className="py-2 px-3 font-mono">
                     {d.winRate != null
                       ? <span className={d.winRate >= 0.42 ? 'text-bull-default' : 'text-bear-default'}>{pct(d.winRate)}</span>
-                      : <span className="text-terminal-muted/40">—</span>}
+                      : <span className="text-terminal-muted/40">â€”</span>}
                   </td>
                   <td className="py-2 px-3 font-mono hidden sm:table-cell">
                     {d.expectancy != null
                       ? <span className={d.expectancy > 0 ? 'text-bull-default' : 'text-bear-default'}>{exp(d.expectancy)}</span>
-                      : <span className="text-terminal-muted/40">—</span>}
+                      : <span className="text-terminal-muted/40">â€”</span>}
                   </td>
                   <td className="py-2 px-3 font-mono text-terminal-muted hidden sm:table-cell">{rr(d.avgRRAchieved)}</td>
                   <td className="py-2 px-3 font-mono text-terminal-muted/50">
@@ -699,7 +375,7 @@ function RiskGradeAnalysis({ rows }: { rows: AttributionDimension[] }) {
           </tbody>
         </table>
         <p className="px-3 py-2 text-terminal-muted/30 text-[10px] font-mono border-t border-terminal-border/20">
-          RISKGRADE.FIX.1: futures penalty +5→+2 · breakout bonus HIGH_MOM +15 · regime quality ±5/−10 for NULL
+          RISKGRADE.FIX.1: futures penalty +5â†’+2 Â· breakout bonus HIGH_MOM +15 Â· regime quality Â±5/âˆ’10 for NULL
         </p>
       </div>
     </div>
@@ -708,19 +384,19 @@ function RiskGradeAnalysis({ rows }: { rows: AttributionDimension[] }) {
 
 const POSTFIX_ITEMS = [
   { key: 'CONFIDENCE.POSTFIX.1',       label: 'Confidence Calibration Validation', desc: 'Verify ECE improvement after threshold recalibration.' },
-  { key: 'RISKGRADE.POSTFIX.1',        label: 'Risk Grade Validation',             desc: 'Confirm Grade A WR ≥ 42%, Grade C shrinks to residual.' },
-  { key: 'MARKET_STRUCTURE.POSTFIX.1', label: 'Market Structure Validation',       desc: 'ms_sr_rejection + ms_trend_exhaustion counts decrease; newly unblocked signals WR ≥ 48%.' },
+  { key: 'RISKGRADE.POSTFIX.1',        label: 'Risk Grade Validation',             desc: 'Confirm Grade A WR â‰¥ 42%, Grade C shrinks to residual.' },
+  { key: 'MARKET_STRUCTURE.POSTFIX.1', label: 'Market Structure Validation',       desc: 'ms_sr_rejection + ms_trend_exhaustion counts decrease; newly unblocked signals WR â‰¥ 48%.' },
   { key: 'ALPHA.POSTFIX.1',            label: 'Alpha Attribution Validation',      desc: 'Sector intelligence and breakout strength attribution confirmed.' },
 ]
 
 function IntelligenceValidationSection() {
   return (
     <div>
-      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Intelligence Validation — POSTFIX.1 Staging</p>
+      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Intelligence Validation â€” POSTFIX.1 Staging</p>
       <div className="space-y-2">
         {POSTFIX_ITEMS.map(item => (
           <div key={item.key} className="glass-card rounded-lg px-4 py-3 flex items-start gap-3">
-            <span className="text-terminal-muted/30 font-mono text-[10px] w-4 mt-0.5 shrink-0">◌</span>
+            <span className="text-terminal-muted/30 font-mono text-[10px] w-4 mt-0.5 shrink-0">â—Œ</span>
             <div className="min-w-0">
               <p className="text-terminal-text text-xs font-semibold">{item.label}</p>
               <p className="text-terminal-muted/60 text-xs mt-0.5">{item.desc}</p>
@@ -746,7 +422,7 @@ function DailyReportTrigger() {
       const json = await res.json()
       setResult(json.success ? `Sent (${json.dataRows ?? 0} resolved signals)` : `Failed: ${json.error ?? 'unknown error'}`)
     } catch {
-      setResult('Network error — could not trigger report')
+      setResult('Network error â€” could not trigger report')
     } finally {
       setSending(false)
     }
@@ -764,7 +440,7 @@ function DailyReportTrigger() {
           disabled={sending}
           className="text-xs font-mono px-3 py-1.5 rounded border border-terminal-border text-terminal-text hover:bg-terminal-bright/10 disabled:opacity-40 transition-colors"
         >
-          {sending ? '◌ Sending…' : '▶ Send Daily Report'}
+          {sending ? 'â—Œ Sendingâ€¦' : 'â–¶ Send Daily Report'}
         </button>
         {result && (
           <span className={`text-xs font-mono ${result.startsWith('Sent') ? 'text-bull-default' : 'text-bear-default'}`}>
@@ -793,7 +469,7 @@ function AttributionTab({ data, loading }: { data: AttributionReport | null; loa
   if (!data) {
     return (
       <div className="glass-card rounded-lg p-5">
-        <p className="text-terminal-muted text-xs">Attribution data unavailable — ensure the attribution API route is deployed and the database migration has been run.</p>
+        <p className="text-terminal-muted text-xs">Attribution data unavailable â€” ensure the attribution API route is deployed and the database migration has been run.</p>
       </div>
     )
   }
@@ -814,39 +490,38 @@ function AttributionTab({ data, loading }: { data: AttributionReport | null; loa
 
       {insufficient ? (
         <div className="glass-card rounded-lg p-5 space-y-2">
-          <p className="text-signal-medium text-sm font-semibold">◌ Attribution warming up</p>
+          <p className="text-signal-medium text-sm font-semibold">â—Œ Attribution warming up</p>
           <p className="text-terminal-muted text-xs leading-relaxed">
-            Outcome attribution requires at least 20 resolved signals (TP hit, SL hit, or timeout) in the {explicitWindowNote(windowHours)}. Currently: {resolvedRows} resolved. Keep running scans — attribution populates automatically as signals resolve.
+            Outcome attribution requires at least 20 resolved signals (TP hit, SL hit, or timeout) in the {explicitWindowNote(windowHours)}. Currently: {resolvedRows} resolved. Keep running scans â€” attribution populates automatically as signals resolve.
           </p>
         </div>
       ) : (
         <>
-          {/* Tactical dimensions */}
+          {/* Tactical dimensions â€” regime and mcap tier kept; signal state, extension risk removed */}
           <DimTable title="Performance by Market Regime" rows={dimensions.byRegime} />
-          <DimTable title="Performance by Signal State"  rows={dimensions.bySignalState} />
           <DimTable title="Performance by Market Cap Tier" rows={dimensions.byMcapTier} />
-          <DimTable title="Performance by Extension Risk"  rows={dimensions.byExtensionRisk} />
 
           {/* Edge patterns */}
           <EdgePatternsSection patterns={edgePatterns} />
 
-          {/* Timeframe + Mode (always available) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <DimTable title="By Timeframe"    rows={dimensions.byTimeframe} />
-            <DimTable title="By Scanner Mode" rows={dimensions.byScannerMode} />
-          </div>
+          {/* Timeframe only (scanner mode duplicate removed) */}
+          <DimTable title="By Timeframe" rows={dimensions.byTimeframe} />
 
-          {/* Risk Grade Analysis — RISKGRADE.FIX.1 validation */}
+          {/* Risk Grade Analysis â€” RISKGRADE.FIX.1 validation */}
           <RiskGradeAnalysis rows={dimensions.byGrade} />
 
-          {/* AI effectiveness */}
-          <AIEffectivenessSection ai={aiEffectiveness} />
+          {/* AI effectiveness â€” collapsed by default */}
+          <details className="mt-4">
+            <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-400 font-semibold uppercase tracking-wide py-1 px-2 rounded hover:bg-zinc-800/50">
+              AI vs Heuristic Analysis â–¸
+            </summary>
+            <div className="mt-3">
+              <AIEffectivenessSection ai={aiEffectiveness} />
+            </div>
+          </details>
 
           {/* Recommendations */}
           <RecommendationsSection recs={recommendations} />
-
-          {/* Intelligence Validation — POSTFIX.1 staging */}
-          <IntelligenceValidationSection />
         </>
       )}
 
@@ -860,7 +535,7 @@ function AttributionTab({ data, loading }: { data: AttributionReport | null; loa
   )
 }
 
-// ─── AI Calibration tab ───────────────────────────────────────────────────────
+// â”€â”€â”€ AI Calibration tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function VerdictBar({ label, count, total }: { label: string; count: number; total: number }) {
   const w = total > 0 ? (count / total) * 100 : 0
@@ -878,19 +553,19 @@ function VerdictBar({ label, count, total }: { label: string; count: number; tot
 }
 
 const CONFIDENCE_THRESHOLDS = [
-  { tier: 'High',     range: '85–100%', description: 'Strong multi-timeframe confirmation, A/B grade risk',  color: 'text-green-400' },
-  { tier: 'Med-High', range: '75–84%',  description: 'Standard qualification, at least 4/5 indicators aligned', color: 'text-blue-400' },
-  { tier: 'Medium',   range: '70–74%',  description: 'Minimum for high_confidence mode, all other modes filtered', color: 'text-amber-400' },
-  { tier: 'Low',      range: '< 70%',   description: 'Rejected — insufficient confirmation', color: 'text-red-400' },
+  { tier: 'High',     range: '85â€“100%', description: 'Strong multi-timeframe confirmation, A/B grade risk',  color: 'text-green-400' },
+  { tier: 'Med-High', range: '75â€“84%',  description: 'Standard qualification, at least 4/5 indicators aligned', color: 'text-blue-400' },
+  { tier: 'Medium',   range: '70â€“74%',  description: 'Minimum for high_confidence mode, all other modes filtered', color: 'text-amber-400' },
+  { tier: 'Low',      range: '< 70%',   description: 'Rejected â€” insufficient confirmation', color: 'text-red-400' },
 ]
 
-// ─── CONFIDENCE.CALIBRATION.2 — read-only empirical confidence analytics ─────
+// â”€â”€â”€ CONFIDENCE.CALIBRATION.2 â€” read-only empirical confidence analytics â”€â”€â”€â”€â”€
 // Rendered only when FeatureFlags.confidence_calibration_v2 is ON (API returns
-// enabled:false otherwise → section hidden, zero UI change). Never affects
+// enabled:false otherwise â†’ section hidden, zero UI change). Never affects
 // scoring, gating, or delivery.
 
 function DriftChip({ drift }: { drift: number | null }) {
-  if (drift == null) return <span className="text-zinc-600 font-mono text-xs">—</span>
+  if (drift == null) return <span className="text-zinc-600 font-mono text-xs">â€”</span>
   const d = Number(drift)
   const cls = d >= -5 ? 'text-emerald-400' : d >= -25 ? 'text-amber-400' : 'text-red-400'
   return <span className={`font-mono text-xs font-bold ${cls}`}>{d > 0 ? '+' : ''}{d.toFixed(0)}</span>
@@ -907,24 +582,24 @@ function CalBandRow({ band, s }: { band: string; s: import('@/lib/admin-api').Ca
           <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
             <div className="h-full bg-zinc-500 rounded-full" style={{ width: `${stW}%` }} />
           </div>
-          <span className="text-[10px] text-zinc-500 font-mono w-20 text-right">stated {s.mean_stated != null ? Number(s.mean_stated).toFixed(0) : '—'}</span>
+          <span className="text-[10px] text-zinc-500 font-mono w-20 text-right">stated {s.mean_stated != null ? Number(s.mean_stated).toFixed(0) : 'â€”'}</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
             <div className={`h-full rounded-full ${(s.wr ?? 0) >= (s.mean_stated ?? 100) ? 'bg-emerald-500' : 'bg-purple-500'}`} style={{ width: `${wrW}%` }} />
           </div>
-          <span className="text-[10px] text-purple-300 font-mono w-20 text-right">actual {s.wr != null ? Number(s.wr).toFixed(0) : '—'}%</span>
+          <span className="text-[10px] text-purple-300 font-mono w-20 text-right">actual {s.wr != null ? Number(s.wr).toFixed(0) : 'â€”'}%</span>
         </div>
       </div>
       <DriftChip drift={s.drift} />
       <span className={`text-[10px] font-mono w-14 text-right ${s.low_sample ? 'text-amber-500' : 'text-zinc-600'}`}>
-        n={s.n}{s.low_sample ? '⚠' : ''}
+        n={s.n}{s.low_sample ? 'âš ' : ''}
       </span>
       <span className="text-[10px] font-mono text-zinc-500 w-16 text-right hidden sm:block">
-        {s.exp != null ? `${Number(s.exp) > 0 ? '+' : ''}${Number(s.exp).toFixed(2)}R` : '—'}
+        {s.exp != null ? `${Number(s.exp) > 0 ? '+' : ''}${Number(s.exp).toFixed(2)}R` : 'â€”'}
       </span>
       <span className="text-[10px] font-mono text-zinc-500 w-12 text-right hidden sm:block">
-        PF {s.pf != null ? Number(s.pf).toFixed(2) : '—'}
+        PF {s.pf != null ? Number(s.pf).toFixed(2) : 'â€”'}
       </span>
     </div>
   )
@@ -934,7 +609,7 @@ function ConfidenceCalibrationSection() {
   const fetcher = useCallback(() => adminApi.analytics.confidenceCalibration().catch(() => null), [])
   const { data: cal } = useAutoRefresh<import('@/lib/admin-api').ConfidenceCalibrationResponse | null>(fetcher, 300_000)
 
-  if (!cal || !cal.enabled) return null   // flag OFF → zero UI change
+  if (!cal || !cal.enabled) return null   // flag OFF â†’ zero UI change
 
   const insights = cal.insights
   const dq = cal.data_quality
@@ -948,7 +623,7 @@ function ConfidenceCalibrationSection() {
   return (
     <div className="space-y-5">
       <p className="text-[9px] text-zinc-600 uppercase tracking-widest flex items-center gap-2">
-        <span className="h-px flex-1 bg-zinc-800"/>Confidence Calibration — Empirical (read-only)<span className="h-px flex-1 bg-zinc-800"/>
+        <span className="h-px flex-1 bg-zinc-800"/>Confidence Calibration â€” Empirical (read-only)<span className="h-px flex-1 bg-zinc-800"/>
       </p>
 
       {/* Data quality warnings */}
@@ -956,7 +631,7 @@ function ConfidenceCalibrationSection() {
         <div className="space-y-1.5">
           {dq.warnings.map((w, i) => (
             <div key={i} className="rounded-lg px-3 py-2 bg-amber-500/5 border border-amber-500/20 text-amber-300/90 text-xs flex items-start gap-2">
-              <span className="shrink-0">⚠</span><span>{w}</span>
+              <span className="shrink-0">âš </span><span>{w}</span>
             </div>
           ))}
         </div>
@@ -970,7 +645,7 @@ function ConfidenceCalibrationSection() {
               <p className="text-[9px] text-zinc-500 uppercase tracking-wider">{c.label}</p>
               <p className={`text-lg font-bold font-mono ${c.color}`}>{c.v?.band}</p>
               <p className="text-[10px] text-zinc-500 font-mono">
-                WR {c.v?.wr != null ? Number(c.v.wr).toFixed(0) : '—'}% · drift {c.v?.drift != null && Number(c.v.drift) > 0 ? '+' : ''}{c.v?.drift != null ? Number(c.v.drift).toFixed(0) : '—'} · n={c.v?.n}
+                WR {c.v?.wr != null ? Number(c.v.wr).toFixed(0) : 'â€”'}% Â· drift {c.v?.drift != null && Number(c.v.drift) > 0 ? '+' : ''}{c.v?.drift != null ? Number(c.v.drift).toFixed(0) : 'â€”'} Â· n={c.v?.n}
               </p>
               <p className="text-[9px] text-zinc-600 mt-0.5">{c.desc}</p>
             </div>
@@ -978,14 +653,14 @@ function ConfidenceCalibrationSection() {
         </div>
       )}
 
-      {/* Stated vs actual — regime-known cohort (clean) */}
+      {/* Stated vs actual â€” regime-known cohort (clean) */}
       {cal.bands_regime_known && Object.keys(cal.bands_regime_known).length > 0 && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
           <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-1">
-            Stated vs Actual Win Rate — Regime-Known Cohort
+            Stated vs Actual Win Rate â€” Regime-Known Cohort
           </h2>
           <p className="text-[10px] text-zinc-600 mb-3">
-            Grey bar = average stated confidence · purple bar = measured WR · drift = actual − stated · ⚠ = n &lt; {dq?.min_reliable_n ?? 30}
+            Grey bar = average stated confidence Â· purple bar = measured WR Â· drift = actual âˆ’ stated Â· âš  = n &lt; {dq?.min_reliable_n ?? 30}
           </p>
           <div className="divide-y divide-zinc-800/60">
             {Object.entries(cal.bands_regime_known).filter(([b]) => b !== 'NULL').map(([band, s]) => (
@@ -1018,8 +693,8 @@ function ConfidenceCalibrationSection() {
               {dims && Object.entries(dims).map(([value, bands]) => (
                 Object.entries(bands).map(([band, s]) => (
                   <div key={`${value}-${band}`} className="flex items-center gap-2 text-[10px]">
-                    <span className="text-zinc-500 font-mono truncate flex-1">{value === 'None' ? 'NULL' : value} · {band}</span>
-                    <span className="text-zinc-400 font-mono">{s.wr != null ? Number(s.wr).toFixed(0) : '—'}%</span>
+                    <span className="text-zinc-500 font-mono truncate flex-1">{value === 'None' ? 'NULL' : value} Â· {band}</span>
+                    <span className="text-zinc-400 font-mono">{s.wr != null ? Number(s.wr).toFixed(0) : 'â€”'}%</span>
                     <DriftChip drift={s.drift} />
                     <span className="text-zinc-600 font-mono w-12 text-right">n={s.n}</span>
                   </div>
@@ -1031,14 +706,14 @@ function ConfidenceCalibrationSection() {
       </div>
 
       <p className="text-zinc-700 text-[10px] font-mono">
-        {dq?.total_resolved ?? 0} resolved outcomes · {dq?.snapshot_generations ?? 0} snapshot generations ·
-        empirical confidence is measurement only — production scoring unchanged
+        {dq?.total_resolved ?? 0} resolved outcomes Â· {dq?.snapshot_generations ?? 0} snapshot generations Â·
+        empirical confidence is measurement only â€” production scoring unchanged
       </p>
     </div>
   )
 }
 
-// ─── AUTO_CALIBRATION.READY.1 — reads already-fetched edge+attribution data ─────
+// â”€â”€â”€ AUTO_CALIBRATION.READY.1 â€” reads already-fetched edge+attribution data â”€â”€â”€â”€â”€
 
 function CalibrationHealthPanel({
   bands,
@@ -1049,7 +724,7 @@ function CalibrationHealthPanel({
 }) {
   if (!bands?.length && !byGrade?.length) return null
 
-  // Grade monotonicity — A should outperform B, B > C, C > D (win rate)
+  // Grade monotonicity â€” A should outperform B, B > C, C > D (win rate)
   const gradeOrder = ['A+', 'A', 'B+', 'B', 'C', 'D']
   const gradeRows = gradeOrder
     .map(g => byGrade?.find(d => d.key === g))
@@ -1068,7 +743,7 @@ function CalibrationHealthPanel({
     }
   }
 
-  // Confidence band monotonicity — higher band should have higher win rate
+  // Confidence band monotonicity â€” higher band should have higher win rate
   const populatedBands = (bands ?? []).filter(b => !b.insufficient_data && b.win_rate != null)
   const bandInversions: string[] = []
   for (let i = 1; i < populatedBands.length; i++) {
@@ -1094,7 +769,7 @@ function CalibrationHealthPanel({
       {healthy && (
         <div className="flex items-center gap-2 text-xs text-bull-default/80 mb-3">
           <span className="w-1.5 h-1.5 rounded-full bg-bull-default"/>
-          Grades monotonic · confidence bands monotonic — no inversions detected
+          Grades monotonic Â· confidence bands monotonic â€” no inversions detected
         </div>
       )}
 
@@ -1104,7 +779,7 @@ function CalibrationHealthPanel({
           <div className="space-y-1">
             {gradeInversions.map(inv => (
               <div key={inv} className="flex items-center gap-2 text-[10px] text-amber-400 font-mono">
-                <span className="text-amber-500">⚠</span> {inv}
+                <span className="text-amber-500">âš </span> {inv}
               </div>
             ))}
           </div>
@@ -1117,7 +792,7 @@ function CalibrationHealthPanel({
           <div className="space-y-1">
             {bandInversions.map(inv => (
               <div key={inv} className="flex items-center gap-2 text-[10px] text-amber-400 font-mono">
-                <span className="text-amber-500">⚠</span> {inv}
+                <span className="text-amber-500">âš </span> {inv}
               </div>
             ))}
           </div>
@@ -1133,7 +808,7 @@ function CalibrationHealthPanel({
               <div key={g.key} className="bg-zinc-800 rounded px-2.5 py-1.5 text-center min-w-[52px]">
                 <p className="text-[9px] text-zinc-500">{g.key}</p>
                 <p className={`font-mono text-xs font-bold ${g.winRate != null && g.winRate >= 0.5 ? 'text-bull-default' : 'text-bear-default'}`}>
-                  {g.winRate != null ? `${(g.winRate * 100).toFixed(0)}%` : '—'}
+                  {g.winRate != null ? `${(g.winRate * 100).toFixed(0)}%` : 'â€”'}
                 </p>
                 <p className="text-[9px] text-zinc-600">n={g.total}</p>
               </div>
@@ -1156,7 +831,7 @@ function CalibrationTabContent({
   edge: EdgeReport | null
   attribution: AttributionReport | null | undefined
 }) {
-  function aiPct(v: number | null | undefined, d = 1) { return v != null ? `${(v * 100).toFixed(d)}%` : '—' }
+  function aiPct(v: number | null | undefined, d = 1) { return v != null ? `${(v * 100).toFixed(d)}%` : 'â€”' }
   const verdicts  = ai?.verdicts ?? (ai as unknown as { verdict_distribution?: Record<string, number> })?.verdict_distribution ?? {}
   const totalVerd = Object.values(verdicts as Record<string, number>).reduce((a: number, b: number) => a + b, 0)
   const hasAiData = (ai?.total_calls ?? 0) > 0
@@ -1170,7 +845,7 @@ function CalibrationTabContent({
 
       {!loading && !hasAiData && (
         <div className="rounded-xl px-5 py-4 bg-amber-500/5 border border-amber-500/20 flex items-start gap-3">
-          <span className="text-amber-400 mt-0.5 shrink-0">⚠</span>
+          <span className="text-amber-400 mt-0.5 shrink-0">âš </span>
           <div>
             <p className="text-amber-300 text-sm font-semibold">AI telemetry warming up</p>
             <p className="text-zinc-500 text-xs mt-1 leading-relaxed">No Claude API calls logged yet. Run a scan to populate calibration data.</p>
@@ -1181,7 +856,7 @@ function CalibrationTabContent({
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {[
           { label: 'Success Rate', value: aiPct(ai?.success_rate), sub: 'API calls OK (24h)',    accent: ai?.success_rate != null ? (ai.success_rate >= 0.9 ? 'text-green-400' : ai.success_rate >= 0.7 ? 'text-amber-400' : 'text-red-400') : 'text-white' },
-          { label: 'Avg Latency',  value: ai?.avg_latency_ms != null ? `${Number(ai.avg_latency_ms).toFixed(0)}ms` : '—', sub: 'per call', accent: ai?.avg_latency_ms != null ? (Number(ai.avg_latency_ms) < 2000 ? 'text-green-400' : 'text-amber-400') : 'text-white' },
+          { label: 'Avg Latency',  value: ai?.avg_latency_ms != null ? `${Number(ai.avg_latency_ms).toFixed(0)}ms` : 'â€”', sub: 'per call', accent: ai?.avg_latency_ms != null ? (Number(ai.avg_latency_ms) < 2000 ? 'text-green-400' : 'text-amber-400') : 'text-white' },
           { label: 'Last Error',   value: ai?.last_error ? 'See logs' : 'None', sub: ai?.last_error ? ai.last_error.slice(0, 40) : 'All calls clean', accent: ai?.last_error ? 'text-red-400' : 'text-green-400' },
         ].map(c => (
           <div key={c.label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
@@ -1194,7 +869,7 @@ function CalibrationTabContent({
 
       {totalVerd > 0 && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-4">Verdict Distribution — {totalVerd} calls (24h)</h2>
+          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-4">Verdict Distribution â€” {totalVerd} calls (24h)</h2>
           <div className="space-y-3">
             {Object.entries(verdicts as Record<string, number>).map(([k, v]) => (
               <VerdictBar key={k} label={k} count={v} total={totalVerd} />
@@ -1205,7 +880,7 @@ function CalibrationTabContent({
 
       <div className="pt-2">
         <p className="text-[9px] text-zinc-600 uppercase tracking-widest mb-3 flex items-center gap-2">
-          <span className="h-px flex-1 bg-zinc-800"/>Confidence Tiers — Reference<span className="h-px flex-1 bg-zinc-800"/>
+          <span className="h-px flex-1 bg-zinc-800"/>Confidence Tiers â€” Reference<span className="h-px flex-1 bg-zinc-800"/>
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {CONFIDENCE_THRESHOLDS.map(t => (
@@ -1219,21 +894,21 @@ function CalibrationTabContent({
         <p className="text-zinc-700 text-[10px] mt-2">Full confidence calibration bands and Claude effectiveness: Edge Validation tab</p>
       </div>
 
-      {/* CONFIDENCE.CALIBRATION.2 — hidden unless confidence_calibration_v2 flag is ON */}
+      {/* CONFIDENCE.CALIBRATION.2 â€” hidden unless confidence_calibration_v2 flag is ON */}
       <ConfidenceCalibrationSection />
     </div>
   )
 }
 
-// ─── Phase D — Track Record tab ───────────────────────────────────────────────
+// â”€â”€â”€ Phase D â€” Track Record tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function TrackRecordTab({ data, loading }: { data: import('@/lib/admin-api').TrackRecordResponse | null; loading: boolean }) {
-  if (loading) return <div className="text-terminal-muted text-sm py-8 text-center">Loading track record…</div>
+  if (loading) return <div className="text-terminal-muted text-sm py-8 text-center">Loading track recordâ€¦</div>
   if (!data)   return <div className="text-terminal-muted text-sm py-8 text-center">No track record data available.</div>
 
-  const w = (wr: number | null) => wr == null ? '—' : `${wr}%`
-  const e = (ex: number | null) => ex == null ? '—' : `${Number(ex) > 0 ? '+' : ''}${Number(ex).toFixed(2)}R`
-  const p = (pf: number | null) => pf == null ? '—' : Number(pf).toFixed(2)
+  const w = (wr: number | null) => wr == null ? 'â€”' : `${wr}%`
+  const e = (ex: number | null) => ex == null ? 'â€”' : `${Number(ex) > 0 ? '+' : ''}${Number(ex).toFixed(2)}R`
+  const p = (pf: number | null) => pf == null ? 'â€”' : Number(pf).toFixed(2)
   const wrCls = (wr: number | null) => wr == null ? 'text-terminal-muted' : wr >= 50 ? 'text-bull-default' : wr >= 40 ? 'text-blue-400' : wr >= 30 ? 'text-amber-400' : 'text-bear-default'
   const expCls = (exp: number | null) => exp == null ? 'text-terminal-muted' : exp >= 0.5 ? 'text-bull-default' : exp >= 0.2 ? 'text-blue-400' : exp >= 0 ? 'text-amber-400' : 'text-bear-default'
   const pfCls  = (pf: number | null)  => pf  == null ? 'text-terminal-muted' : pf  >= 2.0 ? 'text-bull-default' : pf  >= 1.5 ? 'text-blue-400' : pf  >= 1.0 ? 'text-amber-400' : 'text-bear-default'
@@ -1249,14 +924,14 @@ function TrackRecordTab({ data, loading }: { data: import('@/lib/admin-api').Tra
     <div className="space-y-6">
       <div>
         <h2 className="text-terminal-text font-semibold mb-0.5">Verified Track Record</h2>
-        <p className="text-terminal-muted text-xs">Source: {data.source} · Outcome-resolved signals only</p>
+        <p className="text-terminal-muted text-xs">Source: {data.source} Â· Outcome-resolved signals only</p>
       </div>
 
       {/* Performance windows */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {windows.map(({ label, w: win }) => (
           <div key={label} className="glass-card rounded-xl p-5">
-            <p className="text-terminal-muted text-xs uppercase tracking-widest mb-3 font-semibold">{label} Window · {win.resolved} resolved</p>
+            <p className="text-terminal-muted text-xs uppercase tracking-widest mb-3 font-semibold">{label} Window Â· {win.resolved} resolved</p>
             <div className="space-y-2.5">
               <div className="flex justify-between items-center">
                 <span className="text-terminal-muted text-xs">Win Rate</span>
@@ -1313,7 +988,7 @@ function TrackRecordTab({ data, loading }: { data: import('@/lib/admin-api').Tra
         <div className="glass-card rounded-xl p-5">
           <p className="text-terminal-muted text-xs uppercase tracking-widest mb-4 font-semibold">Probability Engine Accuracy</p>
           {data.probability_accuracy.n < 10 ? (
-            <p className="text-terminal-muted text-sm">Insufficient data — need ≥ 10 stamped outcomes (current: {data.probability_accuracy.n})</p>
+            <p className="text-terminal-muted text-sm">Insufficient data â€” need â‰¥ 10 stamped outcomes (current: {data.probability_accuracy.n})</p>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div>
@@ -1323,13 +998,13 @@ function TrackRecordTab({ data, loading }: { data: import('@/lib/admin-api').Tra
               <div>
                 <p className="text-terminal-muted text-xs mb-1">Predicted WR</p>
                 <p className="font-mono text-base text-terminal-text font-bold">
-                  {data.probability_accuracy.avg_predicted_wr != null ? `${Number(data.probability_accuracy.avg_predicted_wr).toFixed(1)}%` : '—'}
+                  {data.probability_accuracy.avg_predicted_wr != null ? `${Number(data.probability_accuracy.avg_predicted_wr).toFixed(1)}%` : 'â€”'}
                 </p>
               </div>
               <div>
                 <p className="text-terminal-muted text-xs mb-1">Actual WR</p>
                 <p className={`font-mono text-base font-bold ${wrCls(data.probability_accuracy.realized_wr)}`}>
-                  {data.probability_accuracy.realized_wr != null ? `${Number(data.probability_accuracy.realized_wr).toFixed(1)}%` : '—'}
+                  {data.probability_accuracy.realized_wr != null ? `${Number(data.probability_accuracy.realized_wr).toFixed(1)}%` : 'â€”'}
                 </p>
               </div>
               <div>
@@ -1339,7 +1014,7 @@ function TrackRecordTab({ data, loading }: { data: import('@/lib/admin-api').Tra
                   : data.probability_accuracy.mean_abs_error <= 0.1 ? 'text-bull-default'
                   : data.probability_accuracy.mean_abs_error <= 0.2 ? 'text-amber-400'
                   : 'text-bear-default'}`}>
-                  {data.probability_accuracy.mean_abs_error != null ? `${(data.probability_accuracy.mean_abs_error * 100).toFixed(0)}pp` : '—'}
+                  {data.probability_accuracy.mean_abs_error != null ? `${(data.probability_accuracy.mean_abs_error * 100).toFixed(0)}pp` : 'â€”'}
                 </p>
               </div>
             </div>
@@ -1350,22 +1025,22 @@ function TrackRecordTab({ data, loading }: { data: import('@/lib/admin-api').Tra
   )
 }
 
-// ─── Page root ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Page root â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-type Tab = 'edge' | 'attribution' | 'calibration' | 'probability' | 'track-record'
+type Tab = 'trackRecord' | 'edge' | 'attribution'
 
-// ─── PHASE.9.P1 — Probability tab ─────────────────────────────────────────────
+// â”€â”€â”€ PHASE.9.P1 â€” Probability tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function EdgeCellRow({ c }: { c: import('@/lib/admin-api').EdgeMatrixCell }) {
   const expCls = (c.exp ?? 0) >= 0.6 ? 'text-emerald-400' : (c.exp ?? 0) >= 0.15 ? 'text-blue-400' : (c.exp ?? 0) >= 0 ? 'text-amber-400' : 'text-red-400'
   return (
     <tr className="border-b border-zinc-800/40 hover:bg-zinc-800/20">
       <td className="py-1.5 px-3 font-mono text-[10px] text-zinc-500">{c.dim_key}</td>
-      <td className="py-1.5 px-3 font-mono text-xs text-zinc-200">{c.dim_value.replace(/\|/g, ' · ')}</td>
+      <td className="py-1.5 px-3 font-mono text-xs text-zinc-200">{c.dim_value.replace(/\|/g, ' Â· ')}</td>
       <td className="py-1.5 px-3 font-mono text-xs text-right text-zinc-300">{Number(c.wr).toFixed(1)}%</td>
-      <td className="py-1.5 px-3 font-mono text-[10px] text-right text-zinc-600">[{c.ci[0]}–{c.ci[1]}]</td>
-      <td className={`py-1.5 px-3 font-mono text-xs text-right font-semibold ${expCls}`}>{c.exp != null ? `${Number(c.exp) >= 0 ? '+' : ''}${Number(c.exp).toFixed(3)}R` : '—'}</td>
-      <td className="py-1.5 px-3 font-mono text-xs text-right text-zinc-400">{c.pf != null ? Number(c.pf).toFixed(2) : '—'}</td>
+      <td className="py-1.5 px-3 font-mono text-[10px] text-right text-zinc-600">[{c.ci[0]}â€“{c.ci[1]}]</td>
+      <td className={`py-1.5 px-3 font-mono text-xs text-right font-semibold ${expCls}`}>{c.exp != null ? `${Number(c.exp) >= 0 ? '+' : ''}${Number(c.exp).toFixed(3)}R` : 'â€”'}</td>
+      <td className="py-1.5 px-3 font-mono text-xs text-right text-zinc-400">{c.pf != null ? Number(c.pf).toFixed(2) : 'â€”'}</td>
       <td className="py-1.5 px-3 font-mono text-xs text-right text-zinc-500">{c.n}</td>
     </tr>
   )
@@ -1386,24 +1061,24 @@ function ProbabilityTabContent() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {([['7d', track.windows.d7], ['30d', track.windows.d30], ['90d', track.windows.d90]] as const).map(([label, w]) => (
             <div key={label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-              <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1">Track Record · {label}</p>
-              <p className="text-xl font-bold font-mono text-white">{w.win_rate != null ? `${Number(w.win_rate).toFixed(1)}%` : '—'} <span className="text-xs text-zinc-500 font-normal">WR</span></p>
+              <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1">Track Record Â· {label}</p>
+              <p className="text-xl font-bold font-mono text-white">{w.win_rate != null ? `${Number(w.win_rate).toFixed(1)}%` : 'â€”'} <span className="text-xs text-zinc-500 font-normal">WR</span></p>
               <p className="text-[11px] font-mono text-zinc-400 mt-1">
-                {w.expectancy != null ? `${w.expectancy >= 0 ? '+' : ''}${Number(w.expectancy).toFixed(3)}R` : '—'} · PF {w.pf != null ? Number(w.pf).toFixed(2) : '—'} · n={w.resolved}
+                {w.expectancy != null ? `${w.expectancy >= 0 ? '+' : ''}${Number(w.expectancy).toFixed(3)}R` : 'â€”'} Â· PF {w.pf != null ? Number(w.pf).toFixed(2) : 'â€”'} Â· n={w.resolved}
               </p>
             </div>
           ))}
         </div>
       )}
 
-      {/* Probability accuracy — predicted vs realized */}
+      {/* Probability accuracy â€” predicted vs realized */}
       {acc && acc.n > 0 && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Probability Accuracy — stamped prediction vs realized outcome</p>
+          <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Probability Accuracy â€” stamped prediction vs realized outcome</p>
           <div className="flex gap-6 flex-wrap text-sm font-mono">
-            <span className="text-zinc-400">Predicted avg: <span className="text-purple-300 font-bold">{acc.avg_predicted_wr != null ? Number(acc.avg_predicted_wr).toFixed(1) : '—'}%</span></span>
-            <span className="text-zinc-400">Realized: <span className="text-emerald-400 font-bold">{acc.realized_wr != null ? Number(acc.realized_wr).toFixed(1) : '—'}%</span></span>
-            <span className="text-zinc-400">Mean abs error: <span className="text-zinc-200 font-bold">{acc.mean_abs_error != null ? Number(acc.mean_abs_error).toFixed(3) : '—'}</span></span>
+            <span className="text-zinc-400">Predicted avg: <span className="text-purple-300 font-bold">{acc.avg_predicted_wr != null ? Number(acc.avg_predicted_wr).toFixed(1) : 'â€”'}%</span></span>
+            <span className="text-zinc-400">Realized: <span className="text-emerald-400 font-bold">{acc.realized_wr != null ? Number(acc.realized_wr).toFixed(1) : 'â€”'}%</span></span>
+            <span className="text-zinc-400">Mean abs error: <span className="text-zinc-200 font-bold">{acc.mean_abs_error != null ? Number(acc.mean_abs_error).toFixed(3) : 'â€”'}</span></span>
             <span className="text-zinc-600">n={acc.n} resolved stamped signals</span>
           </div>
         </div>
@@ -1414,7 +1089,7 @@ function ProbabilityTabContent() {
         <>
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 overflow-x-auto">
             <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">
-              Edge Matrix — Top combinations by expectancy (30d snapshots, n ≥ {matrix.min_n}, Wilson 95% CI)
+              Edge Matrix â€” Top combinations by expectancy (30d snapshots, n â‰¥ {matrix.min_n}, Wilson 95% CI)
             </p>
             <table className="w-full text-xs min-w-[640px]">
               <thead>
@@ -1429,7 +1104,7 @@ function ProbabilityTabContent() {
             </table>
           </div>
           <div className="bg-zinc-900 border border-red-900/30 rounded-xl p-4 overflow-x-auto">
-            <p className="text-[9px] text-red-400/70 uppercase tracking-widest mb-2">Worst cohorts — avoid / gate these</p>
+            <p className="text-[9px] text-red-400/70 uppercase tracking-widest mb-2">Worst cohorts â€” avoid / gate these</p>
             <table className="w-full text-xs min-w-[640px]">
               <tbody>{matrix.bottom.map((c, i) => <EdgeCellRow key={i} c={c} />)}</tbody>
             </table>
@@ -1437,21 +1112,21 @@ function ProbabilityTabContent() {
         </>
       ) : (
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-8 text-center text-zinc-600 text-sm">
-          Edge Matrix populates from nightly attribution snapshots — first generation after 00:15 UTC.
+          Edge Matrix populates from nightly attribution snapshots â€” first generation after 00:15 UTC.
         </div>
       )}
 
-      {/* PERFORMANCE.VERIFICATION.1 — read-only validation */}
+      {/* PERFORMANCE.VERIFICATION.1 â€” read-only validation */}
       <PerformanceVerificationSection />
 
       <p className="text-zinc-700 text-[10px] font-mono">
-        Derived entirely from signal_outcomes via attribution snapshots · no ML · empirical grades: A+ ≥1.0R · A ≥0.6 · B+ ≥0.35 · B ≥0.15 · C ≥0 · D &lt;0
+        Derived entirely from signal_outcomes via attribution snapshots Â· no ML Â· empirical grades: A+ â‰¥1.0R Â· A â‰¥0.6 Â· B+ â‰¥0.35 Â· B â‰¥0.15 Â· C â‰¥0 Â· D &lt;0
       </p>
     </div>
   )
 }
 
-// ─── PERFORMANCE.VERIFICATION.1 ───────────────────────────────────────────────
+// â”€â”€â”€ PERFORMANCE.VERIFICATION.1 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type VerifyResponse = {
   accuracy: {
@@ -1487,21 +1162,21 @@ function GradeValidationTable({ title, rows, inversions }: {
       <div className="flex items-center gap-2 mb-2">
         <p className="text-[9px] text-zinc-500 uppercase tracking-widest">{title}</p>
         {inversions.length === 0
-          ? <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">monotonic ✓</span>
+          ? <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">monotonic âœ“</span>
           : <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400">{inversions.length} inversion{inversions.length > 1 ? 's' : ''}</span>}
       </div>
       <div className="space-y-1">
         {rows.map(g => (
           <div key={g.grade} className="flex items-center gap-3 text-xs font-mono">
             <span className="text-purple-300 font-bold w-7">{g.grade}</span>
-            <span className="text-zinc-300 w-14">{g.wr != null ? Number(g.wr).toFixed(1) : '—'}%</span>
-            <span className={`w-18 ${(Number(g.exp ?? 0) >= 0) ? 'text-emerald-400' : 'text-red-400'}`}>{g.exp != null ? `${Number(g.exp) >= 0 ? '+' : ''}${Number(g.exp).toFixed(3)}R` : '—'}</span>
-            <span className="text-zinc-500 w-14">PF {g.pf != null ? Number(g.pf).toFixed(2) : '—'}</span>
+            <span className="text-zinc-300 w-14">{g.wr != null ? Number(g.wr).toFixed(1) : 'â€”'}%</span>
+            <span className={`w-18 ${(Number(g.exp ?? 0) >= 0) ? 'text-emerald-400' : 'text-red-400'}`}>{g.exp != null ? `${Number(g.exp) >= 0 ? '+' : ''}${Number(g.exp).toFixed(3)}R` : 'â€”'}</span>
+            <span className="text-zinc-500 w-14">PF {g.pf != null ? Number(g.pf).toFixed(2) : 'â€”'}</span>
             <span className="text-zinc-600">n={g.n}</span>
           </div>
         ))}
       </div>
-      {inversions.map((v, i) => <p key={i} className="text-[10px] text-red-400/80 mt-1.5 font-mono">⚠ {v}</p>)}
+      {inversions.map((v, i) => <p key={i} className="text-[10px] text-red-400/80 mt-1.5 font-mono">âš  {v}</p>)}
     </div>
   )
 }
@@ -1521,18 +1196,18 @@ function PerformanceVerificationSection() {
   return (
     <div className="space-y-4">
       <p className="text-[9px] text-zinc-600 uppercase tracking-widest flex items-center gap-2">
-        <span className="h-px flex-1 bg-zinc-800"/>Performance Verification — read-only<span className="h-px flex-1 bg-zinc-800"/>
+        <span className="h-px flex-1 bg-zinc-800"/>Performance Verification â€” read-only<span className="h-px flex-1 bg-zinc-800"/>
       </p>
 
       {v.sample_quality.warnings.map((w, i) => (
         <div key={i} className="rounded-lg px-3 py-2 bg-amber-500/5 border border-amber-500/20 text-amber-300/90 text-xs flex items-start gap-2">
-          <span className="shrink-0">⚠</span><span>{w}</span>
+          <span className="shrink-0">âš </span><span>{w}</span>
         </div>
       ))}
 
       {/* Probability accuracy */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-        <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Probability Accuracy — predicted vs realized (out-of-sample, accumulating)</p>
+        <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Probability Accuracy â€” predicted vs realized (out-of-sample, accumulating)</p>
         {acc ? (
           <>
             <div className="flex gap-5 flex-wrap text-sm font-mono mb-3">
@@ -1550,9 +1225,9 @@ function PerformanceVerificationSection() {
                     <div key={r.value} className="flex items-center gap-2 text-[10px] font-mono">
                       <span className="text-zinc-400 truncate flex-1">{r.value}</span>
                       <span className="text-purple-300">{r.predicted_wr}%</span>
-                      <span className="text-zinc-500">→</span>
+                      <span className="text-zinc-500">â†’</span>
                       <span className="text-zinc-200">{r.actual_wr}%</span>
-                      <span className={r.calibrated ? 'text-emerald-500' : 'text-red-400'}>{r.calibrated ? '✓' : '✗'}</span>
+                      <span className={r.calibrated ? 'text-emerald-500' : 'text-red-400'}>{r.calibrated ? 'âœ“' : 'âœ—'}</span>
                       <span className={`${r.low_sample ? 'text-amber-500' : 'text-zinc-600'}`}>n={r.n}</span>
                     </div>
                   ))}
@@ -1560,36 +1235,36 @@ function PerformanceVerificationSection() {
               ))}
             </div>
           </>
-        ) : <p className="text-zinc-600 text-xs">No resolved stamped signals yet — predictions began accumulating with the Probability Engine deploy.</p>}
+        ) : <p className="text-zinc-600 text-xs">No resolved stamped signals yet â€” predictions began accumulating with the Probability Engine deploy.</p>}
       </div>
 
       {/* Grade validation */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <GradeValidationTable title="RiskGrade 2.0 (empirical) — actual performance"
+        <GradeValidationTable title="RiskGrade 2.0 (empirical) â€” actual performance"
           rows={v.grades.empirical}
           inversions={[...v.grades.empirical_inversions_wr, ...v.grades.empirical_inversions_exp]} />
-        <GradeValidationTable title="Heuristic A–F — actual performance"
+        <GradeValidationTable title="Heuristic Aâ€“F â€” actual performance"
           rows={v.grades.heuristic}
           inversions={v.grades.heuristic_inversions_wr} />
       </div>
 
       {/* Edge stability */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-        <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Edge Stability — top-cohort retention across windows</p>
+        <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Edge Stability â€” top-cohort retention across windows</p>
         <div className="flex gap-6 flex-wrap text-xs font-mono mb-2">
-          <span className="text-zinc-400">7d vs 30d: <span className="text-zinc-200 font-bold">J={v.stability.overlap_7v30.jaccard ?? '—'}</span> · top3 kept {v.stability.overlap_7v30.top3_retained}/3</span>
-          <span className="text-zinc-400">30d vs 90d: <span className="text-zinc-200 font-bold">J={v.stability.overlap_30v90.jaccard ?? '—'}</span> · top3 kept {v.stability.overlap_30v90.top3_retained}/3</span>
+          <span className="text-zinc-400">7d vs 30d: <span className="text-zinc-200 font-bold">J={v.stability.overlap_7v30.jaccard ?? 'â€”'}</span> Â· top3 kept {v.stability.overlap_7v30.top3_retained}/3</span>
+          <span className="text-zinc-400">30d vs 90d: <span className="text-zinc-200 font-bold">J={v.stability.overlap_30v90.jaccard ?? 'â€”'}</span> Â· top3 kept {v.stability.overlap_30v90.top3_retained}/3</span>
         </div>
         <div className="flex gap-4 flex-wrap">
           {Object.entries(v.stability.regime_distribution).map(([win, dist]) => (
             <div key={win} className="text-[10px] font-mono text-zinc-500">
               <span className="text-zinc-400 uppercase">{win}:</span>{' '}
-              {Object.entries(dist).map(([r, n]) => `${r} ${n}`).join(' · ')}
+              {Object.entries(dist).map(([r, n]) => `${r} ${n}`).join(' Â· ')}
             </div>
           ))}
         </div>
         <p className="text-[10px] text-zinc-600 mt-2 leading-relaxed">
-          Low 7d-vs-30d overlap reflects the regime mix shifting (cohort rankings are regime-conditional by design) —
+          Low 7d-vs-30d overlap reflects the regime mix shifting (cohort rankings are regime-conditional by design) â€”
           not cohort decay. 30d-vs-90d is trivially identical until outcome history exceeds 30 days.
         </p>
       </div>
@@ -1597,12 +1272,406 @@ function PerformanceVerificationSection() {
   )
 }
 
+// â”€â”€â”€ Track Record tab (with CalibrationHealthPanel appended) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+function TrackRecordWithCalibration({
+  data,
+  loading,
+  edge,
+  attribution,
+}: {
+  data: import('@/lib/admin-api').TrackRecordResponse | null
+  loading: boolean
+  edge: EdgeReport | null
+  attribution: AttributionReport | null | undefined
+}) {
+  return (
+    <div className="space-y-6">
+      <TrackRecordTab data={data} loading={loading} />
+      <CalibrationHealthPanel
+        bands={edge?.confidence_calibration?.bands}
+        byGrade={attribution?.dimensions?.byGrade}
+      />
+    </div>
+  )
+}
+
+// â”€â”€â”€ Edge tab (with Edge Matrix appended, Intelligence/Confidence Tiers removed) â”€
+
+function EdgeMatrixSection() {
+  const edgeFetcher = useCallback(() => adminApi.analytics.edgeMatrix().catch(() => null), [])
+  const { data: matrix } = useAutoRefresh<import('@/lib/admin-api').EdgeMatrixResponse | null>(edgeFetcher, 300_000)
+
+  if (!matrix || matrix.top.length === 0) {
+    return (
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-8 text-center text-zinc-600 text-sm">
+        Edge Matrix populates from nightly attribution snapshots â€” first generation after 00:15 UTC.
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 overflow-x-auto">
+        <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">
+          Edge Matrix â€” Top combinations by expectancy (30d snapshots, n â‰¥ {matrix.min_n}, Wilson 95% CI)
+        </p>
+        <table className="w-full text-xs min-w-[640px]">
+          <thead>
+            <tr className="border-b border-zinc-700 text-[9px] uppercase tracking-wider text-zinc-500">
+              <th className="text-left py-1.5 px-3">Dimension</th><th className="text-left py-1.5 px-3">Cohort</th>
+              <th className="text-right py-1.5 px-3">WR</th><th className="text-right py-1.5 px-3">CI</th>
+              <th className="text-right py-1.5 px-3">Exp</th><th className="text-right py-1.5 px-3">PF</th>
+              <th className="text-right py-1.5 px-3">n</th>
+            </tr>
+          </thead>
+          <tbody>{matrix.top.slice(0, 25).map((c, i) => <EdgeCellRow key={i} c={c} />)}</tbody>
+        </table>
+      </div>
+      <div className="bg-zinc-900 border border-red-900/30 rounded-xl p-4 overflow-x-auto">
+        <p className="text-[9px] text-red-400/70 uppercase tracking-widest mb-2">Worst cohorts â€” avoid / gate these</p>
+        <table className="w-full text-xs min-w-[640px]">
+          <tbody>{matrix.bottom.map((c, i) => <EdgeCellRow key={i} c={c} />)}</tbody>
+        </table>
+      </div>
+      <p className="text-zinc-700 text-[10px] font-mono">
+        Derived entirely from signal_outcomes via attribution snapshots Â· no ML Â· empirical grades: A+ â‰¥1.0R Â· A â‰¥0.6 Â· B+ â‰¥0.35 Â· B â‰¥0.15 Â· C â‰¥0 Â· D &lt;0
+      </p>
+    </>
+  )
+}
+
+function EdgeTab({ edge, loading }: {
+  edge: EdgeReport | null; loading: boolean
+  matrix?: import('@/lib/admin-api').EdgeMatrixResponse | null
+}) {
+  const overall = edge?.overall
+  const verdict = edge?.edge_verdict
+  const cal     = edge?.confidence_calibration
+
+  const confidenceLevelColor: Record<string, string> = {
+    strong: 'text-bull-default', moderate: 'text-signal-high', weak: 'text-signal-medium',
+    none: 'text-bear-default', insufficient_data: 'text-terminal-muted',
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Edge verdict */}
+      <div className="glass-card rounded-lg p-5">
+        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-4">Edge Verdict</p>
+        {loading ? (
+          <div className="space-y-2">
+            <div className="skeleton h-6 w-48 rounded" />
+            <div className="skeleton h-3 w-full rounded" />
+          </div>
+        ) : verdict?.confidence_level === 'insufficient_data' || !verdict ? (
+          <div className="flex flex-col gap-2">
+            <p className="text-signal-medium text-sm font-semibold">â—Œ Edge analytics warming up</p>
+            <p className="text-terminal-muted text-xs leading-relaxed">
+              Statistical edge verdicts require a minimum of 30 resolved signals (TP hit, SL hit, or timeout). Keep running scans â€” outcomes are resolved automatically as price reaches target or stop levels.
+            </p>
+            {edge && (
+              <p className="text-terminal-muted/50 text-xs font-mono mt-1">
+                {explicitWindowNote(edge.window_hours)} - Total signals tracked: {edge.overall?.total ?? 0}
+              </p>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 mb-3 flex-wrap">
+              <span className={`font-mono font-bold text-xl uppercase ${confidenceLevelColor[verdict.confidence_level]}`}>
+                {verdict.confidence_level.replace(/_/g, ' ')}
+              </span>
+              {verdict.has_edge != null && (
+                <span className={`text-xs px-2 py-0.5 rounded border font-bold uppercase ${
+                  verdict.has_edge ? 'bg-bull-default/10 text-bull-default border-bull-default/20' : 'bg-bear-default/10 text-bear-default border-bear-default/20'
+                }`}>
+                  {verdict.has_edge ? 'EDGE CONFIRMED' : 'NO EDGE'}
+                </span>
+              )}
+            </div>
+            <p className="text-terminal-muted text-xs">{verdict.summary}</p>
+          </>
+        )}
+      </div>
+
+      {/* Overall stats */}
+      <div>
+        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">
+          Overall Statistics - {analyticsWindowLabel(edge?.window_hours ?? 720)}
+        </p>
+        <div className="glass-card rounded-lg p-5">
+          {loading ? (
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="space-y-1">
+                  <div className="skeleton h-2.5 w-16 rounded" />
+                  <div className="skeleton h-6 w-12 rounded" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-4">
+              <StatPair label="Signals"      value={String(overall?.total ?? 0)} />
+              <StatPair label="Win Rate"     value={overall?.win_rate != null ? `${(Number(overall.win_rate) * 100).toFixed(1)}%` : 'â€”'} accent={overall?.win_rate && Number(overall.win_rate) >= 0.55 ? 'text-bull-default' : 'text-bear-default'} />
+              <StatPair label="Expectancy"   value={overall?.expectancy != null ? `${Number(overall.expectancy) > 0 ? '+' : ''}${Number(overall.expectancy).toFixed(2)}R` : 'â€”'} accent={overall?.expectancy && Number(overall.expectancy) > 0 ? 'text-bull-default' : 'text-bear-default'} />
+              <StatPair label="Profit Factor" value={overall?.profit_factor != null ? Number(overall.profit_factor).toFixed(2) : 'â€”'} accent={overall?.profit_factor && Number(overall.profit_factor) >= 1.5 ? 'text-bull-default' : 'text-terminal-text'} />
+              <StatPair label="Max DD"       value={overall?.max_drawdown_r != null ? `${Number(overall.max_drawdown_r).toFixed(1)}R` : 'â€”'} accent="text-bear-default" />
+              <StatPair label="Sharpe"       value={overall?.sharpe != null ? Number(overall.sharpe).toFixed(2) : 'â€”'} accent={overall?.sharpe && Number(overall.sharpe) > 1 ? 'text-bull-default' : 'text-terminal-text'} />
+            </div>
+          )}
+          {!loading && (!overall || overall.total === 0) && (
+            <p className="text-terminal-muted/50 text-xs mt-4 pt-4 border-t border-terminal-border/50">
+              No resolved signals yet â€” statistics will appear after signals reach their TP / SL targets.
+            </p>
+          )}
+          {overall && overall.total > 0 && (
+            <div className="mt-4 pt-4 border-t border-terminal-border/50 flex gap-6 text-xs font-mono text-terminal-muted">
+              <span>TP: <span className="text-bull-default">{overall.tp_hits}</span></span>
+              <span>SL: <span className="text-bear-default">{overall.sl_hits}</span></span>
+              <span>TO: <span className="text-terminal-text">{overall.timeouts}</span></span>
+              {overall.win_rate_ci && (
+                <span>95% CI: [{(overall.win_rate_ci[0] * 100).toFixed(1)}%, {(overall.win_rate_ci[1] * 100).toFixed(1)}%]</span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Calibration */}
+      {!loading && (!cal || !cal.calibration) && (
+        <div className="glass-card rounded-lg p-5">
+          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Confidence Calibration</p>
+          <p className="text-terminal-muted/60 text-xs leading-relaxed">
+            Calibration bands require resolved signals across multiple confidence tiers (70â€“100). Run scans in different modes to build a diverse signal pool.
+          </p>
+        </div>
+      )}
+      {cal && cal.calibration && (
+        <div>
+          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Confidence Calibration</p>
+          <div className="glass-card rounded-lg overflow-hidden">
+            <div className="px-5 py-3 border-b border-terminal-border flex items-center gap-4 flex-wrap">
+              <span className="text-terminal-muted text-xs">ECE:</span>
+              <span className={`font-mono text-sm font-bold ${Number(cal.calibration.ece) < 0.05 ? 'text-bull-default' : Number(cal.calibration.ece) < 0.12 ? 'text-signal-high' : 'text-bear-default'}`}>
+                {Number(cal.calibration.ece).toFixed(4)}
+              </span>
+              <span className="text-terminal-muted text-xs">Label:</span>
+              <span className="text-terminal-text text-xs font-mono">{cal.calibration.label.replace(/_/g, ' ')}</span>
+              <span className="text-terminal-muted text-xs">Monotone:</span>
+              <span className={`text-xs font-mono ${cal.calibration.is_monotone ? 'text-bull-default' : 'text-bear-default'}`}>
+                {cal.calibration.is_monotone === null ? 'â€”' : cal.calibration.is_monotone ? 'yes' : 'no'}
+              </span>
+              {cal.optimal_threshold != null && (
+                <>
+                  <span className="text-terminal-muted text-xs">Optimal threshold:</span>
+                  <span className="text-signal-high font-mono text-xs">{cal.optimal_threshold}</span>
+                </>
+              )}
+            </div>
+            <CalibrationTable bands={cal.bands} />
+          </div>
+        </div>
+      )}
+
+      {/* Scanner Mode Performance */}
+      {edge?.scanner_mode_analysis && !edge.scanner_mode_analysis.insufficient_data && (
+        <div>
+          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">
+            Scanner Mode Performance â€” {analyticsWindowLabel(edge.window_hours)}
+          </p>
+          <div className="glass-card rounded-lg overflow-hidden overflow-x-auto">
+            <table className="w-full text-xs min-w-[380px]">
+              <thead>
+                <tr className="border-b border-terminal-border">
+                  {['Mode', 'Resolved', 'Win Rate', 'Expectancy', 'PF', 'Per Day'].map(h => (
+                    <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(edge.scanner_mode_analysis.ranked_by_expectancy ?? []).map(mode => {
+                  const m = edge.scanner_mode_analysis!.modes[mode]
+                  if (!m) return null
+                  const modeLabel = mode === 'high_confidence' ? 'High Conf' : mode.charAt(0).toUpperCase() + mode.slice(1)
+                  return (
+                    <tr key={mode} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
+                      <td className="py-2 px-3 font-medium text-terminal-text">{modeLabel}</td>
+                      <td className="py-2 px-3 font-mono text-terminal-muted">{m.total}</td>
+                      <td className="py-2 px-3 font-mono">
+                        {m.win_rate != null
+                          ? <span className={m.win_rate >= 0.55 ? 'text-bull-default' : m.win_rate >= 0.45 ? 'text-signal-high' : 'text-bear-default'}>
+                              {(m.win_rate * 100).toFixed(1)}%
+                            </span>
+                          : <span className="text-terminal-muted/40">â€”</span>}
+                      </td>
+                      <td className="py-2 px-3 font-mono">
+                        {m.expectancy != null
+                          ? <span className={Number(m.expectancy) > 0 ? 'text-bull-default' : 'text-bear-default'}>
+                              {Number(m.expectancy) > 0 ? '+' : ''}{Number(m.expectancy).toFixed(2)}R
+                            </span>
+                          : <span className="text-terminal-muted/40">â€”</span>}
+                      </td>
+                      <td className="py-2 px-3 font-mono text-terminal-muted">
+                        {m.profit_factor != null ? Number(m.profit_factor).toFixed(2) : 'â€”'}
+                      </td>
+                      <td className="py-2 px-3 font-mono text-terminal-muted">
+                        {m.signals_per_day != null ? Number(m.signals_per_day).toFixed(1) : 'â€”'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Market Regime Performance */}
+      {edge?.market_regime_analysis && !edge.market_regime_analysis.insufficient_data && (
+        <div>
+          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">
+            Regime Performance â€” {analyticsWindowLabel(edge.window_hours)}
+            {(edge.market_regime_analysis.recommended_avoid ?? []).length > 0 && (
+              <span className="ml-2 text-bear-default normal-case">
+                Avoid: {(edge.market_regime_analysis.recommended_avoid ?? []).join(', ')}
+              </span>
+            )}
+          </p>
+          <div className="glass-card rounded-lg overflow-hidden overflow-x-auto">
+            <table className="w-full text-xs min-w-[340px]">
+              <thead>
+                <tr className="border-b border-terminal-border">
+                  {['Regime', 'Resolved', 'Win Rate', 'Expectancy', 'PF'].map(h => (
+                    <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(edge.market_regime_analysis.ranked_by_expectancy ?? []).map(regime => {
+                  const r = edge.market_regime_analysis!.regimes[regime]
+                  if (!r) return null
+                  const isAvoid  = (edge.market_regime_analysis!.recommended_avoid ?? []).includes(regime)
+                  const isPrefer = (edge.market_regime_analysis!.recommended_prefer ?? []).includes(regime)
+                  return (
+                    <tr key={regime} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
+                      <td className="py-2 px-3 font-medium flex items-center gap-1.5">
+                        <span className={isAvoid ? 'text-bear-default' : isPrefer ? 'text-bull-default' : 'text-terminal-text'}>
+                          {regime.toUpperCase()}
+                        </span>
+                        {isAvoid  && <span className="text-[9px] text-bear-default/70 border border-bear-default/20 px-1 rounded">avoid</span>}
+                        {isPrefer && <span className="text-[9px] text-bull-default/70 border border-bull-default/20 px-1 rounded">prefer</span>}
+                      </td>
+                      <td className="py-2 px-3 font-mono text-terminal-muted">{r.total}</td>
+                      <td className="py-2 px-3 font-mono">
+                        {r.win_rate != null
+                          ? <span className={r.win_rate >= 0.55 ? 'text-bull-default' : r.win_rate >= 0.45 ? 'text-signal-high' : 'text-bear-default'}>
+                              {(r.win_rate * 100).toFixed(1)}%
+                            </span>
+                          : <span className="text-terminal-muted/40">â€”</span>}
+                      </td>
+                      <td className="py-2 px-3 font-mono">
+                        {r.expectancy != null
+                          ? <span className={Number(r.expectancy) > 0 ? 'text-bull-default' : 'text-bear-default'}>
+                              {Number(r.expectancy) > 0 ? '+' : ''}{Number(r.expectancy).toFixed(2)}R
+                            </span>
+                          : <span className="text-terminal-muted/40">â€”</span>}
+                      </td>
+                      <td className="py-2 px-3 font-mono text-terminal-muted">
+                        {r.profit_factor != null ? Number(r.profit_factor).toFixed(2) : 'â€”'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Per-Coin Performance */}
+      {edge?.coin_performance && !edge.coin_performance.insufficient_data && (
+        <div>
+          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">
+            Top Coins by Expectancy â€” {analyticsWindowLabel(edge.window_hours)}
+            <span className="ml-2 text-terminal-muted/50 normal-case font-normal">
+              {edge.coin_performance.total_symbols_seen} symbols seen
+            </span>
+          </p>
+          <div className="glass-card rounded-lg overflow-hidden overflow-x-auto">
+            <table className="w-full text-xs min-w-[420px]">
+              <thead>
+                <tr className="border-b border-terminal-border">
+                  {['Coin', 'Resolved', 'Win Rate', 'Expectancy', 'PF', 'Max DD'].map(h => (
+                    <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(edge.coin_performance.best_by_expectancy ?? []).slice(0, 10).map(sym => {
+                  const c = edge.coin_performance!.coins[sym]
+                  if (!c) return null
+                  const isBestWR  = (edge.coin_performance!.best_by_win_rate ?? []).includes(sym)
+                  const isWorstDD = (edge.coin_performance!.worst_by_drawdown ?? []).includes(sym)
+                  return (
+                    <tr key={sym} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
+                      <td className="py-2 px-3 font-medium font-mono">
+                        <span className="text-terminal-text">{sym}</span>
+                        {isBestWR  && <span className="ml-1.5 text-[9px] text-bull-default/70 border border-bull-default/20 px-1 rounded">top WR</span>}
+                        {isWorstDD && <span className="ml-1.5 text-[9px] text-bear-default/70 border border-bear-default/20 px-1 rounded">high DD</span>}
+                      </td>
+                      <td className="py-2 px-3 font-mono text-terminal-muted">{c.total}</td>
+                      <td className="py-2 px-3 font-mono">
+                        {c.win_rate != null
+                          ? <span className={c.win_rate >= 0.55 ? 'text-bull-default' : c.win_rate >= 0.45 ? 'text-signal-high' : 'text-bear-default'}>
+                              {(c.win_rate * 100).toFixed(1)}%
+                            </span>
+                          : <span className="text-terminal-muted/40">â€”</span>}
+                      </td>
+                      <td className="py-2 px-3 font-mono">
+                        {c.expectancy != null
+                          ? <span className={Number(c.expectancy) > 0 ? 'text-bull-default' : 'text-bear-default'}>
+                              {Number(c.expectancy) > 0 ? '+' : ''}{Number(c.expectancy).toFixed(2)}R
+                            </span>
+                          : <span className="text-terminal-muted/40">â€”</span>}
+                      </td>
+                      <td className="py-2 px-3 font-mono text-terminal-muted">
+                        {c.profit_factor != null ? Number(c.profit_factor).toFixed(2) : 'â€”'}
+                      </td>
+                      <td className="py-2 px-3 font-mono">
+                        {c.max_drawdown_r != null
+                          ? <span className={Number(c.max_drawdown_r) > 2 ? 'text-bear-default' : 'text-terminal-muted'}>
+                              {Number(c.max_drawdown_r).toFixed(2)}R
+                            </span>
+                          : <span className="text-terminal-muted/40">â€”</span>}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {edge && (
+        <p className="text-terminal-muted/40 text-xs font-mono">
+          Generated {formatTs(edge.generated_at)} - {explicitWindowNote(edge.window_hours)}
+        </p>
+      )}
+
+      {/* Edge Matrix (moved from Probability tab) */}
+      <EdgeMatrixSection />
+    </div>
+  )
+}
+
 export default function AnalyticsPage() {
-  const [tab, setTab] = useState<Tab>('edge')
+  const [tab, setTab] = useState<Tab>('trackRecord')
 
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tab') as Tab | null
-    if (t && ['edge', 'attribution', 'calibration', 'probability', 'track-record'].includes(t)) setTab(t)
+    if (t && ['trackRecord', 'edge', 'attribution'].includes(t)) setTab(t)
   }, [])
 
   const edgeFetcher  = useCallback(() => adminApi.analytics.edgeReport(), [])
@@ -1624,43 +1693,50 @@ export default function AnalyticsPage() {
   const trackRecordFetcher = useCallback(() => adminApi.analytics.trackRecord(), [])
   const { data: trackRecord, loading: trackLoading } = useAutoRefresh<import('@/lib/admin-api').TrackRecordResponse>(trackRecordFetcher, 300_000)
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'edge',         label: 'Edge Validation' },
-    { id: 'attribution',  label: 'Attribution'     },
-    { id: 'calibration',  label: 'AI Calibration'  },
-    { id: 'probability',  label: 'Probability'     },
-    { id: 'track-record', label: 'Track Record'    },
-  ]
-
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-terminal-text text-xl font-semibold">Quantitative Analytics</h1>
-        <p className="text-terminal-muted text-sm mt-1">Edge validation · Attribution intelligence · AI calibration</p>
+        <p className="text-terminal-muted text-sm mt-1">Edge validation Â· Attribution intelligence Â· AI calibration</p>
       </div>
 
       {/* Tab nav */}
       <div className="flex gap-1 border-b border-terminal-border pb-0">
-        {tabs.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`px-4 py-2 text-xs font-mono uppercase tracking-wider border-b-2 transition-colors ${
-              tab === t.id
-                ? 'border-terminal-text text-terminal-text'
-                : 'border-transparent text-terminal-muted hover:text-terminal-text/70'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+        <button
+          onClick={() => setTab('trackRecord')}
+          className={`px-4 py-2 text-xs font-mono uppercase tracking-wider border-b-2 transition-colors ${
+            tab === 'trackRecord'
+              ? 'border-terminal-text text-terminal-text'
+              : 'border-transparent text-terminal-muted hover:text-terminal-text/70'
+          }`}
+        >
+          Track Record
+        </button>
+        <button
+          onClick={() => setTab('edge')}
+          className={`px-4 py-2 text-xs font-mono uppercase tracking-wider border-b-2 transition-colors ${
+            tab === 'edge'
+              ? 'border-terminal-text text-terminal-text'
+              : 'border-transparent text-terminal-muted hover:text-terminal-text/70'
+          }`}
+        >
+          Edge
+        </button>
+        <button
+          onClick={() => setTab('attribution')}
+          className={`px-4 py-2 text-xs font-mono uppercase tracking-wider border-b-2 transition-colors ${
+            tab === 'attribution'
+              ? 'border-terminal-text text-terminal-text'
+              : 'border-transparent text-terminal-muted hover:text-terminal-text/70'
+          }`}
+        >
+          Attribution
+        </button>
       </div>
 
-      {tab === 'edge'         && <EdgeValidationTab edge={edge ?? null} loading={edgeLoading} intel={intel ?? null} intelLoading={intelLoading} />}
-      {tab === 'attribution'  && <AttributionTab data={attribution ?? null} loading={attrLoading} />}
-      {tab === 'calibration'  && <CalibrationTabContent ai={aiData ?? null} loading={aiLoading} edge={edge ?? null} attribution={attribution} />}
-      {tab === 'probability'  && <ProbabilityTabContent />}
-      {tab === 'track-record' && <TrackRecordTab data={trackRecord ?? null} loading={trackLoading} />}
+      {tab === 'trackRecord' && <TrackRecordWithCalibration data={trackRecord ?? null} loading={trackLoading} edge={edge ?? null} attribution={attribution} />}
+      {tab === 'edge'        && <EdgeTab edge={edge ?? null} loading={edgeLoading} matrix={null} />}
+      {tab === 'attribution' && <AttributionTab data={attribution ?? null} loading={attrLoading} />}
     </div>
   )
 }

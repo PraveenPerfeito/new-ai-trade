@@ -957,22 +957,28 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      {/* ── Feature Flags — always visible (SETTINGS.CENTER.2) ────────────── */}
-      <div className="space-y-3">
-        <p className="text-terminal-text text-sm font-semibold">Feature Flags</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {(settings['features']?.fields ?? [])
-            .filter(entry => !quickToggleKeys.some(q => q.group === 'features' && q.key === entry.key))
-            .map(entry => {
-              const k = `features.${entry.key}`
-              return (
-                <FeatureFlagCard key={entry.key} entry={entry} value={getValue(entry) as boolean}
-                  onChange={v => handleChange(entry, v)} isSaving={saving.has(k)}
-                  isSaved={saved.has(k)} error={errors[k]} />
-              )
-            })}
+      {/* ── Feature Flags — collapsed by default ────────────────────────── */}
+      <details className="mt-4">
+        <summary className="cursor-pointer flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-900/50 border border-zinc-800/60 text-xs text-zinc-400 hover:text-zinc-300 font-semibold uppercase tracking-wide select-none">
+          <span>Feature Flags</span>
+          <span className="text-zinc-600">(Advanced)</span>
+          <span className="ml-auto text-zinc-600">▸</span>
+        </summary>
+        <div className="space-y-3 mt-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {(settings['features']?.fields ?? [])
+              .filter(entry => !quickToggleKeys.some(q => q.group === 'features' && q.key === entry.key))
+              .map(entry => {
+                const k = `features.${entry.key}`
+                return (
+                  <FeatureFlagCard key={entry.key} entry={entry} value={getValue(entry) as boolean}
+                    onChange={v => handleChange(entry, v)} isSaving={saving.has(k)}
+                    isSaved={saved.has(k)} error={errors[k]} />
+                )
+              })}
+          </div>
         </div>
-      </div>
+      </details>
 
       {/* ── Advanced Settings — single collapsed accordion ────────────────── */}
       <div className="glass-card rounded-xl overflow-hidden border border-terminal-border/50">

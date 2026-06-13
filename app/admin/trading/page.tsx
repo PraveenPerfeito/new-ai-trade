@@ -462,6 +462,9 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
     ...(sig.positioningContext ? [{ label: 'Positioning', value: shortLabel(sig.positioningContext), color: posColor(sig.positioningContext) }] : []),
     ...(sig.marketRegime ? [{ label: 'Regime', value: shortLabel(sig.marketRegime) }] : []),
     ...(adxValue != null ? [{ label: 'ADX', value: adxValue.toFixed(0), color: adxValue >= 40 ? 'text-emerald-400' : adxValue >= 30 ? 'text-blue-400' : adxValue < 18 ? 'text-red-400' : 'text-zinc-300' }] : []),
+  ]
+  // Group B — Extended Intel chips (collapsed)
+  const extIntelFields: IntelField[] = [
     ...(sig.mcapTier ? [{ label: 'MCap', value: sig.mcapTier.charAt(0).toUpperCase() + sig.mcapTier.slice(1) }] : []),
     ...(sig.extensionRisk && sig.extensionRisk !== 'LOW' ? [{ label: 'Ext Risk', value: sig.extensionRisk, color: sig.extensionRisk === 'HIGH' ? 'text-red-400' : 'text-amber-400' }] : []),
     ...(sig.pullbackQuality ? [{ label: 'Pullback', value: shortLabel(String(sig.pullbackQuality)) }] : []),
@@ -1106,10 +1109,6 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
         <div>
           <div className="flex items-center gap-3 mb-2">
             <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Recent Signals</p>
-            <div className="flex items-center gap-1.5 ml-auto">
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/20 text-green-400">{signals.filter(s=>s.type==='BUY').length} BUY</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400">{signals.filter(s=>s.type==='SELL').length} SELL</span>
-            </div>
           </div>
           <div className="space-y-1.5">
             {signals.slice(0,6).map((sig,i)=>{
@@ -1332,7 +1331,12 @@ function ScannerTab({ celery, flags, aiEnabled, loading, error, scanning, scanDo
       </div>
 
       {/* Telegram delivery funnel (TELEGRAM.RELIABILITY.1) */}
-      <TelegramDeliveryCard />
+      <details className="mt-3">
+        <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-400 font-semibold uppercase tracking-wide py-1">
+          Telegram Delivery ▸
+        </summary>
+        <TelegramDeliveryCard />
+      </details>
 
       {/* NORMAL CONTROLS */}
       <div>
@@ -1376,9 +1380,6 @@ function ScannerTab({ celery, flags, aiEnabled, loading, error, scanning, scanDo
         const accepted = Math.round((scanStats.avg_signals_found??0)*scanStats.total_scans)
         const rejected = Math.max(0, total-accepted)
         const rate     = total > 0 ? ((accepted/total)*100).toFixed(1) : '0.0'
-        const gates    = scanStats.gate_rejections??{}
-        const totalGate = Object.values(gates).reduce((s,n)=>s+n,0)
-        const topGates  = Object.entries(gates).filter(([,n])=>n>0).sort(([,a],[,b])=>b-a).slice(0,8)
         return (
           <div>
             <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3 font-semibold">Last 24h — Scan Summary</p>
@@ -1390,27 +1391,6 @@ function ScannerTab({ celery, flags, aiEnabled, loading, error, scanning, scanDo
                 </div>
               ))}
             </div>
-            {topGates.length > 0 && (
-              <div className="glass-card rounded-xl p-4">
-                <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Gate Rejections ({scanStats.total_scans} scans)</p>
-                <div className="space-y-2.5">
-                  {topGates.map(([gate,count])=>{
-                    const pct = totalGate>0?Math.round(count/totalGate*100):0
-                    return (
-                      <div key={gate}>
-                        <div className="flex items-center justify-between mb-0.5">
-                          <span className="text-terminal-text text-sm capitalize">{gate.replace(/_/g,' ').toLowerCase()}</span>
-                          <span className="text-terminal-muted text-xs font-mono">{count} · {pct}%</span>
-                        </div>
-                        <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full bg-blue-400/40" style={{width:`${pct}%`}}/>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
           </div>
         )
       })()}
@@ -1496,7 +1476,7 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
 
       <StageLegend />
 
-      {/* Confidence distribution + BUY/SELL balance */}
+      {/* Confidence distribution */}
       {sorted.length > 0 && (
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[10px]">
           <div className="flex items-center gap-2 text-zinc-600">
@@ -1509,13 +1489,6 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
               ))}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/20 text-green-400">
-              {sorted.filter(s=>s.type==='BUY').length} BUY
-            </span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400">
-              {sorted.filter(s=>s.type==='SELL').length} SELL
-            </span>
-            <div className="w-px bg-zinc-800 h-3"/>
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400" title="Claude AI validated">
               AI: {sorted.filter(s=>s.validationSource==='CLAUDE').length}
             </span>
@@ -1621,7 +1594,15 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
       )}
 
       {/* Phase I — Alpha Watchlist */}
-      <AlphaWatchlist />
+      <details className="mt-3">
+        <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-400 font-semibold uppercase tracking-wide py-1">
+          Alpha Watchlist ▸
+        </summary>
+        <AlphaWatchlist />
+      </details>
+
+      {/* Lifecycle Funnel (merged from Tactical tab) */}
+      <LifecycleFunnelSection />
     </div>
   )
 }
@@ -1684,6 +1665,17 @@ function AlphaWatchlist() {
       )}
     </div>
   )
+}
+
+// ── Lifecycle funnel section (used in Signals tab) ────────────────────────────
+
+function LifecycleFunnelSection() {
+  const fetcher = useCallback(()=>
+    fetch('/api/signals/tactical?limit=100&lifecycleStage=all')
+      .then(r=>r.json()).then(j=>j.signals??[]).catch(()=>[]), [])
+  const { data: allSigs } = useSharedPolling<TacticalSignalRow[]>('trading:tactical-feed', fetcher, 120_000)
+  if (!allSigs || allSigs.length === 0) return null
+  return <LifecycleFunnel signals={allSigs} />
 }
 
 // ── Tactical tab ───────────────────────────────────────────────────────────────
@@ -2325,13 +2317,12 @@ function RegimeTab({ regime, scanStats, regimePerfData }: {
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 
-type Tab = 'overview' | 'scanner' | 'signals' | 'tactical' | 'regime'
+type Tab = 'overview' | 'scanner' | 'signals' | 'regime'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview'  },
   { id: 'scanner',  label: 'Scanner'   },
   { id: 'signals',  label: 'Signals'   },
-  { id: 'tactical', label: 'Tactical'  },
   { id: 'regime',   label: 'Regime'    },
 ]
 
@@ -2442,7 +2433,7 @@ export default function TradingOperationsPage() {
       {/* Header */}
       <div>
         <h1 className="text-lg sm:text-xl font-semibold text-white">Trading Operations</h1>
-        <p className="text-xs text-zinc-500 mt-0.5">Overview · Scanner · Signals · Tactical · Regime</p>
+        <p className="text-xs text-zinc-500 mt-0.5">Overview · Scanner · Signals · Regime</p>
       </div>
 
       {/* Tab nav */}
@@ -2479,7 +2470,6 @@ export default function TradingOperationsPage() {
         />
       )}
       {tab==='signals'  && <SignalsTab  currentRegime={currentRegime} />}
-      {tab==='tactical' && <TacticalTab currentRegime={currentRegime} />}
       {tab==='regime'   && (
         <RegimeTab
           regime={regime??null}

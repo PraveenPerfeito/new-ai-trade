@@ -45,6 +45,10 @@ const nextConfig = {
       { source: '/admin/calibration', destination: '/admin/analytics?tab=calibration',  permanent: false },
       // System (merged: anomalies)
       { source: '/admin/anomalies',  destination: '/admin/system?tab=anomalies',         permanent: false },
+      // PLATFORM.SIMPLIFICATION.1 — Intelligence + Settings → System
+      { source: '/admin/intelligence',        destination: '/admin/system', permanent: false },
+      { source: '/admin/intelligence/:path*', destination: '/admin/system', permanent: false },
+      { source: '/admin/settings',            destination: '/admin/system', permanent: false },
     ];
   },
 

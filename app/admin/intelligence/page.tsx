@@ -2,18 +2,15 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import {
-  Database, Layers, Globe, Activity,
+  Database, Layers,
   TrendingUp, TrendingDown, RefreshCw,
   CheckCircle2, AlertTriangle, BarChart2, Zap,
-  ArrowUpRight, ArrowDownRight, Newspaper, ChevronRight,
-  Shield, Wifi, WifiOff, Clock, Server,
+  ArrowUpRight, ArrowDownRight,
+  Shield, Wifi, Clock, Server,
 } from 'lucide-react'
-import { adminApi } from '@/lib/admin-api'
 import { useSharedPolling } from '@/lib/use-shared-polling'
-import { useAutoRefresh } from '@/lib/use-auto-refresh'
 import { formatTs } from '@/lib/utils'
 import type { SectorStats } from '@/types'
-import { ProviderHealthTable } from '@/components/admin/provider-health-table'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,9 +52,6 @@ interface RegimeData { regime: MarketRegime; btcRsi4h: number; btcTrend4h: strin
 interface GlobalData { btcDominance: number; ethDominance: number; totalMarketCapUsd: number; totalVolume24hUsd: number; marketCapChangePercent24h: number; refreshedAt: string }
 interface TrendingCoin { id: number; symbol: string; name: string; rank: number; priceChange1h: number; priceChange24h: number; volume24h: number; marketCap: number }
 interface IntelligenceData { regime: RegimeData; global: GlobalData | null; trending: { trending: TrendingCoin[]; refreshedAt: string } | null; listings: { breadthUp: number; breadthDown: number; topMovers: { symbol: string; change: number }[] } | null; computedAt: string }
-interface NewsItem { title: string; url: string; source: string; publishedAt: string; sentiment?: 'bullish' | 'bearish' | 'neutral'; coins: string[] }
-interface CoinSentimentEntry { bullish: number; bearish: number; net: number }
-interface NewsSnapshot { fearGreedValue: number | null; fearGreedLabel: string | null; headlines: NewsItem[]; bullishCount: number; bearishCount: number; neutralCount: number; coinSentiment: Record<string, CoinSentimentEntry>; cachedAt: string }
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -80,15 +74,6 @@ const GROUP_ICONS: Record<string, React.ReactNode> = {
   global:     <TrendingUp  className="w-4 h-4" />,
   trending:   <Zap         className="w-4 h-4" />,
   categories: <Layers      className="w-4 h-4" />,
-}
-const FG_COLOR: Record<string, string> = {
-  'Extreme Fear': 'text-red-400', 'Fear': 'text-orange-400', 'Neutral': 'text-zinc-400',
-  'Greed': 'text-green-400', 'Extreme Greed': 'text-emerald-400',
-}
-const SENT_STYLE: Record<string, string> = {
-  bullish: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25',
-  bearish: 'text-red-400 bg-red-500/10 border-red-500/25',
-  neutral: 'text-zinc-400 bg-zinc-800/60 border-zinc-700',
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -213,50 +198,42 @@ function ProvidersTab({ providers, loading }: { providers: ProviderCheckResult[]
         ))}
       </div>
 
-      {/* Health table */}
-      {loading ? (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3">Live Health Check — 8 Services</p>
-          <div className="space-y-1.5">{Array.from({length: 8}).map((_, i) => (
-            <div key={i} className="h-8 rounded-lg bg-zinc-800/50 animate-pulse"/>
-          ))}</div>
-        </div>
-      ) : (
-        <ProviderHealthTable providers={providers} />
-      )}
-
       {/* Provider stack cards */}
-      <div>
-        <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-3">Data Provider Stack</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-          {Object.entries(PROVIDER_META).map(([key, meta]) => {
-            const health = providers.find(p =>
-              p.name.toLowerCase() === meta.label.toLowerCase()
-                .replace('coinmarketcap', 'cmc')
-                .replace('coingecko', 'coingecko')
-            )
-            const isUp = health?.healthy
-            return (
-              <div key={key} className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: meta.color }}/>
-                  <span className="text-sm font-semibold text-white flex-1 truncate">{meta.label}</span>
-                  {!loading && isUp !== undefined && (
-                    <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${isUp ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/5' : 'text-red-400 border-red-500/30 bg-red-500/5'}`}>
-                      {isUp ? 'UP' : 'DOWN'}
-                    </span>
-                  )}
+      <details className="mt-4">
+        <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-400 font-semibold uppercase tracking-wide py-1 px-2 rounded hover:bg-zinc-800/50">
+          Provider Details ▸
+        </summary>
+        <div className="mt-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+            {Object.entries(PROVIDER_META).map(([key, meta]) => {
+              const health = providers.find(p =>
+                p.name.toLowerCase() === meta.label.toLowerCase()
+                  .replace('coinmarketcap', 'cmc')
+                  .replace('coingecko', 'coingecko')
+              )
+              const isUp = health?.healthy
+              return (
+                <div key={key} className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: meta.color }}/>
+                    <span className="text-sm font-semibold text-white flex-1 truncate">{meta.label}</span>
+                    {!loading && isUp !== undefined && (
+                      <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${isUp ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/5' : 'text-red-400 border-red-500/30 bg-red-500/5'}`}>
+                        {isUp ? 'UP' : 'DOWN'}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-zinc-400 mb-1.5">{meta.role}</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-mono text-zinc-600">{meta.quotaNote}</span>
+                    {health?.latencyMs ? <span className="text-[9px] font-mono text-zinc-600">{health.latencyMs}ms</span> : null}
+                  </div>
                 </div>
-                <p className="text-[10px] text-zinc-400 mb-1.5">{meta.role}</p>
-                <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-mono text-zinc-600">{meta.quotaNote}</span>
-                  {health?.latencyMs ? <span className="text-[9px] font-mono text-zinc-600">{health.latencyMs}ms</span> : null}
-                </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
-      </div>
+      </details>
     </div>
   )
 }
@@ -582,7 +559,7 @@ function SectorsTab({ data, error }: { data: SectorsResponse | null; error: stri
 
 // ── Market tab ───────────────────────────────────────────────────────────────
 
-function MarketTab({ data, news, error }: { data: IntelligenceData | null; news: NewsSnapshot | null; error: string | null }) {
+function MarketTab({ data, error }: { data: IntelligenceData | null; error: string | null }) {
   if (error)  return <div className="p-3 rounded-lg bg-red-900/30 border border-red-800 text-red-300 text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4"/>{error}</div>
   if (!data)  return <div className="flex items-center justify-center h-32 text-zinc-500 text-sm"><RefreshCw className="w-4 h-4 animate-spin mr-2"/>Loading…</div>
 
@@ -760,174 +737,14 @@ function MarketTab({ data, news, error }: { data: IntelligenceData | null; news:
   )
 }
 
-// ── News tab ──────────────────────────────────────────────────────────────────
-const FG_COLOR_MAP: Record<string, string> = {
-  'Extreme Fear': 'text-red-400', 'Fear': 'text-orange-400',
-  'Neutral': 'text-yellow-400', 'Greed': 'text-emerald-400', 'Extreme Greed': 'text-emerald-300',
-}
-
-function timeAgo(iso: string): string {
-  try {
-    const diff = Date.now() - new Date(iso).getTime()
-    if (diff < 0) return 'just now'
-    const m = Math.floor(diff / 60_000)
-    if (m < 1)   return 'just now'
-    if (m < 60)  return `${m}m ago`
-    if (m < 1440) return `${Math.floor(m / 60)}h ago`
-    return `${Math.floor(m / 1440)}d ago`
-  } catch { return '' }
-}
-
-const NEWS_PAGE_SIZE = 8
-
-function NewsTab({ data, loading }: { data: NewsSnapshot | null; loading: boolean }) {
-  const [page, setPage] = useState(0)
-
-  if (loading && !data) {
-    return (
-      <div className="flex items-center justify-center h-40 gap-3 text-zinc-500 text-sm">
-        <RefreshCw className="w-4 h-4 animate-spin text-violet-400"/>
-        <span>Loading news…</span>
-      </div>
-    )
-  }
-  if (!data) return null
-
-  const coinEntries = Object.entries(data.coinSentiment ?? {})
-    .map(([coin, s]) => ({ coin, ...s, total: s.bullish + s.bearish }))
-    .filter(e => e.total > 0)
-    .sort((a, b) => Math.abs(b.net) - Math.abs(a.net) || b.total - a.total)
-    .slice(0, 12)
-
-  const totalPages = Math.ceil(data.headlines.length / NEWS_PAGE_SIZE)
-  const pageItems  = data.headlines.slice(page * NEWS_PAGE_SIZE, (page + 1) * NEWS_PAGE_SIZE)
-
-  return (
-    <div className="space-y-4 max-w-5xl">
-      {/* Fear & Greed + overall sentiment */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {data.fearGreedValue !== null && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-center">
-            <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1">Fear &amp; Greed</p>
-            <p className={`text-2xl font-bold font-mono ${FG_COLOR_MAP[data.fearGreedLabel ?? ''] ?? 'text-zinc-400'}`}>{data.fearGreedValue}</p>
-            <p className={`text-[9px] mt-0.5 font-semibold ${FG_COLOR_MAP[data.fearGreedLabel ?? ''] ?? 'text-zinc-500'}`}>{data.fearGreedLabel}</p>
-          </div>
-        )}
-        <div className="bg-zinc-900 border border-emerald-500/20 rounded-xl px-4 py-3 text-center">
-          <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1">Bullish</p>
-          <p className="text-2xl font-bold font-mono text-emerald-400">{data.bullishCount}</p>
-        </div>
-        <div className="bg-zinc-900 border border-red-500/20 rounded-xl px-4 py-3 text-center">
-          <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1">Bearish</p>
-          <p className="text-2xl font-bold font-mono text-red-400">{data.bearishCount}</p>
-        </div>
-        <div className="bg-zinc-900 border border-zinc-700/40 rounded-xl px-4 py-3 text-center">
-          <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1">Total</p>
-          <p className="text-2xl font-bold font-mono text-zinc-300">{data.headlines.length}</p>
-        </div>
-      </div>
-
-      {/* Coin impact panel */}
-      {coinEntries.length > 0 && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <p className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono mb-3">Coin Impact</p>
-          <div className="flex flex-wrap gap-2">
-            {coinEntries.map(({ coin, bullish, bearish, net }) => {
-              const dominant = net > 0 ? 'bullish' : net < 0 ? 'bearish' : 'neutral'
-              return (
-                <div key={coin} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-mono ${
-                  dominant === 'bullish' ? 'bg-emerald-500/8 border-emerald-500/25 text-emerald-300' :
-                  dominant === 'bearish' ? 'bg-red-500/8 border-red-500/25 text-red-300' :
-                  'bg-zinc-800/60 border-zinc-700 text-zinc-400'
-                }`}>
-                  <span className="font-bold">{coin}</span>
-                  <span className="text-[9px] opacity-70 ml-0.5">
-                    {bullish > 0 && <span className="text-emerald-400">▲{bullish}</span>}
-                    {bullish > 0 && bearish > 0 && ' '}
-                    {bearish > 0 && <span className="text-red-400">▼{bearish}</span>}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-          <p className="text-[9px] text-zinc-600 mt-2 font-mono">Based on {data.headlines.length} headlines · keyword analysis</p>
-        </div>
-      )}
-
-      {/* Article feed */}
-      {data.headlines.length > 0 ? (
-        <>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl divide-y divide-zinc-800/60">
-            {pageItems.map((item, i) => (
-              <a key={i} href={item.url} target="_blank" rel="noopener noreferrer"
-                className="flex items-start gap-3 px-4 py-3 hover:bg-zinc-800/30 transition-colors group">
-                <span className={`text-[9px] px-1.5 py-0.5 rounded border shrink-0 mt-0.5 font-bold ${SENT_STYLE[item.sentiment ?? 'neutral']}`}>
-                  {item.sentiment === 'bullish' ? 'B+' : item.sentiment === 'bearish' ? 'B−' : 'N'}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-zinc-100 leading-snug group-hover:text-white transition-colors line-clamp-2">{item.title}</p>
-                  {item.coins && item.coins.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {item.coins.slice(0, 4).map(c => (
-                        <span key={c} className="text-[9px] px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-400 font-mono">{c}</span>
-                      ))}
-                    </div>
-                  )}
-                  <p className="text-[9px] text-zinc-600 mt-1 font-mono">{item.source} · {timeAgo(item.publishedAt)}</p>
-                </div>
-                <ArrowUpRight className="w-3.5 h-3.5 text-zinc-700 group-hover:text-zinc-400 shrink-0 mt-0.5 transition-colors"/>
-              </a>
-            ))}
-          </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-1">
-              <span className="text-[10px] text-zinc-600 font-mono">
-                {page * NEWS_PAGE_SIZE + 1}–{Math.min((page + 1) * NEWS_PAGE_SIZE, data.headlines.length)} of {data.headlines.length}
-              </span>
-              <div className="flex items-center gap-1">
-                <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
-                  className="px-2.5 py-1 rounded-lg text-xs font-medium border border-zinc-700 bg-zinc-800/60 text-zinc-300 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-                  ← Prev
-                </button>
-                {Array.from({ length: totalPages }, (_, i) => (
-                  <button key={i} onClick={() => setPage(i)}
-                    className={`w-7 h-7 rounded-lg text-xs font-mono font-medium transition-colors ${
-                      i === page
-                        ? 'bg-violet-600 text-white border border-violet-500'
-                        : 'border border-zinc-700 bg-zinc-800/60 text-zinc-400 hover:bg-zinc-700'
-                    }`}>
-                    {i + 1}
-                  </button>
-                ))}
-                <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
-                  className="px-2.5 py-1 rounded-lg text-xs font-medium border border-zinc-700 bg-zinc-800/60 text-zinc-300 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-                  Next →
-                </button>
-              </div>
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-5 py-8 text-xs text-zinc-500 text-center">
-          No headlines available — refreshes every 15 minutes.
-        </div>
-      )}
-    </div>
-  )
-}
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'providers' | 'cache' | 'sectors' | 'market' | 'news'
+type Tab = 'providers' | 'cache' | 'sectors' | 'market'
 
 const TABS: { id: Tab; label: string; sub: string }[] = [
   { id: 'providers', label: 'Providers', sub: '8 services'   },
-  { id: 'cache',     label: 'Cache',     sub: 'CMC quota'    },
-  { id: 'sectors',   label: 'Sectors',   sub: 'CMC ecosystem'},
-  { id: 'market',    label: 'Market',    sub: 'regime + news'},
-  { id: 'news',      label: 'News',      sub: 'Grok live'    },
+  { id: 'market',    label: 'Market',    sub: 'regime'       },
 ]
 
 export default function IntelligenceCenterPage() {
@@ -964,14 +781,11 @@ export default function IntelligenceCenterPage() {
     if (json.success) { setMarketError(null); return json as IntelligenceData }
     setMarketError(json.error); return null
   }, [])
-  const newsFetcher = useCallback(() =>
-    fetch('/api/news').then(r => r.json()).then(j => j.success ? j : null).catch(() => null), [])
 
   const { data: providers, loading: provLoading } = useSharedPolling<ProviderCheckResult[]>('intelligence:providers', providerFetcher, 300_000)
   const { data: cacheData, refresh: refreshCache }   = useSharedPolling<IntelligenceTelemetry | null>('intelligence:cache',   cacheFetcher,   180_000)
   const { data: sectors,   refresh: refreshSectors } = useSharedPolling<SectorsResponse | null>       ('intelligence:sectors', sectorsFetcher, 180_000)
   const { data: market,    refresh: refreshMarket  } = useSharedPolling<IntelligenceData | null>       ('intelligence:market',  marketFetcher,  180_000)
-  const { data: news    }                            = useAutoRefresh<NewsSnapshot | null>(newsFetcher, 900_000)
 
   // ── Cache actions ─────────────────────────────────────────────────────────
   function refreshAllPolling() { refreshCache(); refreshSectors(); refreshMarket() }
@@ -1031,20 +845,7 @@ export default function IntelligenceCenterPage() {
       </div>
 
       {tab === 'providers' && <ProvidersTab providers={providers ?? []} loading={provLoading}/>}
-      {tab === 'cache' && (
-        <CacheTab
-          data={cacheData ?? null}
-          onForceRefresh={handleForceRefresh}
-          onRefreshGroup={handleRefreshGroup}
-          onRefreshAll={refreshAllPolling}
-          refreshing={refreshing}
-          refreshingGroup={refreshingGroup}
-          error={cacheError}
-        />
-      )}
-      {tab === 'sectors' && <SectorsTab data={sectors ?? null} error={sectorsError}/>}
-      {tab === 'market'  && <MarketTab  data={market ?? null}  news={news ?? null} error={marketError}/>}
-      {tab === 'news' && <NewsTab data={news ?? null} loading={!news}/>}
+      {tab === 'market'  && <MarketTab  data={market ?? null}  error={marketError}/>}
     </div>
   )
 }

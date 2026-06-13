@@ -269,77 +269,6 @@ function GateRejectionGrid({ counts }: { counts?: Record<string, number> }) {
   )
 }
 
-const MS_GATE_LABELS: { key: string; label: string }[] = [
-  { key: 'ms_sideways',         label: 'Sideways / Low ADX' },
-  { key: 'ms_overextension',    label: 'Overextension' },
-  { key: 'ms_candle_rejection', label: 'Candle Structure' },
-  { key: 'ms_trend_exhaustion', label: 'Trend Exhaustion' },
-  { key: 'ms_fake_volume',      label: 'Fake Volume' },
-  { key: 'ms_sr_rejection',     label: 'S/R Rejection' },
-  { key: 'ms_weak_breakout',    label: 'Weak Breakout' },
-]
-
-function MarketStructureBreakdown({
-  counts24h,
-  counts7d,
-}: {
-  counts24h?: Record<string, number>
-  counts7d?: Record<string, number>
-}) {
-  const total24h = MS_GATE_LABELS.reduce((s, { key }) => s + (counts24h?.[key] ?? 0), 0)
-  const total7d  = MS_GATE_LABELS.reduce((s, { key }) => s + (counts7d?.[key]  ?? 0), 0)
-
-  return (
-    <div className="glass-card rounded-xl p-4">
-      <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">
-        Market Structure Breakdown
-      </p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="text-terminal-muted/60 text-[10px] uppercase">
-              <th className="text-left pb-2 font-medium">Filter</th>
-              <th className="text-right pb-2 font-medium w-16">24h</th>
-              <th className="text-right pb-2 font-medium w-14">24h %</th>
-              <th className="text-right pb-2 font-medium w-16">7d</th>
-              <th className="text-right pb-2 font-medium w-14">7d %</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-terminal-border/10">
-            {MS_GATE_LABELS.map(({ key, label }) => {
-              const n24 = counts24h?.[key] ?? 0
-              const n7  = counts7d?.[key]  ?? 0
-              const p24 = total24h > 0 ? Math.round(n24 / total24h * 100) : 0
-              const p7  = total7d  > 0 ? Math.round(n7  / total7d  * 100) : 0
-              return (
-                <tr key={key}>
-                  <td className="py-1.5 text-terminal-muted">{label}</td>
-                  <td className="py-1.5 text-right font-mono text-terminal-text">{n24}</td>
-                  <td className="py-1.5 text-right font-mono text-terminal-muted/60">{p24}%</td>
-                  <td className="py-1.5 text-right font-mono text-terminal-text">{n7}</td>
-                  <td className="py-1.5 text-right font-mono text-terminal-muted/60">{p7}%</td>
-                </tr>
-              )
-            })}
-            <tr className="font-semibold">
-              <td className="py-1.5 text-terminal-text text-[10px] uppercase tracking-wide">Total</td>
-              <td className="py-1.5 text-right font-mono text-terminal-text">{total24h}</td>
-              <td className="py-1.5 text-right font-mono text-terminal-muted/60">100%</td>
-              <td className="py-1.5 text-right font-mono text-terminal-text">{total7d}</td>
-              <td className="py-1.5 text-right font-mono text-terminal-muted/60">100%</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      {total24h === 0 && total7d === 0 && (
-        <p className="text-terminal-muted/40 text-[10px] font-mono mt-2">
-          Sub-condition data available after first scan with MARKET_STRUCTURE.FIX.1 deployed
-        </p>
-      )}
-    </div>
-  )
-}
-
 // ── Anomalies tab inline ──────────────────────────────────────────────────────
 
 type AnomalyState = 'new' | 'acknowledged' | 'muted' | 'resolved'
@@ -565,11 +494,11 @@ function AnomaliesTab() {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function SystemPage() {
-  const [tab, setTab] = useState<'system' | 'anomalies'>('system')
+  const [tab, setTab] = useState<'system' | 'anomalies' | 'settings'>('system')
 
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tab')
-    if (t === 'system' || t === 'anomalies') setTab(t)
+    if (t === 'system' || t === 'anomalies' || t === 'settings') setTab(t)
   }, [])
 
   const healthFetcher    = useCallback(() => adminApi.health.ready(), [])
@@ -597,15 +526,30 @@ export default function SystemPage() {
 
       {/* Tab nav */}
       <div className="flex gap-1 border-b border-terminal-border pb-0">
-        {(['system', 'anomalies'] as const).map(t => (
+        {(['system', 'anomalies', 'settings'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2 text-xs font-mono uppercase tracking-wider border-b-2 transition-colors ${tab === t ? 'border-terminal-text text-terminal-text' : 'border-transparent text-terminal-muted hover:text-terminal-text/70'}`}>
-            {t === 'system' ? 'System Health' : 'Anomalies'}
+            {t === 'system' ? 'System Health' : t === 'anomalies' ? 'Anomalies' : 'Settings'}
           </button>
         ))}
       </div>
 
       {tab === 'anomalies' && <AnomaliesTab/>}
+
+      {tab === 'settings' && (
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-sm font-semibold text-terminal-text uppercase tracking-wider mb-1">Signal Settings</h2>
+            <p className="text-xs text-terminal-muted mb-4">Configure signal quality thresholds, operating mode presets, and system toggles.</p>
+            <a
+              href="/admin/settings"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-bull-default/10 border border-bull-default/30 text-bull-text text-sm font-semibold hover:bg-bull-default/20 transition-colors"
+            >
+              Open Settings ↗
+            </a>
+          </div>
+        </div>
+      )}
 
       {tab === 'system' && <>
       {/* Overall status banner — primary health, above fold */}
@@ -779,11 +723,6 @@ export default function SystemPage() {
       <PipelineIntegrityCard scans={scans ?? undefined} monitor={monitor ?? undefined} />
 
       <GateRejectionGrid counts={scans?.gate_rejections} />
-
-      <MarketStructureBreakdown
-        counts24h={scans?.gate_rejections}
-        counts7d={scans7d?.gate_rejections}
-      />
 
       {/* Infrastructure Configuration — read-only (SETTINGS.CENTER.2) */}
       <InfraConfigSection />
