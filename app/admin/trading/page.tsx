@@ -134,7 +134,8 @@ const PRESET_DISPLAY: Record<string, { label: string; changes: string[] }> = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmt(n: number, d = 2) {
+function fmt(n: number | null | undefined, d = 2) {
+  if (n == null || isNaN(n as number)) return '—'
   return n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })
 }
 function timeAgo(ts: number | null | string) {
@@ -150,7 +151,8 @@ function fmtCd(secs: number) {
   const m = Math.floor(secs / 60), s = secs % 60
   return m > 0 ? `${m}m ${s.toString().padStart(2, '0')}s` : `${s}s`
 }
-function fmtPx(p: number): string {
+function fmtPx(p: number | null | undefined): string {
+  if (p == null || isNaN(p as number) || p === 0) return '—'
   if (p >= 10000) return p.toLocaleString('en-US', { maximumFractionDigits: 0 })
   if (p >= 100)   return p.toLocaleString('en-US', { maximumFractionDigits: 2 })
   if (p >= 1)     return p.toFixed(4)
@@ -299,11 +301,15 @@ function FreshnessTag({ sig }: { sig: TacticalSignalRow }) {
 // ── Phase A — Founder Command Center ─────────────────────────────────────────
 
 function FounderCommandCenter({ trackRecord }: { trackRecord: TrackRecordResponse | null }) {
-  if (!trackRecord) return null
+  if (!trackRecord || !trackRecord.windows) return null
+  const d7  = trackRecord.windows.d7
+  const d30 = trackRecord.windows.d30
+  const d90 = trackRecord.windows.d90
+  if (!d7 || !d30 || !d90) return null
   const windows = [
-    { label: '7d',  w: trackRecord.windows.d7  },
-    { label: '30d', w: trackRecord.windows.d30 },
-    { label: '90d', w: trackRecord.windows.d90 },
+    { label: '7d',  w: d7  },
+    { label: '30d', w: d30 },
+    { label: '90d', w: d90 },
   ] as const
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-4">
@@ -393,7 +399,7 @@ function GradeValidationStrip() {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[9px] text-emerald-500 uppercase tracking-wider shrink-0 w-14">Empirical</span>
             {empirical.map(g => (
-              <span key={g.grade} className={cn('text-[10px] px-2 py-0.5 rounded border font-mono', GRADE_STYLE[g.grade.charAt(0)] ?? 'text-zinc-400 border-zinc-700 bg-zinc-800')}
+              <span key={g.grade ?? 'unknown'} className={cn('text-[10px] px-2 py-0.5 rounded border font-mono', GRADE_STYLE[g.grade?.charAt(0) ?? ''] ?? 'text-zinc-400 border-zinc-700 bg-zinc-800')}
                 title={`n=${g.n} · Exp: ${g.exp != null ? (g.exp > 0 ? '+' : '') + g.exp.toFixed(2) + 'R' : '—'} · PF: ${g.pf?.toFixed(1) ?? '—'}`}>
                 {g.grade} {g.wr != null ? `${g.wr.toFixed(0)}% WR` : '—'}
               </span>

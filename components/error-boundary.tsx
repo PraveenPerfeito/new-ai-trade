@@ -69,8 +69,6 @@ function ScannerErrorFallback({
   errorId: string | null;
   onReset: () => void;
 }) {
-  const isDev = process.env.NODE_ENV !== 'production';
-
   return (
     <div className="min-h-screen bg-terminal-bg text-terminal-text font-mono flex items-center justify-center p-4">
       <div className="glass-card rounded-xl p-8 max-w-md w-full border border-bear-DEFAULT/30 space-y-5">
@@ -89,15 +87,15 @@ function ScannerErrorFallback({
           </div>
         </div>
 
-        {/* Error message */}
+        {/* Error message — always shown for diagnostics */}
         {error && (
           <div className="rounded-lg bg-terminal-surface border border-terminal-border/50 p-3">
-            <p className="text-[11px] text-terminal-muted leading-relaxed">
-              {isDev ? error.message : 'An error occurred in the scanner interface.'}
+            <p className="text-[11px] text-terminal-muted leading-relaxed break-all">
+              {error.message}
             </p>
-            {isDev && error.stack && (
-              <pre className="mt-2 text-[9px] text-terminal-dim overflow-auto max-h-32 whitespace-pre-wrap">
-                {error.stack.split('\n').slice(1, 5).join('\n')}
+            {error.stack && (
+              <pre className="mt-2 text-[9px] text-terminal-dim overflow-auto max-h-40 whitespace-pre-wrap">
+                {error.stack.split('\n').slice(1, 6).join('\n')}
               </pre>
             )}
           </div>
