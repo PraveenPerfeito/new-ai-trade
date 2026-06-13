@@ -57,23 +57,31 @@ async def readiness():
         checks["postgres"] = f"error: {exc}"
         ok = False
 
-    # P3.1: Celery worker liveness — inspect active queues via Redis
+    # HEARTBEAT.TRUTH.1 — HEALTHY/DEGRADED/OFFLINE based on heartbeat age.
+    # Beat writes key every 600s with TTL 1800s.
+    # HEALTHY  ≤ 900s  (1.5× beat interval — fully current)
+    # DEGRADED  ≤ 1800s (key still alive but a beat was missed)
+    # OFFLINE   > 1800s or key missing
     try:
         from backend.cache.redis_cache import get_redis
         import time
         redis = await get_redis()
-        # Workers publish heartbeats to celery:workers:<hostname> every ~2s
-        # as heartbeat events. A simpler proxy: check if the Celery control
-        # key exists. If Redis is up (checked above) and a worker registered
-        # within the last 5 min, it's alive.
         worker_ts = await redis.get("celery:worker:last_heartbeat")
-        if worker_ts and (time.time() - float(worker_ts)) < 1800:
-            # 1800s = Redis TTL of the key; key exists → worker wrote it within its lifetime
-            checks["celery_worker"] = "ok"
+        if worker_ts:
+            age = time.time() - float(worker_ts)
+            if age <= 900:
+                checks["celery_worker"] = "HEALTHY"
+            elif age <= 1800:
+                checks["celery_worker"] = "DEGRADED"
+            else:
+                checks["celery_worker"] = "OFFLINE"
+            checks["celery_worker_age_s"] = str(int(age))
         else:
-            checks["celery_worker"] = "unknown"  # no heartbeat — may still be alive
+            checks["celery_worker"] = "OFFLINE"
+            checks["celery_worker_age_s"] = ""
     except Exception as exc:
         checks["celery_worker"] = f"error: {exc}"
+        checks["celery_worker_age_s"] = ""
 
     # P3.1: Binance spot connectivity — lightweight ping via /api/v3/ping
     try:

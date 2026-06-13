@@ -325,6 +325,11 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
             _btc_4h(),
             _regime(),
         )
+        # NULL_REGIME.ROOTCAUSE.1 — get_btc_regime() can return "" on kline failure;
+        # the hard gate in signal_pipeline.py rejects None/empty correctly, but a
+        # falsy string here would skip the soft regime adjustment in orchestrator
+        # logging and scan_coin() kwargs. Normalise once, at the source.
+        btc_regime = btc_regime or "SIDEWAYS"
         all_coins = coin_result.coins
 
         log.info(

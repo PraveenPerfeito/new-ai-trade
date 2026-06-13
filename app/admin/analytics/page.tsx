@@ -846,7 +846,124 @@ function ConfidenceCalibrationSection() {
   )
 }
 
-function CalibrationTabContent({ ai, loading }: { ai: import('@/lib/admin-api').AiSummaryResponse | null; loading: boolean }) {
+// ─── AUTO_CALIBRATION.READY.1 — reads already-fetched edge+attribution data ─────
+
+function CalibrationHealthPanel({
+  bands,
+  byGrade,
+}: {
+  bands:   EdgeReport['confidence_calibration']['bands'] | undefined
+  byGrade: AttributionDimension[] | undefined
+}) {
+  if (!bands?.length && !byGrade?.length) return null
+
+  // Grade monotonicity — A should outperform B, B > C, C > D (win rate)
+  const gradeOrder = ['A+', 'A', 'B+', 'B', 'C', 'D']
+  const gradeRows = gradeOrder
+    .map(g => byGrade?.find(d => d.key === g))
+    .filter(Boolean) as AttributionDimension[]
+
+  const gradeInversions: string[] = []
+  for (let i = 1; i < gradeRows.length; i++) {
+    const prev = gradeRows[i - 1]
+    const curr = gradeRows[i]
+    if (
+      prev.winRate != null && curr.winRate != null &&
+      prev.total >= 10 && curr.total >= 10 &&
+      curr.winRate > prev.winRate + 0.02          // 2pp tolerance
+    ) {
+      gradeInversions.push(`${gradeRows[i - 1].key} (${(prev.winRate * 100).toFixed(0)}%) < ${gradeRows[i].key} (${(curr.winRate * 100).toFixed(0)}%)`)
+    }
+  }
+
+  // Confidence band monotonicity — higher band should have higher win rate
+  const populatedBands = (bands ?? []).filter(b => !b.insufficient_data && b.win_rate != null)
+  const bandInversions: string[] = []
+  for (let i = 1; i < populatedBands.length; i++) {
+    const prev = populatedBands[i - 1]
+    const curr = populatedBands[i]
+    if (curr.win_rate! > prev.win_rate! + 0.02) {
+      bandInversions.push(`${prev.label} (${(prev.win_rate! * 100).toFixed(0)}%) < ${curr.label} (${(curr.win_rate! * 100).toFixed(0)}%)`)
+    }
+  }
+
+  // Health score: start 100, deduct for each inversion
+  const score = Math.max(0, 100 - gradeInversions.length * 20 - bandInversions.length * 15)
+  const scoreColor = score >= 80 ? 'text-bull-default' : score >= 60 ? 'text-amber-400' : 'text-bear-default'
+  const healthy = gradeInversions.length === 0 && bandInversions.length === 0
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Calibration Health</h2>
+        <span className={`font-mono font-bold text-lg ${scoreColor}`}>{score}/100</span>
+      </div>
+
+      {healthy && (
+        <div className="flex items-center gap-2 text-xs text-bull-default/80 mb-3">
+          <span className="w-1.5 h-1.5 rounded-full bg-bull-default"/>
+          Grades monotonic · confidence bands monotonic — no inversions detected
+        </div>
+      )}
+
+      {gradeInversions.length > 0 && (
+        <div className="mb-3">
+          <p className="text-[9px] text-amber-500 uppercase tracking-widest mb-1.5">Grade Inversions</p>
+          <div className="space-y-1">
+            {gradeInversions.map(inv => (
+              <div key={inv} className="flex items-center gap-2 text-[10px] text-amber-400 font-mono">
+                <span className="text-amber-500">⚠</span> {inv}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {bandInversions.length > 0 && (
+        <div className="mb-3">
+          <p className="text-[9px] text-amber-500 uppercase tracking-widest mb-1.5">Confidence Band Inversions</p>
+          <div className="space-y-1">
+            {bandInversions.map(inv => (
+              <div key={inv} className="flex items-center gap-2 text-[10px] text-amber-400 font-mono">
+                <span className="text-amber-500">⚠</span> {inv}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Grade WR strip */}
+      {gradeRows.length > 0 && (
+        <div>
+          <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Grade Win Rates</p>
+          <div className="flex flex-wrap gap-2">
+            {gradeRows.map(g => (
+              <div key={g.key} className="bg-zinc-800 rounded px-2.5 py-1.5 text-center min-w-[52px]">
+                <p className="text-[9px] text-zinc-500">{g.key}</p>
+                <p className={`font-mono text-xs font-bold ${g.winRate != null && g.winRate >= 0.5 ? 'text-bull-default' : 'text-bear-default'}`}>
+                  {g.winRate != null ? `${(g.winRate * 100).toFixed(0)}%` : '—'}
+                </p>
+                <p className="text-[9px] text-zinc-600">n={g.total}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CalibrationTabContent({
+  ai,
+  loading,
+  edge,
+  attribution,
+}: {
+  ai: import('@/lib/admin-api').AiSummaryResponse | null
+  loading: boolean
+  edge: EdgeReport | null
+  attribution: AttributionReport | null | undefined
+}) {
   function aiPct(v: number | null | undefined, d = 1) { return v != null ? `${(v * 100).toFixed(d)}%` : '—' }
   const verdicts  = ai?.verdicts ?? (ai as unknown as { verdict_distribution?: Record<string, number> })?.verdict_distribution ?? {}
   const totalVerd = Object.values(verdicts as Record<string, number>).reduce((a: number, b: number) => a + b, 0)
@@ -854,6 +971,11 @@ function CalibrationTabContent({ ai, loading }: { ai: import('@/lib/admin-api').
 
   return (
     <div className="space-y-6 max-w-5xl">
+      <CalibrationHealthPanel
+        bands={edge?.confidence_calibration?.bands}
+        byGrade={attribution?.dimensions?.byGrade}
+      />
+
       {!loading && !hasAiData && (
         <div className="rounded-xl px-5 py-4 bg-amber-500/5 border border-amber-500/20 flex items-start gap-3">
           <span className="text-amber-400 mt-0.5 shrink-0">⚠</span>
@@ -1215,7 +1337,7 @@ export default function AnalyticsPage() {
 
       {tab === 'edge'        && <EdgeValidationTab edge={edge ?? null} loading={edgeLoading} intel={intel ?? null} intelLoading={intelLoading} />}
       {tab === 'attribution' && <AttributionTab data={attribution ?? null} loading={attrLoading} />}
-      {tab === 'calibration' && <CalibrationTabContent ai={aiData ?? null} loading={aiLoading} />}
+      {tab === 'calibration' && <CalibrationTabContent ai={aiData ?? null} loading={aiLoading} edge={edge ?? null} attribution={attribution} />}
       {tab === 'probability' && <ProbabilityTabContent />}
     </div>
   )

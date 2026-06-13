@@ -94,21 +94,24 @@ function InfraConfigSection() {
 }
 
 function ServiceCard({ name, status, detail }: { name: string; status: string; detail?: string }) {
-  const ok = ['ok', 'ready', 'not_configured'].includes(status)
   const isConfigured = status !== 'not_configured'
+  const isOk      = ['ok', 'ready', 'not_configured', 'HEALTHY'].includes(status)
+  const isDegraded = status === 'DEGRADED'
+  const dotCls  = !isConfigured ? 'bg-terminal-muted/40'
+    : isDegraded ? 'bg-amber-400 animate-pulse'
+    : isOk ? 'bg-bull-default' : 'bg-bear-default animate-pulse'
+  const borderCls = !isConfigured ? 'border-terminal-border'
+    : isDegraded ? 'border-amber-500/20'
+    : isOk ? 'border-bull-default/20' : 'border-bear-default/20'
+  const textCls = !isConfigured ? 'text-terminal-muted/60'
+    : isDegraded ? 'text-amber-400'
+    : isOk ? 'text-bull-default' : 'text-bear-default'
   return (
-    <div className={`glass-card rounded-lg px-4 py-3.5 border ${
-      !isConfigured ? 'border-terminal-border' : ok ? 'border-bull-default/20' : 'border-bear-default/20'
-    }`}>
+    <div className={`glass-card rounded-lg px-4 py-3.5 border ${borderCls}`}>
       <div className="flex items-center gap-2.5">
-        <span className={`w-2 h-2 rounded-full shrink-0 ${
-          !isConfigured ? 'bg-terminal-muted/40' : ok ? 'bg-bull-default' : 'bg-bear-default animate-pulse'
-        }`} />
+        <span className={`w-2 h-2 rounded-full shrink-0 ${dotCls}`} />
         <span className="text-terminal-text text-sm font-medium">{name}</span>
-        <span className={`ml-auto font-mono text-xs font-bold uppercase ${
-          !isConfigured ? 'text-terminal-muted/60'
-          : ok ? 'text-bull-default' : 'text-bear-default'
-        }`}>
+        <span className={`ml-auto font-mono text-xs font-bold uppercase ${textCls}`}>
           {status.replace(/_/g, ' ')}
         </span>
       </div>
@@ -634,14 +637,20 @@ export default function SystemPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <ServiceCard name="Backend API" status={health?.status ?? 'unknown'} />
-            {Object.entries(health?.checks ?? {}).map(([svc, status]) => (
-              <ServiceCard
-                key={svc}
-                name={svc.charAt(0).toUpperCase() + svc.slice(1)}
-                status={status.startsWith('error:') ? 'error' : status}
-                detail={status.startsWith('error:') ? status.slice(7) : undefined}
-              />
-            ))}
+            {Object.entries(health?.checks ?? {})
+              .filter(([svc]) => svc !== 'celery_worker_age_s')
+              .map(([svc, status]) => {
+                const ageS = svc === 'celery_worker' ? health?.checks?.celery_worker_age_s : undefined
+                const ageDetail = ageS ? `heartbeat ${ageS}s ago` : undefined
+                return (
+                  <ServiceCard
+                    key={svc}
+                    name={svc === 'celery_worker' ? 'Celery Worker' : svc.charAt(0).toUpperCase() + svc.slice(1).replace(/_/g, ' ')}
+                    status={status.startsWith('error:') ? 'error' : status}
+                    detail={status.startsWith('error:') ? status.slice(7) : ageDetail}
+                  />
+                )
+              })}
           </div>
         )}
       </div>
