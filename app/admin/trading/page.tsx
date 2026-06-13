@@ -417,8 +417,8 @@ function GradeValidationStrip() {
             <span className="text-[9px] text-emerald-500 uppercase tracking-wider shrink-0 w-14">Empirical</span>
             {empirical.map(g => (
               <span key={g.grade ?? 'unknown'} className={cn('text-[10px] px-2 py-0.5 rounded border font-mono', GRADE_STYLE[g.grade?.charAt(0) ?? ''] ?? 'text-zinc-400 border-zinc-700 bg-zinc-800')}
-                title={`n=${g.n} · Exp: ${g.exp != null ? (g.exp > 0 ? '+' : '') + g.exp.toFixed(2) + 'R' : '—'} · PF: ${g.pf?.toFixed(1) ?? '—'}`}>
-                {g.grade} {g.wr != null ? `${g.wr.toFixed(0)}% WR` : '—'}
+                title={`n=${g.n} · Exp: ${g.exp != null ? (Number(g.exp) > 0 ? '+' : '') + Number(g.exp).toFixed(2) + 'R' : '—'} · PF: ${g.pf != null ? Number(g.pf).toFixed(1) : '—'}`}>
+                {g.grade} {g.wr != null ? `${Number(g.wr).toFixed(0)}% WR` : '—'}
               </span>
             ))}
           </div>
@@ -428,8 +428,8 @@ function GradeValidationStrip() {
             <span className="text-[9px] text-zinc-500 uppercase tracking-wider shrink-0 w-14">Heuristic</span>
             {heuristic.map(g => (
               <span key={g.grade} className="text-[10px] px-2 py-0.5 rounded border font-mono text-zinc-400 border-zinc-700"
-                title={`n=${g.n} · Exp: ${g.exp != null ? (g.exp > 0 ? '+' : '') + g.exp.toFixed(2) + 'R' : '—'}`}>
-                {g.grade} {g.wr != null ? `${g.wr.toFixed(0)}% WR` : '—'}
+                title={`n=${g.n} · Exp: ${g.exp != null ? (Number(g.exp) > 0 ? '+' : '') + Number(g.exp).toFixed(2) + 'R' : '—'}`}>
+                {g.grade} {g.wr != null ? `${Number(g.wr).toFixed(0)}% WR` : '—'}
               </span>
             ))}
           </div>
@@ -2222,7 +2222,7 @@ function RegimeTab({ regime, scanStats, regimePerfData }: {
               <div>
                 <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Expectancy</p>
                 <p className={`text-sm font-bold font-mono ${(currentPerfRow.expectancy??0)>0?'text-emerald-400':(currentPerfRow.expectancy??0)>-0.1?'text-amber-400':'text-red-400'}`}>
-                  {currentPerfRow.expectancy != null ? `${currentPerfRow.expectancy>0?'+':''}${currentPerfRow.expectancy.toFixed(2)}R` : '—'}
+                  {currentPerfRow.expectancy != null ? `${Number(currentPerfRow.expectancy)>0?'+':''}${Number(currentPerfRow.expectancy).toFixed(2)}R` : '—'}
                 </p>
               </div>
               {currentPerfRow.n != null && (

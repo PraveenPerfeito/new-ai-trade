@@ -9,6 +9,13 @@ import type { AttributionReport, AttributionDimension, EdgePattern, ThresholdRec
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
 
+// asyncpg/Pydantic v2 serialises PostgreSQL NUMERIC columns as JSON strings.
+function toNum(v: unknown): number | null {
+  if (v == null) return null
+  const n = Number(v)
+  return isNaN(n) ? null : n
+}
+
 function StatPair({ label, value, accent = '' }: { label: string; value: string; accent?: string }) {
   return (
     <div className="flex flex-col gap-1">
@@ -18,15 +25,18 @@ function StatPair({ label, value, accent = '' }: { label: string; value: string;
   )
 }
 
-function pct(n: number | null): string {
-  return n != null ? `${(n * 100).toFixed(1)}%` : '—'
+function pct(n: unknown): string {
+  const v = toNum(n)
+  return v != null ? `${(v * 100).toFixed(1)}%` : '—'
 }
-function exp(n: number | null): string {
-  if (n == null) return '—'
-  return n > 0 ? `+${n.toFixed(2)}R` : `${n.toFixed(2)}R`
+function exp(n: unknown): string {
+  const v = toNum(n)
+  if (v == null) return '—'
+  return v > 0 ? `+${v.toFixed(2)}R` : `${v.toFixed(2)}R`
 }
-function rr(n: number | null): string {
-  return n != null ? `${n.toFixed(2)}R` : '—'
+function rr(n: unknown): string {
+  const v = toNum(n)
+  return v != null ? `${v.toFixed(2)}R` : '—'
 }
 
 // ─── Edge Validation tab ──────────────────────────────────────────────────────
@@ -61,8 +71,8 @@ function CalibrationTable({ bands }: { bands: EdgeReport['confidence_calibration
               <td className="py-2.5 px-3 font-mono hidden sm:table-cell">
                 {b.insufficient_data || b.expectancy == null
                   ? <span className="text-terminal-muted/40">—</span>
-                  : <span className={b.expectancy > 0 ? 'text-bull-default' : 'text-bear-default'}>
-                      {b.expectancy > 0 ? '+' : ''}{b.expectancy.toFixed(2)}R
+                  : <span className={Number(b.expectancy) > 0 ? 'text-bull-default' : 'text-bear-default'}>
+                      {Number(b.expectancy) > 0 ? '+' : ''}{Number(b.expectancy).toFixed(2)}R
                     </span>
                 }
               </td>
@@ -99,7 +109,7 @@ function IntelRow({ label, row }: { label: string; row: IntelligencePerfRow | nu
           {wr != null ? `${(wr * 100).toFixed(1)}%` : '—'}
         </span>
         <span className="text-terminal-muted text-xs font-mono">
-          {row.avg_rr != null ? `${row.avg_rr.toFixed(2)}R` : '—'}
+          {row.avg_rr != null ? `${Number(row.avg_rr).toFixed(2)}R` : '—'}
         </span>
         <span className="text-terminal-muted/50 text-xs font-mono">n={row.n}</span>
       </div>
@@ -221,11 +231,11 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-4">
               <StatPair label="Signals"      value={String(overall?.total ?? 0)} />
-              <StatPair label="Win Rate"     value={overall?.win_rate != null ? `${(overall.win_rate * 100).toFixed(1)}%` : '—'} accent={overall?.win_rate && overall.win_rate >= 0.55 ? 'text-bull-default' : 'text-bear-default'} />
-              <StatPair label="Expectancy"   value={overall?.expectancy != null ? `${overall.expectancy > 0 ? '+' : ''}${overall.expectancy.toFixed(2)}R` : '—'} accent={overall?.expectancy && overall.expectancy > 0 ? 'text-bull-default' : 'text-bear-default'} />
-              <StatPair label="Profit Factor" value={overall?.profit_factor?.toFixed(2) ?? '—'} accent={overall?.profit_factor && overall.profit_factor >= 1.5 ? 'text-bull-default' : 'text-terminal-text'} />
-              <StatPair label="Max DD"       value={overall?.max_drawdown_r != null ? `${overall.max_drawdown_r.toFixed(1)}R` : '—'} accent="text-bear-default" />
-              <StatPair label="Sharpe"       value={overall?.sharpe?.toFixed(2) ?? '—'} accent={overall?.sharpe && overall.sharpe > 1 ? 'text-bull-default' : 'text-terminal-text'} />
+              <StatPair label="Win Rate"     value={overall?.win_rate != null ? `${(Number(overall.win_rate) * 100).toFixed(1)}%` : '—'} accent={overall?.win_rate && Number(overall.win_rate) >= 0.55 ? 'text-bull-default' : 'text-bear-default'} />
+              <StatPair label="Expectancy"   value={overall?.expectancy != null ? `${Number(overall.expectancy) > 0 ? '+' : ''}${Number(overall.expectancy).toFixed(2)}R` : '—'} accent={overall?.expectancy && Number(overall.expectancy) > 0 ? 'text-bull-default' : 'text-bear-default'} />
+              <StatPair label="Profit Factor" value={overall?.profit_factor != null ? Number(overall.profit_factor).toFixed(2) : '—'} accent={overall?.profit_factor && Number(overall.profit_factor) >= 1.5 ? 'text-bull-default' : 'text-terminal-text'} />
+              <StatPair label="Max DD"       value={overall?.max_drawdown_r != null ? `${Number(overall.max_drawdown_r).toFixed(1)}R` : '—'} accent="text-bear-default" />
+              <StatPair label="Sharpe"       value={overall?.sharpe != null ? Number(overall.sharpe).toFixed(2) : '—'} accent={overall?.sharpe && Number(overall.sharpe) > 1 ? 'text-bull-default' : 'text-terminal-text'} />
             </div>
           )}
           {!loading && (!overall || overall.total === 0) && (
@@ -261,8 +271,8 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
           <div className="glass-card rounded-lg overflow-hidden">
             <div className="px-5 py-3 border-b border-terminal-border flex items-center gap-4 flex-wrap">
               <span className="text-terminal-muted text-xs">ECE:</span>
-              <span className={`font-mono text-sm font-bold ${cal.calibration.ece < 0.05 ? 'text-bull-default' : cal.calibration.ece < 0.12 ? 'text-signal-high' : 'text-bear-default'}`}>
-                {cal.calibration.ece.toFixed(4)}
+              <span className={`font-mono text-sm font-bold ${Number(cal.calibration.ece) < 0.05 ? 'text-bull-default' : Number(cal.calibration.ece) < 0.12 ? 'text-signal-high' : 'text-bear-default'}`}>
+                {Number(cal.calibration.ece).toFixed(4)}
               </span>
               <span className="text-terminal-muted text-xs">Label:</span>
               <span className="text-terminal-text text-xs font-mono">{cal.calibration.label.replace(/_/g, ' ')}</span>
@@ -315,16 +325,16 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
                       </td>
                       <td className="py-2 px-3 font-mono">
                         {m.expectancy != null
-                          ? <span className={m.expectancy > 0 ? 'text-bull-default' : 'text-bear-default'}>
-                              {m.expectancy > 0 ? '+' : ''}{m.expectancy.toFixed(2)}R
+                          ? <span className={Number(m.expectancy) > 0 ? 'text-bull-default' : 'text-bear-default'}>
+                              {Number(m.expectancy) > 0 ? '+' : ''}{Number(m.expectancy).toFixed(2)}R
                             </span>
                           : <span className="text-terminal-muted/40">—</span>}
                       </td>
                       <td className="py-2 px-3 font-mono text-terminal-muted">
-                        {m.profit_factor != null ? m.profit_factor.toFixed(2) : '—'}
+                        {m.profit_factor != null ? Number(m.profit_factor).toFixed(2) : '—'}
                       </td>
                       <td className="py-2 px-3 font-mono text-terminal-muted">
-                        {m.signals_per_day != null ? m.signals_per_day.toFixed(1) : '—'}
+                        {m.signals_per_day != null ? Number(m.signals_per_day).toFixed(1) : '—'}
                       </td>
                     </tr>
                   )
@@ -380,13 +390,13 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
                       </td>
                       <td className="py-2 px-3 font-mono">
                         {r.expectancy != null
-                          ? <span className={r.expectancy > 0 ? 'text-bull-default' : 'text-bear-default'}>
-                              {r.expectancy > 0 ? '+' : ''}{r.expectancy.toFixed(2)}R
+                          ? <span className={Number(r.expectancy) > 0 ? 'text-bull-default' : 'text-bear-default'}>
+                              {Number(r.expectancy) > 0 ? '+' : ''}{Number(r.expectancy).toFixed(2)}R
                             </span>
                           : <span className="text-terminal-muted/40">—</span>}
                       </td>
                       <td className="py-2 px-3 font-mono text-terminal-muted">
-                        {r.profit_factor != null ? r.profit_factor.toFixed(2) : '—'}
+                        {r.profit_factor != null ? Number(r.profit_factor).toFixed(2) : '—'}
                       </td>
                     </tr>
                   )
@@ -438,18 +448,18 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
                       </td>
                       <td className="py-2 px-3 font-mono">
                         {c.expectancy != null
-                          ? <span className={c.expectancy > 0 ? 'text-bull-default' : 'text-bear-default'}>
-                              {c.expectancy > 0 ? '+' : ''}{c.expectancy.toFixed(2)}R
+                          ? <span className={Number(c.expectancy) > 0 ? 'text-bull-default' : 'text-bear-default'}>
+                              {Number(c.expectancy) > 0 ? '+' : ''}{Number(c.expectancy).toFixed(2)}R
                             </span>
                           : <span className="text-terminal-muted/40">—</span>}
                       </td>
                       <td className="py-2 px-3 font-mono text-terminal-muted">
-                        {c.profit_factor != null ? c.profit_factor.toFixed(2) : '—'}
+                        {c.profit_factor != null ? Number(c.profit_factor).toFixed(2) : '—'}
                       </td>
                       <td className="py-2 px-3 font-mono">
                         {c.max_drawdown_r != null
-                          ? <span className={c.max_drawdown_r > 2 ? 'text-bear-default' : 'text-terminal-muted'}>
-                              {c.max_drawdown_r.toFixed(2)}R
+                          ? <span className={Number(c.max_drawdown_r) > 2 ? 'text-bear-default' : 'text-terminal-muted'}>
+                              {Number(c.max_drawdown_r).toFixed(2)}R
                             </span>
                           : <span className="text-terminal-muted/40">—</span>}
                       </td>
@@ -881,8 +891,9 @@ const CONFIDENCE_THRESHOLDS = [
 
 function DriftChip({ drift }: { drift: number | null }) {
   if (drift == null) return <span className="text-zinc-600 font-mono text-xs">—</span>
-  const cls = drift >= -5 ? 'text-emerald-400' : drift >= -25 ? 'text-amber-400' : 'text-red-400'
-  return <span className={`font-mono text-xs font-bold ${cls}`}>{drift > 0 ? '+' : ''}{drift.toFixed(0)}</span>
+  const d = Number(drift)
+  const cls = d >= -5 ? 'text-emerald-400' : d >= -25 ? 'text-amber-400' : 'text-red-400'
+  return <span className={`font-mono text-xs font-bold ${cls}`}>{d > 0 ? '+' : ''}{d.toFixed(0)}</span>
 }
 
 function CalBandRow({ band, s }: { band: string; s: import('@/lib/admin-api').CalibrationBandStats }) {
@@ -896,13 +907,13 @@ function CalBandRow({ band, s }: { band: string; s: import('@/lib/admin-api').Ca
           <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
             <div className="h-full bg-zinc-500 rounded-full" style={{ width: `${stW}%` }} />
           </div>
-          <span className="text-[10px] text-zinc-500 font-mono w-20 text-right">stated {s.mean_stated?.toFixed(0) ?? '—'}</span>
+          <span className="text-[10px] text-zinc-500 font-mono w-20 text-right">stated {s.mean_stated != null ? Number(s.mean_stated).toFixed(0) : '—'}</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
             <div className={`h-full rounded-full ${(s.wr ?? 0) >= (s.mean_stated ?? 100) ? 'bg-emerald-500' : 'bg-purple-500'}`} style={{ width: `${wrW}%` }} />
           </div>
-          <span className="text-[10px] text-purple-300 font-mono w-20 text-right">actual {s.wr?.toFixed(0) ?? '—'}%</span>
+          <span className="text-[10px] text-purple-300 font-mono w-20 text-right">actual {s.wr != null ? Number(s.wr).toFixed(0) : '—'}%</span>
         </div>
       </div>
       <DriftChip drift={s.drift} />
@@ -910,10 +921,10 @@ function CalBandRow({ band, s }: { band: string; s: import('@/lib/admin-api').Ca
         n={s.n}{s.low_sample ? '⚠' : ''}
       </span>
       <span className="text-[10px] font-mono text-zinc-500 w-16 text-right hidden sm:block">
-        {s.exp != null ? `${s.exp > 0 ? '+' : ''}${s.exp.toFixed(2)}R` : '—'}
+        {s.exp != null ? `${Number(s.exp) > 0 ? '+' : ''}${Number(s.exp).toFixed(2)}R` : '—'}
       </span>
       <span className="text-[10px] font-mono text-zinc-500 w-12 text-right hidden sm:block">
-        PF {s.pf?.toFixed(2) ?? '—'}
+        PF {s.pf != null ? Number(s.pf).toFixed(2) : '—'}
       </span>
     </div>
   )
@@ -959,7 +970,7 @@ function ConfidenceCalibrationSection() {
               <p className="text-[9px] text-zinc-500 uppercase tracking-wider">{c.label}</p>
               <p className={`text-lg font-bold font-mono ${c.color}`}>{c.v?.band}</p>
               <p className="text-[10px] text-zinc-500 font-mono">
-                WR {c.v?.wr?.toFixed(0)}% · drift {c.v?.drift != null && c.v.drift > 0 ? '+' : ''}{c.v?.drift?.toFixed(0)} · n={c.v?.n}
+                WR {c.v?.wr != null ? Number(c.v.wr).toFixed(0) : '—'}% · drift {c.v?.drift != null && Number(c.v.drift) > 0 ? '+' : ''}{c.v?.drift != null ? Number(c.v.drift).toFixed(0) : '—'} · n={c.v?.n}
               </p>
               <p className="text-[9px] text-zinc-600 mt-0.5">{c.desc}</p>
             </div>
@@ -1008,7 +1019,7 @@ function ConfidenceCalibrationSection() {
                 Object.entries(bands).map(([band, s]) => (
                   <div key={`${value}-${band}`} className="flex items-center gap-2 text-[10px]">
                     <span className="text-zinc-500 font-mono truncate flex-1">{value === 'None' ? 'NULL' : value} · {band}</span>
-                    <span className="text-zinc-400 font-mono">{s.wr?.toFixed(0) ?? '—'}%</span>
+                    <span className="text-zinc-400 font-mono">{s.wr != null ? Number(s.wr).toFixed(0) : '—'}%</span>
                     <DriftChip drift={s.drift} />
                     <span className="text-zinc-600 font-mono w-12 text-right">n={s.n}</span>
                   </div>
@@ -1170,7 +1181,7 @@ function CalibrationTabContent({
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {[
           { label: 'Success Rate', value: aiPct(ai?.success_rate), sub: 'API calls OK (24h)',    accent: ai?.success_rate != null ? (ai.success_rate >= 0.9 ? 'text-green-400' : ai.success_rate >= 0.7 ? 'text-amber-400' : 'text-red-400') : 'text-white' },
-          { label: 'Avg Latency',  value: ai?.avg_latency_ms != null ? `${ai.avg_latency_ms.toFixed(0)}ms` : '—', sub: 'per call', accent: ai?.avg_latency_ms != null ? (ai.avg_latency_ms < 2000 ? 'text-green-400' : 'text-amber-400') : 'text-white' },
+          { label: 'Avg Latency',  value: ai?.avg_latency_ms != null ? `${Number(ai.avg_latency_ms).toFixed(0)}ms` : '—', sub: 'per call', accent: ai?.avg_latency_ms != null ? (Number(ai.avg_latency_ms) < 2000 ? 'text-green-400' : 'text-amber-400') : 'text-white' },
           { label: 'Last Error',   value: ai?.last_error ? 'See logs' : 'None', sub: ai?.last_error ? ai.last_error.slice(0, 40) : 'All calls clean', accent: ai?.last_error ? 'text-red-400' : 'text-green-400' },
         ].map(c => (
           <div key={c.label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
@@ -1221,8 +1232,8 @@ function TrackRecordTab({ data, loading }: { data: import('@/lib/admin-api').Tra
   if (!data)   return <div className="text-terminal-muted text-sm py-8 text-center">No track record data available.</div>
 
   const w = (wr: number | null) => wr == null ? '—' : `${wr}%`
-  const e = (exp: number | null) => exp == null ? '—' : `${exp > 0 ? '+' : ''}${exp.toFixed(2)}R`
-  const p = (pf: number | null) => pf == null ? '—' : pf.toFixed(2)
+  const e = (ex: number | null) => ex == null ? '—' : `${Number(ex) > 0 ? '+' : ''}${Number(ex).toFixed(2)}R`
+  const p = (pf: number | null) => pf == null ? '—' : Number(pf).toFixed(2)
   const wrCls = (wr: number | null) => wr == null ? 'text-terminal-muted' : wr >= 50 ? 'text-bull-default' : wr >= 40 ? 'text-blue-400' : wr >= 30 ? 'text-amber-400' : 'text-bear-default'
   const expCls = (exp: number | null) => exp == null ? 'text-terminal-muted' : exp >= 0.5 ? 'text-bull-default' : exp >= 0.2 ? 'text-blue-400' : exp >= 0 ? 'text-amber-400' : 'text-bear-default'
   const pfCls  = (pf: number | null)  => pf  == null ? 'text-terminal-muted' : pf  >= 2.0 ? 'text-bull-default' : pf  >= 1.5 ? 'text-blue-400' : pf  >= 1.0 ? 'text-amber-400' : 'text-bear-default'
@@ -1312,13 +1323,13 @@ function TrackRecordTab({ data, loading }: { data: import('@/lib/admin-api').Tra
               <div>
                 <p className="text-terminal-muted text-xs mb-1">Predicted WR</p>
                 <p className="font-mono text-base text-terminal-text font-bold">
-                  {data.probability_accuracy.avg_predicted_wr != null ? `${data.probability_accuracy.avg_predicted_wr.toFixed(1)}%` : '—'}
+                  {data.probability_accuracy.avg_predicted_wr != null ? `${Number(data.probability_accuracy.avg_predicted_wr).toFixed(1)}%` : '—'}
                 </p>
               </div>
               <div>
                 <p className="text-terminal-muted text-xs mb-1">Actual WR</p>
                 <p className={`font-mono text-base font-bold ${wrCls(data.probability_accuracy.realized_wr)}`}>
-                  {data.probability_accuracy.realized_wr != null ? `${data.probability_accuracy.realized_wr.toFixed(1)}%` : '—'}
+                  {data.probability_accuracy.realized_wr != null ? `${Number(data.probability_accuracy.realized_wr).toFixed(1)}%` : '—'}
                 </p>
               </div>
               <div>
@@ -1351,10 +1362,10 @@ function EdgeCellRow({ c }: { c: import('@/lib/admin-api').EdgeMatrixCell }) {
     <tr className="border-b border-zinc-800/40 hover:bg-zinc-800/20">
       <td className="py-1.5 px-3 font-mono text-[10px] text-zinc-500">{c.dim_key}</td>
       <td className="py-1.5 px-3 font-mono text-xs text-zinc-200">{c.dim_value.replace(/\|/g, ' · ')}</td>
-      <td className="py-1.5 px-3 font-mono text-xs text-right text-zinc-300">{c.wr.toFixed(1)}%</td>
+      <td className="py-1.5 px-3 font-mono text-xs text-right text-zinc-300">{Number(c.wr).toFixed(1)}%</td>
       <td className="py-1.5 px-3 font-mono text-[10px] text-right text-zinc-600">[{c.ci[0]}–{c.ci[1]}]</td>
-      <td className={`py-1.5 px-3 font-mono text-xs text-right font-semibold ${expCls}`}>{c.exp != null ? `${c.exp >= 0 ? '+' : ''}${c.exp.toFixed(3)}R` : '—'}</td>
-      <td className="py-1.5 px-3 font-mono text-xs text-right text-zinc-400">{c.pf?.toFixed(2) ?? '—'}</td>
+      <td className={`py-1.5 px-3 font-mono text-xs text-right font-semibold ${expCls}`}>{c.exp != null ? `${Number(c.exp) >= 0 ? '+' : ''}${Number(c.exp).toFixed(3)}R` : '—'}</td>
+      <td className="py-1.5 px-3 font-mono text-xs text-right text-zinc-400">{c.pf != null ? Number(c.pf).toFixed(2) : '—'}</td>
       <td className="py-1.5 px-3 font-mono text-xs text-right text-zinc-500">{c.n}</td>
     </tr>
   )
@@ -1376,7 +1387,7 @@ function ProbabilityTabContent() {
           {([['7d', track.windows.d7], ['30d', track.windows.d30], ['90d', track.windows.d90]] as const).map(([label, w]) => (
             <div key={label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
               <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1">Track Record · {label}</p>
-              <p className="text-xl font-bold font-mono text-white">{w.win_rate != null ? `${w.win_rate.toFixed(1)}%` : '—'} <span className="text-xs text-zinc-500 font-normal">WR</span></p>
+              <p className="text-xl font-bold font-mono text-white">{w.win_rate != null ? `${Number(w.win_rate).toFixed(1)}%` : '—'} <span className="text-xs text-zinc-500 font-normal">WR</span></p>
               <p className="text-[11px] font-mono text-zinc-400 mt-1">
                 {w.expectancy != null ? `${w.expectancy >= 0 ? '+' : ''}${Number(w.expectancy).toFixed(3)}R` : '—'} · PF {w.pf != null ? Number(w.pf).toFixed(2) : '—'} · n={w.resolved}
               </p>
@@ -1390,8 +1401,8 @@ function ProbabilityTabContent() {
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
           <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Probability Accuracy — stamped prediction vs realized outcome</p>
           <div className="flex gap-6 flex-wrap text-sm font-mono">
-            <span className="text-zinc-400">Predicted avg: <span className="text-purple-300 font-bold">{acc.avg_predicted_wr?.toFixed(1)}%</span></span>
-            <span className="text-zinc-400">Realized: <span className="text-emerald-400 font-bold">{acc.realized_wr?.toFixed(1)}%</span></span>
+            <span className="text-zinc-400">Predicted avg: <span className="text-purple-300 font-bold">{acc.avg_predicted_wr != null ? Number(acc.avg_predicted_wr).toFixed(1) : '—'}%</span></span>
+            <span className="text-zinc-400">Realized: <span className="text-emerald-400 font-bold">{acc.realized_wr != null ? Number(acc.realized_wr).toFixed(1) : '—'}%</span></span>
             <span className="text-zinc-400">Mean abs error: <span className="text-zinc-200 font-bold">{acc.mean_abs_error != null ? Number(acc.mean_abs_error).toFixed(3) : '—'}</span></span>
             <span className="text-zinc-600">n={acc.n} resolved stamped signals</span>
           </div>
@@ -1483,9 +1494,9 @@ function GradeValidationTable({ title, rows, inversions }: {
         {rows.map(g => (
           <div key={g.grade} className="flex items-center gap-3 text-xs font-mono">
             <span className="text-purple-300 font-bold w-7">{g.grade}</span>
-            <span className="text-zinc-300 w-14">{g.wr?.toFixed(1)}%</span>
-            <span className={`w-18 ${((g.exp ?? 0) >= 0) ? 'text-emerald-400' : 'text-red-400'}`}>{g.exp != null ? `${g.exp >= 0 ? '+' : ''}${g.exp.toFixed(3)}R` : '—'}</span>
-            <span className="text-zinc-500 w-14">PF {g.pf?.toFixed(2) ?? '—'}</span>
+            <span className="text-zinc-300 w-14">{g.wr != null ? Number(g.wr).toFixed(1) : '—'}%</span>
+            <span className={`w-18 ${(Number(g.exp ?? 0) >= 0) ? 'text-emerald-400' : 'text-red-400'}`}>{g.exp != null ? `${Number(g.exp) >= 0 ? '+' : ''}${Number(g.exp).toFixed(3)}R` : '—'}</span>
+            <span className="text-zinc-500 w-14">PF {g.pf != null ? Number(g.pf).toFixed(2) : '—'}</span>
             <span className="text-zinc-600">n={g.n}</span>
           </div>
         ))}
