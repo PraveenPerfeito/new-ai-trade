@@ -356,6 +356,14 @@ async def _maybe_send_critical_anomaly_alert(anomalies: list) -> None:
     if not criticals:
         return
 
+    # Only send if ops alerts are explicitly enabled (default off)
+    try:
+        from backend.core.scanner.telegram_notifier import _ops_alerts_enabled
+        if not await _ops_alerts_enabled():
+            return
+    except Exception:
+        return
+
     try:
         from backend.cache.redis_cache import get_redis
         redis = await get_redis()

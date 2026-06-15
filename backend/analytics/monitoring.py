@@ -503,7 +503,7 @@ async def check_output_collapse() -> dict:
                 await redis.setex(_COLLAPSE_ALERTED_KEY, _COLLAPSE_ALERT_THROTTLE, "1")
                 try:
                     from backend.core.scanner.telegram_notifier import send_output_collapse_alert
-                    send_output_collapse_alert(signals_24h, avg_7d)
+                    await send_output_collapse_alert(signals_24h, avg_7d)
                 except Exception as exc:
                     log.warning("collapse_alert_send_failed", error=str(exc))
         else:

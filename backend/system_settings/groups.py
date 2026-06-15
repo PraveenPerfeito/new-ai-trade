@@ -330,6 +330,11 @@ class TelegramSettings(BaseSettingsGroup):
         title='Include AI Analysis',
         description='Include Claude validation reasoning in alert messages',
     )
+    ops_alerts_enabled: bool = Field(
+        False,
+        title='Ops Alerts Enabled',
+        description='Send operational alerts (anomalies, scan failures, degradation) via Telegram. Off by default — only signal alerts are sent.',
+    )
 
 
 # ── 5. Risk ───────────────────────────────────────────────────────────────────

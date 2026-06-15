@@ -58,6 +58,7 @@ ALL_DEFINITIONS: list[SettingDef] = [
     SettingDef('telegram', 'telegram_max_alerts_per_hour',   'int',  'Max Alerts / Hour',      'Rate-limit on outgoing Telegram signal alerts',         10,   1,  100),
     SettingDef('telegram', 'telegram_daily_summary_enabled', 'bool', 'Daily Summary Enabled',  'Send a daily performance summary message',              True),
     SettingDef('telegram', 'telegram_daily_summary_hour_utc','int',  'Summary Hour (UTC)',      'Hour of day (UTC) to send the daily summary',           8,   0,   23),
+    SettingDef('telegram', 'telegram_ops_alerts_enabled',    'bool', 'Ops Alerts Enabled',      'Send operational alerts (anomalies, scan failures, degradation). Off by default.', False),
 
     # ── Paper Trading ─────────────────────────────────────────────────────────
     SettingDef('paper_trading', 'paper_trading_enabled',          'bool',  'Paper Trading Enabled',   'Enable the virtual paper trading portfolio',            True),

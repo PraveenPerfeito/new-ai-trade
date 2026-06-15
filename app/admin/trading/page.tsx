@@ -1256,8 +1256,8 @@ function ScannerTab({ celery, flags, aiEnabled, loading, error, scanning, scanDo
   const rawDurS  = scanStats?.avg_duration_s
   const rawDurMs = scanStats?.avg_duration_ms
   const durationS = rawDurS != null ? rawDurS.toFixed(1) : rawDurMs != null ? (rawDurMs / 1000).toFixed(1) : null
-  const workerOk = healthReady?.checks?.celery_worker === 'ok'
-  const workerStatus = healthReady == null ? null : workerOk ? 'ALIVE' : 'DOWN'
+  const workerOk = healthReady?.checks?.celery_worker === 'HEALTHY'
+  const workerStatus = healthReady == null ? null : workerOk ? 'ALIVE' : (healthReady.checks?.celery_worker === 'DEGRADED' ? 'DEGRADED' : 'DOWN')
 
   return (
     <div className="space-y-5 max-w-5xl">
@@ -1321,8 +1321,8 @@ function ScannerTab({ celery, flags, aiEnabled, loading, error, scanning, scanDo
               )}
               {durationS && <span className="text-terminal-muted text-xs">Avg duration: <span className="text-terminal-text font-mono">{durationS}s</span></span>}
               {workerStatus && (
-                <span className={`flex items-center gap-1 text-xs ${workerStatus==='ALIVE'?'text-emerald-400':'text-red-400'}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${workerStatus==='ALIVE'?'bg-emerald-400':'bg-red-400 animate-pulse'}`}/>
+                <span className={`flex items-center gap-1 text-xs ${workerStatus==='ALIVE'?'text-emerald-400':workerStatus==='DEGRADED'?'text-amber-400':'text-red-400'}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${workerStatus==='ALIVE'?'bg-emerald-400':workerStatus==='DEGRADED'?'bg-amber-400 animate-pulse':'bg-red-400 animate-pulse'}`}/>
                   Worker {workerStatus}
                 </span>
               )}

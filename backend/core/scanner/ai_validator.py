@@ -133,8 +133,10 @@ async def _send_degradation_alert(fallbacks: int, total: int) -> None:
         pass  # can't check — proceed with alert
 
     try:
-        from backend.core.scanner.telegram_notifier import _is_configured, _enqueue
+        from backend.core.scanner.telegram_notifier import _is_configured, _enqueue, _ops_alerts_enabled
         if not _is_configured():
+            return
+        if not await _ops_alerts_enabled():
             return
         rate_pct = round(fallbacks / total * 100)
         text = (
