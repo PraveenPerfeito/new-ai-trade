@@ -1,7 +1,21 @@
-﻿'use client'
+'use client'
 
-import { useCallback, useState, useEffect, useMemo } from 'react'
-import { adminApi, HealthReady, ScanSummaryResponse, AiSummaryResponse, MonitorSnapshot, MonitorLevel, AnomalyRecord, BurninStatus } from '@/lib/admin-api'
+import { useCallback, useState, useEffect, useMemo, useRef } from 'react'
+import {
+  adminApi,
+  HealthReady,
+  ScanSummaryResponse,
+  AiSummaryResponse,
+  MonitorSnapshot,
+  MonitorLevel,
+  AnomalyRecord,
+  BurninStatus,
+  SettingEntry,
+  SettingsData,
+  SettingsGroupResponse,
+  AuditEntry,
+  AuditChangedField,
+} from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
 import { useSharedPolling } from '@/lib/use-shared-polling'
 import { MetricCard } from '@/components/admin/metric-card'
@@ -9,14 +23,14 @@ import { AnomalyBadge } from '@/components/admin/anomaly-badge'
 import { ProviderHealthTable, type ProviderCheckResult } from '@/components/admin/provider-health-table'
 import { analyticsWindowLabel } from '@/lib/window-label'
 import { formatTs } from '@/lib/utils'
-import { Server, Database, Cpu, Activity, RefreshCw, CheckCircle2, BellOff, Shield, Eye, X, Clock, AlertTriangle, ChevronDown, Lock } from 'lucide-react'
-import { settingTier } from '@/lib/settings-tiers'
+import {
+  Server, Database, Cpu, Activity, RefreshCw, CheckCircle2, BellOff, Shield, Eye, X,
+  Clock, AlertTriangle, ChevronDown, Lock, Settings2, Save, RotateCcw, AlertCircle,
+  History,
+} from 'lucide-react'
+import { settingTier, DANGEROUS_FLAGS } from '@/lib/settings-tiers'
 
 // ── Infrastructure Configuration (SETTINGS.CENTER.2) ─────────────────────────
-// Engineering-only settings relocated from the Founder Settings page.
-// READ-ONLY by design: these are set-once / env-adjacent values; editing them
-// during normal operations is how outages happen. Change path: settings API or
-// a code change — never the dashboard.
 
 interface InfraConfigRow {
   group: string; key: string; label: string
@@ -24,9 +38,9 @@ interface InfraConfigRow {
 }
 
 function InfraConfigSection() {
-  const [open,     setOpen]     = useState(false)
-  const [rows,     setRows]     = useState<InfraConfigRow[] | null>(null)
-  const [loadErr,  setLoadErr]  = useState<string | null>(null)
+  const [open,    setOpen]    = useState(false)
+  const [rows,    setRows]    = useState<InfraConfigRow[] | null>(null)
+  const [loadErr, setLoadErr] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open || rows !== null) return
@@ -95,7 +109,7 @@ function InfraConfigSection() {
 
 function ServiceCard({ name, status, detail }: { name: string; status: string; detail?: string }) {
   const isConfigured = status !== 'not_configured'
-  const isOk      = ['ok', 'ready', 'not_configured', 'HEALTHY'].includes(status)
+  const isOk       = ['ok', 'ready', 'not_configured', 'HEALTHY'].includes(status)
   const isDegraded = status === 'DEGRADED'
   const dotCls  = !isConfigured ? 'bg-terminal-muted/40'
     : isDegraded ? 'bg-amber-400 animate-pulse'
@@ -144,7 +158,7 @@ function MonitorRow({ label, metric }: { label: string; metric: { value: number;
   )
 }
 
-// ── Pipeline Integrity card (PIPELINE.HARDENING.1) ───────────────────────────
+// ── Pipeline Integrity card ───────────────────────────────────────────────────
 
 const PIPELINE_CANON_KEYS = [
   'BTC_DOWN_BUY', 'TOXIC_DENYLIST', 'SIGNAL_COOLDOWN', 'CONFIDENCE_REJECTION',
@@ -186,7 +200,6 @@ function PipelineIntegrityCard({
 
   const telegramPct = signals24h > 0 ? Math.round(telegrams24h / signals24h * 100) : null
 
-  // Base score post-PIPELINE.HARDENING.1; live deductions for observable gaps
   let score = 95
   if (gatesPct < 100) score = Math.max(85, score - Math.round((100 - gatesPct) * 0.15))
   if (resolved7d === 0 && signals24h > 5) score -= 3
@@ -229,9 +242,7 @@ function PipelineIntegrityCard({
 
 // ── Gate rejection labels ─────────────────────────────────────────────────────
 
-// All 12 canonical pipeline gate keys (PIPELINE.HARDENING.1 + original 6)
 const GATE_REJECTION_LABELS: Record<string, string> = {
-  // Outer gates (original 6)
   BTC_DOWN_BUY:          'BTC-down BUY',
   TOXIC_DENYLIST:        'Toxic denylist',
   SIGNAL_COOLDOWN:       '4h cooldown',
@@ -241,7 +252,6 @@ const GATE_REJECTION_LABELS: Record<string, string> = {
   CONTRA_REGIME_REJECTION: 'Contra-regime v2',
   KLINE_EMPTY:           'Kline empty',
   KLINE_PARTIAL:         'Kline partial',
-  // Inner pipeline gates (added PIPELINE.HARDENING.1)
   MTF_REJECTION:             'MTF analysis',
   VOLATILITY_REJECTION:      'Volatility',
   TREND_STRENGTH_REJECTION:  'Trend strength',
@@ -265,77 +275,6 @@ function GateRejectionGrid({ counts }: { counts?: Record<string, number> }) {
           </div>
         ))}
       </div>
-    </div>
-  )
-}
-
-const MS_GATE_LABELS: { key: string; label: string }[] = [
-  { key: 'ms_sideways',         label: 'Sideways / Low ADX' },
-  { key: 'ms_overextension',    label: 'Overextension' },
-  { key: 'ms_candle_rejection', label: 'Candle Structure' },
-  { key: 'ms_trend_exhaustion', label: 'Trend Exhaustion' },
-  { key: 'ms_fake_volume',      label: 'Fake Volume' },
-  { key: 'ms_sr_rejection',     label: 'S/R Rejection' },
-  { key: 'ms_weak_breakout',    label: 'Weak Breakout' },
-]
-
-function MarketStructureBreakdown({
-  counts24h,
-  counts7d,
-}: {
-  counts24h?: Record<string, number>
-  counts7d?: Record<string, number>
-}) {
-  const total24h = MS_GATE_LABELS.reduce((s, { key }) => s + (counts24h?.[key] ?? 0), 0)
-  const total7d  = MS_GATE_LABELS.reduce((s, { key }) => s + (counts7d?.[key]  ?? 0), 0)
-
-  return (
-    <div className="glass-card rounded-xl p-4">
-      <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">
-        Market Structure Breakdown
-      </p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="text-terminal-muted/60 text-[10px] uppercase">
-              <th className="text-left pb-2 font-medium">Filter</th>
-              <th className="text-right pb-2 font-medium w-16">24h</th>
-              <th className="text-right pb-2 font-medium w-14">24h %</th>
-              <th className="text-right pb-2 font-medium w-16">7d</th>
-              <th className="text-right pb-2 font-medium w-14">7d %</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-terminal-border/10">
-            {MS_GATE_LABELS.map(({ key, label }) => {
-              const n24 = counts24h?.[key] ?? 0
-              const n7  = counts7d?.[key]  ?? 0
-              const p24 = total24h > 0 ? Math.round(n24 / total24h * 100) : 0
-              const p7  = total7d  > 0 ? Math.round(n7  / total7d  * 100) : 0
-              return (
-                <tr key={key}>
-                  <td className="py-1.5 text-terminal-muted">{label}</td>
-                  <td className="py-1.5 text-right font-mono text-terminal-text">{n24}</td>
-                  <td className="py-1.5 text-right font-mono text-terminal-muted/60">{p24}%</td>
-                  <td className="py-1.5 text-right font-mono text-terminal-text">{n7}</td>
-                  <td className="py-1.5 text-right font-mono text-terminal-muted/60">{p7}%</td>
-                </tr>
-              )
-            })}
-            <tr className="font-semibold">
-              <td className="py-1.5 text-terminal-text text-[10px] uppercase tracking-wide">Total</td>
-              <td className="py-1.5 text-right font-mono text-terminal-text">{total24h}</td>
-              <td className="py-1.5 text-right font-mono text-terminal-muted/60">100%</td>
-              <td className="py-1.5 text-right font-mono text-terminal-text">{total7d}</td>
-              <td className="py-1.5 text-right font-mono text-terminal-muted/60">100%</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      {total24h === 0 && total7d === 0 && (
-        <p className="text-terminal-muted/40 text-[10px] font-mono mt-2">
-          Sub-condition data available after first scan with MARKET_STRUCTURE.FIX.1 deployed
-        </p>
-      )}
     </div>
   )
 }
@@ -424,8 +363,8 @@ function AnomaliesTab() {
     }, { critical: 0, warning: 0, info: 0, muted: 0 })
   }, [anomalies, getEffectiveState])
 
-  const lastCheck    = status?.anomaly_summary?.checked_at
-  const selectedKey  = selectedAnomaly ? getKey(selectedAnomaly) : null
+  const lastCheck   = status?.anomaly_summary?.checked_at
+  const selectedKey = selectedAnomaly ? getKey(selectedAnomaly) : null
 
   return (
     <div className="space-y-5">
@@ -562,31 +501,1026 @@ function AnomaliesTab() {
   )
 }
 
+// ── Settings tab ──────────────────────────────────────────────────────────────
+
+const SETTINGS_GROUP_LABELS: Record<string, string> = {
+  scanner:  'Scanner',
+  signals:  'Signal Thresholds',
+  ai:       'AI',
+  telegram: 'Telegram',
+  risk:     'Risk',
+  anomaly:  'Anomaly Detection',
+  features: 'Feature Flags',
+}
+
+const SETTINGS_GROUP_DESCRIPTIONS: Record<string, string> = {
+  scanner:  'Scan cadence, coin limits, and confidence thresholds',
+  signals:  'Minimum quality bar for signals to pass the pipeline',
+  ai:       'Claude Haiku validation model and API parameters',
+  telegram: 'Alert delivery and daily summary configuration',
+  risk:     'Grade filters, leverage caps, and portfolio risk limits',
+  anomaly:  'Burn-in health check thresholds and alert levels',
+  features: 'Enable or disable major system capabilities',
+}
+
+const HIDDEN_GROUPS = new Set(['paper_trading'])
+
+type WiredState = 'live' | 'floors' | 'display'
+
+const GROUP_WIRED_DEFAULT: Record<string, WiredState> = {
+  features: 'live', ai: 'live', telegram: 'live', anomaly: 'live',
+  scanner: 'display', signals: 'display', risk: 'display', infra: 'display',
+}
+
+const FIELD_WIRED: Record<string, WiredState> = {
+  'scanner.trending_watchlist': 'live',
+  'scanner.min_confidence':     'floors',
+  'scanner.alert_confidence':   'floors',
+  'scanner.max_coins_per_run':  'floors',
+  'signals.min_rr_ratio':       'floors',
+}
+
+function wiredState(group: string, key: string): WiredState {
+  return FIELD_WIRED[`${group}.${key}`] ?? GROUP_WIRED_DEFAULT[group] ?? 'display'
+}
+
+const RECOMMENDED: Record<string, boolean | number> = {
+  'scanner.min_confidence':    85,
+  'scanner.alert_confidence':  85,
+  'scanner.max_coins_per_run': 80,
+  'signals.min_rr_ratio':      2.0,
+  'ai.enabled':                true,
+  'telegram.alerts_enabled':   true,
+}
+
+type ModeId =
+  | 'conservative'
+  | 'balanced'
+  | 'aggressive'
+  | 'institutional'
+  | 'sniper'
+  | 'futures_tactical'
+  | 'rotation_hunter'
+
+interface OperatingMode {
+  id:          ModeId
+  label:       string
+  icon:        string
+  description: string
+  color:       string
+  frequency:   number
+  riskLevel:   number
+  rrExpected:  string
+  groups:      Record<string, Record<string, number | boolean>>
+}
+
+const OPERATING_MODES: OperatingMode[] = [
+  {
+    id: 'conservative', label: 'Conservative', icon: '◇', color: '#00d084',
+    description: 'High-confluence only · tight risk · ideal for live capital',
+    frequency: 2, riskLevel: 1, rrExpected: '2.5+',
+    groups: {
+      scanner:  { min_confidence: 87, alert_confidence: 92, max_coins_per_run: 50 },
+      signals:  { min_rr_ratio: 2.5, min_quality_score: 60 },
+      risk:     { max_portfolio_risk_pct: 0.01, reject_f_grade: true },
+      telegram: { min_confidence: 90, max_alerts_per_hour: 5 },
+      ai:       { temperature: 0.2 },
+    },
+  },
+  {
+    id: 'balanced', label: 'Balanced', icon: '◈', color: '#3b82f6',
+    description: 'Default production profile · good signal/noise ratio',
+    frequency: 3, riskLevel: 2, rrExpected: '2.0+',
+    groups: {
+      scanner:  { min_confidence: 80, alert_confidence: 85, max_coins_per_run: 100 },
+      signals:  { min_rr_ratio: 2.0, min_quality_score: 40 },
+      risk:     { max_portfolio_risk_pct: 0.02, reject_f_grade: true },
+      telegram: { min_confidence: 85, max_alerts_per_hour: 10 },
+      ai:       { temperature: 0.3 },
+    },
+  },
+  {
+    id: 'aggressive', label: 'Aggressive', icon: '▲', color: '#f97316',
+    description: 'Lower thresholds · high signal volume · research & paper',
+    frequency: 5, riskLevel: 4, rrExpected: '1.5+',
+    groups: {
+      scanner:  { min_confidence: 72, alert_confidence: 78, max_coins_per_run: 100 },
+      signals:  { min_rr_ratio: 1.5, min_quality_score: 30 },
+      risk:     { max_portfolio_risk_pct: 0.04, reject_f_grade: false },
+      telegram: { min_confidence: 78, max_alerts_per_hour: 20 },
+      ai:       { temperature: 0.45 },
+    },
+  },
+  {
+    id: 'institutional', label: 'Institutional', icon: '⬡', color: '#f59e0b',
+    description: 'A-grade only · 3× R:R minimum · for large capital positions',
+    frequency: 1, riskLevel: 1, rrExpected: '3.0+',
+    groups: {
+      scanner:  { min_confidence: 90, alert_confidence: 94, max_coins_per_run: 30 },
+      signals:  { min_rr_ratio: 3.0, min_quality_score: 70 },
+      risk:     { max_portfolio_risk_pct: 0.01, reject_f_grade: true },
+      telegram: { min_confidence: 92, max_alerts_per_hour: 3 },
+      ai:       { temperature: 0.15 },
+    },
+  },
+  {
+    id: 'sniper', label: 'Sniper', icon: '✦', color: '#a855f7',
+    description: 'Ultra-selective · mega/large cap only · maximum conviction',
+    frequency: 1, riskLevel: 1, rrExpected: '3.5+',
+    groups: {
+      scanner:  { min_confidence: 92, alert_confidence: 96, max_coins_per_run: 20 },
+      signals:  { min_rr_ratio: 3.5, min_quality_score: 75 },
+      risk:     { max_portfolio_risk_pct: 0.005, reject_f_grade: true },
+      telegram: { min_confidence: 95, max_alerts_per_hour: 2 },
+      ai:       { temperature: 0.1 },
+    },
+  },
+  {
+    id: 'futures_tactical', label: 'Futures Tactical', icon: '⚡', color: '#06b6d4',
+    description: 'Futures-first · OI + funding rate intelligence active',
+    frequency: 3, riskLevel: 3, rrExpected: '2.0+',
+    groups: {
+      scanner:  { min_confidence: 78, alert_confidence: 82, max_coins_per_run: 100 },
+      signals:  { min_rr_ratio: 2.0, min_quality_score: 45 },
+      risk:     { max_portfolio_risk_pct: 0.025, reject_f_grade: true },
+      telegram: { min_confidence: 82, max_alerts_per_hour: 15 },
+      ai:       { temperature: 0.35 },
+    },
+  },
+  {
+    id: 'rotation_hunter', label: 'Rotation Hunter', icon: '↺', color: '#14b8a6',
+    description: 'Sector rotation detection · momentum-based entry engine',
+    frequency: 4, riskLevel: 3, rrExpected: '1.8+',
+    groups: {
+      scanner:  { min_confidence: 75, alert_confidence: 80, max_coins_per_run: 100 },
+      signals:  { min_rr_ratio: 1.8, min_quality_score: 35 },
+      risk:     { max_portfolio_risk_pct: 0.03, reject_f_grade: false },
+      telegram: { min_confidence: 80, max_alerts_per_hour: 18 },
+      ai:       { temperature: 0.4 },
+    },
+  },
+]
+
+interface TacticalControlDef {
+  group:   string
+  key:     string
+  label:   string
+  tagline: string
+  impact:  string
+}
+
+const TACTICAL_CONTROLS: TacticalControlDef[] = [
+  {
+    group: 'scanner', key: 'min_confidence',
+    label: 'Signal Strictness',
+    tagline: 'Minimum pipeline confidence for a signal to surface',
+    impact: 'Lower → more signals  ·  Higher → fewer false positives',
+  },
+  {
+    group: 'signals', key: 'min_rr_ratio',
+    label: 'Min Risk / Reward',
+    tagline: 'R:R threshold — setups below this are rejected',
+    impact: 'Higher → only high-conviction entries qualify',
+  },
+  {
+    group: 'scanner', key: 'max_coins_per_run',
+    label: 'Scan Coverage',
+    tagline: 'Coins scanned per cycle (top-N by market cap)',
+    impact: 'Wider → more opportunities  ·  Narrow → faster scans',
+  },
+  {
+    group: 'scanner', key: 'alert_confidence',
+    label: 'Alert Threshold',
+    tagline: 'Minimum confidence to dispatch a Telegram alert',
+    impact: 'Higher → alerts on strongest setups only',
+  },
+]
+
+function formatRelative(iso: string | null | undefined): string {
+  if (!iso) return 'never'
+  const diff = Date.now() - new Date(iso).getTime()
+  if (diff < 60_000)         return 'just now'
+  if (diff < 3_600_000)      return `${Math.floor(diff / 60_000)}m ago`
+  if (diff < 86_400_000)     return `${Math.floor(diff / 3_600_000)}h ago`
+  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d ago`
+  return new Date(iso).toLocaleDateString()
+}
+
+function validateField(entry: SettingEntry, value: boolean | number | string): string | null {
+  if (entry.data_type === 'int' || entry.data_type === 'float') {
+    const num = Number(value)
+    if (isNaN(num))                                return 'Must be a number'
+    if (entry.min_val != null && num < entry.min_val) return `Min: ${entry.min_val}`
+    if (entry.max_val != null && num > entry.max_val) return `Max: ${entry.max_val}`
+  }
+  return null
+}
+
+function valEq(a: unknown, b: unknown): boolean { return String(a) === String(b) }
+
+function Toggle({ value, onChange, disabled }: {
+  value: boolean; onChange: (v: boolean) => void; disabled?: boolean
+}) {
+  return (
+    <button
+      type="button" role="switch" aria-checked={value} disabled={disabled}
+      onClick={() => !disabled && onChange(!value)}
+      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors
+        ${value ? 'bg-bull-default/80' : 'bg-terminal-bright'}
+        ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+    >
+      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform
+        ${value ? 'translate-x-4' : 'translate-x-0.5'}`} />
+    </button>
+  )
+}
+
+function WiredChip({ state }: { state: WiredState }) {
+  const cfg = {
+    live:    { label: 'live',         cls: 'text-bull-default border-bull-default/30 bg-bull-default/5',      title: 'Read by the backend at runtime' },
+    floors:  { label: 'floor',        cls: 'text-blue-400 border-blue-500/30 bg-blue-500/5',                  title: 'Applied as a floor on per-mode configs when Apply Founder Thresholds is ON' },
+    display: { label: 'display only', cls: 'text-terminal-muted/50 border-terminal-border/60 bg-transparent', title: 'No backend consumer reads this value' },
+  }[state]
+  return (
+    <span title={cfg.title} className={`text-[8px] px-1 py-0.5 rounded border font-mono uppercase tracking-wider ${cfg.cls}`}>
+      {cfg.label}
+    </span>
+  )
+}
+
+function SettingInput({ entry, value, onChange, disabled }: {
+  entry: SettingEntry; value: boolean | number | string
+  onChange: (v: boolean | number | string) => void; disabled?: boolean
+}) {
+  const base = 'bg-terminal-bg border border-terminal-border rounded px-2 py-1 font-mono text-xs text-terminal-text focus:outline-none focus:border-signal-medium/50 disabled:opacity-50'
+
+  if (entry.data_type === 'bool')
+    return <Toggle value={value as boolean} onChange={onChange as (v: boolean) => void} disabled={disabled} />
+
+  if (entry.data_type === 'enum' && entry.allowed_values)
+    return (
+      <select value={String(value)} disabled={disabled} onChange={e => onChange(e.target.value)}
+        className={`${base} cursor-pointer min-w-[10rem]`}>
+        {entry.allowed_values.map(v => <option key={v} value={v}>{v}</option>)}
+      </select>
+    )
+
+  return (
+    <input type="number" value={String(value)}
+      min={entry.min_val ?? undefined} max={entry.max_val ?? undefined}
+      step={entry.data_type === 'float' ? 0.01 : 1} disabled={disabled}
+      onChange={e => { const p = entry.data_type === 'float' ? parseFloat(e.target.value) : parseInt(e.target.value, 10); if (!isNaN(p)) onChange(p) }}
+      className={`${base} w-28`} />
+  )
+}
+
+function FeatureFlagCard({ entry, value, onChange, isSaving, isSaved, error }: {
+  entry: SettingEntry; value: boolean; onChange: (v: boolean) => void
+  isSaving: boolean; isSaved: boolean; error: string | undefined
+}) {
+  const modified = !valEq(value, entry.default)
+  return (
+    <div className={`glass-card rounded-lg p-4 flex items-start gap-3 transition-all border ${value ? 'border-bull-default/25' : 'border-terminal-border'}`}>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-terminal-text font-mono leading-tight">{entry.label}</span>
+          {modified && <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-signal-medium/10 text-signal-medium/70 border border-signal-medium/20">modified</span>}
+          {isSaving && <span className="text-xs text-terminal-muted animate-pulse">saving…</span>}
+          {isSaved  && <CheckCircle2 size={10} className="text-bull-default" />}
+        </div>
+        <p className="text-xs text-terminal-muted/60 mt-1 leading-relaxed">{entry.description}</p>
+        {error && <p className="text-xs text-bear-default mt-1">{error}</p>}
+      </div>
+      <div className="shrink-0 pt-0.5">
+        <Toggle value={value} onChange={onChange} disabled={isSaving} />
+      </div>
+    </div>
+  )
+}
+
+function DotIndicator({ value, color }: { value: number; color: string }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <span key={i} className="w-1.5 h-1.5 rounded-full"
+          style={{ backgroundColor: i < value ? color : 'rgba(255,255,255,0.1)' }} />
+      ))}
+    </div>
+  )
+}
+
+function ModeCard({ mode, isActive, isApplying, disabled, onApply }: {
+  mode: OperatingMode; isActive: boolean; isApplying: boolean
+  disabled: boolean; onApply: (m: OperatingMode) => void
+}) {
+  const riskColor = mode.riskLevel <= 2 ? '#00d084' : mode.riskLevel <= 3 ? '#f59e0b' : '#ff3b5c'
+  return (
+    <button
+      type="button"
+      onClick={() => !disabled && onApply(mode)}
+      disabled={disabled}
+      className={`relative text-left w-full rounded-xl p-4 border transition-all ${
+        disabled ? 'cursor-not-allowed opacity-60' : 'hover:scale-[1.01] active:scale-[0.99]'
+      } ${isActive ? '' : 'border-terminal-border/50 bg-transparent hover:border-terminal-border'}`}
+      style={{
+        borderColor:     isActive ? mode.color + '70' : undefined,
+        backgroundColor: isActive ? mode.color + '0d' : undefined,
+      }}
+    >
+      {isActive && (
+        <span className="absolute top-2.5 right-2.5 text-[8px] font-mono px-1.5 py-0.5 rounded-full border"
+          style={{ color: mode.color, borderColor: mode.color + '60', backgroundColor: mode.color + '18' }}>
+          ACTIVE
+        </span>
+      )}
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <span className="text-base leading-none" style={{ color: mode.color }}>
+          {isApplying ? <span className="inline-block animate-spin text-sm">◌</span> : mode.icon}
+        </span>
+        <span className="text-sm font-semibold text-terminal-text">{mode.label}</span>
+      </div>
+      <p className="text-[10px] text-terminal-muted/55 leading-relaxed mb-3">{mode.description}</p>
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[9px] text-terminal-muted/45 uppercase tracking-wider">Frequency</span>
+          <DotIndicator value={mode.frequency} color={mode.color} />
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-[9px] text-terminal-muted/45 uppercase tracking-wider">Risk</span>
+          <DotIndicator value={mode.riskLevel} color={riskColor} />
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-[9px] text-terminal-muted/45 uppercase tracking-wider">Min R:R</span>
+          <span className="text-[10px] font-mono font-semibold" style={{ color: mode.color }}>{mode.rrExpected}</span>
+        </div>
+      </div>
+    </button>
+  )
+}
+
+function SafetyStatusCard({ settings, dirty }: {
+  settings: SettingsData
+  dirty: Record<string, boolean | number | string>
+}) {
+  const val = (grp: string, key: string): unknown => {
+    const k = `${grp}.${key}`
+    return dirty[k] !== undefined ? dirty[k] : settings[grp]?.fields.find(f => f.key === key)?.value
+  }
+
+  const issues = Object.entries(DANGEROUS_FLAGS)
+    .map(([path, cfg]) => {
+      const [grp, key] = path.split('.')
+      const v = val(grp, key)
+      if (v === undefined) return null
+      return Boolean(v) === cfg.dangerousWhen ? cfg : null
+    })
+    .filter((c): c is NonNullable<typeof c> => c !== null)
+
+  const conf = Number(val('scanner', 'min_confidence') ?? 0)
+  const floorsOn = Boolean(val('features', 'apply_founder_thresholds'))
+  if (conf > 0 && conf < 85 && floorsOn) {
+    issues.push({
+      dangerousWhen: true,
+      label: `Min confidence ${conf} is below the audited 85 floor`,
+      detail: 'The 80–85 band ran negative expectancy over 30d (ALPHA.TRUTH.1).',
+    })
+  }
+
+  if (issues.length === 0) {
+    return (
+      <div className="rounded-xl border border-bull-default/25 bg-bull-default/5 px-4 py-3 flex items-center gap-3">
+        <span className="w-2.5 h-2.5 rounded-full bg-bull-default shrink-0" />
+        <div>
+          <p className="text-sm font-semibold text-terminal-text">Safety status: normal</p>
+          <p className="text-[11px] text-terminal-muted/60">AI validation, Telegram delivery, and operational switches are all in their expected states.</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-xl border border-bear-default/40 bg-bear-default/5 px-4 py-3">
+      <div className="flex items-center gap-2 mb-2">
+        <AlertTriangle size={14} className="text-bear-default shrink-0" />
+        <p className="text-sm font-semibold text-bear-default">
+          {issues.length} safety condition{issues.length !== 1 ? 's' : ''} need attention
+        </p>
+      </div>
+      <div className="space-y-1.5">
+        {issues.map((iss, i) => (
+          <div key={i} className="text-xs">
+            <span className="text-bear-default/90 font-semibold">{iss.label}</span>
+            <span className="text-terminal-muted/60"> — {iss.detail}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function SettingsTab() {
+  const [settings,        setSettings]        = useState<SettingsData>({})
+  const [dirty,           setDirty]           = useState<Record<string, boolean | number | string>>({})
+  const [saving,          setSaving]          = useState<Set<string>>(new Set())
+  const [saved,           setSaved]           = useState<Set<string>>(new Set())
+  const [errors,          setErrors]          = useState<Record<string, string>>({})
+  const [loading,         setLoading]         = useState(true)
+  const [fetchError,      setFetchError]      = useState<string | null>(null)
+  const [activeAdvTab,    setActiveAdvTab]    = useState('scanner')
+  const [auditLog,        setAuditLog]        = useState<AuditEntry[]>([])
+  const [auditGroup,      setAuditGroup]      = useState('all')
+  const [auditLoading,    setAuditLoading]    = useState(false)
+  const [resetConfirm,    setResetConfirm]    = useState<string | null>(null)
+  const [saveWarnings,    setSaveWarnings]    = useState<Record<string, string[]>>({})
+  const [applyingMode,    setApplyingMode]    = useState<ModeId | null>(null)
+  const [activeMode,      setActiveMode]      = useState<ModeId | null>(null)
+  const [allSettingsOpen, setAllSettingsOpen] = useState(false)
+
+  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+
+  const fetchSettings = useCallback(async () => {
+    setFetchError(null)
+    try { setSettings(await adminApi.settings.all()) }
+    catch (e) { setFetchError(String(e)) }
+    finally { setLoading(false) }
+  }, [])
+
+  const fetchAudit = useCallback(async (grp = 'all') => {
+    setAuditLoading(true)
+    try {
+      const data = await adminApi.settings.audit(150, grp !== 'all' ? grp : undefined)
+      setAuditLog(data.entries ?? [])
+    } finally { setAuditLoading(false) }
+  }, [])
+
+  useEffect(() => { fetchSettings() }, [fetchSettings])
+  useEffect(() => { if (activeAdvTab === 'audit') fetchAudit(auditGroup) }, [activeAdvTab, auditGroup, fetchAudit])
+
+  // Derived
+  const advTabs = [...Object.keys(settings).filter(g => !HIDDEN_GROUPS.has(g) && g !== 'infra' && g !== 'features'), 'audit']
+  const advGroup  = settings[activeAdvTab] as SettingsGroupResponse | undefined
+  const advFields = (advGroup?.fields ?? []).filter(f => {
+    const tier = settingTier(activeAdvTab, f.key)
+    return tier !== 'dead' && tier !== 'engineering'
+  })
+  const advMeta = advGroup?.meta
+
+  const getValue = (entry: SettingEntry) => {
+    const k = `${entry.category}.${entry.key}`
+    return dirty[k] !== undefined ? dirty[k] : entry.value
+  }
+  const isDirtyField = (e: SettingEntry) => dirty[`${e.category}.${e.key}`] !== undefined
+  const dirtyKeys    = (cat: string) => (settings[cat]?.fields ?? []).filter(isDirtyField).length
+
+  const flashSaved = (k: string) => {
+    setSaved(s => new Set(s).add(k))
+    setTimeout(() => setSaved(s => { const n = new Set(s); n.delete(k); return n }), 2_000)
+  }
+
+  const saveField = useCallback(async (entry: SettingEntry, value: boolean | number | string) => {
+    const k = `${entry.category}.${entry.key}`
+    setSaving(s => new Set(s).add(k))
+    setErrors(e => { const n = { ...e }; delete n[k]; return n })
+    try {
+      const result = await adminApi.settings.patch(entry.category, { [entry.key]: value })
+      if (result.warnings?.length) {
+        setSaveWarnings(prev => ({ ...prev, [entry.category]: result.warnings! }))
+      } else {
+        setSaveWarnings(prev => { const n = { ...prev }; delete n[entry.category]; return n })
+      }
+      setSettings(prev => {
+        const updated = { ...prev }
+        const grp     = updated[entry.category]
+        if (grp) updated[entry.category] = {
+          ...grp,
+          meta:   { ...grp.meta, data_version: grp.meta.data_version + 1, updated_at: new Date().toISOString() },
+          fields: grp.fields.map(f => f.key === entry.key ? { ...f, value } : f),
+        }
+        return updated
+      })
+      setDirty(d => { const n = { ...d }; delete n[k]; return n })
+      flashSaved(k)
+    } catch (e) {
+      setErrors(prev => ({ ...prev, [k]: String(e).replace(/^Error: /, '') }))
+    } finally {
+      setSaving(s => { const n = new Set(s); n.delete(k); return n })
+    }
+  }, [])
+
+  const handleChange = (entry: SettingEntry, value: boolean | number | string) => {
+    const k = `${entry.category}.${entry.key}`
+    setDirty(d => ({ ...d, [k]: value }))
+    const err = validateField(entry, value)
+    setErrors(e => { const n = { ...e }; if (err) n[k] = err; else delete n[k]; return n })
+    if (err) return
+    clearTimeout(timers.current[k])
+    if (entry.data_type === 'bool' || entry.data_type === 'enum') { saveField(entry, value); return }
+    timers.current[k] = setTimeout(() => saveField(entry, value), 800)
+  }
+
+  const handleManualSave = (entry: SettingEntry) => {
+    const k = `${entry.category}.${entry.key}`
+    const v = dirty[k]
+    if (v === undefined) return
+    clearTimeout(timers.current[k])
+    saveField(entry, v)
+  }
+
+  const handleResetGroup = async (groupName: string) => {
+    if (resetConfirm !== groupName) { setResetConfirm(groupName); return }
+    setResetConfirm(null)
+    try { await adminApi.settings.reset(groupName); setDirty({}); await fetchSettings() } catch {}
+  }
+
+  const applyMode = useCallback(async (mode: OperatingMode) => {
+    setApplyingMode(mode.id)
+    const allWarnings: Record<string, string[]> = {}
+    try {
+      await Promise.all(
+        Object.entries(mode.groups).map(async ([grp, flds]) => {
+          const result = await adminApi.settings.patch(grp, flds)
+          if (result.warnings?.length) allWarnings[grp] = result.warnings
+        }),
+      )
+      if (Object.keys(allWarnings).length) setSaveWarnings(prev => ({ ...prev, ...allWarnings }))
+      setDirty({})
+      await fetchSettings()
+      setActiveMode(mode.id)
+    } catch (e) {
+      setFetchError(`Mode "${mode.label}" failed: ${String(e).replace(/^Error: /, '')}`)
+    } finally {
+      setApplyingMode(null)
+    }
+  }, [fetchSettings])
+
+  const getTacticalEntry = (grp: string, key: string): SettingEntry | null =>
+    settings[grp]?.fields.find(f => f.key === key) ?? null
+
+  const getTacticalValue = (grp: string, key: string): boolean | number | string => {
+    const k   = `${grp}.${key}`
+    const ent = getTacticalEntry(grp, key)
+    if (!ent) return 0
+    return dirty[k] !== undefined ? dirty[k] : ent.value
+  }
+
+  const quickToggleKeys = [
+    { group: 'ai',       key: 'enabled' },
+    { group: 'telegram', key: 'alerts_enabled' },
+    { group: 'features', key: 'apply_founder_thresholds' },
+  ]
+
+  if (loading) {
+    return (
+      <div className="glass-card rounded-lg p-10 text-center text-terminal-muted text-sm">
+        Loading configuration…
+      </div>
+    )
+  }
+
+  if (fetchError) {
+    return (
+      <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-bear-default/5 border border-bear-default/20 text-bear-default text-xs">
+        <AlertCircle size={13} />
+        <span>Failed to load settings: {fetchError}</span>
+        <button onClick={fetchSettings} className="ml-auto underline">Retry</button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+
+      {/* Safety status */}
+      <SafetyStatusCard settings={settings} dirty={dirty} />
+
+      {/* ── Quick Controls ──────────────────────────────────────────────────── */}
+      <div className="space-y-3">
+        <div className="flex items-baseline justify-between gap-3 flex-wrap">
+          <p className="text-terminal-text text-sm font-semibold">Quick Controls</p>
+          <p className="text-[10px] text-terminal-muted/50">
+            Emergency Stop · Maintenance live in{' '}
+            <a href="/admin/trading?tab=scanner" className="underline hover:text-terminal-text">Trading → Scanner</a>
+          </p>
+        </div>
+        {/* Toggles */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {quickToggleKeys.map(({ group: g, key: kk }) => {
+            const entry = getTacticalEntry(g, kk)
+            if (!entry) return null
+            const k = `${g}.${kk}`
+            return (
+              <FeatureFlagCard key={k} entry={entry} value={getTacticalValue(g, kk) as boolean}
+                onChange={v => handleChange(entry, v)} isSaving={saving.has(k)}
+                isSaved={saved.has(k)} error={errors[k]} />
+            )
+          })}
+        </div>
+        {/* Number controls */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          {TACTICAL_CONTROLS.map(def => {
+            const entry = getTacticalEntry(def.group, def.key)
+            if (!entry) return null
+            const k     = `${def.group}.${def.key}`
+            const value = getTacticalValue(def.group, def.key)
+            const pct   = entry.min_val != null && entry.max_val != null
+              ? Math.round(((Number(value) - entry.min_val) / (entry.max_val - entry.min_val)) * 100)
+              : null
+            const barColor = pct == null ? '#3b82f6' : pct > 60 ? '#00d084' : pct > 30 ? '#f59e0b' : '#ff3b5c'
+            const isFieldDirty = dirty[k] !== undefined
+            const modified = !valEq(value, entry.default)
+            const errMsg = errors[k]
+            return (
+              <div key={k} className={`glass-card rounded-xl p-4 border transition-all ${
+                errMsg       ? 'border-bear-default/30 bg-bear-default/5'
+                : isFieldDirty ? 'border-signal-medium/30'
+                : modified   ? 'border-signal-medium/20'
+                : 'border-terminal-border/50'
+              }`}>
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <span className="text-sm font-medium text-terminal-text leading-tight">{def.label}</span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {modified && !isFieldDirty && (
+                      <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-signal-medium/10 text-signal-medium/70 border border-signal-medium/20">modified</span>
+                    )}
+                    {saving.has(k) && <span className="text-[10px] text-terminal-muted animate-pulse">saving…</span>}
+                    {saved.has(k) && !isFieldDirty && <CheckCircle2 size={11} className="text-bull-default" />}
+                  </div>
+                </div>
+                <p className="text-[10px] text-terminal-muted/55 mb-1 leading-relaxed">{def.tagline}</p>
+                <p className="text-[9px] text-terminal-muted/35 mb-3 font-mono">{def.impact}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <SettingInput entry={entry} value={value} onChange={v => handleChange(entry, v)} disabled={saving.has(k)} />
+                  {pct !== null && (
+                    <div className="flex-1 min-w-[48px] h-1.5 rounded-full bg-terminal-bright/25 overflow-hidden">
+                      <div className="h-full rounded-full transition-all"
+                        style={{ width: `${Math.max(0, Math.min(100, pct))}%`, backgroundColor: barColor }} />
+                    </div>
+                  )}
+                  {isFieldDirty && !saving.has(k) && !errMsg && (
+                    <button onClick={() => handleManualSave(entry)}
+                      className="flex items-center gap-1 px-2 py-1 rounded bg-signal-medium/10 border border-signal-medium/30 text-signal-medium text-xs hover:bg-signal-medium/20 font-mono transition-colors">
+                      <Save size={9} />Save
+                    </button>
+                  )}
+                </div>
+                {errMsg && (
+                  <p className="text-bear-default text-xs mt-2 flex items-center gap-1">
+                    <AlertCircle size={9} />{errMsg}
+                  </p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Operating Mode ──────────────────────────────────────────────────── */}
+      <div className="space-y-3">
+        <p className="text-terminal-text text-sm font-semibold">Operating Mode</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {OPERATING_MODES.filter(m => ['conservative', 'balanced', 'aggressive'].includes(m.id)).map(mode => (
+            <ModeCard key={mode.id} mode={mode} isActive={activeMode === mode.id}
+              isApplying={applyingMode === mode.id} disabled={!!applyingMode} onApply={applyMode} />
+          ))}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] text-terminal-muted/50 uppercase tracking-wider shrink-0">Specialist:</span>
+          {OPERATING_MODES.filter(m => !['conservative', 'balanced', 'aggressive'].includes(m.id)).map(mode => (
+            <button key={mode.id} type="button" title={mode.description}
+              onClick={() => applyMode(mode)} disabled={!!applyingMode}
+              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
+                activeMode === mode.id
+                  ? 'border-bull-default/50 bg-bull-default/10 text-terminal-text'
+                  : 'border-terminal-border text-terminal-muted hover:text-terminal-text hover:border-terminal-border/80'
+              }`}>
+              <span style={{ color: mode.color }}>{mode.icon}</span>
+              {applyingMode === mode.id ? 'Applying…' : mode.label}
+              <span className="text-terminal-muted/40 font-mono hidden sm:inline">RR {mode.rrExpected}</span>
+            </button>
+          ))}
+        </div>
+        <p className="text-[10px] text-terminal-muted/40 leading-relaxed">
+          Presets that set confidence below 85 (Aggressive, Futures Tactical, Rotation Hunter) conflict with the
+          ALPHA.TRUTH.1 audit — the 80–85 band ran negative expectancy over 30d. Prefer Balanced/Conservative for live capital.
+        </p>
+      </div>
+
+      {/* ── Feature Flags ───────────────────────────────────────────────────── */}
+      <div className="space-y-3">
+        <p className="text-terminal-text text-sm font-semibold">Feature Flags</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {(settings['features']?.fields ?? [])
+            .filter(entry => !quickToggleKeys.some(q => q.group === 'features' && q.key === entry.key))
+            .map(entry => {
+              const k = `features.${entry.key}`
+              return (
+                <FeatureFlagCard key={entry.key} entry={entry} value={getValue(entry) as boolean}
+                  onChange={v => handleChange(entry, v)} isSaving={saving.has(k)}
+                  isSaved={saved.has(k)} error={errors[k]} />
+              )
+            })}
+        </div>
+      </div>
+
+      {/* ── Advanced Settings & Audit Log ───────────────────────────────────── */}
+      <div className="glass-card rounded-xl overflow-hidden border border-terminal-border/50">
+        <button type="button" onClick={() => setAllSettingsOpen(v => !v)}
+          className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-terminal-bright/5 transition-colors">
+          <div className="flex items-center gap-2">
+            <Database size={14} className="text-terminal-muted/60" />
+            <span className="text-sm font-semibold text-terminal-text">Advanced Settings &amp; Audit Log</span>
+            <span className="text-[10px] text-terminal-muted/40 font-mono hidden sm:block">
+              · tuning-phase knobs · change history
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            {Object.values(dirty).length > 0 && (
+              <span className="text-xs text-signal-medium font-semibold">
+                {Object.keys(dirty).length} unsaved
+              </span>
+            )}
+            <ChevronDown size={14} className={`text-terminal-muted/50 transition-transform ${allSettingsOpen ? 'rotate-180' : ''}`} />
+          </div>
+        </button>
+
+        {allSettingsOpen && (
+          <div className="flex min-h-[400px] border-t border-terminal-border/40">
+            {/* Left nav */}
+            <div className="w-44 sm:w-52 shrink-0 border-r border-terminal-border/40 py-2">
+              {[...advTabs.filter(t => t !== 'audit'), 'audit'].map(tab => {
+                const isActive = activeAdvTab === tab
+                const count    = tab !== 'audit' ? dirtyKeys(tab) : 0
+                const label    = tab === 'audit' ? 'Audit Log' : (SETTINGS_GROUP_LABELS[tab] ?? tab)
+                const desc     = tab === 'audit' ? 'Change history' : (SETTINGS_GROUP_DESCRIPTIONS[tab] ?? '')
+                const dotColor: Record<string, string> = {
+                  scanner: '#3b82f6', signals: '#00d084', ai: '#a855f7',
+                  telegram: '#06b6d4', risk: '#f59e0b', anomaly: '#f97316',
+                  features: '#6366f1', audit: '#374151',
+                }
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => { setActiveAdvTab(tab); setResetConfirm(null) }}
+                    className={`w-full text-left px-3 py-2.5 transition-colors relative ${
+                      isActive
+                        ? 'bg-terminal-bright/15 text-terminal-text'
+                        : 'text-terminal-muted hover:bg-terminal-bright/5 hover:text-terminal-text'
+                    }`}
+                  >
+                    {isActive && (
+                      <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full bg-bull-default/70" />
+                    )}
+                    <div className="flex items-center gap-2 pl-1.5">
+                      <span className="w-2 h-2 rounded-full shrink-0 opacity-70"
+                        style={{ backgroundColor: dotColor[tab] ?? '#6b7280' }} />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-xs font-semibold truncate ${isActive ? 'text-terminal-text' : ''}`}>
+                            {label}
+                          </span>
+                          {count > 0 && (
+                            <span className="text-[9px] px-1 py-0.5 rounded bg-signal-medium/20 text-signal-medium font-bold shrink-0">
+                              {count}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-terminal-muted/45 truncate leading-tight mt-0.5 hidden sm:block">
+                          {desc.split('·')[0].trim()}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Right content */}
+            <div className="flex-1 min-w-0 p-4 sm:p-5 space-y-4">
+              {activeAdvTab !== 'audit' && (
+                <>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-terminal-text text-sm font-medium">{SETTINGS_GROUP_LABELS[activeAdvTab] ?? activeAdvTab}</p>
+                      <p className="text-terminal-muted/60 text-xs mt-0.5">{SETTINGS_GROUP_DESCRIPTIONS[activeAdvTab]}</p>
+                      {advMeta && (
+                        <div className="flex items-center gap-3 mt-1.5 text-xs font-mono text-terminal-muted/40">
+                          <span className="flex items-center gap-1"><Clock size={9} />{formatRelative(advMeta.updated_at)}</span>
+                          <span>schema v{advMeta.schema_version} · data v{advMeta.data_version}</span>
+                          <span>by {advMeta.updated_by}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button onClick={() => { setAuditGroup(activeAdvTab); setActiveAdvTab('audit') }}
+                        className="flex items-center gap-1.5 text-xs px-2 py-1 rounded border transition-colors font-mono text-terminal-muted border-terminal-border hover:text-terminal-text">
+                        <History size={10} />History
+                      </button>
+                      <button onClick={() => handleResetGroup(activeAdvTab)}
+                        className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded border transition-colors font-mono ${
+                          resetConfirm === activeAdvTab
+                            ? 'text-bear-default border-bear-default/40 bg-bear-default/5'
+                            : 'text-terminal-muted border-terminal-border hover:text-terminal-text'
+                        }`}>
+                        <RotateCcw size={10} />
+                        {resetConfirm === activeAdvTab ? 'Confirm?' : 'Defaults'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {(saveWarnings[activeAdvTab]?.length ?? 0) > 0 && (
+                    <div className="flex items-start gap-2.5 px-4 py-3 rounded-lg bg-signal-high/5 border border-signal-high/20 text-signal-high text-xs">
+                      <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <p className="font-semibold">Safety warnings — saved, but review recommended:</p>
+                        {saveWarnings[activeAdvTab].map((w, i) => <p key={i} className="text-signal-high/80 leading-relaxed">{w}</p>)}
+                      </div>
+                      <button onClick={() => setSaveWarnings(p => { const n = { ...p }; delete n[activeAdvTab]; return n })}
+                        className="ml-auto text-signal-high/50 hover:text-signal-high shrink-0 font-mono text-xs">✕</button>
+                    </div>
+                  )}
+
+                  <div className="glass-card rounded-lg overflow-hidden">
+                    {!advFields.length ? (
+                      <div className="px-5 py-8 text-center text-terminal-muted text-sm">No settings in this group</div>
+                    ) : (
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-terminal-border">
+                            {[['Setting', 'w-44'], ['Value', ''], ['Default', 'w-24 hidden md:table-cell'], ['Description', 'hidden lg:table-cell'], ['', 'w-20']].map(([h, cls]) => (
+                              <th key={h} className={`text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-4 ${cls}`}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {advFields.map(entry => {
+                            const k            = `${entry.category}.${entry.key}`
+                            const currentVal   = getValue(entry)
+                            const isFieldDirty = isDirtyField(entry)
+                            const isSavingK    = saving.has(k)
+                            const isSavedK     = saved.has(k)
+                            const errMsg       = errors[k]
+                            return (
+                              <tr key={entry.key} className={`border-b border-terminal-border/30 transition-colors ${
+                                errMsg ? 'bg-bear-default/5' : isFieldDirty ? 'bg-signal-medium/5' : 'hover:bg-terminal-bright/5'
+                              }`}>
+                                <td className="py-2.5 px-4">
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="text-terminal-text font-mono">{entry.label}</p>
+                                    <WiredChip state={wiredState(entry.category, entry.key)} />
+                                  </div>
+                                  <p className="text-terminal-muted/50 text-xs font-mono">{entry.key}</p>
+                                  {entry.requires_restart && <span className="text-xs text-signal-high">↻ restart</span>}
+                                </td>
+                                <td className="py-2.5 px-4">
+                                  <SettingInput entry={entry} value={currentVal} onChange={v => handleChange(entry, v)} disabled={isSavingK} />
+                                  {errMsg && <p className="text-bear-default text-xs mt-1 flex items-center gap-1"><AlertCircle size={9} />{errMsg}</p>}
+                                  {(() => {
+                                    const rec = RECOMMENDED[`${entry.category}.${entry.key}`]
+                                    if (rec === undefined || valEq(currentVal, rec)) return null
+                                    return (
+                                      <button onClick={() => handleChange(entry, rec)} disabled={isSavingK}
+                                        title="Audited recommendation — click to apply"
+                                        className="mt-1 text-[10px] px-1.5 py-0.5 rounded border border-signal-medium/40 text-signal-medium hover:bg-signal-medium/10 font-mono transition-colors">
+                                        Rec: {String(rec)} — apply
+                                      </button>
+                                    )
+                                  })()}
+                                </td>
+                                <td className="py-2.5 px-4 font-mono text-terminal-muted/50 text-xs hidden md:table-cell">{String(entry.default)}</td>
+                                <td className="py-2.5 px-4 text-terminal-muted/60 hidden lg:table-cell">
+                                  {entry.description}
+                                  {entry.min_val != null && entry.max_val != null && (
+                                    <span className="ml-1 text-terminal-muted/30 font-mono">[{entry.min_val}–{entry.max_val}]</span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-4">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    {isSavingK && <span className="text-xs text-terminal-muted font-mono animate-pulse">saving…</span>}
+                                    {isSavedK && !isFieldDirty && <CheckCircle2 size={13} className="text-bull-default" />}
+                                    {isFieldDirty && !isSavingK && !errMsg && (
+                                      <button onClick={() => handleManualSave(entry)}
+                                        className="flex items-center gap-1 px-2 py-1 rounded bg-signal-medium/10 border border-signal-medium/30 text-signal-medium text-xs hover:bg-signal-medium/20 font-mono transition-colors">
+                                        <Save size={9} />Save
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* Audit log */}
+              {activeAdvTab === 'audit' && (
+                <>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <p className="text-terminal-muted text-xs uppercase tracking-wider flex-1">Configuration Change History</p>
+                    <select value={auditGroup} onChange={e => setAuditGroup(e.target.value)}
+                      className="bg-terminal-bg border border-terminal-border rounded px-2 py-1 text-xs font-mono text-terminal-text focus:outline-none cursor-pointer">
+                      <option value="all">All groups</option>
+                      {Object.keys(settings).map(g => <option key={g} value={g}>{SETTINGS_GROUP_LABELS[g] ?? g}</option>)}
+                    </select>
+                    <button onClick={() => fetchAudit(auditGroup)}
+                      className="flex items-center gap-1 text-terminal-muted text-xs hover:text-terminal-text font-mono transition-colors">
+                      <RefreshCw size={10} />Refresh
+                    </button>
+                  </div>
+                  <div className="glass-card rounded-lg overflow-hidden">
+                    {auditLoading ? (
+                      Array.from({ length: 5 }).map((_, i) => (
+                        <div key={i} className="px-4 py-3 border-b border-terminal-border/40 flex gap-4">
+                          <div className="skeleton h-3 w-20 rounded" />
+                          <div className="skeleton h-3 w-28 rounded" />
+                          <div className="skeleton h-3 w-40 rounded" />
+                        </div>
+                      ))
+                    ) : !auditLog.length ? (
+                      <div className="px-5 py-10 text-center text-terminal-muted text-sm">No configuration changes recorded yet</div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs min-w-[620px]">
+                          <thead>
+                            <tr className="border-b border-terminal-border">
+                              {['Group', 'Version', 'Changed Fields', 'By', 'When'].map(h => (
+                                <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3">{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {auditLog.map(entry => (
+                              <tr key={entry.id} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
+                                <td className="py-2.5 px-3 font-mono text-terminal-muted/60 text-xs">{SETTINGS_GROUP_LABELS[entry.group_name] ?? entry.group_name}</td>
+                                <td className="py-2.5 px-3 font-mono text-xs whitespace-nowrap">
+                                  <span className="text-bear-default/60">v{entry.old_version}</span>
+                                  <span className="text-terminal-muted/30"> → </span>
+                                  <span className="text-bull-default">v{entry.new_version}</span>
+                                </td>
+                                <td className="py-2.5 px-3 text-xs max-w-xs">
+                                  <div className="space-y-0.5">
+                                    {Object.entries(entry.changed_fields as Record<string, AuditChangedField>).map(([field, diff]) => (
+                                      <div key={field} className="font-mono">
+                                        <span className="text-terminal-text">{field}</span>
+                                        <span className="text-terminal-muted/30"> </span>
+                                        <span className="text-bear-default/70">{JSON.stringify(diff.old)}</span>
+                                        <span className="text-terminal-muted/30"> → </span>
+                                        <span className="text-bull-default">{JSON.stringify(diff.new)}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-3 font-mono text-terminal-muted text-xs">{entry.updated_by}</td>
+                                <td className="py-2.5 px-3 font-mono text-terminal-muted/50 text-xs whitespace-nowrap">
+                                  <span title={new Date(entry.updated_at).toLocaleString()}>{formatRelative(entry.updated_at)}</span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function SystemPage() {
-  const [tab, setTab] = useState<'system' | 'anomalies'>('system')
+  const [tab, setTab] = useState<'system' | 'anomalies' | 'settings'>('system')
 
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tab')
-    if (t === 'system' || t === 'anomalies') setTab(t)
+    if (t === 'system' || t === 'anomalies' || t === 'settings') setTab(t)
   }, [])
 
-  const healthFetcher    = useCallback(() => adminApi.health.ready(), [])
-  const providerFetcher  = useCallback(() => fetch('/api/health/providers').then(r => r.json()), [])
-  const scanFetcher      = useCallback(() => adminApi.analytics.scans(24), [])
-  const scan7dFetcher    = useCallback(() => adminApi.analytics.scans(168), [])
-  const aiFetcher        = useCallback(() => adminApi.analytics.ai(24), [])
-  const monitorFetcher   = useCallback(() => adminApi.analytics.monitor(), [])
+  const healthFetcher   = useCallback(() => adminApi.health.ready(), [])
+  const providerFetcher = useCallback(() => fetch('/api/health/providers').then(r => r.json()), [])
+  const scanFetcher     = useCallback(() => adminApi.analytics.scans(24), [])
+  const aiFetcher       = useCallback(() => adminApi.analytics.ai(24), [])
+  const monitorFetcher  = useCallback(() => adminApi.analytics.monitor(), [])
 
-  const { data: health,    loading: hl } = useAutoRefresh<HealthReady>(healthFetcher, 120_000)
-  const { data: provData }               = useAutoRefresh<{ providers: ProviderCheckResult[] }>(providerFetcher, 120_000)
-  const { data: scans }                  = useAutoRefresh<ScanSummaryResponse>(scanFetcher, 120_000)
-  const { data: scans7d }                = useAutoRefresh<ScanSummaryResponse>(scan7dFetcher, 120_000)
-  const { data: ai }                     = useAutoRefresh<AiSummaryResponse>(aiFetcher, 120_000)
-  // R7: shared polling — multiple tabs/widgets reuse the same timer + response.
-  // Interval raised 60s → 120s; monitor counters are daily aggregates.
-  const { data: monitor }                = useSharedPolling<MonitorSnapshot>('admin:monitor', monitorFetcher, 120_000)
+  const { data: health,   loading: hl } = useAutoRefresh<HealthReady>(healthFetcher, 120_000)
+  const { data: provData }              = useAutoRefresh<{ providers: ProviderCheckResult[] }>(providerFetcher, 120_000)
+  const { data: scans }                 = useAutoRefresh<ScanSummaryResponse>(scanFetcher, 120_000)
+  const { data: ai }                    = useAutoRefresh<AiSummaryResponse>(aiFetcher, 120_000)
+  const { data: monitor }               = useSharedPolling<MonitorSnapshot>('admin:monitor', monitorFetcher, 120_000)
+
+  const TABS = [
+    { id: 'system',    label: 'Health' },
+    { id: 'anomalies', label: 'Anomalies' },
+    { id: 'settings',  label: 'Settings' },
+  ] as const
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -597,18 +1531,20 @@ export default function SystemPage() {
 
       {/* Tab nav */}
       <div className="flex gap-1 border-b border-terminal-border pb-0">
-        {(['system', 'anomalies'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-2 text-xs font-mono uppercase tracking-wider border-b-2 transition-colors ${tab === t ? 'border-terminal-text text-terminal-text' : 'border-transparent text-terminal-muted hover:text-terminal-text/70'}`}>
-            {t === 'system' ? 'System Health' : 'Anomalies'}
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`px-4 py-2 text-xs font-mono uppercase tracking-wider border-b-2 transition-colors ${tab === t.id ? 'border-terminal-text text-terminal-text' : 'border-transparent text-terminal-muted hover:text-terminal-text/70'}`}>
+            {t.label}
           </button>
         ))}
       </div>
 
-      {tab === 'anomalies' && <AnomaliesTab/>}
+      {tab === 'anomalies' && <AnomaliesTab />}
+
+      {tab === 'settings' && <SettingsTab />}
 
       {tab === 'system' && <>
-      {/* Overall status banner — primary health, above fold */}
+      {/* Overall status banner */}
       {!hl && health && (
         <div className={`rounded-xl px-5 py-4 border flex items-center gap-4 ${
           health.status === 'ready'
@@ -627,7 +1563,7 @@ export default function SystemPage() {
         </div>
       )}
 
-      {/* Primary: Service grid */}
+      {/* Service grid */}
       <div>
         <p className="text-[9px] text-terminal-muted/50 uppercase tracking-widest mb-2.5">Service Status</p>
         {hl ? (
@@ -655,12 +1591,12 @@ export default function SystemPage() {
         )}
       </div>
 
-      {/* Provider health table — 8 services */}
+      {/* Provider health table */}
       {provData?.providers && provData.providers.length > 0 && (
         <ProviderHealthTable providers={provData.providers} />
       )}
 
-      {/* Secondary: Operational metrics */}
+      {/* Operational metrics */}
       <div>
         <p className="text-[9px] text-terminal-muted/50 uppercase tracking-widest mb-2.5">Operational Metrics · {analyticsWindowLabel(24)}</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -699,7 +1635,7 @@ export default function SystemPage() {
         </div>
       </div>
 
-      {/* ── OUTPUT.COLLAPSE.ALERT.1 banner ─────────────────────────────────── */}
+      {/* OUTPUT.COLLAPSE.ALERT.1 banner */}
       {monitor?.output_collapse?.active && (
         <div className="rounded-xl border border-red-500/50 bg-red-900/25 p-4 flex items-start gap-3">
           <span className="text-lg shrink-0">🚨</span>
@@ -716,7 +1652,7 @@ export default function SystemPage() {
         </div>
       )}
 
-      {/* ── Operational Monitoring ─────────────────────────────────────────── */}
+      {/* Operational Monitoring */}
       {monitor && (
         <div>
           <div className="flex items-center gap-2 mb-3">
@@ -729,7 +1665,6 @@ export default function SystemPage() {
             </span>
           </div>
 
-          {/* Anomalies */}
           {monitor.anomalies.length > 0 && (
             <div className="space-y-1.5 mb-3">
               {monitor.anomalies.map((a, i) => (
@@ -744,15 +1679,14 @@ export default function SystemPage() {
             </div>
           )}
 
-          {/* Metrics grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="glass-card rounded-xl p-4">
               <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-2">Signals & Outcomes</p>
               <MonitorRow label={`Signals generated (${analyticsWindowLabel(monitor.metrics.signals_per_day.window_hours)})`} metric={monitor.metrics.signals_per_day} />
-              <MonitorRow label="Win rate (7d)"        metric={monitor.metrics.win_rate_pct} />
-              <MonitorRow label="SL rate (7d)"         metric={monitor.metrics.sl_rate_pct} />
+              <MonitorRow label="Win rate (7d)"          metric={monitor.metrics.win_rate_pct} />
+              <MonitorRow label="SL rate (7d)"           metric={monitor.metrics.sl_rate_pct} />
               <MonitorRow label="Resolved outcomes (7d)" metric={monitor.metrics.resolved_7d} />
-              <MonitorRow label="Telegram sends"       metric={monitor.metrics.telegram_sends_per_day} />
+              <MonitorRow label="Telegram sends"         metric={monitor.metrics.telegram_sends_per_day} />
             </div>
             <div className="glass-card rounded-xl p-4">
               <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-2">Scanner</p>
@@ -764,10 +1698,10 @@ export default function SystemPage() {
             </div>
             <div className="glass-card rounded-xl p-4">
               <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-2">Claude / AI</p>
-              <MonitorRow label="Claude calls"         metric={monitor.metrics.claude_calls_per_day} />
-              <MonitorRow label="Heuristic calls"      metric={monitor.metrics.heuristic_calls_per_day} />
-              <MonitorRow label="Fallback rate"        metric={monitor.metrics.claude_fallback_pct} />
-              <MonitorRow label="Est. cost today"      metric={monitor.metrics.estimated_cost_usd} />
+              <MonitorRow label="Claude calls"       metric={monitor.metrics.claude_calls_per_day} />
+              <MonitorRow label="Heuristic calls"    metric={monitor.metrics.heuristic_calls_per_day} />
+              <MonitorRow label="Fallback rate"      metric={monitor.metrics.claude_fallback_pct} />
+              <MonitorRow label="Est. cost today"    metric={monitor.metrics.estimated_cost_usd} />
             </div>
           </div>
           <p className="text-terminal-muted/30 text-[10px] font-mono mt-2">
@@ -779,11 +1713,6 @@ export default function SystemPage() {
       <PipelineIntegrityCard scans={scans ?? undefined} monitor={monitor ?? undefined} />
 
       <GateRejectionGrid counts={scans?.gate_rejections} />
-
-      <MarketStructureBreakdown
-        counts24h={scans?.gate_rejections}
-        counts7d={scans7d?.gate_rejections}
-      />
 
       {/* Infrastructure Configuration — read-only (SETTINGS.CENTER.2) */}
       <InfraConfigSection />
