@@ -33,17 +33,17 @@ const nextConfig = {
       // Old 4-center URLs → new 3-center URLs
       { source: '/admin/trading',     destination: '/admin/signals',              permanent: false },
       { source: '/admin/analytics',   destination: '/admin/performance',          permanent: false },
-      { source: '/admin/intelligence', destination: '/admin/system?tab=health',   permanent: false },
+      { source: '/admin/intelligence', destination: '/admin/system?tab=system',   permanent: false },
       { source: '/admin/settings',    destination: '/admin/system?tab=settings',  permanent: false },
       // Legacy individual pages → new centers
       { source: '/admin/overview',   destination: '/admin/signals',                       permanent: true },
-      { source: '/admin/scanner',    destination: '/admin/system?tab=health',             permanent: false },
+      { source: '/admin/scanner',    destination: '/admin/system?tab=system',             permanent: false },
       { source: '/admin/tactical',   destination: '/admin/signals?tab=signals',           permanent: false },
       { source: '/admin/regime',     destination: '/admin/signals?tab=regime',            permanent: false },
-      { source: '/admin/providers',  destination: '/admin/system?tab=health',             permanent: true },
-      { source: '/admin/cache',      destination: '/admin/system?tab=health',             permanent: false },
-      { source: '/admin/sectors',    destination: '/admin/system?tab=health',             permanent: false },
-      { source: '/admin/market',     destination: '/admin/system?tab=health',             permanent: false },
+      { source: '/admin/providers',  destination: '/admin/system?tab=system',             permanent: true },
+      { source: '/admin/cache',      destination: '/admin/system?tab=system',             permanent: false },
+      { source: '/admin/sectors',    destination: '/admin/system?tab=system',             permanent: false },
+      { source: '/admin/market',     destination: '/admin/system?tab=system',             permanent: false },
       { source: '/admin/calibration', destination: '/admin/performance?tab=attribution',  permanent: false },
       { source: '/admin/anomalies',  destination: '/admin/system?tab=anomalies',          permanent: false },
     ];

@@ -1174,9 +1174,10 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
   const [expandedId,  setExpandedId]  = useState<string|null>(null)
   const [search,      setSearch]      = useState('')
   const [page,        setPage]        = useState(0)
-  const [preset, setPreset] = useState<'active'|'won'|'lost'|'expired'|'all'>('active')
+  const [preset, setPreset] = useState<'active'|'sent'|'won'|'lost'|'expired'|'all'>('active')
   const stageMap: Record<string, SignalLifecycleStage[]> = {
     active:  ['ACTIVE','AI_APPROVED','SCREENED','TELEGRAM_SENT'],
+    sent:    ['TELEGRAM_SENT'],
     won:     ['TP_HIT'],
     lost:    ['SL_HIT'],
     expired: ['STALE','CLOSED'],
@@ -1210,6 +1211,7 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
 
   const presetDefs = [
     {id:'active',  label:'Active',   cls:'bg-green-500/10 border-green-500/30 text-green-300'},
+    {id:'sent',    label:'📨 Sent',  cls:'bg-blue-500/10 border-blue-500/30 text-blue-300'},
     {id:'won',     label:'✓ Won',    cls:'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'},
     {id:'lost',    label:'✗ Lost',   cls:'bg-red-500/10 border-red-500/30 text-red-300'},
     {id:'expired', label:'Expired',  cls:'bg-zinc-500/10 border-zinc-600/30 text-zinc-400'},

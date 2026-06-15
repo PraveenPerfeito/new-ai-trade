@@ -3,17 +3,15 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  TrendingUp, Database, BarChart3, Server, Settings2,
+  TrendingUp, BarChart3, Server,
 } from 'lucide-react'
 
 type NavItem = { href: string; icon: React.ElementType; label: string; sub: string }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: '/admin/trading',      icon: TrendingUp, label: 'Trading',      sub: 'Overview · Scanner · Signals · Regime'  },
-  { href: '/admin/intelligence', icon: Database,   label: 'Intelligence', sub: 'Providers · Cache · Sectors · Market'   },
-  { href: '/admin/analytics',    icon: BarChart3,  label: 'Analytics',    sub: 'Edge · Attribution · Calibration'       },
-  { href: '/admin/system',       icon: Server,     label: 'System',       sub: 'Health · Anomalies · Operations'        },
-  { href: '/admin/settings',     icon: Settings2,  label: 'Settings',     sub: 'Signal quality · Risk · Presets'        },
+  { href: '/admin/signals',     icon: TrendingUp, label: 'Signals',     sub: 'Overview · Signals · Regime'          },
+  { href: '/admin/performance', icon: BarChart3,  label: 'Performance', sub: 'Track Record · Edge · Attribution'    },
+  { href: '/admin/system',      icon: Server,     label: 'System',      sub: 'Health · Anomalies · Settings'        },
 ]
 
 export function AdminSidebar() {

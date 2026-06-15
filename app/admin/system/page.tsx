@@ -1099,7 +1099,7 @@ function SettingsTab() {
           <p className="text-terminal-text text-sm font-semibold">Quick Controls</p>
           <p className="text-[10px] text-terminal-muted/50">
             Emergency Stop · Maintenance live in{' '}
-            <a href="/admin/trading?tab=scanner" className="underline hover:text-terminal-text">Trading → Scanner</a>
+            <a href="/admin/signals?tab=scanner" className="underline hover:text-terminal-text">Trading → Scanner</a>
           </p>
         </div>
         {/* Toggles */}
