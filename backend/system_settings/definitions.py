@@ -56,7 +56,7 @@ ALL_DEFINITIONS: list[SettingDef] = [
     SettingDef('telegram', 'telegram_alerts_enabled',        'bool', 'Alerts Enabled',         'Send signal alerts via Telegram',                       True),
     SettingDef('telegram', 'telegram_min_confidence',        'int',  'Min Alert Confidence',   'Only alert on signals at or above this confidence',     85,  50, 100),
     SettingDef('telegram', 'telegram_max_alerts_per_hour',   'int',  'Max Alerts / Hour',      'Rate-limit on outgoing Telegram signal alerts',         10,   1,  100),
-    SettingDef('telegram', 'telegram_daily_summary_enabled', 'bool', 'Daily Summary Enabled',  'Send a daily performance summary message',              True),
+    SettingDef('telegram', 'telegram_daily_summary_enabled', 'bool', 'Daily Summary Enabled',  'Send a daily performance summary message',              False),
     SettingDef('telegram', 'telegram_daily_summary_hour_utc','int',  'Summary Hour (UTC)',      'Hour of day (UTC) to send the daily summary',           8,   0,   23),
     SettingDef('telegram', 'telegram_ops_alerts_enabled',    'bool', 'Ops Alerts Enabled',      'Send operational alerts (anomalies, scan failures, degradation). Off by default.', False),
 

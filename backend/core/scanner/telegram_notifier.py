@@ -558,6 +558,8 @@ async def send_scan_summary(
     duration_ms: int,
     mode: str,
 ) -> bool:
+    if not await _ops_alerts_enabled():
+        return False
     try:
         from backend.system_settings.service import get_settings_service
         from backend.system_settings.groups import TelegramSettings, FeatureFlags
@@ -566,7 +568,7 @@ async def send_scan_summary(
         if not tg_cfg.alerts_enabled or not flags.telegram or flags.emergency_stop or flags.maintenance_mode:
             return False
     except Exception:
-        pass  # fail open for scan summaries
+        pass
 
     text = (
         f"<b>Scan Complete — {mode.upper()}</b>\n"
@@ -592,6 +594,8 @@ async def send_provider_fallback_alert(
     Alert is throttled externally (Redis key) — this function always sends when called.
     """
     if not _is_configured():
+        return
+    if not await _ops_alerts_enabled():
         return
 
     _ICONS = {"coinmarketcap": "📊", "coingecko": "🦎", "binance": "⚡"}

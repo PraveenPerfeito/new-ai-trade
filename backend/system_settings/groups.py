@@ -316,7 +316,7 @@ class TelegramSettings(BaseSettingsGroup):
         description='Rate cap on outgoing Telegram signal alerts',
     )
     daily_summary_enabled: bool = Field(
-        True,
+        False,
         title='Daily Summary Enabled',
         description='Send a nightly performance summary message',
     )
