@@ -441,27 +441,31 @@ function GradeValidationStrip() {
 
 function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
   type IntelField = { label: string; value: string; color?: string }
-  // Extract ADX from setup description ("... | ADX: 35") before it gets stripped
   const adxMatch = sig.setupDescription?.match(/\|\s*ADX:\s*(\d+(?:\.\d+)?)/i)
   const adxValue = adxMatch ? parseFloat(adxMatch[1]) : null
 
-  const fields: IntelField[] = [
-    ...(sig.trendScore != null ? [{ label: 'TrendScore', value: trendScoreLabel(sig.trendScore), color: trendScoreColor(sig.trendScore) }] : []),
-    ...(sig.sectorStatus ? [{ label: 'Sector', value: shortLabel(sig.sectorStatus) }] : []),
+  // Primary intel chips — most actionable for trade decision
+  const primaryFields: IntelField[] = [
     ...(sig.breakoutStrength ? [{
       label: 'Breakout',
       value: shortLabel(sig.breakoutStrength) + (sig.breakoutType ? ` · ${sig.breakoutType.replace(/_/g,' ')}` : ''),
       color: breakoutColor(sig.breakoutStrength),
     }] : []),
     ...(sig.oiInterpretation ? [{ label: 'OI', value: shortLabel(sig.oiInterpretation), color: oiColor(sig.oiInterpretation) }] : []),
+    ...(sig.marketRegime ? [{ label: 'Regime', value: shortLabel(sig.marketRegime) }] : []),
+    ...(adxValue != null ? [{ label: 'ADX', value: adxValue.toFixed(0), color: adxValue >= 40 ? 'text-emerald-400' : adxValue >= 30 ? 'text-blue-400' : adxValue < 18 ? 'text-red-400' : 'text-zinc-300' }] : []),
+  ]
+
+  // Secondary intel chips — context/detail, shown in More Details
+  const secondaryFields: IntelField[] = [
+    ...(sig.trendScore != null ? [{ label: 'TrendScore', value: trendScoreLabel(sig.trendScore), color: trendScoreColor(sig.trendScore) }] : []),
+    ...(sig.sectorStatus ? [{ label: 'Sector', value: shortLabel(sig.sectorStatus) }] : []),
     ...(sig.fundingTrend ? [{
       label: 'Funding',
       value: sig.fundingTrend + (sig.fundingTrend === 'RISING' ? ' ↗' : sig.fundingTrend === 'FALLING' ? ' ↘' : ' →'),
       color: sig.fundingTrend === 'RISING' ? 'text-amber-400' : sig.fundingTrend === 'FALLING' ? 'text-emerald-400' : 'text-zinc-400',
     }] : []),
     ...(sig.positioningContext ? [{ label: 'Positioning', value: shortLabel(sig.positioningContext), color: posColor(sig.positioningContext) }] : []),
-    ...(sig.marketRegime ? [{ label: 'Regime', value: shortLabel(sig.marketRegime) }] : []),
-    ...(adxValue != null ? [{ label: 'ADX', value: adxValue.toFixed(0), color: adxValue >= 40 ? 'text-emerald-400' : adxValue >= 30 ? 'text-blue-400' : adxValue < 18 ? 'text-red-400' : 'text-zinc-300' }] : []),
     ...(sig.mcapTier ? [{ label: 'MCap', value: sig.mcapTier.charAt(0).toUpperCase() + sig.mcapTier.slice(1) }] : []),
     ...(sig.extensionRisk && sig.extensionRisk !== 'LOW' ? [{ label: 'Ext Risk', value: sig.extensionRisk, color: sig.extensionRisk === 'HIGH' ? 'text-red-400' : 'text-amber-400' }] : []),
     ...(sig.pullbackQuality ? [{ label: 'Pullback', value: shortLabel(String(sig.pullbackQuality)) }] : []),
@@ -472,7 +476,6 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
   const qs = sig.qualityScore
   const rs = sig.riskScore
 
-  // Phase B: why this signal
   const contProb = sig.continuation?.continuationProbability ?? null
   const contCase = sig.continuation?.reasons?.[0] ?? null
   const iq       = sig.entryQualityScore
@@ -480,34 +483,28 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
   const ras      = sig.regimeAlignmentScore
   const hasWhySection = contProb != null || iq != null || iScore != null || ras != null
 
-  // Phase C: empirical trust
   const hasEmpiricalData = sig.empiricalWr != null
 
-  // Phase G: technical indicators
   const rsi         = sig.indicators?.rsi
   const volumeSpike = sig.indicators?.volumeSpike
   const hasTechnical = (rsi != null && rsi > 0) || (volumeSpike != null && volumeSpike > 0)
 
-  // Phase H: futures data
-  const fd           = sig.futuresData
-  const hasFutures   = !!fd && (sig.scannerMode === 'futures' || sig.scannerMode === 'high_confidence')
+  const fd         = sig.futuresData
+  const hasFutures = !!fd && (sig.scannerMode === 'futures' || sig.scannerMode === 'high_confidence')
 
-  // Extended technical (Python-side fields not in TS type — cast to access)
-  const indRaw     = sig.indicators as unknown as Record<string, unknown>
-  const ema200Raw  = indRaw?.ema200 as number | null | undefined
-  const ema200Pos  = ema200Raw && sig.indicators.currentPrice
+  const indRaw    = sig.indicators as unknown as Record<string, unknown>
+  const ema200Raw = indRaw?.ema200 as number | null | undefined
+  const ema200Pos = ema200Raw && sig.indicators.currentPrice
     ? (sig.indicators.currentPrice > ema200Raw ? 'ABOVE' : 'BELOW') : null
-  const candlePat  = (indRaw?.candle_pattern as string | null | undefined) ?? null
-  const bbRaw      = indRaw?.bb as Record<string, unknown> | null | undefined
-  const bbSqueeze  = bbRaw?.squeeze as boolean | null | undefined
+  const candlePat = (indRaw?.candle_pattern as string | null | undefined) ?? null
+  const bbRaw     = indRaw?.bb as Record<string, unknown> | null | undefined
+  const bbSqueeze = bbRaw?.squeeze as boolean | null | undefined
   const hasExtTech = !!(ema200Pos || (candlePat && candlePat !== 'NONE') || bbSqueeze)
 
-  // AI explainability fields
-  const aiExp            = sig.aiExplainability
-  const aiSummary        = aiExp?.summary ?? null
-  const aiContCase       = aiExp?.continuationCase ?? null
-  const aiCautionCase    = aiExp?.cautionCase ?? null
-  const hasAiExpl        = !!(aiSummary || aiContCase || aiCautionCase)
+  const aiExp         = sig.aiExplainability
+  const aiSummary     = aiExp?.summary ?? null
+  const aiContCase    = aiExp?.continuationCase ?? null
+  const aiCautionCase = aiExp?.cautionCase ?? null
   const hasRisksStrengths = ((sig.strengths?.length ?? 0) > 0) || ((sig.risks?.length ?? 0) > 0)
 
   const slDistPct = sig.entryPrice && sig.stopLoss
@@ -517,7 +514,10 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
     ? fmtDistPct(sig.entryPrice, sig.targetPrice, sig.type as 'BUY' | 'SELL', 'tp')
     : null
 
-  if (fields.length === 0 && !hasAI && !hasSetup && qs == null && !hasEmpiricalData) {
+  const hasMoreDetails = secondaryFields.length > 0 || hasTechnical || hasFutures || hasExtTech ||
+    !!(aiContCase || aiCautionCase || hasAI || contCase)
+
+  if (primaryFields.length === 0 && !hasAI && !hasSetup && qs == null && !hasEmpiricalData) {
     return (
       <div className="border-t border-zinc-800 px-4 py-3 text-[11px] text-zinc-600">
         No intelligence data available for this signal.
@@ -527,7 +527,7 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
 
   return (
     <div className="border-t border-zinc-800 px-4 py-3 space-y-2.5">
-      {/* Phase C — Empirical Trust Layer */}
+      {/* 1. Empirical Trust */}
       {hasEmpiricalData && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 rounded-lg bg-zinc-800/40 border border-zinc-700/50">
           <span className="text-[10px] text-zinc-500 uppercase tracking-widest shrink-0">Empirical</span>
@@ -546,7 +546,7 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
           )}
         </div>
       )}
-      {/* Quality + Risk scores + trade distances */}
+      {/* 2. Quality + Risk + trade distances */}
       {(qs != null || rs != null || slDistPct || tpDistPct) && (
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
           {qs != null && (
@@ -585,10 +585,10 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
           )}
         </div>
       )}
-      {/* Intelligence fields */}
-      {fields.length > 0 && (
+      {/* 3. Primary intel: Breakout + OI + Regime + ADX */}
+      {primaryFields.length > 0 && (
         <div className="flex flex-wrap gap-x-5 gap-y-1.5">
-          {fields.map((f, i) => (
+          {primaryFields.map((f, i) => (
             <div key={i} className="flex items-center gap-1.5">
               <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{f.label}</span>
               <span className={cn('text-[11px] font-mono font-semibold', f.color ?? 'text-zinc-300')}>{f.value}</span>
@@ -596,140 +596,7 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
           ))}
         </div>
       )}
-      {/* Phase G — Technical Context */}
-      {hasTechnical && (
-        <div className="flex flex-wrap gap-x-5 gap-y-1.5">
-          {rsi != null && rsi > 0 && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">RSI 1h</span>
-              <span className={`text-[11px] font-mono font-semibold ${rsi >= 70 ? 'text-red-400' : rsi >= 60 ? 'text-amber-400' : rsi <= 30 ? 'text-green-400' : rsi <= 40 ? 'text-emerald-400' : 'text-zinc-300'}`}>
-                {rsi.toFixed(1)}
-              </span>
-            </div>
-          )}
-          {volumeSpike != null && volumeSpike > 0 && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Vol Spike</span>
-              <span className={`text-[11px] font-mono font-semibold ${volumeSpike >= 2.5 ? 'text-emerald-400' : volumeSpike >= 1.5 ? 'text-blue-400' : volumeSpike < 0.8 ? 'text-red-400' : 'text-zinc-300'}`}>
-                {volumeSpike.toFixed(1)}×
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-      {/* Phase H — Futures Intelligence */}
-      {hasFutures && fd && (
-        <div className="flex flex-wrap gap-x-5 gap-y-1.5">
-          {fd.fundingRate != null && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Funding Rate</span>
-              <span className={`text-[11px] font-mono font-semibold ${Math.abs(fd.fundingRate) > 0.0005 ? 'text-amber-400' : 'text-zinc-300'}`}>
-                {fd.fundingRate >= 0 ? '+' : ''}{(fd.fundingRate * 100).toFixed(4)}%
-              </span>
-            </div>
-          )}
-          {fd.fundingRateAnnualized != null && Math.abs(fd.fundingRateAnnualized) > 0 && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Annualized</span>
-              <span className={`text-[11px] font-mono font-semibold ${Math.abs(fd.fundingRateAnnualized) > 50 ? 'text-red-400' : Math.abs(fd.fundingRateAnnualized) > 20 ? 'text-amber-400' : 'text-zinc-300'}`}>
-                {fd.fundingRateAnnualized >= 0 ? '+' : ''}{fd.fundingRateAnnualized.toFixed(1)}%
-              </span>
-            </div>
-          )}
-          {fd.fundingBias && fd.fundingBias !== 'NEUTRAL' && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Fund Bias</span>
-              <span className={`text-[11px] font-mono font-semibold ${fd.fundingBias === 'SHORT_HEAVY' ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {fd.fundingBias.replace('_', ' ')}
-              </span>
-            </div>
-          )}
-          {fd.oiTrend && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">OI Trend</span>
-              <span className={`text-[11px] font-mono font-semibold ${fd.oiTrend === 'RISING' ? 'text-emerald-400' : fd.oiTrend === 'FALLING' ? 'text-red-400' : 'text-zinc-400'}`}>
-                {fd.oiTrend}
-              </span>
-            </div>
-          )}
-          {fd.oiChange24h != null && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">OI 24h</span>
-              <span className={`text-[11px] font-mono font-semibold ${fd.oiChange24h > 5 ? 'text-emerald-400' : fd.oiChange24h < -5 ? 'text-red-400' : 'text-zinc-300'}`}>
-                {fd.oiChange24h > 0 ? '+' : ''}{fd.oiChange24h.toFixed(1)}%
-              </span>
-            </div>
-          )}
-          {fd.longShortRatio != null && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">L/S Ratio</span>
-              <span className="text-[11px] font-mono font-semibold text-zinc-300">{fd.longShortRatio.toFixed(2)}</span>
-            </div>
-          )}
-          {fd.momentumScore != null && fd.momentumScore > 0 && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Momentum</span>
-              <span className={`text-[11px] font-mono font-semibold ${fd.momentumScore >= 70 ? 'text-emerald-400' : fd.momentumScore >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>
-                {fd.momentumScore}/100
-              </span>
-            </div>
-          )}
-          {sig.maxSafeLeverage != null && sig.maxSafeLeverage > 0 && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Max Lev</span>
-              <span className="text-[11px] font-mono font-semibold text-zinc-300">{sig.maxSafeLeverage}×</span>
-            </div>
-          )}
-        </div>
-      )}
-      {/* Liquidation Zones */}
-      {hasFutures && fd && fd.liquidationZones && fd.liquidationZones.length > 0 && (
-        <div className="space-y-1">
-          <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Liquidation Zones</p>
-          <div className="flex flex-wrap gap-1.5">
-            {fd.liquidationZones.slice(0, 4).map((z, i) => (
-              <span
-                key={i}
-                className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
-                  z.side === 'LONG_LIQ'
-                    ? 'text-red-400 border-red-500/20 bg-red-500/5'
-                    : 'text-emerald-400 border-emerald-500/20 bg-emerald-500/5'
-                }`}
-              >
-                {z.side === 'LONG_LIQ' ? '↓' : '↑'} ${z.price.toFixed(2)} · {z.distancePct.toFixed(1)}% away
-                {z.strength !== 'WEAK' && <span className="ml-1 opacity-60">({z.strength.toLowerCase()})</span>}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-      {/* Extended Technical Context — ema200 position, candle pattern, BB squeeze */}
-      {hasExtTech && (
-        <div className="flex flex-wrap gap-x-5 gap-y-1.5 items-center">
-          {ema200Pos && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">EMA200</span>
-              <span className={`text-[11px] font-mono font-semibold ${ema200Pos === 'ABOVE' ? 'text-emerald-400' : 'text-red-400'}`}>
-                {ema200Pos} {ema200Pos === 'ABOVE' ? '↑' : '↓'}
-              </span>
-            </div>
-          )}
-          {candlePat && candlePat !== 'NONE' && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Pattern</span>
-              <span className="text-[11px] font-mono font-semibold text-blue-400">
-                {candlePat.replace(/_/g, ' ')}
-              </span>
-            </div>
-          )}
-          {bbSqueeze && (
-            <span className="text-[10px] font-semibold text-purple-400 border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.5 rounded">
-              ⚡ BB SQUEEZE
-            </span>
-          )}
-        </div>
-      )}
-      {/* Phase B — Why This Signal */}
+      {/* 4. Why this signal */}
       {hasWhySection && (
         <div className="flex flex-wrap gap-x-5 gap-y-1.5">
           {contProb != null && (
@@ -766,65 +633,209 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
           )}
         </div>
       )}
-      {contCase && (
-        <p className="text-[10px] text-zinc-500 leading-relaxed border-l-2 border-zinc-800 pl-2.5 italic">
-          {contCase}
-        </p>
-      )}
-      {/* AI Explainability — summary, continuation case, caution case */}
-      {hasAiExpl && (
+      {/* 5. AI summary + strengths/risks (max 2 each) */}
+      {(aiSummary || hasRisksStrengths) && (
         <div className="space-y-1.5">
           {aiSummary && (
-            <p className="text-[11px] text-zinc-300 font-medium leading-snug">
-              {aiSummary}
-            </p>
+            <p className="text-[11px] text-zinc-300 font-medium leading-snug">{aiSummary}</p>
           )}
-          {aiContCase && (
-            <p className="text-[10px] text-emerald-400/75 leading-relaxed border-l-2 border-emerald-600/30 pl-2.5">
-              ↗ {aiContCase}
-            </p>
-          )}
-          {aiCautionCase && (
-            <p className="text-[10px] text-amber-400/75 leading-relaxed border-l-2 border-amber-600/30 pl-2.5">
-              ⚠ {aiCautionCase}
-            </p>
-          )}
-        </div>
-      )}
-      {/* Risks & Strengths from AI validation */}
-      {hasRisksStrengths && (
-        <div className="space-y-1">
-          {(sig.strengths?.length ?? 0) > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {sig.strengths!.slice(0, 3).map((s, i) => (
-                <span key={i} className="text-[9px] text-emerald-400/80 border border-emerald-500/20 bg-emerald-500/5 px-1.5 py-0.5 rounded">
-                  ✓ {s}
-                </span>
-              ))}
-            </div>
-          )}
-          {(sig.risks?.length ?? 0) > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {sig.risks!.slice(0, 3).map((r, i) => (
-                <span key={i} className="text-[9px] text-red-400/80 border border-red-500/20 bg-red-500/5 px-1.5 py-0.5 rounded">
-                  ⚠ {r}
-                </span>
-              ))}
+          {hasRisksStrengths && (
+            <div className="space-y-1">
+              {(sig.strengths?.length ?? 0) > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {sig.strengths!.slice(0, 2).map((s, i) => (
+                    <span key={i} className="text-[9px] text-emerald-400/80 border border-emerald-500/20 bg-emerald-500/5 px-1.5 py-0.5 rounded">
+                      ✓ {s}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {(sig.risks?.length ?? 0) > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {sig.risks!.slice(0, 2).map((r, i) => (
+                    <span key={i} className="text-[9px] text-red-400/80 border border-red-500/20 bg-red-500/5 px-1.5 py-0.5 rounded">
+                      ⚠ {r}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
       )}
-      {/* Setup description */}
+      {/* 6. Setup description */}
       {hasSetup && (
         <p className="text-[10px] text-zinc-500 leading-relaxed border-l-2 border-zinc-800 pl-2.5 font-mono">
           {sig.setupDescription!.replace(/\s*\|\s*ADX:.*$/i, '')}
         </p>
       )}
-      {/* AI reasoning — full, no truncation (Phase B) */}
-      {hasAI && (
-        <p className="text-[11px] text-zinc-400 leading-relaxed border-l-2 border-zinc-700 pl-2.5 italic">
-          &ldquo;{sig.aiReasoning!}&rdquo;
-        </p>
+      {/* More Details — collapsed by default */}
+      {hasMoreDetails && (
+        <details className="group">
+          <summary className="list-none flex items-center gap-2 cursor-pointer select-none text-[10px] text-zinc-500 hover:text-zinc-400 transition-colors pt-0.5">
+            <span className="group-open:hidden">▸</span>
+            <span className="hidden group-open:inline">▾</span>
+            <span className="uppercase tracking-wider">More Details</span>
+          </summary>
+          <div className="pt-2.5 space-y-2.5">
+            {/* Secondary intel */}
+            {secondaryFields.length > 0 && (
+              <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+                {secondaryFields.map((f, i) => (
+                  <div key={i} className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{f.label}</span>
+                    <span className={cn('text-[11px] font-mono font-semibold', f.color ?? 'text-zinc-300')}>{f.value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Technical */}
+            {hasTechnical && (
+              <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+                {rsi != null && rsi > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">RSI 1h</span>
+                    <span className={`text-[11px] font-mono font-semibold ${rsi >= 70 ? 'text-red-400' : rsi >= 60 ? 'text-amber-400' : rsi <= 30 ? 'text-green-400' : rsi <= 40 ? 'text-emerald-400' : 'text-zinc-300'}`}>
+                      {rsi.toFixed(1)}
+                    </span>
+                  </div>
+                )}
+                {volumeSpike != null && volumeSpike > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Vol Spike</span>
+                    <span className={`text-[11px] font-mono font-semibold ${volumeSpike >= 2.5 ? 'text-emerald-400' : volumeSpike >= 1.5 ? 'text-blue-400' : volumeSpike < 0.8 ? 'text-red-400' : 'text-zinc-300'}`}>
+                      {volumeSpike.toFixed(1)}×
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Extended technical */}
+            {hasExtTech && (
+              <div className="flex flex-wrap gap-x-5 gap-y-1.5 items-center">
+                {ema200Pos && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">EMA200</span>
+                    <span className={`text-[11px] font-mono font-semibold ${ema200Pos === 'ABOVE' ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {ema200Pos} {ema200Pos === 'ABOVE' ? '↑' : '↓'}
+                    </span>
+                  </div>
+                )}
+                {candlePat && candlePat !== 'NONE' && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Pattern</span>
+                    <span className="text-[11px] font-mono font-semibold text-blue-400">{candlePat.replace(/_/g, ' ')}</span>
+                  </div>
+                )}
+                {bbSqueeze && (
+                  <span className="text-[10px] font-semibold text-purple-400 border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.5 rounded">
+                    ⚡ BB SQUEEZE
+                  </span>
+                )}
+              </div>
+            )}
+            {/* Futures intelligence */}
+            {hasFutures && fd && (
+              <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+                {fd.fundingRate != null && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Funding Rate</span>
+                    <span className={`text-[11px] font-mono font-semibold ${Math.abs(fd.fundingRate) > 0.0005 ? 'text-amber-400' : 'text-zinc-300'}`}>
+                      {fd.fundingRate >= 0 ? '+' : ''}{(fd.fundingRate * 100).toFixed(4)}%
+                    </span>
+                  </div>
+                )}
+                {fd.fundingRateAnnualized != null && Math.abs(fd.fundingRateAnnualized) > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Annualized</span>
+                    <span className={`text-[11px] font-mono font-semibold ${Math.abs(fd.fundingRateAnnualized) > 50 ? 'text-red-400' : Math.abs(fd.fundingRateAnnualized) > 20 ? 'text-amber-400' : 'text-zinc-300'}`}>
+                      {fd.fundingRateAnnualized >= 0 ? '+' : ''}{fd.fundingRateAnnualized.toFixed(1)}%
+                    </span>
+                  </div>
+                )}
+                {fd.fundingBias && fd.fundingBias !== 'NEUTRAL' && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Fund Bias</span>
+                    <span className={`text-[11px] font-mono font-semibold ${fd.fundingBias === 'SHORT_HEAVY' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {fd.fundingBias.replace('_', ' ')}
+                    </span>
+                  </div>
+                )}
+                {fd.oiTrend && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">OI Trend</span>
+                    <span className={`text-[11px] font-mono font-semibold ${fd.oiTrend === 'RISING' ? 'text-emerald-400' : fd.oiTrend === 'FALLING' ? 'text-red-400' : 'text-zinc-400'}`}>
+                      {fd.oiTrend}
+                    </span>
+                  </div>
+                )}
+                {fd.oiChange24h != null && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">OI 24h</span>
+                    <span className={`text-[11px] font-mono font-semibold ${fd.oiChange24h > 5 ? 'text-emerald-400' : fd.oiChange24h < -5 ? 'text-red-400' : 'text-zinc-300'}`}>
+                      {fd.oiChange24h > 0 ? '+' : ''}{fd.oiChange24h.toFixed(1)}%
+                    </span>
+                  </div>
+                )}
+                {fd.longShortRatio != null && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">L/S Ratio</span>
+                    <span className="text-[11px] font-mono font-semibold text-zinc-300">{fd.longShortRatio.toFixed(2)}</span>
+                  </div>
+                )}
+                {fd.momentumScore != null && fd.momentumScore > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Momentum</span>
+                    <span className={`text-[11px] font-mono font-semibold ${fd.momentumScore >= 70 ? 'text-emerald-400' : fd.momentumScore >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>
+                      {fd.momentumScore}/100
+                    </span>
+                  </div>
+                )}
+                {sig.maxSafeLeverage != null && sig.maxSafeLeverage > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Max Lev</span>
+                    <span className="text-[11px] font-mono font-semibold text-zinc-300">{sig.maxSafeLeverage}×</span>
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Liquidation zones */}
+            {hasFutures && fd && fd.liquidationZones && fd.liquidationZones.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Liquidation Zones</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {fd.liquidationZones.slice(0, 4).map((z, i) => (
+                    <span key={i} className={`text-[10px] font-mono px-2 py-0.5 rounded border ${z.side === 'LONG_LIQ' ? 'text-red-400 border-red-500/20 bg-red-500/5' : 'text-emerald-400 border-emerald-500/20 bg-emerald-500/5'}`}>
+                      {z.side === 'LONG_LIQ' ? '↓' : '↑'} ${z.price.toFixed(2)} · {z.distancePct.toFixed(1)}% away
+                      {z.strength !== 'WEAK' && <span className="ml-1 opacity-60">({z.strength.toLowerCase()})</span>}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Continuation reason */}
+            {contCase && (
+              <p className="text-[10px] text-zinc-500 leading-relaxed border-l-2 border-zinc-800 pl-2.5 italic">{contCase}</p>
+            )}
+            {/* AI continuation + caution */}
+            {(aiContCase || aiCautionCase) && (
+              <div className="space-y-1.5">
+                {aiContCase && (
+                  <p className="text-[10px] text-emerald-400/75 leading-relaxed border-l-2 border-emerald-600/30 pl-2.5">↗ {aiContCase}</p>
+                )}
+                {aiCautionCase && (
+                  <p className="text-[10px] text-amber-400/75 leading-relaxed border-l-2 border-amber-600/30 pl-2.5">⚠ {aiCautionCase}</p>
+                )}
+              </div>
+            )}
+            {/* Full AI reasoning */}
+            {hasAI && (
+              <p className="text-[11px] text-zinc-400 leading-relaxed border-l-2 border-zinc-700 pl-2.5 italic">
+                &ldquo;{sig.aiReasoning!}&rdquo;
+              </p>
+            )}
+          </div>
+        </details>
       )}
     </div>
   )
