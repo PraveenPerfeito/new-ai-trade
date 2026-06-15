@@ -266,7 +266,7 @@ def check_scan_failure_spike(scan_summary: dict) -> Anomaly | None:
     return None
 
 
-def check_ai_health(ai_summary: dict) -> list[Anomaly]:
+def check_ai_health(ai_summary: dict, ai_enabled: bool = True) -> list[Anomaly]:
     """Detect AI API errors and excessive fallback usage."""
     anomalies: list[Anomaly] = []
     total = ai_summary.get("total_calls", 0)
@@ -293,7 +293,8 @@ def check_ai_health(ai_summary: dict) -> list[Anomaly]:
             threshold=_g('ai_error_warn', AI_ERROR_WARN),
         ))
 
-    if fallback_rate >= _g('ai_fallback_warn', AI_FALLBACK_WARN):
+    # Skip fallback-rate warning when AI is intentionally disabled (100% fallback is expected)
+    if ai_enabled and fallback_rate >= _g('ai_fallback_warn', AI_FALLBACK_WARN):
         anomalies.append(Anomaly(
             anomaly_type="ai_error_spike",
             severity="warning",
@@ -341,6 +342,7 @@ def run_all_checks(
     ai_summary: dict,
     queue_depths: dict[str, int],
     previous_calibration: dict | None = None,
+    ai_enabled: bool = True,
 ) -> list[Anomaly]:
     """
     Run every anomaly check and return a list of Anomaly instances,
@@ -362,7 +364,7 @@ def run_all_checks(
             anomalies.append(result)
 
     # List-returning checks
-    anomalies.extend(check_ai_health(ai_summary))
+    anomalies.extend(check_ai_health(ai_summary, ai_enabled=ai_enabled))
     anomalies.extend(check_queue_backlog(queue_depths))
 
     _severity_order = {"critical": 0, "warning": 1, "info": 2}

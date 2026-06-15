@@ -122,6 +122,16 @@ def _record_call_outcome(is_fallback: bool) -> None:
 
 async def _send_degradation_alert(fallbacks: int, total: int) -> None:
     """Send one Telegram ops alert when Claude API is degraded. Throttled at call site."""
+    # Skip if AI is intentionally disabled — this is not a degradation scenario
+    try:
+        from backend.system_settings.service import get_settings_service
+        from backend.system_settings.groups import AISettings
+        ai_cfg = await get_settings_service().get_group(AISettings)
+        if not ai_cfg.enabled:
+            return
+    except Exception:
+        pass  # can't check — proceed with alert
+
     try:
         from backend.core.scanner.telegram_notifier import _is_configured, _enqueue
         if not _is_configured():
@@ -338,7 +348,7 @@ async def validate_signal(
             result = _heuristic(signal, ind4h, trend_strength, volatility)
             _record(signal.id, "heuristic", 0, result.confidence, result.validated, used_fallback=True,
                     symbol=signal.symbol, setup_score=setup_score)
-            _record_call_outcome(is_fallback=True)
+            # Do NOT record as degradation — AI is intentionally off, not failing
             return result
         ai_cfg_daily_limit = getattr(ai_cfg, "daily_call_limit", 0)
         # CLAUDE.OPTIMIZATION.1: wire ai.max_tokens (was hardcoded 768) with a
