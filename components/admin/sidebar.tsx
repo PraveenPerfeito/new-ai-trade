@@ -9,9 +9,9 @@ import {
 type NavItem = { href: string; icon: React.ElementType; label: string; sub: string }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: '/admin/trading',   icon: TrendingUp, label: 'Signals',     sub: 'Overview · Signals · Regime'      },
-  { href: '/admin/analytics', icon: BarChart3,  label: 'Performance', sub: 'Track Record · Edge · Attribution' },
-  { href: '/admin/system',    icon: Server,     label: 'System',      sub: 'Health · Settings'                 },
+  { href: '/admin/signals',     icon: TrendingUp, label: 'Signals',     sub: 'Overview · Signals · Regime'          },
+  { href: '/admin/performance', icon: BarChart3,  label: 'Performance', sub: 'Track Record · Edge · Attribution'    },
+  { href: '/admin/system',      icon: Server,     label: 'System',      sub: 'Health · Anomalies · Settings'        },
 ]
 
 export function AdminSidebar() {
@@ -35,9 +35,7 @@ export function AdminSidebar() {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-4 px-2.5 space-y-1">
         {NAV_ITEMS.map(({ href, icon: Icon, label, sub }) => {
-          const active = href === '/admin/system'
-            ? (path === href || path.startsWith(href + '/') || path.startsWith('/admin/intelligence') || path.startsWith('/admin/settings'))
-            : (path === href || path.startsWith(href + '/'))
+          const active = path === href || path.startsWith(href + '/')
           return (
             <Link
               key={href}

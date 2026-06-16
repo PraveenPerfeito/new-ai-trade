@@ -224,6 +224,17 @@ def _is_configured() -> bool:
     return bool(s.telegram_bot_token and s.telegram_chat_id)
 
 
+async def _ops_alerts_enabled() -> bool:
+    """Return True only if ops/anomaly Telegram alerts are explicitly enabled."""
+    try:
+        from backend.system_settings.service import get_settings_service
+        from backend.system_settings.groups import TelegramSettings
+        tg = await get_settings_service().get_group(TelegramSettings)
+        return bool(tg.ops_alerts_enabled)
+    except Exception:
+        return False  # default off
+
+
 def _enqueue(text: str, signal_id: str | None = None, dedup_key: str | None = None,
              confidence: int | None = None) -> None:
     """Push message to send queue; drops oldest if queue is full."""
@@ -246,13 +257,15 @@ def _grade_emoji(grade: str) -> str:
     return {"A": "🟢", "B": "🔵", "C": "🟡", "D": "🟠", "F": "🔴"}.get(grade, "⚪")
 
 
-def send_output_collapse_alert(signals_24h: int, avg_daily_7d: float) -> None:
+async def send_output_collapse_alert(signals_24h: int, avg_daily_7d: float) -> None:
     """
     OUTPUT.COLLAPSE.ALERT.1 — operational alert when signal output collapses
     below 25% of the 7-day baseline for 2+ consecutive scan cycles.
     Throttling is handled by the caller (monitoring.check_output_collapse).
     """
     if not _is_configured():
+        return
+    if not await _ops_alerts_enabled():
         return
     text = (
         f"🚨 <b>Signal Output Collapse</b>\n\n"
@@ -545,6 +558,8 @@ async def send_scan_summary(
     duration_ms: int,
     mode: str,
 ) -> bool:
+    if not await _ops_alerts_enabled():
+        return False
     try:
         from backend.system_settings.service import get_settings_service
         from backend.system_settings.groups import TelegramSettings, FeatureFlags
@@ -553,7 +568,7 @@ async def send_scan_summary(
         if not tg_cfg.alerts_enabled or not flags.telegram or flags.emergency_stop or flags.maintenance_mode:
             return False
     except Exception:
-        pass  # fail open for scan summaries
+        pass
 
     text = (
         f"<b>Scan Complete — {mode.upper()}</b>\n"
@@ -579,6 +594,8 @@ async def send_provider_fallback_alert(
     Alert is throttled externally (Redis key) — this function always sends when called.
     """
     if not _is_configured():
+        return
+    if not await _ops_alerts_enabled():
         return
 
     _ICONS = {"coinmarketcap": "📊", "coingecko": "🦎", "binance": "⚡"}

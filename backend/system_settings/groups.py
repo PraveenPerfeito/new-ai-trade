@@ -316,7 +316,7 @@ class TelegramSettings(BaseSettingsGroup):
         description='Rate cap on outgoing Telegram signal alerts',
     )
     daily_summary_enabled: bool = Field(
-        True,
+        False,
         title='Daily Summary Enabled',
         description='Send a nightly performance summary message',
     )
@@ -329,6 +329,11 @@ class TelegramSettings(BaseSettingsGroup):
         True,
         title='Include AI Analysis',
         description='Include Claude validation reasoning in alert messages',
+    )
+    ops_alerts_enabled: bool = Field(
+        False,
+        title='Ops Alerts Enabled',
+        description='Send operational alerts (anomalies, scan failures, degradation) via Telegram. Off by default — only signal alerts are sent.',
     )
 
 

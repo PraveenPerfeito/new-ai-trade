@@ -314,7 +314,16 @@ async def get_monitoring_snapshot() -> dict:
     order  = {"critical": 3, "warning": 2, "healthy": 1}
     worst  = max((m.get("level", "healthy") for m in metrics.values()), key=lambda l: order.get(l, 0))
 
-    anomalies = _detect_anomalies(now, signals, fallback_pct, binance_errs, last_duration_s)
+    ai_enabled = True
+    try:
+        from backend.system_settings.service import get_settings_service
+        from backend.system_settings.groups import AISettings
+        ai_cfg = await get_settings_service().get_group(AISettings)
+        ai_enabled = bool(ai_cfg.enabled)
+    except Exception:
+        pass
+
+    anomalies = _detect_anomalies(now, signals, fallback_pct, binance_errs, last_duration_s, ai_enabled=ai_enabled)
 
     return {
         "date":          today,
@@ -340,6 +349,7 @@ def _detect_anomalies(
     fallback_pct: float,
     binance_errs: int,
     last_duration_s: int,
+    ai_enabled: bool = True,
 ) -> list[dict]:
     anomalies: list[dict] = []
     hour = now.hour
@@ -352,8 +362,8 @@ def _detect_anomalies(
             "message":  f"0 signals generated today (UTC {hour:02d}:xx) — scanner may be paused or all signals rejected",
         })
 
-    # Claude fallback spike
-    if fallback_pct >= 50:
+    # Claude fallback spike — skip when AI is intentionally disabled (expected 100% fallback)
+    if fallback_pct >= 50 and ai_enabled:
         anomalies.append({
             "type":     "claude_fallback_spike",
             "severity": "warning" if fallback_pct < 80 else "critical",
@@ -493,7 +503,7 @@ async def check_output_collapse() -> dict:
                 await redis.setex(_COLLAPSE_ALERTED_KEY, _COLLAPSE_ALERT_THROTTLE, "1")
                 try:
                     from backend.core.scanner.telegram_notifier import send_output_collapse_alert
-                    send_output_collapse_alert(signals_24h, avg_7d)
+                    await send_output_collapse_alert(signals_24h, avg_7d)
                 except Exception as exc:
                     log.warning("collapse_alert_send_failed", error=str(exc))
         else:

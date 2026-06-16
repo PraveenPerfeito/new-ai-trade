@@ -1,2 +1,2 @@
 import { redirect } from 'next/navigation'
-export default function Page() { redirect('/admin/trading?tab=scanner') }
+export default function Page() { redirect('/admin/system?tab=system') }

@@ -308,8 +308,10 @@ async def _maybe_send_futures_geo_alert(status_code: int | None) -> None:
         return
     _futures_alert_sent_at = now
     try:
-        from backend.core.scanner.telegram_notifier import _is_configured, _enqueue
+        from backend.core.scanner.telegram_notifier import _is_configured, _enqueue, _ops_alerts_enabled
         if not _is_configured():
+            return
+        if not await _ops_alerts_enabled():
             return
         if status_code == 451:
             reason = "HTTP <b>451 Unavailable For Legal Reasons</b> — Binance geo-block detected."

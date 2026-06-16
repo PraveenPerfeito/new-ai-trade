@@ -47,8 +47,13 @@ def _is_transient(exc: BaseException) -> bool:
     return any(p in msg for p in _TRANSIENT_PATTERNS)
 
 
+_scan_ops_alerts_enabled: bool = False  # updated async each scan; default off
+
+
 def _send_failure_alert(mode: str, error: str, attempt: int) -> None:
     """Fire-and-forget Telegram alert when a scan permanently fails."""
+    if not _scan_ops_alerts_enabled:
+        return
     settings = get_settings()
     token = settings.telegram_bot_token
     chat_id = settings.telegram_chat_id
@@ -169,6 +174,14 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
                 logger.debug(f"intelligence_refresh_skipped error={exc}")
 
         async def _run_and_record():
+            global _scan_ops_alerts_enabled
+            try:
+                from backend.system_settings.service import get_settings_service
+                from backend.system_settings.groups import TelegramSettings
+                _tg = await get_settings_service().get_group(TelegramSettings)
+                _scan_ops_alerts_enabled = bool(_tg.ops_alerts_enabled)
+            except Exception:
+                _scan_ops_alerts_enabled = False
             try:
                 result = await run_scan(scanner_mode)
                 try:

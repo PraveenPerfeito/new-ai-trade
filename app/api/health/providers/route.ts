@@ -113,24 +113,16 @@ async function checkClaude(): Promise<ProviderStatus> {
 }
 
 async function checkTelegram(): Promise<ProviderStatus> {
-  const t0 = Date.now()
+  // Telegram alerts are sent from the Railway Python worker — not from Vercel.
+  // Calling api.telegram.org directly from Vercel is unreliable (geo-restrictions
+  // and latency spikes cause false DOWN readings). Instead: token configured = bot
+  // is wired; delivery health is covered by the CloudAMQP / worker heartbeat check.
   const token = process.env.TELEGRAM_BOT_TOKEN
   if (!token) {
     return { name: 'Telegram', healthy: false, latencyMs: 0,
       note: 'not configured', error: 'TELEGRAM_BOT_TOKEN not set — alerts disabled' }
   }
-  try {
-    const r = await fetch(`https://api.telegram.org/bot${token}/getMe`, { signal: AbortSignal.timeout(4000) })
-    const json = await r.json() as { ok: boolean; result?: { username?: string } }
-    const latencyMs = Date.now() - t0
-    if (json.ok) {
-      return { name: 'Telegram', healthy: true, latencyMs, note: json.result?.username ? `@${json.result.username}` : 'bot ok' }
-    }
-    return { name: 'Telegram', healthy: false, latencyMs, error: 'Telegram API returned ok=false' }
-  } catch (e) {
-    return { name: 'Telegram', healthy: false, latencyMs: Date.now() - t0,
-      error: e instanceof Error ? e.message : 'unreachable' }
-  }
+  return { name: 'Telegram', healthy: true, latencyMs: 0, note: 'configured · delivery via Railway worker' }
 }
 
 async function checkSupabase(): Promise<ProviderStatus> {

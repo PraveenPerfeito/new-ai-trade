@@ -300,6 +300,15 @@ async def run_hourly_anomaly_check() -> dict:
     except Exception:
         pass
 
+    ai_enabled = True
+    try:
+        from backend.system_settings.service import get_settings_service
+        from backend.system_settings.groups import AISettings
+        _ai_cfg = await get_settings_service().get_group(AISettings)
+        ai_enabled = bool(_ai_cfg.enabled)
+    except Exception:
+        pass
+
     anomalies = run_all_checks(
         stats_7d=stats_7d,
         stats_30d=stats_30d,
@@ -308,6 +317,7 @@ async def run_hourly_anomaly_check() -> dict:
         ai_summary=ai_sum,
         queue_depths=queue_depths,
         previous_calibration=prev_cal_sub,
+        ai_enabled=ai_enabled,
     )
 
     result = {
@@ -344,6 +354,14 @@ async def _maybe_send_critical_anomaly_alert(anomalies: list) -> None:
     criticals = [a for a in anomalies if getattr(a, "severity", None) == "critical"
                  or (isinstance(a, dict) and a.get("severity") == "critical")]
     if not criticals:
+        return
+
+    # Only send if ops alerts are explicitly enabled (default off)
+    try:
+        from backend.core.scanner.telegram_notifier import _ops_alerts_enabled
+        if not await _ops_alerts_enabled():
+            return
+    except Exception:
         return
 
     try:

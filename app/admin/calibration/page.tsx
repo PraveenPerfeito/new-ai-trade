@@ -1,2 +1,2 @@
 import { redirect } from 'next/navigation'
-export default function Page() { redirect('/admin/analytics?tab=calibration') }
+export default function Page() { redirect('/admin/performance?tab=attribution') }
