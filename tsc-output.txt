@@ -1,0 +1,54 @@
+﻿node : 
+At line:1 char:41
++ ... -ai-trade"; node --max-old-space-size=6144 node_modules/typescript/bi ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+<--- Last few GCs --->
+
+[16104:000002B199340380]     4488 ms: Scavenge 126.5 (145.4) -> 120.8 (150.7) MB, 16.91 / 0.02 ms  (average mu = 
+1.000, current mu = 1.000) allocation failure; 
+[16104:000002B199340380]     4580 ms: Scavenge 131.9 (150.7) -> 125.4 (155.2) MB, 17.07 / 0.00 ms  (average mu = 
+1.000, current mu = 1.000) allocation failure; 
+[16104:000002B199340380]     4841 ms: Scavenge 136.1 (155.2) -> 129.7 (158.7) MB, 179.02 / 0.00 ms  (average mu = 
+1.000, current mu = 1.000) allocation failure; 
+
+
+<--- JS stacktrace --->
+
+FATAL ERROR: MarkCompactCollector: young object promotion failed Allocation failed - JavaScript heap out of memory
+----- Native stack trace -----
+
+
+<--- Last few GCs --->
+
+[16104:000002B199340380]     4488 ms: Scavenge 126.5 (145.4) -> 120.8 (150.7) MB, 16.91 / 0.02 ms  (average mu = 
+1.000, current mu = 1.000) allocation failure; 
+[16104:000002B199340380]     4580 ms: Scavenge 131.9 (150.7) -> 125.4 (155.2) MB, 17.07 / 0.00 ms  (average mu = 
+1.000, current mu = 1.000) allocation failure; 
+[16104:000002B199340380]     4841 ms: Scavenge 136.1 (155.2) -> 129.7 (158.7) MB, 179.02 / 0.00 ms  (average mu = 
+1.000, current mu = 1.000) allocation failure; 
+
+
+<--- JS stacktrace --->
+
+FATAL ERROR: MarkCompactCollector: young object promotion failed Allocation failed - JavaScript heap out of memory
+----- Native stack trace -----
+
+ 1: 00007FF6C5D7C23B 
+ 2: 00007FF6C5CEB1B8 
+ 3: 00007FF6C67651D1 
+ 4: 00007FF6C674E858 
+ 5: 00007FF6C65B0490 
+ 6: 00007FF6C657A5DA 
+ 7: 00007FF6C6594962 
+ 8: 00007FF6C6587BB4 
+ 9: 00007FF6C659158B 
+10: 00007FF6C659668A 
+11: 00007FF6C690B735 
+12: 00007FF6C5C703FD 
+13: 00007FF6C5DCFFBD 
+14: 00007FF6C6FAAE80 
+15: 00007FF8E69A53E0 
+16: 00007FF8E822485B 
