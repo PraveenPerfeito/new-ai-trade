@@ -2153,7 +2153,7 @@ export default function SignalsCenterPage() {
   const countsFetcher  = useCallback(()=>fetch('/api/signals/counts').then(r=>r.json()), [])
   const cacheFetcher   = useCallback(()=>fetch('/api/cache/intelligence').then(r=>r.json()).then(j=>j.telemetry??null), [])
   const provFetcher    = useCallback(()=>fetch('/api/health/providers').then(r=>r.json()).then(j=>j.providers??[]).catch(()=>[]), [])
-  // REDIS.OPTIMIZATION.2: same shared feed as SignalsTab/TacticalTab; overview slices 6
+  // REDIS.OPTIMIZATION.2: same shared feed as SignalsTab; full 100 passed to OverviewTab
   const sigFetcher     = useCallback(()=>fetch('/api/signals/tactical?limit=100&lifecycleStage=all').then(r=>r.json()).then(j=>j.signals??[]).catch(()=>[]), [])
   const flagsFetcher   = useCallback(async ()=>{
     const [featRes,aiRes] = await Promise.all([adminApi.settings.group('features'),adminApi.settings.group('ai')])
@@ -2265,7 +2265,7 @@ export default function SignalsCenterPage() {
       {tab==='overview' && (
         <OverviewTab
           celery={celery??null} regime={regime??null} signalCounts={signalCounts??null}
-          providers={providers??[]} cache={cache??null} signals={recentSignals??[]}
+          providers={providers??[]} cache={cache??null} signals={recentFeed??[]}
           flags={flags} countdown={countdown}
           trackRecord={trackRecord??null}
           scanMode={scanMode} onScanModeChange={setScanMode}
