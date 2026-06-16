@@ -1002,10 +1002,13 @@ function ProviderHealthRow({ providers }: { providers: ProviderStatus[] }) {
 
 // ── Overview tab ───────────────────────────────────────────────────────────────
 
-function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, countdown, flags, trackRecord }: {
+function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, countdown, flags, trackRecord,
+  scanMode, onScanModeChange, onScanNow, scanning, scanDone, scanError }: {
   celery: CeleryStatus | null; regime: RegimeData | null; signalCounts: SignalCounts | null
   providers: ProviderStatus[]; cache: CacheTelemetry | null; flags: OpsFlags | null
   signals: TacticalSignalRow[]; countdown: number | null; trackRecord: TrackRecordResponse | null
+  scanMode: ScannerMode; onScanModeChange: (m: ScannerMode) => void
+  onScanNow: () => void; scanning: boolean; scanDone: boolean; scanError: string | null
 }) {
   const lc = signals.reduce<Record<string,number>>((a,s)=>{ a[s.lifecycleStage]=(a[s.lifecycleStage]??0)+1; return a }, {})
   const currentRegime = regime?.regime ?? null
@@ -1051,6 +1054,37 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
               </p>
             </div>
           </div>
+
+          {/* Manual scan — mode selector + trigger */}
+          <div className="mt-3 pt-3 border-t border-zinc-800/60">
+            <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-2">Manual Scan</p>
+            <div className="flex flex-wrap gap-1.5 mb-2.5">
+              {MODES.map(m => (
+                <button key={m} onClick={() => onScanModeChange(m)}
+                  className={`text-[10px] px-2.5 py-1 rounded-md border font-semibold transition-colors ${
+                    scanMode === m
+                      ? MODE_COLORS[m] + ' opacity-100'
+                      : 'text-zinc-500 border-zinc-700 bg-transparent hover:text-zinc-300 hover:border-zinc-600'
+                  }`}>
+                  {modeDisplayLabel(m)}
+                </button>
+              ))}
+            </div>
+            <button onClick={onScanNow} disabled={scanning || celery?.scanning}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                scanDone
+                  ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
+                  : scanning || celery?.scanning
+                  ? 'bg-zinc-800 border border-zinc-700 text-zinc-500 cursor-not-allowed'
+                  : 'bg-bull-default/10 border border-bull-default/30 text-bull-text hover:bg-bull-default/20'
+              }`}>
+              {scanning ? <><span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"/> Scanning…</>
+               : scanDone ? <><CheckCircle2 className="w-3 h-3"/> Done</>
+               : <><Play className="w-3 h-3"/> Scan Now</>}
+            </button>
+            {scanError && <p className="text-[10px] text-red-400 mt-1.5">{scanError}</p>}
+          </div>
+
           {signals.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">
               {(lc['ACTIVE']??0) > 0 && <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400"><span className="w-1 h-1 rounded-full bg-blue-400"/>{lc['ACTIVE']} Active</span>}
@@ -2081,6 +2115,8 @@ export default function SignalsCenterPage() {
           providers={providers??[]} cache={cache??null} signals={recentSignals??[]}
           flags={flags} countdown={countdown}
           trackRecord={trackRecord??null}
+          scanMode={scanMode} onScanModeChange={setScanMode}
+          onScanNow={handleScanNow} scanning={scanning} scanDone={scanDone} scanError={opError}
         />
       )}
       {tab==='signals'  && <SignalsTab  currentRegime={currentRegime} />}
