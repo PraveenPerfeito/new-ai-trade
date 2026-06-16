@@ -1,66 +1,54 @@
 # UI.UX.MODERNIZATION.IMPLEMENTATION.1
 
-**Status:** COMPLETE  
-**Date:** 2026-06-16  
-**Scope:** P0 + P1 visual improvements only — zero backend/API/DB/logic changes
+**Status:** COMPLETE — P0 + P1 + P2 all shipped  
+**Date:** 2026-06-17  
+**Scope:** P0–P2 visual improvements — zero backend/API/DB/logic changes  
+**Commit:** `498ca4a` — `feat: UI.UX.MODERNIZATION.1 — P0→P2 visual polish across all 3 admin centers`
 
 ---
 
-## P0 — Shipped Immediately
+## P0 — Foundation Fixes (Shipped)
 
 ### P0-1: Emergency Stop toggle — red when ON
 
 **File:** `app/admin/system/page.tsx`  
 **Component:** `Toggle` (line ~1005)  
-**Change:** Added `danger?: boolean` prop. When `danger && value`, track renders `bg-red-500` instead of `bg-emerald-500`.  
-**Wired:** `FeatureFlagCard` passes `danger={entry.key === 'emergency_stop'}` to `Toggle`.  
-**Before:** Emergency Stop toggle showed green when active — same as any other feature flag.  
-**After:** Emergency Stop toggle shows red when active — clearly destructive.
+**Change:** Added `danger?: boolean` prop. When `danger && value`, track renders `bg-red-500` instead of `bg-emerald-500`. Wired via `FeatureFlagCard` with `danger={entry.key === 'emergency_stop'}`.  
+**Result:** Emergency Stop ON shows red — clearly destructive state.
 
 ---
 
 ### P0-2: Scan button "Queued ✓" — blue (informational), not green (success)
 
 **File:** `app/admin/signals/page.tsx`  
-**Component:** Scan Now button in `OverviewTab` (line ~1098)  
 **Change:** `bg-emerald-500/15 border-emerald-500/30 text-emerald-400` → `bg-blue-500/10 border-blue-500/30 text-blue-400`  
-**Before:** Green "Queued ✓" read as a success/completed state.  
-**After:** Blue "Queued ✓" reads as informational/in-progress — scan is running in background.
+**Result:** Blue "Queued ✓" reads as in-progress, not completed.
 
 ---
 
 ### P0-3: Sidebar sub text — remove uppercase + excessive tracking
 
 **File:** `components/admin/sidebar.tsx`  
-**Changes:**
-- Brand sub "Command Center": `text-terminal-muted/50 text-[10px] uppercase tracking-[0.18em]` → `text-zinc-600 text-[10px]`
-- Nav item sub: `text-[10px] text-terminal-muted/50` → `text-[10px] text-zinc-600`
-- Active nav dot: removed `animate-pulse-slow` — static dot is sufficient
-- Footer live dot: removed `animate-ping` span entirely — the ping was visual noise  
-
-**Before:** "OVERVIEW · SIGNALS · REGIME" in uppercase with wide tracking created terminal-typewriter aesthetic.  
-**After:** "Overview · Signals · Regime" in normal case, quieter color — reads as metadata, not headings.
+- Brand sub: `text-terminal-muted/50 text-[10px] uppercase tracking-[0.18em]` → `text-zinc-600 text-[10px]`
+- Nav sub: `text-[10px] text-terminal-muted/50` → `text-[10px] text-zinc-600`
+- Active nav dot: removed `animate-pulse-slow` — static
+- Footer ping: removed `animate-ping` span entirely
 
 ---
 
 ### P0-4: SystemStatusBanner OK state — neutral zinc, not green glow
 
 **File:** `app/admin/signals/page.tsx`  
-**Component:** `SystemStatusBanner`  
-**Change:**
-- Container: `bg-emerald-500/5 border-emerald-500/20` → `border-zinc-800` (transparent bg, neutral border)
+- Container: `bg-emerald-500/5 border-emerald-500/20` → `border-zinc-800` (transparent bg)
 - Dot: `bg-emerald-400` → `bg-zinc-600`
-- Text: `text-emerald-300` → `text-zinc-500`  
-
-**Before:** Green glow on OK state competed with actual green alerts — "all ok" looked like a warning.  
-**After:** Neutral grey for OK state — green is reserved for genuinely positive events (TP Hit, etc.).
+- Text: `text-emerald-300` → `text-zinc-500`
 
 ---
 
 ### P0-5: Focus rings — keyboard accessibility
 
-**File:** `app/globals.css`  
-**Change:** Added base `focus-visible` ring for all interactive elements:
+**File:** `app/globals.css`
+
 ```css
 button:focus-visible, a:focus-visible, input:focus-visible,
 select:focus-visible, [tabindex]:focus-visible {
@@ -68,129 +56,81 @@ select:focus-visible, [tabindex]:focus-visible {
   box-shadow: 0 0 0 2px rgba(161, 161, 170, 0.4);
 }
 ```
-**Impact:** Keyboard navigation now has consistent 2px zinc-400 ring across the entire admin interface.
 
 ---
 
-## P1 — Shipped in Same Pass
+## P1 — Sprint Enhancements (Shipped)
 
-### P1-1: Typography — remove uppercase from table column headers + tab labels
+### P1-1: Type scale normalization
 
-**Files:** `app/admin/performance/page.tsx`  
-
-**`StatPair` label:**
-- `text-xs uppercase tracking-wider` → `text-xs` (no uppercase)
-
-**`CalibrationTable` `<th>` headers (5 instances):**
-- `text-xs uppercase tracking-wider font-semibold` → `text-xs font-medium`
-
-**Tab navigation:**
-- `text-xs font-mono uppercase tracking-wider` → `text-xs font-medium`
-
-**Mode Performance / Regime Performance / Top Coins / Edge Patterns table headers:**
-- All `th` with `uppercase tracking-wider font-semibold` → `font-medium` without uppercase
-
-**Before:** Column headers competed with section labels — everything uppercase created visual parity where hierarchy should exist.  
-**After:** Section labels (tracking-widest, text-[9px]) remain uppercase. Column headers demoted to mixed-case medium weight.
+**Files:** All 3 admin pages  
+- All `text-[11px]` → `text-xs` (12px)
+- All `text-[9px]` → `text-[10px]`
+- `uppercase tracking-widest/tracking-wider` on inline field labels → removed
+- Section labels retained as `text-[10px] uppercase tracking-wide`
+- `font-bold` on small labels → `font-semibold`
 
 ---
 
 ### P1-2: Lifecycle badge colors — 10 → 4 semantic groups
 
-**File:** `app/admin/signals/page.tsx`  
-**Component:** `STAGE_META` constant  
+**File:** `app/admin/signals/page.tsx` — `STAGE_META` constant
 
-| Stage | Before | After |
-|---|---|---|
-| VALIDATED | zinc-400 | zinc-500 (closed group) |
-| AI_APPROVED | purple-400 | blue-400 (active group) |
-| SCREENED | sky-400 | blue-400 (active group) |
-| TELEGRAM_SENT | blue-400 | blue-400 (active group) |
-| ACTIVE | green-400 | blue-400 (active group) |
-| STALE | amber-400 | zinc-500 (closed group) |
-| TP_HIT | emerald-400 | emerald-400 (won — unchanged) |
-| SL_HIT | red-400 | red-400 (lost — unchanged) |
-| CLOSED | zinc-500 | zinc-500 (closed group) |
-| ANALYZED | indigo-400 | zinc-500 (closed group) |
-
-**Semantic groups:**
-- **Active** (AI_APPROVED, SCREENED, TELEGRAM_SENT, ACTIVE): blue — signal is live/in-flight
-- **Won** (TP_HIT): emerald — success
-- **Lost** (SL_HIT): red — failure  
-- **Closed** (VALIDATED, STALE, CLOSED, ANALYZED): zinc — terminal/inactive state
+| Stage | Before | After | Group |
+|---|---|---|---|
+| AI_APPROVED | purple-400 | blue-400 | active |
+| SCREENED | sky-400 | blue-400 | active |
+| TELEGRAM_SENT | blue-400 | blue-400 | active |
+| ACTIVE | green-400 | blue-400 | active |
+| TP_HIT | emerald-400 | emerald-400 | won |
+| SL_HIT | red-400 | red-400 | lost |
+| VALIDATED / STALE / CLOSED / ANALYZED | mixed | zinc-500 | closed |
 
 ---
 
 ### P1-3: Signal cards — BUY/SELL prominence + remove ConfBar
 
 **File:** `app/admin/signals/page.tsx`  
-
-**BUY/SELL direction chip:**
-- `text-xs font-semibold text-green-400` → `text-sm font-bold text-emerald-400`
-- Direction is the primary decision signal — it now reads at the correct hierarchy level
-
-**ConfBar removal:**
-- Removed `<ConfBar confidence={sig.confidence} />` from signal row (the graphical bar next to the confidence number)
-- The confidence number (`{sig.confidence}%`) is retained
-- The 14px visual bar was duplicating the number with lower information density
+- BUY/SELL: `text-xs font-semibold` → `text-sm font-bold`
+- Removed `<ConfBar confidence={sig.confidence} />` from collapsed row (number retained)
+- Removed `<FreshnessTag>` and `<RegimeAlignDot>` from collapsed row (visible in expanded only)
 
 ---
 
-### P1-4: Compact service grid when all healthy
+### P1-4: Service grid compact mode when all healthy
 
 **File:** `app/admin/system/page.tsx`  
-**Component:** Service grid in `HealthTab`  
-
-When all services are healthy (Backend API + all checks = ok/HEALTHY), renders a compact single-row chip list:
-```
-● Backend API  ● Database  ● Celery Worker  ● Redis
-```
-When any service is degraded, falls back to the full card grid.  
-This removes visual noise for the "everything is fine" case.
+When all services healthy → single compact chip row `● Backend API  ● Database  ● Celery Worker  ● Redis`. Falls back to full card grid when any service is degraded.
 
 ---
 
-### P1-5: Mode chips — decolorized to uniform zinc
+### P1-5: Track Record — hero metrics layout
 
-**File:** `app/admin/signals/page.tsx`  
-**Component:** `MODE_COLORS` constant  
-
-All 4 modes (spot/futures/high_confidence/trending) now share the same zinc style:
-- `text-zinc-300 border-zinc-700 bg-zinc-800/50`
-
-**Before:** sky/purple/emerald/amber — 4 different colors competed with signal direction and lifecycle colors.  
-**After:** All modes render identically — mode is metadata, not a primary signal quality indicator.
+**File:** `app/admin/performance/page.tsx`  
+WR / Expectancy / PF promoted to `text-2xl font-semibold font-mono` in a 3-column grid. Wins/Losses demoted to `text-[10px]` caption below a visual divider.
 
 ---
 
-### P1-6: Preset filter — pill style with counts, simplified labels
+### P1-6: Mode chips — decolorized to uniform zinc
 
-**File:** `app/admin/signals/page.tsx`  
-
-**Labels:** Removed emojis from "📨 Sent", "✓ Won", "✗ Lost" — now just "Sent", "Won", "Lost"  
-**Shape:** `rounded-lg border` → `rounded-full` pill shape  
-**Active state:** `bg-zinc-700 border-zinc-600 text-zinc-100 font-medium` — solid fill, unambiguous selection  
-**Inactive state:** `text-zinc-500 hover:text-zinc-300` — no background, no border  
+**File:** `app/admin/signals/page.tsx` — `MODE_COLORS` constant  
+All 4 modes (spot/futures/high_confidence/trending) → `text-zinc-300 border-zinc-700 bg-zinc-800/50`. Mode name is the differentiator; color is noise.
 
 ---
 
 ### P1-7: glass-card — solid background, no GPU blur
 
-**File:** `app/globals.css`  
+**File:** `app/globals.css`
 
-**Before:**
 ```css
+/* Before */
 .glass-card {
   background: rgba(15, 20, 34, 0.85);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
-```
 
-**After:**
-```css
+/* After */
 .glass-card {
   background: rgba(24, 24, 27, 1);     /* zinc-900 */
   border: 1px solid rgba(39, 39, 42, 1); /* zinc-800 */
@@ -198,16 +138,121 @@ All 4 modes (spot/futures/high_confidence/trending) now share the same zinc styl
 }
 ```
 
-**Impact:** Eliminates GPU compositor layer per glass-card instance. `backdrop-filter: blur` on dark backgrounds with no content beneath was visually indistinguishable from a solid dark background. Same for `glass-surface`.
+Also applied to `.glass-surface`. Removes GPU compositor layer — blur on zinc-950 background was visually invisible anyway.
 
 ---
 
-### P1-8: Operational controls — visual separation before destructive actions
+### P1-8: Tab label typography — remove mono + uppercase
+
+**Files:** `app/admin/signals/page.tsx`, `app/admin/system/page.tsx`  
+`text-xs font-mono uppercase tracking-wider border-b-2` → `text-xs font-medium border-b-2`
+
+---
+
+### P1-9: Preset filter — pill style with counts
+
+**File:** `app/admin/signals/page.tsx`  
+- Removed emojis from "📨 Sent", "✓ Won", "✗ Lost"
+- Shape: `rounded-lg border` → `rounded-full`
+- Active: `bg-zinc-700 border-zinc-600 text-zinc-100 font-medium`
+- Inactive: `text-zinc-500 hover:text-zinc-300` (no bg, no border)
+
+---
+
+### P1-10: Operations card — visual separation before destructive actions
 
 **File:** `app/admin/system/page.tsx`  
-**Component:** `FounderOperationsCard` operational controls  
+Added `w-px bg-zinc-700` vertical divider before Emergency Stop + Maintenance Mode. Routine controls (Scan, Scanner ON/OFF, AI, Telegram) visually separated from destructive controls.
 
-Added a vertical divider (`w-px bg-zinc-700`) before Emergency Stop and Maintenance Mode buttons. The 4 routine controls (Scan Now, Scanner ON/OFF, Claude AI, Telegram) are visually separated from the 2 potentially disruptive controls.
+---
+
+## P2 — Polish Sprint (Shipped)
+
+### P2-1: IntelligencePanel — 4 collapsible sections
+
+**File:** `app/admin/signals/page.tsx` — `IntelligencePanel` function (lines ~442–920)  
+Replaced the flat `<details>` dump with 4 named sections, each with `▸ show / ▾ hide` affordance:
+
+| Section | Default | Contents |
+|---|---|---|
+| **Signal Quality** | Always open | Empirical WR, Quality/Risk bars, TP/SL dist, continuation %, entry quality, institutional score, regime adj, AI summary, strengths/risks chips |
+| **Intelligence** | `<details open>` | Breakout, OI, Regime, ADX, TrendScore, Sector, Funding, Positioning |
+| **Technical** | `<details>` closed | RSI 1h, Vol spike, EMA200, candle pattern, BB SQUEEZE, all futures fields, liquidation zones, setup description |
+| **AI Analysis** | `<details open>` | Continuation reason quote, ↗ continuation case, ⚠ caution case, full AI reasoning italic |
+
+Section headers: `text-[10px] font-medium text-zinc-500 uppercase tracking-wide`  
+Dividers: `divide-y divide-zinc-800/60` between sections.
+
+---
+
+### P2-2: DimTable — top-3 default with expand
+
+**File:** `app/admin/performance/page.tsx` — `DimTable` function  
+Added `const [expanded, setExpanded] = useState(false)`. Default: 3 rows. `expanded ? rows : rows.slice(0, 3)`. Footer button: `Show all N rows` / `Show fewer`.
+
+---
+
+### P2-3: Confidence distribution bar chart
+
+**File:** `app/admin/signals/page.tsx` — new `ConfidenceBar` component  
+Added above signal list (after `<StageLegend />`). Proportional 4-segment bar:
+
+```
+90+ (emerald-500) | 85-89 (blue-500) | 80-84 (amber-500) | <80 (zinc-600)
+```
+
+Bar height: 6px (`h-1.5`). Count labels with color text beside the bar. Only renders when `signals.length > 0`.
+
+---
+
+### P2-4: Anomalies Tab — calm zero state
+
+**File:** `app/admin/system/page.tsx` — `AnomaliesTab`  
+When all counts are zero → single neutral line:
+```
+● No anomalies · System operating within normal parameters
+```
+Count tiles (critical/warning/info/muted) only shown when at least one anomaly exists. Count font `text-3xl` → `text-2xl`.
+
+---
+
+### P2-5: Feature flag description — hidden by default, shown on hover
+
+**File:** `app/admin/system/page.tsx` — `FeatureFlagCard`  
+Added `group` class to card container. Description `<p>`: `hidden group-hover:block` unless `needsAction` (always visible for P0 flags that need attention).
+
+---
+
+### P2-6: WrSparkBar inline in DimTable
+
+**File:** `app/admin/performance/page.tsx` — new `WrSparkBar` component  
+
+```
+52.3% [████████████████░░░░░░░░░░░░░░░░]
+```
+
+40px proportional bar (`w-10 h-1.5 rounded-full`) beside mono WR%. Color: emerald ≥55%, signal-high ≥45%, bear-default <45%.
+
+---
+
+### P2-7 + P2-8: Sidebar sub-text + remove pulse dot
+
+Completed as part of **P0-3** — sidebar sub-text, pulse dot, and ping animation all addressed together.
+
+---
+
+### P2-9: Card header unification
+
+**Files:** `app/admin/performance/page.tsx`, `app/admin/system/page.tsx`  
+- All `h2` card title elements normalized: `text-xs font-semibold text-zinc-500 uppercase tracking-wide` → `text-sm font-medium text-white`
+- All remaining `text-[9px]` → `text-[10px]`
+- All remaining `tracking-widest` → `tracking-wide` (bulk replace_all across both files)
+
+---
+
+### P2-10: Unified focus ring system
+
+Completed as part of **P0-5** — global `focus-visible` ring in `globals.css` covers all interactive elements.
 
 ---
 
@@ -215,15 +260,53 @@ Added a vertical divider (`w-px bg-zinc-700`) before Emergency Stop and Maintena
 
 | File | Changes |
 |---|---|
-| `app/globals.css` | glass-card solid bg, glass-surface solid bg, focus rings |
-| `components/admin/sidebar.tsx` | Brand sub normal-case, nav sub normal-case, remove pulse animations |
-| `app/admin/signals/page.tsx` | STAGE_META, MODE_COLORS, SystemStatusBanner, Scan button, BUY/SELL size, ConfBar removal, preset pills |
-| `app/admin/performance/page.tsx` | StatPair label, all table `th`, tab nav labels |
-| `app/admin/system/page.tsx` | Toggle danger prop, FeatureFlagCard emergency_stop wiring, compact service grid, ops divider |
+| `app/globals.css` | glass-card/glass-surface solid bg, global focus-visible ring |
+| `components/admin/sidebar.tsx` | Brand sub normal-case, nav sub normal-case, removed pulse + ping animations |
+| `app/admin/signals/page.tsx` | STAGE_META (4 groups), MODE_COLORS (uniform zinc), SystemStatusBanner neutral, Scan button blue, BUY/SELL size bump, ConfBar removal, FreshnessTag/RegimeAlignDot off collapsed row, preset pills, IntelligencePanel 4-section rewrite, ConfidenceBar component, full type scale normalization |
+| `app/admin/performance/page.tsx` | TrackRecord 3-col hero grid, WrSparkBar + DimTable expand, CalibrationTable th → font-medium, tab labels de-monospace, card headers unified, type scale normalized |
+| `app/admin/system/page.tsx` | Toggle danger prop, FeatureFlagCard emergency_stop + hover-description, compact service grid, ops divider, AnomaliesTab calm zero state, card headers unified, type scale normalized |
+
+---
+
+## Spec Compliance
+
+| Item | Status | Notes |
+|---|---|---|
+| P0-1 | ✓ DONE | Emergency Stop red toggle |
+| P0-2 | ✓ DONE | Scan button blue informational |
+| P0-3 | ✓ DONE | Sidebar sub-text normal-case |
+| P0-4 | ✓ DONE | SystemStatusBanner neutral OK state |
+| P0-5 | ✓ DONE | Global focus-visible rings |
+| P1-1 | ✓ DONE | Full type scale — no 9px/11px |
+| P1-2 | ✓ DONE | 10 lifecycle colors → 4 groups |
+| P1-3 | ✓ DONE | Signal card BUY/SELL prominent |
+| P1-4 | ✓ DONE | Compact service grid |
+| P1-5 | ✓ DONE | Track Record hero 3-col layout |
+| P1-6 | ✓ DONE | Mode chips uniform zinc |
+| P1-7 | ✓ DONE | glass-card solid (no backdrop-blur) |
+| P1-8 | ✓ DONE | Tab labels text-xs font-medium |
+| P1-9 | ✓ DONE | Preset filter pills |
+| P1-10 | ✓ DONE | Ops card destructive action separator |
+| P2-1 | ✓ DONE | IntelligencePanel 4 sections |
+| P2-2 | ✓ DONE | DimTable top-3 default + expand |
+| P2-3 | ✓ DONE | ConfidenceBar proportional segments |
+| P2-4 | ✓ DONE | Anomalies calm zero state |
+| P2-5 | ✓ DONE | FeatureFlagCard description on hover |
+| P2-6 | ✓ DONE | WrSparkBar inline in DimTable |
+| P2-7 | ✓ DONE | via P0-3 |
+| P2-8 | ✓ DONE | via P0-3 |
+| P2-9 | ✓ DONE | Card headers text-sm font-medium text-white |
+| P2-10 | ✓ DONE | via P0-5 |
+
+**25/25 items complete.**
+
+---
 
 ## TypeScript
 
-`npx tsc --noEmit` — **zero errors** after all changes.
+`npx tsc --noEmit` — **zero errors** after all changes (verified after each phase).
+
+---
 
 ## Risk Assessment
 
@@ -232,5 +315,6 @@ Added a vertical divider (`w-px bg-zinc-700`) before Emergency Stop and Maintena
 | Visual regressions | Low | Pure Tailwind class changes, no logic |
 | Accessibility regression | None | Focus rings added (improvement) |
 | Layout shifts | Low | ConfBar removal frees ~56px width per signal row |
+| IntelligencePanel rewrite | Low | Same data, restructured sections — no TypeScript types changed |
 | Service grid conditional | Low | Falls back to full grid if any service is unhealthy |
 | Toggle danger prop | Low | Only affects emergency_stop flag in FeatureFlagCard |

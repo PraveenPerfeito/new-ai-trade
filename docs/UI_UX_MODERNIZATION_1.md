@@ -1,9 +1,11 @@
 # UI.UX.MODERNIZATION.1
 
-**Date:** 2026-06-16
-**Author:** Principal Product Designer + Staff UX + Senior Frontend Architect
-**Status:** APPROVED FOR IMPLEMENTATION
-**Scope:** Visual modernization only — zero functionality changes
+**Date:** 2026-06-16  
+**Completed:** 2026-06-17  
+**Author:** Principal Product Designer + Staff UX + Senior Frontend Architect  
+**Status:** COMPLETE — all 25 items (P0–P2) shipped in commit `498ca4a`  
+**Scope:** Visual modernization only — zero functionality changes  
+**Implementation record:** `docs/UI_UX_MODERNIZATION_IMPLEMENTATION_1.md`
 
 ---
 
@@ -683,16 +685,16 @@ Nice-to-have. Higher risk or effort. No logic changes.
 
 | # | Enhancement | Effort | Risk |
 |---|-------------|--------|------|
-| P2-1 | **Intelligence Panel sections**: Group into 4 collapsible sections (Quality / Intelligence / Technical / Trade Levels). Two open by default. | H | Low |
-| P2-2 | **DimTable show top-3 + expand**: Default all Performance dimension tables to 3 rows with "Show all N rows" button. | M | Low |
-| P2-3 | **Confidence distribution bar chart**: Replace text strip `90+: 3 · 85: 7` with proportional colored bar segments. | S | Low |
-| P2-4 | **Anomaly count tiles — calm zero state**: When zero anomalies, replace 4 tiles with single calm confirmation line. | S | Low |
-| P2-5 | **Feature flag description on hover only**: Move description to tooltip/expand, default to label + status + toggle only. | M | Low |
-| P2-6 | **WR sparkbar in DimTable**: Add a 40px inline bar beside each WR value in dimension tables. | M | Low |
-| P2-7 | **Sidebar sub-text**: Change from `Overview · Signals · Regime` (uppercase, tracked) to clean lowercase. | S | None |
-| P2-8 | **Remove pulse dot from active nav item**: Static left border accent is sufficient. Remove `animate-pulse-slow` dot. | S | None |
-| P2-9 | **Card header unification**: Audit every card header — standardize to `px-5 pt-4 pb-3 + CardTitle + optional right-side badge`. | H | Low |
-| P2-10 | **Unified focus ring system**: Add `focus-visible:ring-2 focus-visible:ring-zinc-400` to all interactive elements via a base class in globals.css. | M | None |
+| P2-1 | **Intelligence Panel sections**: Group into 4 collapsible sections (Quality / Intelligence / Technical / AI Analysis). Two open by default. | H | Low | ✓ DONE |
+| P2-2 | **DimTable show top-3 + expand**: Default all Performance dimension tables to 3 rows with "Show all N rows" button. | M | Low | ✓ DONE |
+| P2-3 | **Confidence distribution bar chart**: Replace text strip `90+: 3 · 85: 7` with proportional colored bar segments. | S | Low | ✓ DONE |
+| P2-4 | **Anomaly count tiles — calm zero state**: When zero anomalies, replace 4 tiles with single calm confirmation line. | S | Low | ✓ DONE |
+| P2-5 | **Feature flag description on hover only**: Move description to tooltip/expand, default to label + status + toggle only. | M | Low | ✓ DONE |
+| P2-6 | **WR sparkbar in DimTable**: Add a 40px inline bar beside each WR value in dimension tables. | M | Low | ✓ DONE |
+| P2-7 | **Sidebar sub-text**: Change from `Overview · Signals · Regime` (uppercase, tracked) to clean lowercase. | S | None | ✓ DONE (via P0-3) |
+| P2-8 | **Remove pulse dot from active nav item**: Static left border accent is sufficient. Remove `animate-pulse-slow` dot. | S | None | ✓ DONE (via P0-3) |
+| P2-9 | **Card header unification**: Audit every card header — standardize to `text-sm font-medium text-white`. | H | Low | ✓ DONE |
+| P2-10 | **Unified focus ring system**: Add `focus-visible:ring-2 focus-visible:ring-zinc-400` to all interactive elements via a base class in globals.css. | M | None | ✓ DONE (via P0-5) |
 
 ---
 
