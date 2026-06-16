@@ -1098,8 +1098,8 @@ function SettingsTab() {
         <div className="flex items-baseline justify-between gap-3 flex-wrap">
           <p className="text-terminal-text text-sm font-semibold">Quick Controls</p>
           <p className="text-[10px] text-terminal-muted/50">
-            Emergency Stop · Maintenance live in{' '}
-            <a href="/admin/signals?tab=scanner" className="underline hover:text-terminal-text">Trading → Scanner</a>
+            Emergency Stop · Maintenance also in{' '}
+            <a href="/admin/system?tab=settings" className="underline hover:text-terminal-text">System → Settings</a>
           </p>
         </div>
         {/* Toggles */}

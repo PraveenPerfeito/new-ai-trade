@@ -2,10 +2,10 @@
 
 import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import {
-  Activity, Zap, ScanLine, Target, RefreshCw,
-  Play, Square, ArrowRight, CheckCircle, CheckCircle2, XCircle,
+  Activity, Zap, Target, RefreshCw,
+  Play, Square, ArrowRight, CheckCircle2, XCircle,
   TrendingUp, TrendingDown, Minus, Clock,
-  ShieldAlert, Wrench, Bot, Send, AlertTriangle,
+  ShieldAlert, AlertTriangle,
   ChevronDown, BarChart2,
 } from 'lucide-react'
 import { adminApi } from '@/lib/admin-api'
