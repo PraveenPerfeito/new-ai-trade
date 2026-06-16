@@ -1547,7 +1547,7 @@ function CoinWatchlist({ signals }: { signals: TacticalSignalRow[] }) {
                     <span className="text-[10px] text-zinc-500 shrink-0">{sig.scannerMode}</span>
                     <span className="text-[10px] text-zinc-400 shrink-0">{sig.confidence}%</span>
                     {sig.riskGrade && <span className="text-[10px] text-zinc-500 shrink-0">Gr.{sig.riskGrade}</span>}
-                    <span className="text-[10px] text-zinc-600 truncate">{timeAgo(sig.createdAt.toISOString())}</span>
+                    <span className="text-[10px] text-zinc-600 truncate">{timeAgo(typeof sig.createdAt === 'string' ? sig.createdAt : sig.createdAt.toISOString())}</span>
                   </div>
                 ) : (
                   <span className="text-[10px] text-zinc-600 flex-1">No recent signal</span>
