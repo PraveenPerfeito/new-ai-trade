@@ -297,14 +297,6 @@ function sOTxt(level: 'green' | 'amber' | 'red' | 'neutral') {
   return level === 'green' ? 'text-emerald-400' : level === 'amber' ? 'text-amber-400' : level === 'red' ? 'text-red-400' : 'text-terminal-text'
 }
 
-const ADVANCED_FLAG_DEFS = [
-  { key: 'probability_gate_v1',       label: 'Probability Gate v1',       desc: 'Expectancy filter on Telegram sends — OFF = no filter' },
-  { key: 'riskgrade_v2',              label: 'Risk Grade v2',              desc: 'Empirical grades as display-primary over heuristic' },
-  { key: 'confidence_calibration_v2', label: 'Confidence Calibration v2', desc: 'Empirical confidence measurement (read-only analytics)' },
-  { key: 'early_breakout_penalty_v1', label: 'Early Breakout Penalty v1', desc: '−8 setup score for BUY+EARLY_BREAKOUT signals' },
-  { key: 'regime_hard_gate_v2',       label: 'Regime Hard Gate v2',       desc: 'Hard-reject contra-regime unless HIGH_MOMENTUM OI' },
-] as const
-
 // Flag categorization for Feature Flags section (SIGNAL.QUALITY.AUDIT.3)
 // tier 'quality' = direct trading/signal impact, always visible
 // tier 'operational' = system controls, visible
@@ -336,7 +328,7 @@ const FLAG_META: Record<string, {
   attribution_snapshots:              { tier: 'advanced' },
 }
 
-// ── Advanced Operations Accordion (Phase D) ───────────────────────────────────
+// ── System Diagnostics Accordion ─────────────────────────────────────────────
 
 function AdvancedOperationsAccordion({
   providers, scans, monitor,
@@ -345,37 +337,7 @@ function AdvancedOperationsAccordion({
   scans: ScanSummaryResponse | null
   monitor: MonitorSnapshot | null
 }) {
-  const [open,       setOpen]       = useState(false)
-  const [advFlags,   setAdvFlags]   = useState<Record<string, boolean> | null>(null)
-  const [advLoading, setAdvLoading] = useState(false)
-  const [advSaving,  setAdvSaving]  = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!open || advFlags !== null || advLoading) return
-    setAdvLoading(true)
-    adminApi.settings.group('features')
-      .then(res => {
-        const obj: Record<string, boolean> = {}
-        ADVANCED_FLAG_DEFS.forEach(({ key }) => {
-          const f = (res.fields as { key: string; value: unknown }[]).find(x => x.key === key)
-          if (f) obj[key] = Boolean(f.value)
-        })
-        setAdvFlags(obj)
-      })
-      .catch(() => {})
-      .finally(() => setAdvLoading(false))
-  }, [open, advFlags, advLoading])
-
-  const toggleAdvFlag = async (key: string) => {
-    if (advFlags === null) return
-    const cur = advFlags[key] ?? false
-    setAdvSaving(key)
-    try {
-      await adminApi.settings.patch('features', { [key]: !cur })
-      setAdvFlags(prev => prev ? { ...prev, [key]: !cur } : prev)
-    } catch {}
-    finally { setAdvSaving(null) }
-  }
+  const [open, setOpen] = useState(false)
 
   return (
     <div className="glass-card rounded-xl overflow-hidden border border-terminal-border/50">
@@ -383,38 +345,13 @@ function AdvancedOperationsAccordion({
         className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-terminal-bright/5 transition-colors">
         <div className="flex items-center gap-2">
           <Settings2 size={13} className="text-terminal-muted/60" />
-          <span className="text-sm font-semibold text-terminal-text">Advanced Operations</span>
-          <span className="text-[10px] text-terminal-muted/40 font-mono hidden sm:block">· feature flags · diagnostics · collapsed by default</span>
+          <span className="text-sm font-semibold text-terminal-text">System Diagnostics</span>
+          <span className="text-[10px] text-terminal-muted/40 font-mono hidden sm:block">· provider health · queue metrics · gate analysis · infra config</span>
         </div>
         <ChevronDown size={14} className={`text-terminal-muted/50 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
         <div className="border-t border-terminal-border/40 p-5 space-y-6">
-
-          {/* Feature Flags */}
-          <div>
-            <p className="text-[9px] text-terminal-muted/50 uppercase tracking-widest mb-3">Feature Flags</p>
-            {advLoading ? (
-              <p className="text-terminal-muted text-xs animate-pulse">Loading…</p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {ADVANCED_FLAG_DEFS.map(({ key, label, desc }) => {
-                  const val = advFlags?.[key] ?? false
-                  return (
-                    <div key={key} className={`glass-card rounded-lg p-3 flex items-start gap-3 border transition-all ${val ? 'border-bull-default/25' : 'border-terminal-border'}`}>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-terminal-text font-mono">{label}</p>
-                        <p className="text-[10px] text-terminal-muted/55 mt-0.5 leading-relaxed">{desc}</p>
-                      </div>
-                      <div className="shrink-0 pt-0.5">
-                        <Toggle value={val} onChange={() => toggleAdvFlag(key)} disabled={advSaving === key || advFlags === null} />
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
 
           {/* Provider Diagnostics */}
           {providers && providers.length > 0 && (
@@ -1596,12 +1533,33 @@ function SettingsTab() {
         }
         return (
           <div className="space-y-4">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <p className="text-terminal-text text-sm font-semibold">Feature Flags</p>
               {p0Pending > 0 && (
-                <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold">
-                  {p0Pending} P0 fix{p0Pending > 1 ? 'es' : ''} pending
-                </span>
+                <>
+                  <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold">
+                    {p0Pending} P0 fix{p0Pending > 1 ? 'es' : ''} pending
+                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const changes: Record<string, boolean> = {}
+                      qualityFlags.forEach(e => {
+                        const m = FLAG_META[e.key]
+                        if (m?.p0 && m.recommendedState !== undefined && (getValue(e) as boolean) !== m.recommendedState)
+                          changes[e.key] = m.recommendedState
+                      })
+                      if (!Object.keys(changes).length) return
+                      try {
+                        await adminApi.settings.patch('features', changes)
+                        await fetchSettings()
+                      } catch {}
+                    }}
+                    className="text-[9px] font-mono px-2.5 py-1 rounded border border-emerald-500/40 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors font-semibold"
+                  >
+                    ✓ Apply All Recommended
+                  </button>
+                </>
               )}
             </div>
 
