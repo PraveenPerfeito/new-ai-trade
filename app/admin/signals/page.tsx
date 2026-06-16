@@ -1042,21 +1042,26 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
                 celery?.enabled && celery?.is_overdue ? 'bg-amber-400 animate-pulse' :
                 celery?.enabled ? 'bg-green-400 animate-pulse' : 'bg-zinc-600'
               }`} />
-              <span className={`text-sm font-semibold truncate ${celery?.is_overdue && celery?.enabled ? 'text-amber-300' : 'text-white'}`}>
+              <span className={`text-sm font-semibold truncate ${
+                celery?.is_overdue && celery?.enabled ? 'text-amber-300' :
+                !celery?.enabled ? 'text-zinc-500' : 'text-white'
+              }`}>
                 {celery===null ? 'Connecting…' : celery.scanning ? `Scanning — ${celery.running_modes.join(', ')||'standard'}` :
-                 celery.enabled && celery.is_overdue ? 'Auto-scan Overdue' : celery.enabled ? 'Auto-scan Active' : 'Auto-scan Paused'}
+                 celery.enabled && celery.is_overdue ? 'Auto-scan Overdue' : celery.enabled ? 'Auto-scan Active' : 'Auto-scan Stopped'}
               </span>
             </div>
             <button onClick={onTogglePause} disabled={pausing || celery===null}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition-colors shrink-0 ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors shrink-0 ${
                 pausing ? 'text-zinc-500 border-zinc-700 bg-zinc-800 cursor-not-allowed'
                 : celery?.enabled
-                ? 'text-amber-400 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20'
-                : 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20'
+                ? 'text-red-400 border-red-500/40 bg-red-500/10 hover:bg-red-500/20'
+                : 'text-emerald-400 border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25'
               }`}>
-              {pausing ? '…' : celery?.enabled
-                ? <><Square className="w-2.5 h-2.5"/> Pause</>
-                : <><Play className="w-2.5 h-2.5"/> Resume</>}
+              {pausing
+                ? <><span className="w-2 h-2 rounded-full border-2 border-zinc-500 border-t-transparent animate-spin inline-block"/> Working…</>
+                : celery?.enabled
+                ? <><Square className="w-3 h-3 fill-current"/> Stop Scanner</>
+                : <><Play className="w-3 h-3 fill-current"/> Start Scanner</>}
             </button>
           </div>
           <div className="grid grid-cols-2 gap-3">
