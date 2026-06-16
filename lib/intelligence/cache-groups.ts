@@ -55,10 +55,3 @@ export const CACHE_GROUPS: Record<CacheGroupName, CacheGroupConfig> = {
   },
 };
 
-// Redis key for hit/miss telemetry per group
-export function groupHitsKey(name: CacheGroupName): string {
-  return `cache:intel:hits:${name}`;
-}
-export function groupMissesKey(name: CacheGroupName): string {
-  return `cache:intel:misses:${name}`;
-}

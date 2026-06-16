@@ -2,7 +2,7 @@ import { CoinData } from '@/types';
 import { getRedis } from '@/lib/redis';
 import { createLogger } from '@/lib/logger';
 import { getMarketDataService } from '@/lib/market-data/service';
-import { CACHE_GROUPS, groupHitsKey, groupMissesKey } from './cache-groups';
+import { CACHE_GROUPS } from './cache-groups';
 import {
   ListingsSnapshot,
   GlobalSnapshot,

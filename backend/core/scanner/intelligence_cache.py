@@ -214,7 +214,6 @@ FALLBACK_STATUS_KEY    = "intel:fallback:status"     # admin-visible JSON status
 FALLBACK_ALERT_TTL_KEY = "intel:fallback:alert_sent"  # throttle key — 15-min TTL
 FALLBACK_STATUS_TTL    = 30 * 60   # 30 min
 FALLBACK_ALERT_TTL     = 15 * 60   # 15 min — minimum gap between Telegram alerts
-FALLBACK_COUNTER_KEY   = "intel:fallback:count_24h"   # daily fallback counter
 
 
 async def _record_fallback_event(coin_count: int, reason: str = "cache_cold") -> bool:
@@ -239,10 +238,6 @@ async def _record_fallback_event(coin_count: int, reason: str = "cache_cold") ->
             "coin_count":       coin_count,
         })
         await redis.setex(FALLBACK_STATUS_KEY, FALLBACK_STATUS_TTL, status)
-
-        # Daily counter (resets at 24h)
-        await redis.incr(FALLBACK_COUNTER_KEY)
-        await redis.expire(FALLBACK_COUNTER_KEY, 24 * 60 * 60)
 
         # Alert throttle check
         already_alerted = await redis.exists(FALLBACK_ALERT_TTL_KEY)
