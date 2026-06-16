@@ -26,7 +26,7 @@ import { formatTs } from '@/lib/utils'
 import {
   Server, Database, Cpu, Activity, RefreshCw, CheckCircle2, BellOff, Shield, Eye, X,
   Clock, AlertTriangle, ChevronDown, Lock, Settings2, Save, RotateCcw, AlertCircle,
-  History,
+  History, Play, Square, Zap,
 } from 'lucide-react'
 import { settingTier, DANGEROUS_FLAGS } from '@/lib/settings-tiers'
 
@@ -274,6 +274,322 @@ function GateRejectionGrid({ counts }: { counts?: Record<string, number> }) {
             <p className="text-terminal-text font-mono font-semibold text-sm">{counts?.[key] ?? 0}</p>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Founder Operations interfaces + helpers ───────────────────────────────────
+
+interface CeleryStatus {
+  enabled: boolean; scanning: boolean; running_modes: string[]; last_scan_at: number | null
+  next_scan_at?: Record<string, number | null>; is_overdue?: boolean
+}
+interface SystemOpsFlags {
+  emergency_stop: boolean; maintenance_mode: boolean
+  ai_enabled: boolean; telegram_enabled: boolean
+}
+
+function sODot(level: 'green' | 'amber' | 'red' | 'neutral') {
+  return level === 'green' ? 'bg-emerald-400' : level === 'amber' ? 'bg-amber-400 animate-pulse' : level === 'red' ? 'bg-red-400 animate-pulse' : 'bg-zinc-600'
+}
+function sOTxt(level: 'green' | 'amber' | 'red' | 'neutral') {
+  return level === 'green' ? 'text-emerald-400' : level === 'amber' ? 'text-amber-400' : level === 'red' ? 'text-red-400' : 'text-terminal-text'
+}
+
+const ADVANCED_FLAG_DEFS = [
+  { key: 'probability_gate_v1',       label: 'Probability Gate v1',       desc: 'Expectancy filter on Telegram sends — OFF = no filter' },
+  { key: 'riskgrade_v2',              label: 'Risk Grade v2',              desc: 'Empirical grades as display-primary over heuristic' },
+  { key: 'confidence_calibration_v2', label: 'Confidence Calibration v2', desc: 'Empirical confidence measurement (read-only analytics)' },
+  { key: 'early_breakout_penalty_v1', label: 'Early Breakout Penalty v1', desc: '−8 setup score for BUY+EARLY_BREAKOUT signals' },
+  { key: 'regime_hard_gate_v2',       label: 'Regime Hard Gate v2',       desc: 'Hard-reject contra-regime unless HIGH_MOMENTUM OI' },
+] as const
+
+// ── Advanced Operations Accordion (Phase D) ───────────────────────────────────
+
+function AdvancedOperationsAccordion({
+  providers, scans, monitor,
+}: {
+  providers: ProviderCheckResult[] | null
+  scans: ScanSummaryResponse | null
+  monitor: MonitorSnapshot | null
+}) {
+  const [open,       setOpen]       = useState(false)
+  const [advFlags,   setAdvFlags]   = useState<Record<string, boolean> | null>(null)
+  const [advLoading, setAdvLoading] = useState(false)
+  const [advSaving,  setAdvSaving]  = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open || advFlags !== null || advLoading) return
+    setAdvLoading(true)
+    adminApi.settings.group('features')
+      .then(res => {
+        const obj: Record<string, boolean> = {}
+        ADVANCED_FLAG_DEFS.forEach(({ key }) => {
+          const f = (res.fields as { key: string; value: unknown }[]).find(x => x.key === key)
+          if (f) obj[key] = Boolean(f.value)
+        })
+        setAdvFlags(obj)
+      })
+      .catch(() => {})
+      .finally(() => setAdvLoading(false))
+  }, [open, advFlags, advLoading])
+
+  const toggleAdvFlag = async (key: string) => {
+    if (advFlags === null) return
+    const cur = advFlags[key] ?? false
+    setAdvSaving(key)
+    try {
+      await adminApi.settings.patch('features', { [key]: !cur })
+      setAdvFlags(prev => prev ? { ...prev, [key]: !cur } : prev)
+    } catch {}
+    finally { setAdvSaving(null) }
+  }
+
+  return (
+    <div className="glass-card rounded-xl overflow-hidden border border-terminal-border/50">
+      <button type="button" onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-terminal-bright/5 transition-colors">
+        <div className="flex items-center gap-2">
+          <Settings2 size={13} className="text-terminal-muted/60" />
+          <span className="text-sm font-semibold text-terminal-text">Advanced Operations</span>
+          <span className="text-[10px] text-terminal-muted/40 font-mono hidden sm:block">· feature flags · diagnostics · collapsed by default</span>
+        </div>
+        <ChevronDown size={14} className={`text-terminal-muted/50 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="border-t border-terminal-border/40 p-5 space-y-6">
+
+          {/* Feature Flags */}
+          <div>
+            <p className="text-[9px] text-terminal-muted/50 uppercase tracking-widest mb-3">Feature Flags</p>
+            {advLoading ? (
+              <p className="text-terminal-muted text-xs animate-pulse">Loading…</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {ADVANCED_FLAG_DEFS.map(({ key, label, desc }) => {
+                  const val = advFlags?.[key] ?? false
+                  return (
+                    <div key={key} className={`glass-card rounded-lg p-3 flex items-start gap-3 border transition-all ${val ? 'border-bull-default/25' : 'border-terminal-border'}`}>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-terminal-text font-mono">{label}</p>
+                        <p className="text-[10px] text-terminal-muted/55 mt-0.5 leading-relaxed">{desc}</p>
+                      </div>
+                      <div className="shrink-0 pt-0.5">
+                        <Toggle value={val} onChange={() => toggleAdvFlag(key)} disabled={advSaving === key || advFlags === null} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Provider Diagnostics */}
+          {providers && providers.length > 0 && (
+            <div>
+              <p className="text-[9px] text-terminal-muted/50 uppercase tracking-widest mb-3">Provider Diagnostics</p>
+              <ProviderHealthTable providers={providers} />
+            </div>
+          )}
+
+          {/* Queue & Scanner Diagnostics */}
+          {monitor && (
+            <div>
+              <p className="text-[9px] text-terminal-muted/50 uppercase tracking-widest mb-3">Queue & Scanner Diagnostics</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {([
+                  { label: 'Scans Today',   val: monitor.metrics.scans_today.value,             lvl: monitor.metrics.scans_today.level },
+                  { label: 'Last Scan',     val: `${monitor.metrics.scan_duration_s.value}s`,   lvl: monitor.metrics.scan_duration_s.level },
+                  { label: 'Binance Err',   val: monitor.metrics.binance_errors_per_day.value,  lvl: monitor.metrics.binance_errors_per_day.level },
+                  { label: 'CMC Credits',   val: monitor.metrics.cmc_credits_per_day.value,     lvl: monitor.metrics.cmc_credits_per_day.level },
+                  { label: 'Tg Sends',      val: monitor.metrics.telegram_sends_per_day.value,  lvl: monitor.metrics.telegram_sends_per_day.level },
+                  { label: 'Claude Calls',  val: monitor.metrics.claude_calls_per_day.value,    lvl: monitor.metrics.claude_calls_per_day.level },
+                  { label: 'Heuristic',     val: monitor.metrics.heuristic_calls_per_day.value, lvl: monitor.metrics.heuristic_calls_per_day.level },
+                  { label: 'AI Fallback',   val: `${monitor.metrics.claude_fallback_pct.value}%`, lvl: monitor.metrics.claude_fallback_pct.level },
+                ] as { label: string; val: number | string; lvl: MonitorLevel }[]).map(({ label, val, lvl }) => (
+                  <div key={label} className="glass-card rounded-lg px-3 py-2.5">
+                    <p className="text-[9px] text-terminal-muted/55 uppercase tracking-wider mb-1">{label}</p>
+                    <p className={`text-sm font-mono font-semibold ${LEVEL_CLS[lvl]}`}>{val}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Gate Rejection Diagnostics */}
+          {scans && (
+            <div>
+              <p className="text-[9px] text-terminal-muted/50 uppercase tracking-widest mb-3">Gate Rejection Diagnostics</p>
+              <PipelineIntegrityCard scans={scans} monitor={monitor ?? undefined} />
+              <div className="mt-3"><GateRejectionGrid counts={scans.gate_rejections} /></div>
+            </div>
+          )}
+
+          {/* Redis / Infra Configuration */}
+          <div>
+            <p className="text-[9px] text-terminal-muted/50 uppercase tracking-widest mb-3">Redis & Infrastructure Config</p>
+            <InfraConfigSection />
+          </div>
+
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Founder Operations Card (Phase A, B, C) ───────────────────────────────────
+
+function FounderOperationsCard({
+  celery, flags, monitor, health,
+  onPauseScanner, onPatchFlag, onScanNow,
+  scanning, scanDone, opLoading, opError, pausing,
+}: {
+  celery: CeleryStatus | null
+  flags: SystemOpsFlags | null
+  monitor: MonitorSnapshot | null
+  health: HealthReady | null
+  onPauseScanner: () => void
+  onPatchFlag: (group: string, key: string, value: boolean) => void
+  onScanNow: () => void
+  scanning: boolean; scanDone: boolean; opLoading: boolean; opError: string | null; pausing: boolean
+}) {
+  const signals24h  = monitor?.metrics.signals_per_day.value ?? null
+  const queueWorker = health?.checks?.celery_worker as string | undefined
+  const queueOk     = queueWorker === 'HEALTHY'
+  const queueWarn   = queueWorker === 'DEGRADED'
+
+  const lastScanText = celery?.last_scan_at
+    ? (() => {
+        const s = Math.floor((Date.now() - celery.last_scan_at * 1000) / 1000)
+        if (s < 60) return `${s}s ago`
+        if (s < 3600) return `${Math.floor(s / 60)}m ago`
+        return `${Math.floor(s / 3600)}h ago`
+      })()
+    : '—'
+
+  type Lvl = 'green' | 'amber' | 'red' | 'neutral'
+  type StatusItem = { label: string; value: string; level: Lvl }
+
+  const items: StatusItem[] = [
+    { label: 'Scanner',        value: celery === null ? '…' : celery.scanning ? 'SCANNING' : celery.enabled ? 'ACTIVE' : 'DISABLED', level: celery === null ? 'neutral' : celery.enabled ? 'green' : 'amber'         },
+    { label: 'Claude AI',      value: flags  === null ? '…' : flags.ai_enabled ? 'ACTIVE'  : 'DISABLED',                             level: flags  === null ? 'neutral' : flags.ai_enabled ? 'green' : 'amber'        },
+    { label: 'Telegram',       value: flags  === null ? '…' : flags.telegram_enabled ? 'ACTIVE' : 'DISABLED',                        level: flags  === null ? 'neutral' : flags.telegram_enabled ? 'green' : 'amber'  },
+    { label: 'Emergency Stop', value: flags  === null ? '…' : flags.emergency_stop ? 'ON'   : 'OFF',                                 level: flags  === null ? 'neutral' : flags.emergency_stop ? 'red' : 'green'      },
+    { label: 'Maintenance',    value: flags  === null ? '…' : flags.maintenance_mode ? 'ON' : 'OFF',                                 level: flags  === null ? 'neutral' : flags.maintenance_mode ? 'amber' : 'green'  },
+    { label: 'Last Scan',      value: lastScanText,                                                                                   level: 'neutral'                                                                   },
+    { label: 'Signals (24h)',  value: signals24h !== null ? String(signals24h) : '—',                                                level: 'neutral'                                                                   },
+    { label: 'Queue',          value: !queueWorker ? '—' : queueOk ? 'Healthy' : queueWarn ? 'Warning' : 'Offline',                 level: !queueWorker ? 'neutral' : queueOk ? 'green' : queueWarn ? 'amber' : 'red' },
+  ]
+
+  const hasCritical = Boolean(flags?.emergency_stop)
+  const hasWarning  = flags != null && (!flags.ai_enabled || !flags.telegram_enabled || !celery?.enabled || flags.maintenance_mode)
+
+  return (
+    <div className={`rounded-xl border p-5 space-y-5 ${hasCritical ? 'border-red-500/40 bg-red-900/10' : hasWarning ? 'border-amber-500/30 bg-amber-900/5' : 'border-terminal-border/70 bg-terminal-surface/30'}`}>
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${hasCritical ? 'bg-red-400 animate-pulse' : hasWarning ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`} />
+          <p className="text-sm font-semibold text-terminal-text">System Status</p>
+        </div>
+        <span className={`text-xs font-mono font-bold uppercase ${hasCritical ? 'text-red-400' : hasWarning ? 'text-amber-400' : 'text-emerald-400'}`}>
+          {hasCritical ? 'CRITICAL' : hasWarning ? 'WARNING' : 'OPERATIONAL'}
+        </span>
+      </div>
+
+      {/* Status grid (Phase A) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {items.map(item => (
+          <div key={item.label} className="bg-terminal-bg/40 rounded-lg px-3 py-2.5 border border-terminal-border/30">
+            <p className="text-[9px] text-terminal-muted/50 uppercase tracking-wider mb-1.5">{item.label}</p>
+            <div className="flex items-center gap-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${sODot(item.level)}`} />
+              <span className={`font-mono font-bold text-xs ${sOTxt(item.level)}`}>{item.value}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Operational Controls (Phase B + C) */}
+      <div>
+        <p className="text-[9px] text-terminal-muted/50 uppercase tracking-widest mb-2">Operational Controls</p>
+        <div className="flex flex-wrap gap-2">
+
+          {/* Run Scan Now (Phase C) */}
+          <button onClick={onScanNow}
+            disabled={scanning || opLoading || !celery || flags?.emergency_stop || flags?.maintenance_mode}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
+              scanDone  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' :
+              scanning  ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' :
+                          'bg-terminal-bg border-terminal-border text-terminal-text hover:border-terminal-bright'
+            }`}>
+            {scanning ? <><RefreshCw size={11} className="animate-spin"/>Scanning…</> :
+             scanDone  ? <><CheckCircle2 size={11}/>Done</> :
+                         <><Zap size={11}/>Scan Now</>}
+          </button>
+
+          {/* Scanner ON/OFF */}
+          <button onClick={onPauseScanner}
+            disabled={pausing || opLoading || celery === null}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
+              celery?.enabled
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
+                : 'bg-terminal-bg border-terminal-border text-terminal-text hover:border-terminal-bright'
+            }`}>
+            {celery?.enabled ? <><Square size={11}/>Pause Scanner</> : <><Play size={11}/>Enable Scanner</>}
+          </button>
+
+          {/* Claude AI ON/OFF */}
+          <button onClick={() => flags && onPatchFlag('ai', 'enabled', !flags.ai_enabled)}
+            disabled={opLoading || flags === null}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
+              flags?.ai_enabled
+                ? 'bg-purple-500/10 border-purple-500/30 text-purple-400 hover:bg-purple-500/20'
+                : 'bg-terminal-bg border-terminal-border text-terminal-muted hover:border-terminal-bright'
+            }`}>
+            <Cpu size={11} />
+            Claude AI {flags === null ? '…' : flags.ai_enabled ? 'ON' : 'OFF'}
+          </button>
+
+          {/* Telegram ON/OFF */}
+          <button onClick={() => flags && onPatchFlag('telegram', 'alerts_enabled', !flags.telegram_enabled)}
+            disabled={opLoading || flags === null}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
+              flags?.telegram_enabled
+                ? 'bg-sky-500/10 border-sky-500/30 text-sky-400 hover:bg-sky-500/20'
+                : 'bg-terminal-bg border-terminal-border text-terminal-muted hover:border-terminal-bright'
+            }`}>
+            <Activity size={11} />
+            Telegram {flags === null ? '…' : flags.telegram_enabled ? 'ON' : 'OFF'}
+          </button>
+
+          {/* Emergency Stop */}
+          <button onClick={() => flags && onPatchFlag('features', 'emergency_stop', !flags.emergency_stop)}
+            disabled={opLoading || flags === null}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
+              flags?.emergency_stop
+                ? 'bg-red-500/20 border-red-500/50 text-red-400 hover:bg-red-500/30'
+                : 'bg-terminal-bg border-terminal-border text-terminal-muted/60 hover:border-terminal-bright'
+            }`}>
+            <AlertTriangle size={11} />
+            Emergency Stop{flags?.emergency_stop ? ' — ACTIVE' : ''}
+          </button>
+
+          {/* Maintenance Mode */}
+          <button onClick={() => flags && onPatchFlag('features', 'maintenance_mode', !flags.maintenance_mode)}
+            disabled={opLoading || flags === null}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
+              flags?.maintenance_mode
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
+                : 'bg-terminal-bg border-terminal-border text-terminal-muted/60 hover:border-terminal-bright'
+            }`}>
+            <Settings2 size={11} />
+            Maintenance{flags?.maintenance_mode ? ' — ON' : ''}
+          </button>
+        </div>
+        {opError && <p className="text-xs text-bear-default font-mono mt-2">{opError}</p>}
       </div>
     </div>
   )
@@ -1516,6 +1832,67 @@ export default function SystemPage() {
   const { data: ai }                    = useAutoRefresh<AiSummaryResponse>(aiFetcher, 120_000)
   const { data: monitor }               = useSharedPolling<MonitorSnapshot>('admin:monitor', monitorFetcher, 120_000)
 
+  // ── Founder operations state (Phase A–C) ──────────────────────────────────
+  const celeryFetcher   = useCallback(() => adminApi.scheduler.status().then(r => r.success ? r.data : null), [])
+  const sysFlagsFetcher = useCallback(async () => {
+    const [featRes, aiRes, teleRes] = await Promise.all([
+      adminApi.settings.group('features'),
+      adminApi.settings.group('ai'),
+      adminApi.settings.group('telegram'),
+    ])
+    const field = (res: SettingsGroupResponse, k: string) =>
+      (res.fields as { key: string; value: unknown }[]).find(f => f.key === k)?.value
+    return {
+      emergency_stop:   Boolean(field(featRes, 'emergency_stop')),
+      maintenance_mode: Boolean(field(featRes, 'maintenance_mode')),
+      ai_enabled:       Boolean(field(aiRes, 'enabled')),
+      telegram_enabled: Boolean(field(teleRes, 'alerts_enabled')),
+    } as SystemOpsFlags
+  }, [])
+
+  const { data: celery,   refresh: refreshCelery } = useAutoRefresh<CeleryStatus | null>(celeryFetcher, 120_000)
+  const { data: sysFlags, refresh: refreshFlags  } = useAutoRefresh<SystemOpsFlags | null>(sysFlagsFetcher, 120_000)
+
+  const [opLoading,  setOpLoading]  = useState(false)
+  const [opError,    setOpError]    = useState<string | null>(null)
+  const [scanning,   setScanning]   = useState(false)
+  const [scanDone,   setScanDone]   = useState(false)
+  const [pausing,    setPausing]    = useState(false)
+  const scanDoneTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  async function handleScanNow() {
+    setScanning(true); setScanDone(false); setOpError(null)
+    if (scanDoneTimer.current) clearTimeout(scanDoneTimer.current)
+    try {
+      const res  = await fetch('/api/scanner/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
+      const json = await res.json()
+      if (res.status === 423) { setOpError('A scan is already running.'); return }
+      if (res.status === 503) { setOpError(json.detail ?? 'Scanner is disabled or blocked.'); return }
+      if (!json.success)      { setOpError(json.error ?? 'Scan failed'); return }
+      setScanDone(true)
+      scanDoneTimer.current = setTimeout(() => setScanDone(false), 30_000)
+      refreshCelery()
+    } catch (e) { setOpError(e instanceof Error ? e.message : 'Network error') }
+    finally { setScanning(false) }
+  }
+
+  async function handlePauseScanner() {
+    if (!celery || pausing) return
+    setPausing(true)
+    try {
+      if (celery.enabled) await adminApi.scheduler.stop()
+      else await adminApi.scheduler.start()
+      refreshCelery()
+    } finally { setPausing(false) }
+  }
+
+  async function handlePatchFlag(group: string, key: string, value: boolean) {
+    setOpLoading(true); setOpError(null)
+    try { await adminApi.settings.patch(group, { [key]: value }); refreshFlags() }
+    catch (e) { setOpError(e instanceof Error ? e.message : 'Failed') }
+    finally { setOpLoading(false) }
+  }
+
   const TABS = [
     { id: 'system',    label: 'Health' },
     { id: 'anomalies', label: 'Anomalies' },
@@ -1544,6 +1921,22 @@ export default function SystemPage() {
       {tab === 'settings' && <SettingsTab />}
 
       {tab === 'system' && <>
+      {/* Founder Operations Card — Phase A, B, C */}
+      <FounderOperationsCard
+        celery={celery ?? null}
+        flags={sysFlags ?? null}
+        monitor={monitor ?? null}
+        health={health ?? null}
+        onPauseScanner={handlePauseScanner}
+        onPatchFlag={handlePatchFlag}
+        onScanNow={handleScanNow}
+        scanning={scanning}
+        scanDone={scanDone}
+        opLoading={opLoading}
+        opError={opError}
+        pausing={pausing}
+      />
+
       {/* Overall status banner */}
       {!hl && health && (
         <div className={`rounded-xl px-5 py-4 border flex items-center gap-4 ${
@@ -1590,11 +1983,6 @@ export default function SystemPage() {
           </div>
         )}
       </div>
-
-      {/* Provider health table */}
-      {provData?.providers && provData.providers.length > 0 && (
-        <ProviderHealthTable providers={provData.providers} />
-      )}
 
       {/* Operational metrics */}
       <div>
@@ -1710,17 +2098,12 @@ export default function SystemPage() {
         </div>
       )}
 
-      <PipelineIntegrityCard scans={scans ?? undefined} monitor={monitor ?? undefined} />
-
-      <GateRejectionGrid counts={scans?.gate_rejections} />
-
-      {/* Infrastructure Configuration — read-only (SETTINGS.CENTER.2) */}
-      <InfraConfigSection />
-
-      {/* Diagnostics section label */}
-      <p className="text-[9px] text-terminal-muted/40 uppercase tracking-widest flex items-center gap-2">
-        <span className="h-px flex-1 bg-terminal-border/30" />Diagnostics<span className="h-px flex-1 bg-terminal-border/30" />
-      </p>
+      {/* Advanced Operations accordion — Phase D */}
+      <AdvancedOperationsAccordion
+        providers={provData?.providers ?? null}
+        scans={scans ?? null}
+        monitor={monitor ?? null}
+      />
       </>}
     </div>
   )

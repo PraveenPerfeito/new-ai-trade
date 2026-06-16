@@ -1002,11 +1002,10 @@ function ProviderHealthRow({ providers }: { providers: ProviderStatus[] }) {
 
 // ── Overview tab ───────────────────────────────────────────────────────────────
 
-function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, countdown, flags, onPause, pausing, trackRecord }: {
+function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, countdown, flags, trackRecord }: {
   celery: CeleryStatus | null; regime: RegimeData | null; signalCounts: SignalCounts | null
   providers: ProviderStatus[]; cache: CacheTelemetry | null; flags: OpsFlags | null
-  signals: TacticalSignalRow[]; countdown: number | null
-  onPause: () => void; pausing: boolean; trackRecord: TrackRecordResponse | null
+  signals: TacticalSignalRow[]; countdown: number | null; trackRecord: TrackRecordResponse | null
 }) {
   const lc = signals.reduce<Record<string,number>>((a,s)=>{ a[s.lifecycleStage]=(a[s.lifecycleStage]??0)+1; return a }, {})
   const currentRegime = regime?.regime ?? null
@@ -1029,24 +1028,16 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
           celery.scanning  ? 'bg-blue-500/5 border-blue-500/25' :
           celery.is_overdue ? 'bg-amber-500/5 border-amber-500/25' : 'bg-zinc-900 border-zinc-800'
         }`}>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                celery?.scanning ? 'bg-blue-400 animate-pulse' :
-                celery?.enabled && celery?.is_overdue ? 'bg-amber-400 animate-pulse' :
-                celery?.enabled ? 'bg-green-400 animate-pulse' : 'bg-zinc-600'
-              }`} />
-              <span className={`text-sm font-semibold ${celery?.is_overdue && celery?.enabled ? 'text-amber-300' : 'text-white'}`}>
-                {celery===null ? 'Connecting…' : celery.scanning ? `Scanning — ${celery.running_modes.join(', ')||'standard'}` :
-                 celery.enabled && celery.is_overdue ? 'Auto-scan Overdue' : celery.enabled ? 'Auto-scan Active' : 'Auto-scan Paused'}
-              </span>
-            </div>
-            <button onClick={onPause} disabled={pausing||celery===null}
-              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
-                celery?.enabled ? 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20' : 'bg-green-500/10 border-green-500/30 text-green-400 hover:bg-green-500/20'
-              }`}>
-              {celery?.enabled ? <><Square className="w-3 h-3"/>Pause</> : <><Play className="w-3 h-3"/>Resume</>}
-            </button>
+          <div className="flex items-center gap-2 mb-4">
+            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+              celery?.scanning ? 'bg-blue-400 animate-pulse' :
+              celery?.enabled && celery?.is_overdue ? 'bg-amber-400 animate-pulse' :
+              celery?.enabled ? 'bg-green-400 animate-pulse' : 'bg-zinc-600'
+            }`} />
+            <span className={`text-sm font-semibold ${celery?.is_overdue && celery?.enabled ? 'text-amber-300' : 'text-white'}`}>
+              {celery===null ? 'Connecting…' : celery.scanning ? `Scanning — ${celery.running_modes.join(', ')||'standard'}` :
+               celery.enabled && celery.is_overdue ? 'Auto-scan Overdue' : celery.enabled ? 'Auto-scan Active' : 'Auto-scan Paused'}
+            </span>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-zinc-800/60 rounded-lg px-3 py-2.5">
@@ -2088,7 +2079,7 @@ export default function SignalsCenterPage() {
         <OverviewTab
           celery={celery??null} regime={regime??null} signalCounts={signalCounts??null}
           providers={providers??[]} cache={cache??null} signals={recentSignals??[]}
-          flags={flags} countdown={countdown} onPause={handlePause} pausing={pausing}
+          flags={flags} countdown={countdown}
           trackRecord={trackRecord??null}
         />
       )}
