@@ -1133,7 +1133,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
             <div className="mt-3 pt-3 border-t border-zinc-800/60 grid grid-cols-4 gap-1.5">
               {[
                 { label: 'Active',  value: lc['ACTIVE']??0, color: 'text-blue-400' },
-                { label: 'Sent',    value: (lc['TELEGRAM_SENT']??0)+(lc['AI_APPROVED']??0)+(lc['SCREENED']??0), color: 'text-purple-400' },
+                { label: 'Sent',    value: signals.filter(s => s.telegramSent || ['TELEGRAM_SENT','ACTIVE','STALE','TP_HIT','SL_HIT','CLOSED'].includes(s.lifecycleStage)).length, color: 'text-purple-400' },
                 { label: 'TP Hit',  value: lc['TP_HIT']??0,  color: 'text-emerald-400' },
                 { label: 'SL Hit',  value: lc['SL_HIT']??0,  color: 'text-red-400' },
               ].map(({ label, value, color }) => (
@@ -1644,7 +1644,7 @@ function LifecycleFunnel({ signals }: { signals: TacticalSignalRow[] }) {
   // for older signals where telegram_sent column was NULL (pre-TELEGRAM.RELIABILITY.1).
   const sentStages = new Set(['TELEGRAM_SENT','ACTIVE','STALE','TP_HIT','SL_HIT','CLOSED','ANALYZED'])
   const sent       = signals.filter(s => s.telegramSent || sentStages.has(s.lifecycleStage)).length
-  const active    = (counts['ACTIVE'] ?? 0) + (counts['TELEGRAM_SENT'] ?? 0)
+  const active    = signals.filter(s => s.lifecycleStage === 'ACTIVE' || s.lifecycleStage === 'TELEGRAM_SENT').length
   const won       = counts['TP_HIT'] ?? 0
   const lost      = counts['SL_HIT'] ?? 0
   const expired   = (counts['STALE']??0) + (counts['CLOSED']??0)

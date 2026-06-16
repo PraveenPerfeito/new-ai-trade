@@ -86,6 +86,7 @@ export async function saveSignal(signal: TradingSignal): Promise<string | null> 
       sector_name:              signal.sectorName              ?? null,
       continuation_probability: signal.continuation?.continuationProbability ?? null,
       regime_alignment_score:   signal.regimeAlignmentScore    ?? null,
+      validation_source:        signal.validationSource        ?? null,
     })
     .select('id')
     .single();
