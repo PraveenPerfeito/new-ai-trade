@@ -960,20 +960,22 @@ function SystemStatusBanner({ celery, flags, providers }: {
   celery: CeleryStatus | null; flags: OpsFlags | null; providers: ProviderStatus[]
 }) {
   const issues: string[] = []
-  if (flags?.emergency_stop)  issues.push('Emergency Stop ACTIVE')
-  if (flags?.maintenance_mode) issues.push('Maintenance Mode ON')
-  if (celery?.is_overdue && celery?.enabled) issues.push('Scanner overdue')
-  if (!celery?.enabled) issues.push('Scanner paused')
+  if (flags?.emergency_stop)   issues.push('🛑 Emergency Stop ACTIVE')
+  if (flags?.maintenance_mode) issues.push('🔧 Maintenance Mode ON')
+  if (flags !== null && !flags.telegram)     issues.push('📵 Telegram OFF — no alerts sending')
+  if (flags !== null && !flags.ai_validation) issues.push('🤖 AI Validation OFF')
+  if (celery?.is_overdue && celery?.enabled) issues.push('⏰ Scanner overdue')
+  if (celery !== null && !celery.enabled)    issues.push('⏸ Scanner paused')
   const unhealthy = providers.filter(p => !p.healthy)
-  if (unhealthy.length > 0) issues.push(`${unhealthy.length} provider${unhealthy.length > 1 ? 's' : ''} unhealthy`)
+  if (unhealthy.length > 0) issues.push(`⚠ ${unhealthy.length} provider${unhealthy.length > 1 ? 's' : ''} down`)
 
   const ok = issues.length === 0
   return (
-    <div className={cn('rounded-lg px-4 py-2.5 flex items-center gap-3 text-sm',
+    <div className={cn('rounded-lg px-4 py-2.5 flex items-start gap-3',
       ok ? 'bg-emerald-500/5 border border-emerald-500/20' : 'bg-amber-500/5 border border-amber-500/25')}>
-      <span className={`w-2 h-2 rounded-full shrink-0 ${ok ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`} />
-      <span className={ok ? 'text-emerald-300' : 'text-amber-300'}>
-        {ok ? 'All Systems Operational' : `${issues.length} Issue${issues.length > 1 ? 's' : ''} Detected: ${issues.join(' · ')}`}
+      <span className={`w-2 h-2 rounded-full shrink-0 mt-1 ${ok ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`} />
+      <span className={`text-sm ${ok ? 'text-emerald-300' : 'text-amber-300'}`}>
+        {ok ? 'All Systems Operational — scanner active, Telegram enabled' : issues.join('  ·  ')}
       </span>
     </div>
   )
@@ -1003,12 +1005,14 @@ function ProviderHealthRow({ providers }: { providers: ProviderStatus[] }) {
 // ── Overview tab ───────────────────────────────────────────────────────────────
 
 function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, countdown, flags, trackRecord,
-  scanMode, onScanModeChange, onScanNow, scanning, scanDone, scanError }: {
+  scanMode, onScanModeChange, onScanNow, scanning, scanDone, scanError,
+  onTogglePause, pausing }: {
   celery: CeleryStatus | null; regime: RegimeData | null; signalCounts: SignalCounts | null
   providers: ProviderStatus[]; cache: CacheTelemetry | null; flags: OpsFlags | null
   signals: TacticalSignalRow[]; countdown: number | null; trackRecord: TrackRecordResponse | null
   scanMode: ScannerMode; onScanModeChange: (m: ScannerMode) => void
   onScanNow: () => void; scanning: boolean; scanDone: boolean; scanError: string | null
+  onTogglePause: () => void; pausing: boolean
 }) {
   const lc = signals.reduce<Record<string,number>>((a,s)=>{ a[s.lifecycleStage]=(a[s.lifecycleStage]??0)+1; return a }, {})
   const currentRegime = regime?.regime ?? null
@@ -1031,16 +1035,29 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
           celery.scanning  ? 'bg-blue-500/5 border-blue-500/25' :
           celery.is_overdue ? 'bg-amber-500/5 border-amber-500/25' : 'bg-zinc-900 border-zinc-800'
         }`}>
-          <div className="flex items-center gap-2 mb-4">
-            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-              celery?.scanning ? 'bg-blue-400 animate-pulse' :
-              celery?.enabled && celery?.is_overdue ? 'bg-amber-400 animate-pulse' :
-              celery?.enabled ? 'bg-green-400 animate-pulse' : 'bg-zinc-600'
-            }`} />
-            <span className={`text-sm font-semibold ${celery?.is_overdue && celery?.enabled ? 'text-amber-300' : 'text-white'}`}>
-              {celery===null ? 'Connecting…' : celery.scanning ? `Scanning — ${celery.running_modes.join(', ')||'standard'}` :
-               celery.enabled && celery.is_overdue ? 'Auto-scan Overdue' : celery.enabled ? 'Auto-scan Active' : 'Auto-scan Paused'}
-            </span>
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                celery?.scanning ? 'bg-blue-400 animate-pulse' :
+                celery?.enabled && celery?.is_overdue ? 'bg-amber-400 animate-pulse' :
+                celery?.enabled ? 'bg-green-400 animate-pulse' : 'bg-zinc-600'
+              }`} />
+              <span className={`text-sm font-semibold truncate ${celery?.is_overdue && celery?.enabled ? 'text-amber-300' : 'text-white'}`}>
+                {celery===null ? 'Connecting…' : celery.scanning ? `Scanning — ${celery.running_modes.join(', ')||'standard'}` :
+                 celery.enabled && celery.is_overdue ? 'Auto-scan Overdue' : celery.enabled ? 'Auto-scan Active' : 'Auto-scan Paused'}
+              </span>
+            </div>
+            <button onClick={onTogglePause} disabled={pausing || celery===null}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition-colors shrink-0 ${
+                pausing ? 'text-zinc-500 border-zinc-700 bg-zinc-800 cursor-not-allowed'
+                : celery?.enabled
+                ? 'text-amber-400 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20'
+                : 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20'
+              }`}>
+              {pausing ? '…' : celery?.enabled
+                ? <><Square className="w-2.5 h-2.5"/> Pause</>
+                : <><Play className="w-2.5 h-2.5"/> Resume</>}
+            </button>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-zinc-800/60 rounded-lg px-3 py-2.5">
@@ -1070,18 +1087,21 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
                 </button>
               ))}
             </div>
-            <button onClick={onScanNow} disabled={scanning || celery?.scanning}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                scanDone
-                  ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
-                  : scanning || celery?.scanning
-                  ? 'bg-zinc-800 border border-zinc-700 text-zinc-500 cursor-not-allowed'
-                  : 'bg-bull-default/10 border border-bull-default/30 text-bull-text hover:bg-bull-default/20'
-              }`}>
-              {scanning ? <><span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"/> Scanning…</>
-               : scanDone ? <><CheckCircle2 className="w-3 h-3"/> Done</>
-               : <><Play className="w-3 h-3"/> Scan Now</>}
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button onClick={onScanNow} disabled={scanning || celery?.scanning}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  scanDone
+                    ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
+                    : scanning || celery?.scanning
+                    ? 'bg-zinc-800 border border-zinc-700 text-zinc-500 cursor-not-allowed'
+                    : 'bg-bull-default/10 border border-bull-default/30 text-bull-text hover:bg-bull-default/20'
+                }`}>
+                {scanning ? <><span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"/> Queuing…</>
+                 : scanDone ? <><CheckCircle2 className="w-3 h-3"/> Queued ✓</>
+                 : <><Play className="w-3 h-3"/> Scan Now</>}
+              </button>
+              {scanDone && <span className="text-[10px] text-zinc-500">Running in background — watch status above</span>}
+            </div>
             {scanError && <p className="text-[10px] text-red-400 mt-1.5">{scanError}</p>}
           </div>
 
@@ -1405,15 +1425,114 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
         </div>
       )}
 
+      {/* Coin Watchlist — manual coin tracker */}
+      <details className="group" open>
+        <summary className="text-xs text-zinc-400 cursor-pointer hover:text-zinc-200 select-none list-none flex items-center gap-1.5 font-medium">
+          <span className="group-open:rotate-90 transition-transform inline-block">▶</span> My Watchlist
+          <span className="text-zinc-600 font-normal">(manually tracked coins)</span>
+        </summary>
+        <div className="mt-2">
+          <CoinWatchlist signals={signals??[]} />
+        </div>
+      </details>
+
       {/* Alpha Watchlist — collapsed by default */}
       <details className="group">
         <summary className="text-xs text-zinc-500 cursor-pointer hover:text-zinc-300 select-none list-none flex items-center gap-1.5">
-          <span className="group-open:rotate-90 transition-transform">▶</span> Alpha Watchlist
+          <span className="group-open:rotate-90 transition-transform inline-block">▶</span> Alpha Watchlist
+          <span className="text-zinc-600 text-[10px] font-normal">(auto — validated signals not sent)</span>
         </summary>
         <div className="mt-2">
           <AlphaWatchlist />
         </div>
       </details>
+    </div>
+  )
+}
+
+// ── Manual Coin Watchlist ───────────────────────────────────────────────────────
+
+function CoinWatchlist({ signals }: { signals: TacticalSignalRow[] }) {
+  const STORAGE_KEY = 'signals:watchlist-coins'
+  const [coins, setCoins] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') } catch { return [] }
+  })
+  const [input, setInput] = useState('')
+
+  const persist = (next: string[]) => {
+    setCoins(next)
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)) } catch { /* */ }
+  }
+
+  const add = () => {
+    const sym = input.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+    if (!sym || coins.includes(sym)) { setInput(''); return }
+    persist([...coins, sym])
+    setInput('')
+  }
+
+  const remove = (sym: string) => persist(coins.filter(c => c !== sym))
+
+  // Build a quick lookup: symbol → most recent signal
+  const sigBySymbol = new Map<string, TacticalSignalRow>()
+  for (const s of signals) {
+    const existing = sigBySymbol.get(s.symbol)
+    if (!existing || s.createdAt > existing.createdAt) {
+      sigBySymbol.set(s.symbol, s)
+    }
+  }
+
+  const STAGE_DOT: Record<string, string> = {
+    ACTIVE: 'bg-blue-400', TELEGRAM_SENT: 'bg-purple-400', AI_APPROVED: 'bg-purple-400',
+    SCREENED: 'bg-sky-400', TP_HIT: 'bg-emerald-400', SL_HIT: 'bg-red-400',
+    STALE: 'bg-zinc-600', CLOSED: 'bg-zinc-600', ANALYZED: 'bg-zinc-600', VALIDATED: 'bg-zinc-600',
+  }
+
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
+      {/* Add coin input */}
+      <div className="flex gap-2">
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value.toUpperCase())}
+          onKeyDown={e => e.key === 'Enter' && add()}
+          placeholder="Add coin symbol e.g. BTC"
+          className="flex-1 bg-zinc-800/80 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
+        />
+        <button onClick={add}
+          className="px-3 py-1.5 rounded-lg bg-bull-default/10 border border-bull-default/30 text-bull-text text-xs font-semibold hover:bg-bull-default/20 transition-colors">
+          + Add
+        </button>
+      </div>
+
+      {coins.length === 0 ? (
+        <p className="text-[11px] text-zinc-600 text-center py-2">No coins yet — type a symbol above and press Enter</p>
+      ) : (
+        <div className="space-y-1.5">
+          {coins.map(sym => {
+            const sig = sigBySymbol.get(sym)
+            return (
+              <div key={sym} className="flex items-center gap-2 rounded-lg bg-zinc-800/50 px-3 py-2">
+                <span className="text-xs font-semibold text-white w-16 shrink-0">{sym}</span>
+                {sig ? (
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STAGE_DOT[sig.lifecycleStage] ?? 'bg-zinc-600'}`}/>
+                    <span className={`text-[10px] font-semibold shrink-0 ${sig.type === 'BUY' ? 'text-emerald-400' : 'text-red-400'}`}>{sig.type}</span>
+                    <span className="text-[10px] text-zinc-500 shrink-0">{sig.scannerMode}</span>
+                    <span className="text-[10px] text-zinc-400 shrink-0">{sig.confidence}%</span>
+                    {sig.riskGrade && <span className="text-[10px] text-zinc-500 shrink-0">Gr.{sig.riskGrade}</span>}
+                    <span className="text-[10px] text-zinc-600 truncate">{timeAgo(sig.createdAt.toISOString())}</span>
+                  </div>
+                ) : (
+                  <span className="text-[10px] text-zinc-600 flex-1">No recent signal</span>
+                )}
+                <button onClick={() => remove(sym)}
+                  className="ml-auto text-zinc-700 hover:text-zinc-400 text-[11px] shrink-0 transition-colors">✕</button>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -2117,6 +2236,7 @@ export default function SignalsCenterPage() {
           trackRecord={trackRecord??null}
           scanMode={scanMode} onScanModeChange={setScanMode}
           onScanNow={handleScanNow} scanning={scanning} scanDone={scanDone} scanError={opError}
+          onTogglePause={handlePause} pausing={pausing}
         />
       )}
       {tab==='signals'  && <SignalsTab  currentRegime={currentRegime} />}
