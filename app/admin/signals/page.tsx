@@ -1130,11 +1130,18 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
           </div>
 
           {signals.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {(lc['ACTIVE']??0) > 0 && <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400"><span className="w-1 h-1 rounded-full bg-blue-400"/>{lc['ACTIVE']} Active</span>}
-              {((lc['TELEGRAM_SENT']??0)+(lc['AI_APPROVED']??0)+(lc['SCREENED']??0)) > 0 && <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400"><Zap className="w-2.5 h-2.5"/>{(lc['TELEGRAM_SENT']??0)+(lc['AI_APPROVED']??0)+(lc['SCREENED']??0)} Sent</span>}
-              {(lc['TP_HIT']??0) > 0 && <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"><CheckCircle2 className="w-2.5 h-2.5"/>{lc['TP_HIT']} TP</span>}
-              {(lc['SL_HIT']??0) > 0 && <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400"><XCircle className="w-2.5 h-2.5"/>{lc['SL_HIT']} SL</span>}
+            <div className="mt-3 pt-3 border-t border-zinc-800/60 grid grid-cols-4 gap-1.5">
+              {[
+                { label: 'Active',  value: lc['ACTIVE']??0, color: 'text-blue-400' },
+                { label: 'Sent',    value: (lc['TELEGRAM_SENT']??0)+(lc['AI_APPROVED']??0)+(lc['SCREENED']??0), color: 'text-purple-400' },
+                { label: 'TP Hit',  value: lc['TP_HIT']??0,  color: 'text-emerald-400' },
+                { label: 'SL Hit',  value: lc['SL_HIT']??0,  color: 'text-red-400' },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="bg-zinc-800/50 rounded-lg px-2 py-2 text-center">
+                  <div className={`text-base font-bold font-mono leading-none ${color}`}>{value}</div>
+                  <div className="text-[9px] text-zinc-500 mt-1 leading-none">{label}</div>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -1633,9 +1640,10 @@ function LifecycleFunnel({ signals }: { signals: TacticalSignalRow[] }) {
   // is always ~100% — show the AI vs Screened split instead.
   const aiCount   = signals.filter(s => s.validationSource === 'CLAUDE' || s.lifecycleStage === 'AI_APPROVED').length
   const scrCount  = signals.filter(s => s.validationSource === 'HEURISTIC' || s.lifecycleStage === 'SCREENED').length
-  // Sent = actually delivered to Telegram. Outcomes register for ALL accepted
-  // signals, so inferring "sent" from outcome stages overcounts — use the boolean.
-  const sent      = signals.filter(s => s.telegramSent).length
+  // Sent — use telegramSent when populated; fall back to lifecycle-stage inference
+  // for older signals where telegram_sent column was NULL (pre-TELEGRAM.RELIABILITY.1).
+  const sentStages = new Set(['TELEGRAM_SENT','ACTIVE','STALE','TP_HIT','SL_HIT','CLOSED','ANALYZED'])
+  const sent       = signals.filter(s => s.telegramSent || sentStages.has(s.lifecycleStage)).length
   const active    = (counts['ACTIVE'] ?? 0) + (counts['TELEGRAM_SENT'] ?? 0)
   const won       = counts['TP_HIT'] ?? 0
   const lost      = counts['SL_HIT'] ?? 0
