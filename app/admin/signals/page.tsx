@@ -1043,7 +1043,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
     : null
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* System Status Banner */}
       <SystemStatusBanner celery={celery} flags={flags} providers={providers} />
 
@@ -1304,7 +1304,7 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
   }
 
   return (
-    <div className="space-y-4 max-w-5xl">
+    <div className="space-y-6">
       {/* Lifecycle funnel */}
       <LifecycleFunnel signals={signals??[]} />
 
@@ -1992,7 +1992,7 @@ function RegimeTab({ regime, scanStats, regimePerfData }: {
         />
       )}
 
-      <div className="space-y-4 max-w-3xl">
+      <div className="space-y-6">
         {/* Current Regime Card */}
         <div className={`rounded-xl border p-6 bg-zinc-900 ${REGIME_BORDER[regime.regime]}`}>
           <div className="flex items-center justify-between mb-2">
@@ -2234,15 +2234,15 @@ export default function SignalsCenterPage() {
   const currentRegime = regime?.regime ?? null
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 max-w-6xl mx-auto">
+    <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div>
-        <h1 className="text-lg sm:text-xl font-semibold text-white">Signals</h1>
+        <h1 className="text-xl font-semibold text-terminal-text">Signals</h1>
         <p className="text-xs text-zinc-500 mt-0.5">Overview · Signals · Regime</p>
       </div>
 
       {/* Tab nav */}
-      <div className="flex gap-0 border-b border-zinc-800 -mx-1">
+      <div className="flex gap-1 border-b border-terminal-border pb-0">
         {TABS.map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)}
             className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
