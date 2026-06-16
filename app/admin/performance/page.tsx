@@ -19,7 +19,7 @@ function toNum(v: unknown): number | null {
 function StatPair({ label, value, accent = '' }: { label: string; value: string; accent?: string }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-terminal-muted text-xs uppercase tracking-wider">{label}</span>
+      <span className="text-terminal-muted text-xs">{label}</span>
       <span className={`font-mono font-bold text-lg ${accent || 'text-terminal-text'}`}>{value}</span>
     </div>
   )
@@ -48,11 +48,11 @@ function CalibrationTable({ bands }: { bands: EdgeReport['confidence_calibration
       <table className="w-full text-xs min-w-[380px]">
         <thead>
           <tr className="border-b border-terminal-border">
-            <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Band</th>
-            <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Signals</th>
-            <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Win Rate</th>
-            <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold hidden sm:table-cell">Expectancy</th>
-            <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Status</th>
+            <th className="text-terminal-muted text-xs text-left py-2 px-3 font-medium">Band</th>
+            <th className="text-terminal-muted text-xs text-left py-2 px-3 font-medium">Signals</th>
+            <th className="text-terminal-muted text-xs text-left py-2 px-3 font-medium">Win Rate</th>
+            <th className="text-terminal-muted text-xs text-left py-2 px-3 font-medium hidden sm:table-cell">Expectancy</th>
+            <th className="text-terminal-muted text-xs text-left py-2 px-3 font-medium">Status</th>
           </tr>
         </thead>
         <tbody>
@@ -120,13 +120,13 @@ function IntelRow({ label, row }: { label: string; row: IntelligencePerfRow | nu
 function IntelligenceSection({ data, loading }: { data: IntelligenceSummary | null; loading: boolean }) {
   if (loading) return (
     <div className="glass-card rounded-lg p-5">
-      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Intelligence Performance</p>
+      <p className="text-terminal-muted text-xs uppercase tracking-wide mb-3">Intelligence Performance</p>
       <div className="space-y-2">{Array.from({ length: 7 }).map((_, i) => <div key={i} className="skeleton h-7 rounded" />)}</div>
     </div>
   )
   if (!data || data.insufficient_data) return (
     <div className="glass-card rounded-lg p-5">
-      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-2">Intelligence Performance</p>
+      <p className="text-terminal-muted text-xs uppercase tracking-wide mb-2">Intelligence Performance</p>
       <p className="text-terminal-muted/60 text-xs leading-relaxed">
         Intelligence breakdowns require at least 5 resolved outcomes per tier. Warming up — data populates as signals resolve.
         {data && ` Total resolved: ${data.total}.`}
@@ -135,7 +135,7 @@ function IntelligenceSection({ data, loading }: { data: IntelligenceSummary | nu
   )
   return (
     <div>
-      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Intelligence Performance — Best Tier per Dimension</p>
+      <p className="text-terminal-muted text-xs uppercase tracking-wide mb-3">Intelligence Performance — Best Tier per Dimension</p>
       <div className="glass-card rounded-lg p-5">
         <div className="flex items-center gap-4 mb-4 text-terminal-muted/50 text-[10px] font-mono uppercase tracking-wider">
           <span className="w-44 shrink-0">Dimension</span>
@@ -176,7 +176,7 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
     <div className="space-y-6">
       {/* Edge verdict */}
       <div className="glass-card rounded-lg p-5">
-        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-4">Edge Verdict</p>
+        <p className="text-terminal-muted text-xs uppercase tracking-wide mb-4">Edge Verdict</p>
         {loading ? (
           <div className="space-y-2">
             <div className="skeleton h-6 w-48 rounded" />
@@ -215,7 +215,7 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
 
       {/* Overall stats */}
       <div>
-        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">
+        <p className="text-terminal-muted text-xs uppercase tracking-wide mb-3">
           Overall Statistics - {analyticsWindowLabel(edge?.window_hours ?? 720)}
         </p>
         <div className="glass-card rounded-lg p-5">
@@ -259,7 +259,7 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
       {/* Calibration */}
       {!loading && (!cal || !cal.calibration) && (
         <div className="glass-card rounded-lg p-5">
-          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Confidence Calibration</p>
+          <p className="text-terminal-muted text-xs uppercase tracking-wide mb-3">Confidence Calibration</p>
           <p className="text-terminal-muted/60 text-xs leading-relaxed">
             Calibration bands require resolved signals across multiple confidence tiers (70–100). Run scans in different modes to build a diverse signal pool.
           </p>
@@ -267,7 +267,7 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
       )}
       {cal && cal.calibration && (
         <div>
-          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Confidence Calibration</p>
+          <p className="text-terminal-muted text-xs uppercase tracking-wide mb-3">Confidence Calibration</p>
           <div className="glass-card rounded-lg overflow-hidden">
             <div className="px-5 py-3 border-b border-terminal-border flex items-center gap-4 flex-wrap">
               <span className="text-terminal-muted text-xs">ECE:</span>
@@ -295,7 +295,7 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
       {/* Scanner Mode Performance */}
       {edge?.scanner_mode_analysis && !edge.scanner_mode_analysis.insufficient_data && (
         <div>
-          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">
+          <p className="text-terminal-muted text-xs uppercase tracking-wide mb-3">
             Scanner Mode Performance — {analyticsWindowLabel(edge.window_hours)}
           </p>
           <div className="glass-card rounded-lg overflow-hidden overflow-x-auto">
@@ -303,7 +303,7 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
               <thead>
                 <tr className="border-b border-terminal-border">
                   {['Mode', 'Resolved', 'Win Rate', 'Expectancy', 'PF', 'Per Day'].map(h => (
-                    <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
+                    <th key={h} className="text-terminal-muted text-xs text-left py-2 px-3 font-medium">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -348,7 +348,7 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
       {/* Market Regime Performance */}
       {edge?.market_regime_analysis && !edge.market_regime_analysis.insufficient_data && (
         <div>
-          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">
+          <p className="text-terminal-muted text-xs uppercase tracking-wide mb-3">
             Regime Performance — {analyticsWindowLabel(edge.window_hours)}
             {(edge.market_regime_analysis.recommended_avoid ?? []).length > 0 && (
               <span className="ml-2 text-bear-default normal-case">
@@ -361,7 +361,7 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
               <thead>
                 <tr className="border-b border-terminal-border">
                   {['Regime', 'Resolved', 'Win Rate', 'Expectancy', 'PF'].map(h => (
-                    <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
+                    <th key={h} className="text-terminal-muted text-xs text-left py-2 px-3 font-medium">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -377,8 +377,8 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
                         <span className={isAvoid ? 'text-bear-default' : isPrefer ? 'text-bull-default' : 'text-terminal-text'}>
                           {regime.toUpperCase()}
                         </span>
-                        {isAvoid  && <span className="text-[9px] text-bear-default/70 border border-bear-default/20 px-1 rounded">avoid</span>}
-                        {isPrefer && <span className="text-[9px] text-bull-default/70 border border-bull-default/20 px-1 rounded">prefer</span>}
+                        {isAvoid  && <span className="text-[10px] text-bear-default/70 border border-bear-default/20 px-1 rounded">avoid</span>}
+                        {isPrefer && <span className="text-[10px] text-bull-default/70 border border-bull-default/20 px-1 rounded">prefer</span>}
                       </td>
                       <td className="py-2 px-3 font-mono text-terminal-muted">{r.total}</td>
                       <td className="py-2 px-3 font-mono">
@@ -410,7 +410,7 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
       {/* Per-Coin Performance */}
       {edge?.coin_performance && !edge.coin_performance.insufficient_data && (
         <div>
-          <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">
+          <p className="text-terminal-muted text-xs uppercase tracking-wide mb-3">
             Top Coins by Expectancy — {analyticsWindowLabel(edge.window_hours)}
             <span className="ml-2 text-terminal-muted/50 normal-case font-normal">
               {edge.coin_performance.total_symbols_seen} symbols seen
@@ -421,7 +421,7 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
               <thead>
                 <tr className="border-b border-terminal-border">
                   {['Coin', 'Resolved', 'Win Rate', 'Expectancy', 'PF', 'Max DD'].map(h => (
-                    <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
+                    <th key={h} className="text-terminal-muted text-xs text-left py-2 px-3 font-medium">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -435,8 +435,8 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
                     <tr key={sym} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
                       <td className="py-2 px-3 font-medium font-mono">
                         <span className="text-terminal-text">{sym}</span>
-                        {isBestWR  && <span className="ml-1.5 text-[9px] text-bull-default/70 border border-bull-default/20 px-1 rounded">top WR</span>}
-                        {isWorstDD && <span className="ml-1.5 text-[9px] text-bear-default/70 border border-bear-default/20 px-1 rounded">high DD</span>}
+                        {isBestWR  && <span className="ml-1.5 text-[10px] text-bull-default/70 border border-bull-default/20 px-1 rounded">top WR</span>}
+                        {isWorstDD && <span className="ml-1.5 text-[10px] text-bear-default/70 border border-bear-default/20 px-1 rounded">high DD</span>}
                       </td>
                       <td className="py-2 px-3 font-mono text-terminal-muted">{c.total}</td>
                       <td className="py-2 px-3 font-mono">
@@ -486,33 +486,45 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
 
 // ─── Attribution tab ──────────────────────────────────────────────────────────
 
+function WrSparkBar({ wr }: { wr: number | null | undefined }) {
+  if (wr == null) return <span className="text-terminal-muted/40">—</span>
+  const fill = Math.min(100, Math.max(0, wr * 100))
+  const color = fill >= 55 ? 'bg-bull-default' : fill >= 45 ? 'bg-signal-high' : 'bg-bear-default'
+  const textColor = fill >= 55 ? 'text-bull-default' : fill >= 45 ? 'text-signal-high' : 'text-bear-default'
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={`font-mono ${textColor}`}>{pct(wr)}</span>
+      <span className="w-10 h-1.5 rounded-full bg-terminal-border/40 overflow-hidden shrink-0">
+        <span className={`block h-full rounded-full ${color}`} style={{ width: `${fill}%` }} />
+      </span>
+    </span>
+  )
+}
+
 function DimTable({ title, rows }: { title: string; rows: AttributionDimension[] }) {
+  const [expanded, setExpanded] = useState(false)
   if (!rows.length) return null
+  const visible = expanded ? rows : rows.slice(0, 3)
   return (
     <div>
-      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-2">{title}</p>
+      <p className="text-terminal-muted text-xs mb-2">{title}</p>
       <div className="glass-card rounded-lg overflow-hidden overflow-x-auto">
         <table className="w-full text-xs min-w-[320px]">
           <thead>
             <tr className="border-b border-terminal-border">
-              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Dimension</th>
-              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Signals</th>
-              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Win Rate</th>
-              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold hidden sm:table-cell">Avg RR</th>
-              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold hidden sm:table-cell">Expectancy</th>
+              <th className="text-terminal-muted text-xs text-left py-2 px-3 font-medium">Dimension</th>
+              <th className="text-terminal-muted text-xs text-left py-2 px-3 font-medium">Signals</th>
+              <th className="text-terminal-muted text-xs text-left py-2 px-3 font-medium">Win Rate</th>
+              <th className="text-terminal-muted text-xs text-left py-2 px-3 font-medium hidden sm:table-cell">Avg RR</th>
+              <th className="text-terminal-muted text-xs text-left py-2 px-3 font-medium hidden sm:table-cell">Expectancy</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map(d => (
+            {visible.map(d => (
               <tr key={d.key} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
                 <td className="py-2 px-3 text-terminal-text font-medium">{d.label}</td>
                 <td className="py-2 px-3 font-mono text-terminal-muted">{d.total}</td>
-                <td className="py-2 px-3 font-mono">
-                  {d.winRate != null
-                    ? <span className={d.winRate >= 0.55 ? 'text-bull-default' : d.winRate >= 0.45 ? 'text-signal-high' : 'text-bear-default'}>{pct(d.winRate)}</span>
-                    : <span className="text-terminal-muted/40">—</span>
-                  }
-                </td>
+                <td className="py-2 px-3"><WrSparkBar wr={d.winRate} /></td>
                 <td className="py-2 px-3 font-mono text-terminal-muted hidden sm:table-cell">{rr(d.avgRRAchieved)}</td>
                 <td className="py-2 px-3 font-mono hidden sm:table-cell">
                   {d.expectancy != null
@@ -524,6 +536,15 @@ function DimTable({ title, rows }: { title: string; rows: AttributionDimension[]
             ))}
           </tbody>
         </table>
+        {rows.length > 3 && (
+          <button
+            type="button"
+            onClick={() => setExpanded(v => !v)}
+            className="w-full py-2 text-xs text-terminal-muted hover:text-terminal-text border-t border-terminal-border/30 transition-colors text-center"
+          >
+            {expanded ? 'Show fewer' : `Show all ${rows.length} rows`}
+          </button>
+        )}
       </div>
     </div>
   )
@@ -533,13 +554,13 @@ function EdgePatternsSection({ patterns }: { patterns: EdgePattern[] }) {
   if (!patterns.length) return null
   return (
     <div>
-      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-2">Top Edge Patterns</p>
+      <p className="text-terminal-muted text-xs uppercase tracking-wide mb-2">Top Edge Patterns</p>
       <div className="glass-card rounded-lg overflow-hidden">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-terminal-border">
               {['Rank', 'Pattern', 'Signals', 'Win Rate', 'Avg RR', 'Expectancy'].map(h => (
-                <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">{h}</th>
+                <th key={h} className="text-terminal-muted text-xs text-left py-2 px-3 font-medium">{h}</th>
               ))}
             </tr>
           </thead>
@@ -577,7 +598,7 @@ const dirIcon: Record<string, string> = { RAISE: '↑', LOWER: '↓', MONITOR: '
 function RecommendationsSection({ recs }: { recs: ThresholdRecommendation[] }) {
   return (
     <div>
-      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-2">Calibration Intelligence</p>
+      <p className="text-terminal-muted text-xs uppercase tracking-wide mb-2">Calibration Intelligence</p>
       <div className="space-y-2">
         {recs.map((r, i) => (
           <div key={i} className="glass-card rounded-lg p-4">
@@ -602,7 +623,7 @@ function AIEffectivenessSection({ ai }: { ai: AttributionReport['aiEffectiveness
   const { aiApproved, heuristic, aiEdgeDelta } = ai
   return (
     <div>
-      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-2">AI vs Heuristic Effectiveness</p>
+      <p className="text-terminal-muted text-xs uppercase tracking-wide mb-2">AI vs Heuristic Effectiveness</p>
       <div className="glass-card rounded-lg p-5">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
           <div className="space-y-1">
@@ -649,24 +670,24 @@ const GRADE_COLOR: Record<string, string> = {
 function RiskGradeAnalysis({ rows }: { rows: AttributionDimension[] }) {
   if (!rows.length) return (
     <div className="glass-card rounded-lg p-5">
-      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-2">Risk Grade Analysis</p>
+      <p className="text-terminal-muted text-xs uppercase tracking-wide mb-2">Risk Grade Analysis</p>
       <p className="text-terminal-muted/60 text-xs">No resolved signals with grade data yet. Warms up as signals reach TP/SL.</p>
     </div>
   )
   const sorted = [...rows].sort((a, b) => a.key.localeCompare(b.key))
   return (
     <div>
-      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Risk Grade Analysis — RISKGRADE.FIX.1 Validation</p>
+      <p className="text-terminal-muted text-xs uppercase tracking-wide mb-3">Risk Grade Analysis — RISKGRADE.FIX.1 Validation</p>
       <div className="glass-card rounded-lg overflow-hidden overflow-x-auto">
         <table className="w-full text-xs min-w-[360px]">
           <thead>
             <tr className="border-b border-terminal-border">
-              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Grade</th>
-              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Signals</th>
-              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Win Rate</th>
-              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold hidden sm:table-cell">Expectancy</th>
-              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold hidden sm:table-cell">Avg RR</th>
-              <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Target</th>
+              <th className="text-terminal-muted text-xs text-left py-2 px-3 font-medium">Grade</th>
+              <th className="text-terminal-muted text-xs text-left py-2 px-3 font-medium">Signals</th>
+              <th className="text-terminal-muted text-xs text-left py-2 px-3 font-medium">Win Rate</th>
+              <th className="text-terminal-muted text-xs text-left py-2 px-3 font-medium hidden sm:table-cell">Expectancy</th>
+              <th className="text-terminal-muted text-xs text-left py-2 px-3 font-medium hidden sm:table-cell">Avg RR</th>
+              <th className="text-terminal-muted text-xs text-left py-2 px-3 font-medium">Target</th>
             </tr>
           </thead>
           <tbody>
@@ -726,7 +747,7 @@ function DailyReportTrigger() {
 
   return (
     <div className="glass-card rounded-lg p-5">
-      <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Founder Daily Report</p>
+      <p className="text-terminal-muted text-xs uppercase tracking-wide mb-3">Founder Daily Report</p>
       <p className="text-terminal-muted text-xs mb-4 leading-relaxed">
         Sends a Telegram message with 24h regime performance, top edge pattern, AI vs heuristic breakdown, and calibration alerts.
       </p>
@@ -823,7 +844,7 @@ function ConfidenceCalibrationSection() {
 
   return (
     <div className="space-y-5">
-      <p className="text-[9px] text-zinc-600 uppercase tracking-widest flex items-center gap-2">
+      <p className="text-[10px] text-zinc-600 uppercase tracking-wide flex items-center gap-2">
         <span className="h-px flex-1 bg-zinc-800"/>Confidence Calibration — Empirical (read-only)<span className="h-px flex-1 bg-zinc-800"/>
       </p>
 
@@ -841,12 +862,12 @@ function ConfidenceCalibrationSection() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           {insightCards.map(c => (
             <div key={c.label} className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5">
-              <p className="text-[9px] text-zinc-500 uppercase tracking-wider">{c.label}</p>
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wider">{c.label}</p>
               <p className={`text-lg font-bold font-mono ${c.color}`}>{c.v?.band}</p>
               <p className="text-[10px] text-zinc-500 font-mono">
                 WR {c.v?.wr != null ? Number(c.v.wr).toFixed(0) : '—'}% · drift {c.v?.drift != null && Number(c.v.drift) > 0 ? '+' : ''}{c.v?.drift != null ? Number(c.v.drift).toFixed(0) : '—'} · n={c.v?.n}
               </p>
-              <p className="text-[9px] text-zinc-600 mt-0.5">{c.desc}</p>
+              <p className="text-[10px] text-zinc-600 mt-0.5">{c.desc}</p>
             </div>
           ))}
         </div>
@@ -854,7 +875,7 @@ function ConfidenceCalibrationSection() {
 
       {cal.bands_regime_known && Object.keys(cal.bands_regime_known).length > 0 && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-1">
+          <h2 className="text-sm font-medium text-white mb-1">
             Stated vs Actual Win Rate — Regime-Known Cohort
           </h2>
           <p className="text-[10px] text-zinc-600 mb-3">
@@ -870,7 +891,7 @@ function ConfidenceCalibrationSection() {
 
       {cal.bands && Object.keys(cal.bands).length > 0 && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-3">
+          <h2 className="text-sm font-medium text-white mb-3">
             All Outcomes (includes pre-fix NULL-regime era)
           </h2>
           <div className="divide-y divide-zinc-800/60">
@@ -884,7 +905,7 @@ function ConfidenceCalibrationSection() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {([['Regime', cal.drift_by_regime], ['Signal Type', cal.drift_by_type], ['Scanner Mode', cal.drift_by_mode]] as const).map(([title, dims]) => (
           <div key={title} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-            <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Drift by {title}</p>
+            <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-2">Drift by {title}</p>
             <div className="space-y-1.5">
               {dims && Object.entries(dims).map(([value, bands]) => (
                 Object.entries(bands).map(([band, s]) => (
@@ -953,7 +974,7 @@ function CalibrationHealthPanel({
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Calibration Health</h2>
+        <h2 className="text-sm font-medium text-white">Calibration Health</h2>
         <span className={`font-mono font-bold text-lg ${scoreColor}`}>{score}/100</span>
       </div>
 
@@ -966,7 +987,7 @@ function CalibrationHealthPanel({
 
       {gradeInversions.length > 0 && (
         <div className="mb-3">
-          <p className="text-[9px] text-amber-500 uppercase tracking-widest mb-1.5">Grade Inversions</p>
+          <p className="text-[10px] text-amber-500 uppercase tracking-wide mb-1.5">Grade Inversions</p>
           <div className="space-y-1">
             {gradeInversions.map(inv => (
               <div key={inv} className="flex items-center gap-2 text-[10px] text-amber-400 font-mono">
@@ -979,7 +1000,7 @@ function CalibrationHealthPanel({
 
       {bandInversions.length > 0 && (
         <div className="mb-3">
-          <p className="text-[9px] text-amber-500 uppercase tracking-widest mb-1.5">Confidence Band Inversions</p>
+          <p className="text-[10px] text-amber-500 uppercase tracking-wide mb-1.5">Confidence Band Inversions</p>
           <div className="space-y-1">
             {bandInversions.map(inv => (
               <div key={inv} className="flex items-center gap-2 text-[10px] text-amber-400 font-mono">
@@ -992,15 +1013,15 @@ function CalibrationHealthPanel({
 
       {gradeRows.length > 0 && (
         <div>
-          <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Grade Win Rates</p>
+          <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-2">Grade Win Rates</p>
           <div className="flex flex-wrap gap-2">
             {gradeRows.map(g => (
               <div key={g.key} className="bg-zinc-800 rounded px-2.5 py-1.5 text-center min-w-[52px]">
-                <p className="text-[9px] text-zinc-500">{g.key}</p>
+                <p className="text-[10px] text-zinc-500">{g.key}</p>
                 <p className={`font-mono text-xs font-bold ${g.winRate != null && g.winRate >= 0.5 ? 'text-bull-default' : 'text-bear-default'}`}>
                   {g.winRate != null ? `${(g.winRate * 100).toFixed(0)}%` : '—'}
                 </p>
-                <p className="text-[9px] text-zinc-600">n={g.total}</p>
+                <p className="text-[10px] text-zinc-600">n={g.total}</p>
               </div>
             ))}
           </div>
@@ -1044,10 +1065,10 @@ function GradeValidationTable({ title, rows, inversions }: {
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
       <div className="flex items-center gap-2 mb-2">
-        <p className="text-[9px] text-zinc-500 uppercase tracking-widest">{title}</p>
+        <p className="text-[10px] text-zinc-500 uppercase tracking-wide">{title}</p>
         {inversions.length === 0
-          ? <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">monotonic ✓</span>
-          : <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400">{inversions.length} inversion{inversions.length > 1 ? 's' : ''}</span>}
+          ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">monotonic ✓</span>
+          : <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400">{inversions.length} inversion{inversions.length > 1 ? 's' : ''}</span>}
       </div>
       <div className="space-y-1">
         {rows.map(g => (
@@ -1096,24 +1117,24 @@ function TrackRecordTab({ data, loading }: { data: import('@/lib/admin-api').Tra
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {windows.map(({ label, w: win }) => (
           <div key={label} className="glass-card rounded-xl p-5">
-            <p className="text-terminal-muted text-xs uppercase tracking-widest mb-3 font-semibold">{label} Window · {win.resolved} resolved</p>
-            <div className="space-y-2.5">
-              <div className="flex justify-between items-center">
-                <span className="text-terminal-muted text-xs">Win Rate</span>
-                <span className={`font-mono font-bold text-base ${wrCls(win.win_rate)}`}>{w(win.win_rate)}</span>
+            <p className="text-terminal-muted text-[10px] tracking-wide font-medium mb-4">{label} · {win.resolved} resolved</p>
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              <div className="text-center">
+                <p className={`font-mono font-semibold text-2xl leading-none ${wrCls(win.win_rate)}`}>{w(win.win_rate)}</p>
+                <p className="text-terminal-muted text-[10px] mt-1.5">Win Rate</p>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-terminal-muted text-xs">Expectancy</span>
-                <span className={`font-mono font-bold text-base ${expCls(win.expectancy)}`}>{e(win.expectancy)}</span>
+              <div className="text-center">
+                <p className={`font-mono font-semibold text-2xl leading-none ${expCls(win.expectancy)}`}>{e(win.expectancy)}</p>
+                <p className="text-terminal-muted text-[10px] mt-1.5">Expectancy</p>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-terminal-muted text-xs">Profit Factor</span>
-                <span className={`font-mono font-bold text-base ${pfCls(win.pf)}`}>{p(win.pf)}</span>
+              <div className="text-center">
+                <p className={`font-mono font-semibold text-2xl leading-none ${pfCls(win.pf)}`}>{p(win.pf)}</p>
+                <p className="text-terminal-muted text-[10px] mt-1.5">Prof Factor</p>
               </div>
-              <div className="flex justify-between items-center border-t border-terminal-border/40 pt-2">
-                <span className="text-terminal-muted text-xs">Wins / Losses</span>
-                <span className="font-mono text-xs text-terminal-muted">{win.wins}W / {win.losses}L</span>
-              </div>
+            </div>
+            <div className="border-t border-terminal-border/40 pt-2.5 flex justify-between items-center">
+              <span className="text-terminal-muted text-[10px]">Wins / Losses</span>
+              <span className="font-mono text-xs text-terminal-muted">{win.wins}W / {win.losses}L</span>
             </div>
           </div>
         ))}
@@ -1122,15 +1143,15 @@ function TrackRecordTab({ data, loading }: { data: import('@/lib/admin-api').Tra
       {/* By mode (30d) */}
       {(data.by_mode_30d ?? []).length > 0 && (
         <div className="glass-card rounded-xl p-5">
-          <p className="text-terminal-muted text-xs uppercase tracking-widest mb-4 font-semibold">30d by Mode</p>
+          <p className="text-terminal-muted text-xs uppercase tracking-wide mb-4 font-semibold">30d by Mode</p>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-terminal-border">
-                  <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Mode</th>
-                  <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">n</th>
-                  <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Win Rate</th>
-                  <th className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3 font-semibold">Expectancy</th>
+                  <th className="text-terminal-muted text-xs text-left py-2 px-3 font-medium">Mode</th>
+                  <th className="text-terminal-muted text-xs text-left py-2 px-3 font-medium">n</th>
+                  <th className="text-terminal-muted text-xs text-left py-2 px-3 font-medium">Win Rate</th>
+                  <th className="text-terminal-muted text-xs text-left py-2 px-3 font-medium">Expectancy</th>
                 </tr>
               </thead>
               <tbody>
@@ -1151,7 +1172,7 @@ function TrackRecordTab({ data, loading }: { data: import('@/lib/admin-api').Tra
       {/* Probability accuracy */}
       {data.probability_accuracy && (
         <div className="glass-card rounded-xl p-5">
-          <p className="text-terminal-muted text-xs uppercase tracking-widest mb-4 font-semibold">Probability Engine Accuracy</p>
+          <p className="text-terminal-muted text-xs uppercase tracking-wide mb-4 font-semibold">Probability Engine Accuracy</p>
           {data.probability_accuracy.n < 10 ? (
             <p className="text-terminal-muted text-sm">Insufficient data — need ≥ 10 stamped outcomes (current: {data.probability_accuracy.n})</p>
           ) : (
@@ -1273,8 +1294,8 @@ function AttributionTab({
       <details className="group">
         <summary className="cursor-pointer list-none select-none">
           <div className="flex items-center gap-3 py-3 border-t border-terminal-border">
-            <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono group-open:hidden">▶ Calibration &amp; AI Analysis</span>
-            <span className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono hidden group-open:inline">▼ Calibration &amp; AI Analysis</span>
+            <span className="text-[10px] text-zinc-500 uppercase tracking-wide font-mono group-open:hidden">▶ Calibration &amp; AI Analysis</span>
+            <span className="text-[10px] text-zinc-500 uppercase tracking-wide font-mono hidden group-open:inline">▼ Calibration &amp; AI Analysis</span>
           </div>
         </summary>
         <div className="space-y-6 pt-2">
@@ -1312,7 +1333,7 @@ function AttributionTab({
             const totalVerd = Object.values(verdicts as Record<string, number>).reduce((a: number, b: number) => a + b, 0)
             return totalVerd > 0 ? (
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-                <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest mb-4">Verdict Distribution — {totalVerd} calls (24h)</h2>
+                <h2 className="text-sm font-medium text-white mb-4">Verdict Distribution — {totalVerd} calls (24h)</h2>
                 <div className="space-y-3">
                   {Object.entries(verdicts as Record<string, number>).map(([k, v]) => (
                     <VerdictBar key={k} label={k} count={v} total={totalVerd} />
@@ -1379,7 +1400,7 @@ export default function PerformancePage() {
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`px-4 py-2 text-xs font-mono uppercase tracking-wider border-b-2 transition-colors ${
+            className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
               tab === t.id
                 ? 'border-terminal-text text-terminal-text'
                 : 'border-transparent text-terminal-muted hover:text-terminal-text/70'

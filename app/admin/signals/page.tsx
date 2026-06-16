@@ -65,26 +65,26 @@ const REGIME_META: Record<string, { desc: string; implication: string }> = {
   CAPITULATION:    { desc: 'Extreme fear — RSI < 22, mass selling', implication: 'High-conviction long setups may be viable — capitulation often precedes reversals' },
 }
 const MODE_COLORS: Record<string, string> = {
-  spot:            'text-sky-400     border-sky-400/20     bg-sky-400/5',
-  futures:         'text-purple-400  border-purple-400/20  bg-purple-400/5',
-  high_confidence: 'text-emerald-400 border-emerald-400/20 bg-emerald-400/5',
-  trending:        'text-amber-400   border-amber-400/20   bg-amber-400/5',
+  spot:            'text-zinc-300 border-zinc-700 bg-zinc-800/50',
+  futures:         'text-zinc-300 border-zinc-700 bg-zinc-800/50',
+  high_confidence: 'text-zinc-300 border-zinc-700 bg-zinc-800/50',
+  trending:        'text-zinc-300 border-zinc-700 bg-zinc-800/50',
 }
 const MODES: ScannerMode[] = ['spot', 'futures', 'high_confidence', 'trending']
 const MODE_FIRE_MINUTES: Record<string, number[]> = {
   spot: [0,15,30,45], futures: [10,40], high_confidence: [5,35], trending: [20,50],
 }
 const STAGE_META: Record<string, { label: string; color: string }> = {
-  VALIDATED:     { label: 'Validated',   color: 'text-zinc-400    bg-zinc-500/10    border-zinc-500/20'    },
-  AI_APPROVED:   { label: 'AI Approved', color: 'text-purple-400  bg-purple-500/10  border-purple-500/20'  },
-  SCREENED:      { label: 'Screened',    color: 'text-sky-400     bg-sky-500/10     border-sky-500/20'     },
-  TELEGRAM_SENT: { label: 'Sent',        color: 'text-blue-400   bg-blue-500/10   border-blue-500/20'   },
-  ACTIVE:        { label: 'Active',      color: 'text-green-400   bg-green-500/10   border-green-500/20'   },
-  STALE:         { label: 'Stale',       color: 'text-amber-400   bg-amber-500/10   border-amber-500/20'   },
+  VALIDATED:     { label: 'Validated',   color: 'text-zinc-500 bg-zinc-500/10 border-zinc-600/20' },
+  AI_APPROVED:   { label: 'AI Approved', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  SCREENED:      { label: 'Screened',    color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  TELEGRAM_SENT: { label: 'Sent',        color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  ACTIVE:        { label: 'Active',      color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  STALE:         { label: 'Stale',       color: 'text-zinc-500 bg-zinc-500/10 border-zinc-600/20' },
   TP_HIT:        { label: 'TP Hit',      color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
-  SL_HIT:        { label: 'SL Hit',      color: 'text-red-400     bg-red-500/10     border-red-500/20'     },
-  CLOSED:        { label: 'Closed',      color: 'text-zinc-500    bg-zinc-500/10    border-zinc-600/20'    },
-  ANALYZED:      { label: 'Analyzed',    color: 'text-indigo-400  bg-indigo-500/10  border-indigo-500/20'  },
+  SL_HIT:        { label: 'SL Hit',      color: 'text-red-400 bg-red-500/10 border-red-500/20'   },
+  CLOSED:        { label: 'Closed',      color: 'text-zinc-500 bg-zinc-500/10 border-zinc-600/20' },
+  ANALYZED:      { label: 'Analyzed',    color: 'text-zinc-500 bg-zinc-500/10 border-zinc-600/20' },
 }
 const STAGE_TIPS: Record<string, string> = {
   VALIDATED:     'Passed all 11 scanner gates — queued for AI or heuristic review',
@@ -114,6 +114,32 @@ function StageLegend() {
           )}
         </div>
       ))}
+    </div>
+  )
+}
+function ConfidenceBar({ signals }: { signals: TacticalSignalRow[] }) {
+  const t90  = signals.filter(s => (s.confidence ?? 0) >= 90).length
+  const t85  = signals.filter(s => (s.confidence ?? 0) >= 85 && (s.confidence ?? 0) < 90).length
+  const t80  = signals.filter(s => (s.confidence ?? 0) >= 80 && (s.confidence ?? 0) < 85).length
+  const tLow = signals.filter(s => (s.confidence ?? 0) < 80).length
+  const total = signals.length
+  if (total === 0) return null
+  const pct = (n: number) => Math.round((n / total) * 100)
+  return (
+    <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-zinc-900/50 border border-zinc-800">
+      <span className="text-[10px] text-zinc-600 font-medium uppercase tracking-wide shrink-0 mr-1">Confidence</span>
+      <div className="flex-1 flex h-1.5 rounded-full overflow-hidden gap-px">
+        {t90  > 0 && <div className="bg-emerald-500"   style={{ width: `${pct(t90)}%` }} title={`90+: ${t90}`}  />}
+        {t85  > 0 && <div className="bg-blue-500"      style={{ width: `${pct(t85)}%` }} title={`85-89: ${t85}`}/>}
+        {t80  > 0 && <div className="bg-amber-500"     style={{ width: `${pct(t80)}%` }} title={`80-84: ${t80}`}/>}
+        {tLow > 0 && <div className="bg-zinc-600"      style={{ width: `${pct(tLow)}%`}} title={`<80: ${tLow}`} />}
+      </div>
+      <div className="flex items-center gap-3 shrink-0">
+        {t90  > 0 && <span className="text-[10px] text-emerald-400 font-mono">90+ <span className="text-zinc-500">({t90})</span></span>}
+        {t85  > 0 && <span className="text-[10px] text-blue-400 font-mono">85-89 <span className="text-zinc-500">({t85})</span></span>}
+        {t80  > 0 && <span className="text-[10px] text-amber-400 font-mono">80-84 <span className="text-zinc-500">({t80})</span></span>}
+        {tLow > 0 && <span className="text-[10px] text-zinc-500 font-mono">&lt;80 <span className="text-zinc-600">({tLow})</span></span>}
+      </div>
     </div>
   )
 }
@@ -322,7 +348,7 @@ function FounderCommandCenter({ trackRecord }: { trackRecord: TrackRecordRespons
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-4">
       <div className="flex items-center gap-2 mb-3">
         <BarChart2 className="w-3.5 h-3.5 text-zinc-500" />
-        <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">Verified Performance</span>
+        <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">Verified Performance</span>
         <span className="text-[10px] text-zinc-600 font-mono ml-auto">{trackRecord.source}</span>
       </div>
       <div className="grid grid-cols-3 gap-3 mb-4">
@@ -332,23 +358,23 @@ function FounderCommandCenter({ trackRecord }: { trackRecord: TrackRecordRespons
           const wr  = toNum(w.win_rate)
           return (
           <div key={label} className="bg-zinc-800/50 rounded-lg px-3 py-2.5">
-            <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">{label} · {w.resolved} resolved</p>
+            <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-2">{label} · {w.resolved} resolved</p>
             <div className="space-y-1.5">
               <div className="flex justify-between items-center">
                 <span className="text-[10px] text-zinc-500">Win Rate</span>
-                <span className={`text-[11px] font-mono font-bold ${wrColor(wr)}`}>
+                <span className={`text-xs font-mono font-bold ${wrColor(wr)}`}>
                   {wr != null ? `${wr}%` : '—'}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-[10px] text-zinc-500">Expectancy</span>
-                <span className={`text-[11px] font-mono font-bold ${expColor(exp)}`}>
+                <span className={`text-xs font-mono font-bold ${expColor(exp)}`}>
                   {exp != null ? `${exp > 0 ? '+' : ''}${exp.toFixed(2)}R` : '—'}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-[10px] text-zinc-500">Prof Factor</span>
-                <span className={`text-[11px] font-mono font-bold ${pfColor(pf)}`}>
+                <span className={`text-xs font-mono font-bold ${pfColor(pf)}`}>
                   {pf != null ? pf.toFixed(2) : '—'}
                 </span>
               </div>
@@ -358,7 +384,7 @@ function FounderCommandCenter({ trackRecord }: { trackRecord: TrackRecordRespons
       </div>
       {(trackRecord.by_mode_30d ?? []).length > 0 && (
         <div className="mb-3">
-          <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">By Mode · 30d</p>
+          <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-2">By Mode · 30d</p>
           <div className="flex flex-wrap gap-2">
             {(trackRecord.by_mode_30d ?? []).map(m => {
               const mExp = toNum(m.exp)
@@ -410,11 +436,11 @@ function GradeValidationStrip() {
   if (empirical.length === 0 && heuristic.length === 0) return null
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3">
-      <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2.5">Grade Validation · Historical Win Rates</p>
+      <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-2.5">Grade Validation · Historical Win Rates</p>
       <div className="space-y-2">
         {empirical.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[9px] text-emerald-500 uppercase tracking-wider shrink-0 w-14">Empirical</span>
+            <span className="text-[10px] text-emerald-500 shrink-0 w-14">Empirical</span>
             {empirical.map(g => (
               <span key={g.grade ?? 'unknown'} className={cn('text-[10px] px-2 py-0.5 rounded border font-mono', GRADE_STYLE[g.grade?.charAt(0) ?? ''] ?? 'text-zinc-400 border-zinc-700 bg-zinc-800')}
                 title={`n=${g.n} · Exp: ${g.exp != null ? (Number(g.exp) > 0 ? '+' : '') + Number(g.exp).toFixed(2) + 'R' : '—'} · PF: ${g.pf != null ? Number(g.pf).toFixed(1) : '—'}`}>
@@ -425,7 +451,7 @@ function GradeValidationStrip() {
         )}
         {heuristic.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[9px] text-zinc-500 uppercase tracking-wider shrink-0 w-14">Heuristic</span>
+            <span className="text-[10px] text-zinc-500 shrink-0 w-14">Heuristic</span>
             {heuristic.map(g => (
               <span key={g.grade} className="text-[10px] px-2 py-0.5 rounded border font-mono text-zinc-400 border-zinc-700"
                 title={`n=${g.n} · Exp: ${g.exp != null ? (Number(g.exp) > 0 ? '+' : '') + Number(g.exp).toFixed(2) + 'R' : '—'}`}>
@@ -517,294 +543,275 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
   const hasMoreDetails = secondaryFields.length > 0 || hasTechnical || hasFutures || hasExtTech ||
     !!(aiContCase || aiCautionCase || hasAI || contCase)
 
-  if (primaryFields.length === 0 && !hasAI && !hasSetup && qs == null && !hasEmpiricalData) {
+  const hasIntelSection = primaryFields.length > 0 || secondaryFields.length > 0
+  const hasTechSection  = hasTechnical || hasExtTech || hasFutures || hasSetup
+  const hasAiSection    = !!(aiContCase || aiCautionCase || hasAI || contCase)
+  const hasQualitySection = hasEmpiricalData || qs != null || rs != null || slDistPct != null || tpDistPct != null || hasWhySection || aiSummary || hasRisksStrengths
+
+  if (!hasQualitySection && !hasIntelSection && !hasTechSection && !hasAiSection) {
     return (
-      <div className="border-t border-zinc-800 px-4 py-3 text-[11px] text-zinc-600">
+      <div className="border-t border-zinc-800 px-4 py-3 text-xs text-zinc-600">
         No intelligence data available for this signal.
       </div>
     )
   }
 
   return (
-    <div className="border-t border-zinc-800 px-4 py-3 space-y-2.5">
-      {/* 1. Empirical Trust */}
-      {hasEmpiricalData && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 rounded-lg bg-zinc-800/40 border border-zinc-700/50">
-          <span className="text-[10px] text-zinc-500 uppercase tracking-widest shrink-0">Empirical</span>
-          {sig.empiricalWr != null && (
-            <span className={`text-[11px] font-mono font-bold ${sig.empiricalWr >= 55 ? 'text-emerald-400' : sig.empiricalWr >= 45 ? 'text-blue-400' : 'text-amber-400'}`}>
-              {sig.empiricalWr.toFixed(0)}% WR
-            </span>
-          )}
-          {sig.empiricalN != null && (
-            <span className="text-[10px] text-zinc-500 font-mono">n={sig.empiricalN}</span>
-          )}
-          {sig.empiricalGrade && (
-            <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded border', GRADE_STYLE[sig.empiricalGrade.charAt(0)] ?? 'text-zinc-500 border-zinc-700 bg-zinc-800')}>
-              Emp {sig.empiricalGrade}
-            </span>
-          )}
-        </div>
-      )}
-      {/* 2. Quality + Risk + trade distances */}
-      {(qs != null || rs != null || slDistPct || tpDistPct) && (
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
-          {qs != null && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Quality</span>
-              <div className="flex items-center gap-1.5">
-                <div className="w-14 h-1 bg-zinc-700 rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full ${qs >= 70 ? 'bg-emerald-400' : qs >= 50 ? 'bg-blue-400' : 'bg-amber-400'}`}
-                    style={{ width: `${Math.min(100, qs)}%` }} />
-                </div>
-                <span className={`text-[11px] font-mono font-semibold ${qs >= 70 ? 'text-emerald-400' : qs >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>
-                  {Math.round(qs)}/100
+    <div className="border-t border-zinc-800 px-4 py-3 space-y-3 divide-y divide-zinc-800/60">
+
+      {/* ── Section 1: Signal Quality (always open) ── */}
+      {hasQualitySection && (
+        <div className="space-y-2 pt-1 first:pt-0">
+          <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide">Signal Quality</p>
+
+          {/* Empirical trust row */}
+          {hasEmpiricalData && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-1.5 rounded-lg bg-zinc-800/40 border border-zinc-700/50">
+              <span className="text-[10px] text-zinc-500">Empirical</span>
+              {sig.empiricalWr != null && (
+                <span className={`text-xs font-mono font-bold ${sig.empiricalWr >= 55 ? 'text-emerald-400' : sig.empiricalWr >= 45 ? 'text-blue-400' : 'text-amber-400'}`}>
+                  {sig.empiricalWr.toFixed(0)}% WR
                 </span>
-              </div>
+              )}
+              {sig.empiricalN != null && <span className="text-[10px] text-zinc-500 font-mono">n={sig.empiricalN}</span>}
+              {sig.empiricalGrade && (
+                <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded border', GRADE_STYLE[sig.empiricalGrade.charAt(0)] ?? 'text-zinc-500 border-zinc-700 bg-zinc-800')}>
+                  Emp {sig.empiricalGrade}
+                </span>
+              )}
             </div>
           )}
-          {rs != null && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Risk</span>
-              <span className={`text-[11px] font-mono font-semibold ${rs <= 25 ? 'text-emerald-400' : rs <= 45 ? 'text-blue-400' : rs <= 60 ? 'text-amber-400' : 'text-red-400'}`}>
-                {Math.round(rs)}/100
-              </span>
-            </div>
-          )}
-          {tpDistPct && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">TP dist</span>
-              <span className="text-[11px] font-mono font-semibold text-emerald-400">{tpDistPct}</span>
-            </div>
-          )}
-          {slDistPct && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">SL dist</span>
-              <span className="text-[11px] font-mono font-semibold text-red-400">{slDistPct}</span>
-            </div>
-          )}
-        </div>
-      )}
-      {/* 3. Primary intel: Breakout + OI + Regime + ADX */}
-      {primaryFields.length > 0 && (
-        <div className="flex flex-wrap gap-x-5 gap-y-1.5">
-          {primaryFields.map((f, i) => (
-            <div key={i} className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{f.label}</span>
-              <span className={cn('text-[11px] font-mono font-semibold', f.color ?? 'text-zinc-300')}>{f.value}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      {/* 4. Why this signal */}
-      {hasWhySection && (
-        <div className="flex flex-wrap gap-x-5 gap-y-1.5">
-          {contProb != null && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Continuation</span>
-              <span className={`text-[11px] font-mono font-semibold ${contProb >= 60 ? 'text-emerald-400' : contProb >= 40 ? 'text-amber-400' : 'text-red-400'}`}>
-                {contProb}%
-              </span>
-            </div>
-          )}
-          {iq != null && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Entry Quality</span>
-              <span className={`text-[11px] font-mono font-semibold ${iq >= 70 ? 'text-emerald-400' : iq >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>
-                {Math.round(iq)}/100
-              </span>
-            </div>
-          )}
-          {iScore != null && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Institutional</span>
-              <span className={`text-[11px] font-mono font-semibold ${iScore >= 70 ? 'text-emerald-400' : iScore >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>
-                {Math.round(iScore)}/100
-              </span>
-            </div>
-          )}
-          {ras != null && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Regime Adj</span>
-              <span className={`text-[11px] font-mono font-semibold ${ras >= 5 ? 'text-emerald-400' : ras >= 0 ? 'text-zinc-300' : 'text-amber-400'}`}>
-                {ras > 0 ? '+' : ''}{Math.round(ras)}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-      {/* 5. AI summary + strengths/risks (max 2 each) */}
-      {(aiSummary || hasRisksStrengths) && (
-        <div className="space-y-1.5">
-          {aiSummary && (
-            <p className="text-[11px] text-zinc-300 font-medium leading-snug">{aiSummary}</p>
-          )}
-          {hasRisksStrengths && (
-            <div className="space-y-1">
-              {(sig.strengths?.length ?? 0) > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {sig.strengths!.slice(0, 2).map((s, i) => (
-                    <span key={i} className="text-[9px] text-emerald-400/80 border border-emerald-500/20 bg-emerald-500/5 px-1.5 py-0.5 rounded">
-                      ✓ {s}
-                    </span>
-                  ))}
+
+          {/* Quality / Risk / TP-SL dist */}
+          {(qs != null || rs != null || slDistPct || tpDistPct) && (
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+              {qs != null && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-zinc-500">Quality</span>
+                  <div className="w-14 h-1 bg-zinc-700 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${qs >= 70 ? 'bg-emerald-400' : qs >= 50 ? 'bg-blue-400' : 'bg-amber-400'}`} style={{ width: `${Math.min(100, qs)}%` }} />
+                  </div>
+                  <span className={`text-xs font-mono font-semibold ${qs >= 70 ? 'text-emerald-400' : qs >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>{Math.round(qs)}/100</span>
                 </div>
               )}
-              {(sig.risks?.length ?? 0) > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {sig.risks!.slice(0, 2).map((r, i) => (
-                    <span key={i} className="text-[9px] text-red-400/80 border border-red-500/20 bg-red-500/5 px-1.5 py-0.5 rounded">
-                      ⚠ {r}
-                    </span>
-                  ))}
+              {rs != null && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-zinc-500">Risk</span>
+                  <span className={`text-xs font-mono font-semibold ${rs <= 25 ? 'text-emerald-400' : rs <= 45 ? 'text-blue-400' : rs <= 60 ? 'text-amber-400' : 'text-red-400'}`}>{Math.round(rs)}/100</span>
+                </div>
+              )}
+              {tpDistPct && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-zinc-500">TP dist</span>
+                  <span className="text-xs font-mono font-semibold text-emerald-400">{tpDistPct}</span>
+                </div>
+              )}
+              {slDistPct && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-zinc-500">SL dist</span>
+                  <span className="text-xs font-mono font-semibold text-red-400">{slDistPct}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Why scores */}
+          {hasWhySection && (
+            <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+              {contProb != null && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-zinc-500">Continuation</span>
+                  <span className={`text-xs font-mono font-semibold ${contProb >= 60 ? 'text-emerald-400' : contProb >= 40 ? 'text-amber-400' : 'text-red-400'}`}>{contProb}%</span>
+                </div>
+              )}
+              {iq != null && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-zinc-500">Entry Quality</span>
+                  <span className={`text-xs font-mono font-semibold ${iq >= 70 ? 'text-emerald-400' : iq >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>{Math.round(iq)}/100</span>
+                </div>
+              )}
+              {iScore != null && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-zinc-500">Institutional</span>
+                  <span className={`text-xs font-mono font-semibold ${iScore >= 70 ? 'text-emerald-400' : iScore >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>{Math.round(iScore)}/100</span>
+                </div>
+              )}
+              {ras != null && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-zinc-500">Regime Adj</span>
+                  <span className={`text-xs font-mono font-semibold ${ras >= 5 ? 'text-emerald-400' : ras >= 0 ? 'text-zinc-300' : 'text-amber-400'}`}>{ras > 0 ? '+' : ''}{Math.round(ras)}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* AI summary + strengths / risks */}
+          {(aiSummary || hasRisksStrengths) && (
+            <div className="space-y-1.5">
+              {aiSummary && <p className="text-xs text-zinc-300 font-medium leading-snug">{aiSummary}</p>}
+              {hasRisksStrengths && (
+                <div className="space-y-1">
+                  {(sig.strengths?.length ?? 0) > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {sig.strengths!.slice(0, 2).map((s, i) => (
+                        <span key={i} className="text-[10px] text-emerald-400/80 border border-emerald-500/20 bg-emerald-500/5 px-1.5 py-0.5 rounded">✓ {s}</span>
+                      ))}
+                    </div>
+                  )}
+                  {(sig.risks?.length ?? 0) > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {sig.risks!.slice(0, 2).map((r, i) => (
+                        <span key={i} className="text-[10px] text-red-400/80 border border-red-500/20 bg-red-500/5 px-1.5 py-0.5 rounded">⚠ {r}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )}
         </div>
       )}
-      {/* 6. Setup description */}
-      {hasSetup && (
-        <p className="text-[10px] text-zinc-500 leading-relaxed border-l-2 border-zinc-800 pl-2.5 font-mono">
-          {sig.setupDescription!.replace(/\s*\|\s*ADX:.*$/i, '')}
-        </p>
-      )}
-      {/* More Details — collapsed by default */}
-      {hasMoreDetails && (
-        <details className="group">
-          <summary className="list-none flex items-center gap-2 cursor-pointer select-none text-[10px] text-zinc-500 hover:text-zinc-400 transition-colors pt-0.5">
-            <span className="group-open:hidden">▸</span>
-            <span className="hidden group-open:inline">▾</span>
-            <span className="uppercase tracking-wider">More Details</span>
+
+      {/* ── Section 2: Intelligence (collapsible, default open) ── */}
+      {hasIntelSection && (
+        <details open className="group pt-2.5">
+          <summary className="list-none flex items-center justify-between cursor-pointer select-none mb-1.5">
+            <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide">Intelligence</span>
+            <span className="text-[10px] text-zinc-600 group-open:hidden">▸ show</span>
+            <span className="text-[10px] text-zinc-600 hidden group-open:block">▾ hide</span>
           </summary>
-          <div className="pt-2.5 space-y-2.5">
-            {/* Secondary intel */}
-            {secondaryFields.length > 0 && (
+          <div className="space-y-1.5">
+            {primaryFields.length > 0 && (
               <div className="flex flex-wrap gap-x-5 gap-y-1.5">
-                {secondaryFields.map((f, i) => (
+                {primaryFields.map((f, i) => (
                   <div key={i} className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{f.label}</span>
-                    <span className={cn('text-[11px] font-mono font-semibold', f.color ?? 'text-zinc-300')}>{f.value}</span>
+                    <span className="text-[10px] text-zinc-500">{f.label}</span>
+                    <span className={cn('text-xs font-mono font-semibold', f.color ?? 'text-zinc-300')}>{f.value}</span>
                   </div>
                 ))}
               </div>
             )}
-            {/* Technical */}
+            {secondaryFields.length > 0 && (
+              <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+                {secondaryFields.map((f, i) => (
+                  <div key={i} className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-zinc-500">{f.label}</span>
+                    <span className={cn('text-xs font-mono font-semibold', f.color ?? 'text-zinc-300')}>{f.value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </details>
+      )}
+
+      {/* ── Section 3: Technical (collapsible, default closed) ── */}
+      {hasTechSection && (
+        <details className="group pt-2.5">
+          <summary className="list-none flex items-center justify-between cursor-pointer select-none mb-1.5">
+            <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide">Technical</span>
+            <span className="text-[10px] text-zinc-600 group-open:hidden">▸ show</span>
+            <span className="text-[10px] text-zinc-600 hidden group-open:block">▾ hide</span>
+          </summary>
+          <div className="space-y-2">
             {hasTechnical && (
               <div className="flex flex-wrap gap-x-5 gap-y-1.5">
                 {rsi != null && rsi > 0 && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">RSI 1h</span>
-                    <span className={`text-[11px] font-mono font-semibold ${rsi >= 70 ? 'text-red-400' : rsi >= 60 ? 'text-amber-400' : rsi <= 30 ? 'text-green-400' : rsi <= 40 ? 'text-emerald-400' : 'text-zinc-300'}`}>
-                      {rsi.toFixed(1)}
-                    </span>
+                    <span className="text-[10px] text-zinc-500">RSI 1h</span>
+                    <span className={`text-xs font-mono font-semibold ${rsi >= 70 ? 'text-red-400' : rsi >= 60 ? 'text-amber-400' : rsi <= 30 ? 'text-green-400' : rsi <= 40 ? 'text-emerald-400' : 'text-zinc-300'}`}>{rsi.toFixed(1)}</span>
                   </div>
                 )}
                 {volumeSpike != null && volumeSpike > 0 && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Vol Spike</span>
-                    <span className={`text-[11px] font-mono font-semibold ${volumeSpike >= 2.5 ? 'text-emerald-400' : volumeSpike >= 1.5 ? 'text-blue-400' : volumeSpike < 0.8 ? 'text-red-400' : 'text-zinc-300'}`}>
-                      {volumeSpike.toFixed(1)}×
-                    </span>
+                    <span className="text-[10px] text-zinc-500">Vol Spike</span>
+                    <span className={`text-xs font-mono font-semibold ${volumeSpike >= 2.5 ? 'text-emerald-400' : volumeSpike >= 1.5 ? 'text-blue-400' : volumeSpike < 0.8 ? 'text-red-400' : 'text-zinc-300'}`}>{volumeSpike.toFixed(1)}×</span>
                   </div>
                 )}
               </div>
             )}
-            {/* Extended technical */}
             {hasExtTech && (
               <div className="flex flex-wrap gap-x-5 gap-y-1.5 items-center">
                 {ema200Pos && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">EMA200</span>
-                    <span className={`text-[11px] font-mono font-semibold ${ema200Pos === 'ABOVE' ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {ema200Pos} {ema200Pos === 'ABOVE' ? '↑' : '↓'}
-                    </span>
+                    <span className="text-[10px] text-zinc-500">EMA200</span>
+                    <span className={`text-xs font-mono font-semibold ${ema200Pos === 'ABOVE' ? 'text-emerald-400' : 'text-red-400'}`}>{ema200Pos} {ema200Pos === 'ABOVE' ? '↑' : '↓'}</span>
                   </div>
                 )}
                 {candlePat && candlePat !== 'NONE' && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Pattern</span>
-                    <span className="text-[11px] font-mono font-semibold text-blue-400">{candlePat.replace(/_/g, ' ')}</span>
+                    <span className="text-[10px] text-zinc-500">Pattern</span>
+                    <span className="text-xs font-mono font-semibold text-blue-400">{candlePat.replace(/_/g, ' ')}</span>
                   </div>
                 )}
                 {bbSqueeze && (
-                  <span className="text-[10px] font-semibold text-purple-400 border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.5 rounded">
-                    ⚡ BB SQUEEZE
-                  </span>
+                  <span className="text-[10px] font-semibold text-purple-400 border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.5 rounded">⚡ BB SQUEEZE</span>
                 )}
               </div>
             )}
-            {/* Futures intelligence */}
             {hasFutures && fd && (
               <div className="flex flex-wrap gap-x-5 gap-y-1.5">
                 {fd.fundingRate != null && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Funding Rate</span>
-                    <span className={`text-[11px] font-mono font-semibold ${Math.abs(fd.fundingRate) > 0.0005 ? 'text-amber-400' : 'text-zinc-300'}`}>
+                    <span className="text-[10px] text-zinc-500">Funding Rate</span>
+                    <span className={`text-xs font-mono font-semibold ${Math.abs(fd.fundingRate) > 0.0005 ? 'text-amber-400' : 'text-zinc-300'}`}>
                       {fd.fundingRate >= 0 ? '+' : ''}{(fd.fundingRate * 100).toFixed(4)}%
                     </span>
                   </div>
                 )}
                 {fd.fundingRateAnnualized != null && Math.abs(fd.fundingRateAnnualized) > 0 && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Annualized</span>
-                    <span className={`text-[11px] font-mono font-semibold ${Math.abs(fd.fundingRateAnnualized) > 50 ? 'text-red-400' : Math.abs(fd.fundingRateAnnualized) > 20 ? 'text-amber-400' : 'text-zinc-300'}`}>
+                    <span className="text-[10px] text-zinc-500">Annualized</span>
+                    <span className={`text-xs font-mono font-semibold ${Math.abs(fd.fundingRateAnnualized) > 50 ? 'text-red-400' : Math.abs(fd.fundingRateAnnualized) > 20 ? 'text-amber-400' : 'text-zinc-300'}`}>
                       {fd.fundingRateAnnualized >= 0 ? '+' : ''}{fd.fundingRateAnnualized.toFixed(1)}%
                     </span>
                   </div>
                 )}
                 {fd.fundingBias && fd.fundingBias !== 'NEUTRAL' && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Fund Bias</span>
-                    <span className={`text-[11px] font-mono font-semibold ${fd.fundingBias === 'SHORT_HEAVY' ? 'text-emerald-400' : 'text-amber-400'}`}>
-                      {fd.fundingBias.replace('_', ' ')}
-                    </span>
+                    <span className="text-[10px] text-zinc-500">Fund Bias</span>
+                    <span className={`text-xs font-mono font-semibold ${fd.fundingBias === 'SHORT_HEAVY' ? 'text-emerald-400' : 'text-amber-400'}`}>{fd.fundingBias.replace('_', ' ')}</span>
                   </div>
                 )}
                 {fd.oiTrend && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">OI Trend</span>
-                    <span className={`text-[11px] font-mono font-semibold ${fd.oiTrend === 'RISING' ? 'text-emerald-400' : fd.oiTrend === 'FALLING' ? 'text-red-400' : 'text-zinc-400'}`}>
-                      {fd.oiTrend}
-                    </span>
+                    <span className="text-[10px] text-zinc-500">OI Trend</span>
+                    <span className={`text-xs font-mono font-semibold ${fd.oiTrend === 'RISING' ? 'text-emerald-400' : fd.oiTrend === 'FALLING' ? 'text-red-400' : 'text-zinc-400'}`}>{fd.oiTrend}</span>
                   </div>
                 )}
                 {fd.oiChange24h != null && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">OI 24h</span>
-                    <span className={`text-[11px] font-mono font-semibold ${fd.oiChange24h > 5 ? 'text-emerald-400' : fd.oiChange24h < -5 ? 'text-red-400' : 'text-zinc-300'}`}>
+                    <span className="text-[10px] text-zinc-500">OI 24h</span>
+                    <span className={`text-xs font-mono font-semibold ${fd.oiChange24h > 5 ? 'text-emerald-400' : fd.oiChange24h < -5 ? 'text-red-400' : 'text-zinc-300'}`}>
                       {fd.oiChange24h > 0 ? '+' : ''}{fd.oiChange24h.toFixed(1)}%
                     </span>
                   </div>
                 )}
                 {fd.longShortRatio != null && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">L/S Ratio</span>
-                    <span className="text-[11px] font-mono font-semibold text-zinc-300">{fd.longShortRatio.toFixed(2)}</span>
+                    <span className="text-[10px] text-zinc-500">L/S Ratio</span>
+                    <span className="text-xs font-mono font-semibold text-zinc-300">{fd.longShortRatio.toFixed(2)}</span>
                   </div>
                 )}
                 {fd.momentumScore != null && fd.momentumScore > 0 && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Momentum</span>
-                    <span className={`text-[11px] font-mono font-semibold ${fd.momentumScore >= 70 ? 'text-emerald-400' : fd.momentumScore >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>
-                      {fd.momentumScore}/100
-                    </span>
+                    <span className="text-[10px] text-zinc-500">Momentum</span>
+                    <span className={`text-xs font-mono font-semibold ${fd.momentumScore >= 70 ? 'text-emerald-400' : fd.momentumScore >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>{fd.momentumScore}/100</span>
                   </div>
                 )}
                 {sig.maxSafeLeverage != null && sig.maxSafeLeverage > 0 && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Max Lev</span>
-                    <span className="text-[11px] font-mono font-semibold text-zinc-300">{sig.maxSafeLeverage}×</span>
+                    <span className="text-[10px] text-zinc-500">Max Lev</span>
+                    <span className="text-xs font-mono font-semibold text-zinc-300">{sig.maxSafeLeverage}×</span>
                   </div>
                 )}
               </div>
             )}
-            {/* Liquidation zones */}
-            {hasFutures && fd && fd.liquidationZones && fd.liquidationZones.length > 0 && (
+            {hasFutures && fd && (fd.liquidationZones?.length ?? 0) > 0 && (
               <div className="space-y-1">
-                <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Liquidation Zones</p>
+                <p className="text-[10px] text-zinc-500">Liquidation Zones</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {fd.liquidationZones.slice(0, 4).map((z, i) => (
+                  {fd.liquidationZones!.slice(0, 4).map((z, i) => (
                     <span key={i} className={`text-[10px] font-mono px-2 py-0.5 rounded border ${z.side === 'LONG_LIQ' ? 'text-red-400 border-red-500/20 bg-red-500/5' : 'text-emerald-400 border-emerald-500/20 bg-emerald-500/5'}`}>
                       {z.side === 'LONG_LIQ' ? '↓' : '↑'} ${z.price.toFixed(2)} · {z.distancePct.toFixed(1)}% away
                       {z.strength !== 'WEAK' && <span className="ml-1 opacity-60">({z.strength.toLowerCase()})</span>}
@@ -813,30 +820,42 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
                 </div>
               </div>
             )}
-            {/* Continuation reason */}
+            {hasSetup && (
+              <p className="text-[10px] text-zinc-500 leading-relaxed border-l-2 border-zinc-800 pl-2.5 font-mono">
+                {sig.setupDescription!.replace(/\s*\|\s*ADX:.*$/i, '')}
+              </p>
+            )}
+          </div>
+        </details>
+      )}
+
+      {/* ── Section 4: AI Analysis (collapsible, default open) ── */}
+      {hasAiSection && (
+        <details open className="group pt-2.5">
+          <summary className="list-none flex items-center justify-between cursor-pointer select-none mb-1.5">
+            <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide">AI Analysis</span>
+            <span className="text-[10px] text-zinc-600 group-open:hidden">▸ show</span>
+            <span className="text-[10px] text-zinc-600 hidden group-open:block">▾ hide</span>
+          </summary>
+          <div className="space-y-1.5">
             {contCase && (
               <p className="text-[10px] text-zinc-500 leading-relaxed border-l-2 border-zinc-800 pl-2.5 italic">{contCase}</p>
             )}
-            {/* AI continuation + caution */}
             {(aiContCase || aiCautionCase) && (
               <div className="space-y-1.5">
-                {aiContCase && (
-                  <p className="text-[10px] text-emerald-400/75 leading-relaxed border-l-2 border-emerald-600/30 pl-2.5">↗ {aiContCase}</p>
-                )}
-                {aiCautionCase && (
-                  <p className="text-[10px] text-amber-400/75 leading-relaxed border-l-2 border-amber-600/30 pl-2.5">⚠ {aiCautionCase}</p>
-                )}
+                {aiContCase && <p className="text-[10px] text-emerald-400/75 leading-relaxed border-l-2 border-emerald-600/30 pl-2.5">↗ {aiContCase}</p>}
+                {aiCautionCase && <p className="text-[10px] text-amber-400/75 leading-relaxed border-l-2 border-amber-600/30 pl-2.5">⚠ {aiCautionCase}</p>}
               </div>
             )}
-            {/* Full AI reasoning */}
             {hasAI && (
-              <p className="text-[11px] text-zinc-400 leading-relaxed border-l-2 border-zinc-700 pl-2.5 italic">
+              <p className="text-xs text-zinc-400 leading-relaxed border-l-2 border-zinc-700 pl-2.5 italic">
                 &ldquo;{sig.aiReasoning!}&rdquo;
               </p>
             )}
           </div>
         </details>
       )}
+
     </div>
   )
 }
@@ -850,9 +869,9 @@ function MetricTile({ label, value, sub, accent = 'default' }: {
   const colors = { green:'text-green-400', red:'text-red-400', amber:'text-amber-400', blue:'text-blue-400', default:'text-white' }
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
-      <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">{label}</div>
+      <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1">{label}</div>
       <div className={`text-xl font-bold font-mono ${colors[accent]}`}>{value}</div>
-      {sub && <div className="text-[11px] text-zinc-600 mt-0.5">{sub}</div>}
+      {sub && <div className="text-[10px] text-zinc-600 mt-0.5">{sub}</div>}
     </div>
   )
 }
@@ -910,12 +929,12 @@ function dotColor(level: KpiLevel) {
 function ScorecardCell({ label, value, level, sub }: { label: string; value: string; level: KpiLevel; sub?: string }) {
   return (
     <div className="flex flex-col gap-0.5 min-w-0">
-      <span className="text-[9px] text-zinc-500 uppercase tracking-widest leading-none">{label}</span>
+      <span className="text-[10px] text-zinc-500 uppercase tracking-wide leading-none">{label}</span>
       <div className="flex items-center gap-1.5">
         <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor(level)}`} />
         <span className={`text-base font-bold font-mono leading-none ${kpiColor(level)}`}>{value}</span>
       </div>
-      {sub && <span className="text-[9px] text-zinc-600 leading-none">{sub}</span>}
+      {sub && <span className="text-[10px] text-zinc-600 leading-none">{sub}</span>}
     </div>
   )
 }
@@ -924,7 +943,7 @@ function SignalQualityScorecard({ counts, gradeAPct }: { counts: SignalCounts | 
   if (!counts || counts.resolved_7d === 0) {
     return (
       <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3">
-        <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2">Signal Quality Scorecard</p>
+        <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-2">Signal Quality Scorecard</p>
         <p className="text-zinc-600 text-xs">No resolved signals yet — scorecard updates after first resolved trade.</p>
       </div>
     )
@@ -942,7 +961,7 @@ function SignalQualityScorecard({ counts, gradeAPct }: { counts: SignalCounts | 
 
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3">
-      <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-3">Signal Quality Scorecard · 7d · {counts.resolved_7d} resolved</p>
+      <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-3">Signal Quality Scorecard · 7d · {counts.resolved_7d} resolved</p>
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <ScorecardCell label="Win Rate"       value={`${wr}%`}    level={wrLevel}  />
         <ScorecardCell label="Expectancy"     value={`${exp > 0 ? '+' : ''}${exp}R`} level={expLevel} />
@@ -972,9 +991,9 @@ function SystemStatusBanner({ celery, flags, providers }: {
   const ok = issues.length === 0
   return (
     <div className={cn('rounded-lg px-4 py-2.5 flex items-start gap-3',
-      ok ? 'bg-emerald-500/5 border border-emerald-500/20' : 'bg-amber-500/5 border border-amber-500/25')}>
-      <span className={`w-2 h-2 rounded-full shrink-0 mt-1 ${ok ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`} />
-      <span className={`text-sm ${ok ? 'text-emerald-300' : 'text-amber-300'}`}>
+      ok ? 'border border-zinc-800' : 'bg-amber-500/5 border border-amber-500/25')}>
+      <span className={`w-2 h-2 rounded-full shrink-0 mt-1 ${ok ? 'bg-zinc-600' : 'bg-amber-400 animate-pulse'}`} />
+      <span className={`text-sm ${ok ? 'text-zinc-500' : 'text-amber-300'}`}>
         {ok ? 'All Systems Operational — scanner active, Telegram enabled' : issues.join('  ·  ')}
       </span>
     </div>
@@ -987,7 +1006,7 @@ function ProviderHealthRow({ providers }: { providers: ProviderStatus[] }) {
   if (providers.length === 0) return null
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3">
-      <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2.5">Provider Health</p>
+      <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-2.5">Provider Health</p>
       <div className="flex flex-wrap gap-x-5 gap-y-2">
         {providers.map(p => (
           <div key={p.name} className="flex items-center gap-2">
@@ -1066,11 +1085,11 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-zinc-800/60 rounded-lg px-3 py-2.5">
-              <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1">Last Scan</p>
+              <p className="text-[10px] text-zinc-500 mb-1">Last Scan</p>
               <p className="text-sm font-mono font-semibold text-white">{celery?.last_scan_at ? timeAgo(celery.last_scan_at) : '—'}</p>
             </div>
             <div className="bg-zinc-800/60 rounded-lg px-3 py-2.5">
-              <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1">Next Scan</p>
+              <p className="text-[10px] text-zinc-500 mb-1">Next Scan</p>
               <p className={`text-sm font-mono font-semibold ${celery?.scanning ? 'text-blue-400' : celery?.is_overdue && celery?.enabled ? 'text-amber-400' : 'text-white'}`}>
                 {celery?.scanning ? 'Running now' : celery?.enabled && celery?.is_overdue ? 'Overdue' : celery?.enabled && countdown!==null ? fmtCd(countdown) : '—'}
               </p>
@@ -1079,7 +1098,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
 
           {/* Manual scan — mode selector + trigger */}
           <div className="mt-3 pt-3 border-t border-zinc-800/60">
-            <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-2">Manual Scan</p>
+            <p className="text-[10px] text-zinc-500 mb-2">Manual Scan</p>
             <div className="flex flex-wrap gap-1.5 mb-2.5">
               {MODES.map(m => (
                 <button key={m} onClick={() => onScanModeChange(m)}
@@ -1096,7 +1115,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
               <button onClick={onScanNow} disabled={scanning || celery?.scanning}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                   scanDone
-                    ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
+                    ? 'bg-blue-500/10 border border-blue-500/30 text-blue-400'
                     : scanning || celery?.scanning
                     ? 'bg-zinc-800 border border-zinc-700 text-zinc-500 cursor-not-allowed'
                     : 'bg-bull-default/10 border border-bull-default/30 text-bull-text hover:bg-bull-default/20'
@@ -1124,7 +1143,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
           <div className={`lg:col-span-2 rounded-xl border p-5 bg-zinc-900 h-full ${REGIME_BORDER[regime.regime]}`}>
             <div className="flex items-center gap-1.5 mb-3">
               <Activity className="w-3.5 h-3.5 text-zinc-500"/>
-              <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">Market Regime</span>
+              <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">Market Regime</span>
             </div>
             <div className={`text-2xl font-bold mb-1.5 ${REGIME_COLOR[regime.regime]}`}>{REGIME_LABEL[regime.regime]}</div>
             {REGIME_META[regime.regime] && (
@@ -1133,14 +1152,14 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
               </p>
             )}
             <div className="grid grid-cols-3 gap-2">
-              <div><p className="text-[9px] text-zinc-500 mb-0.5">RSI 4h</p><p className={`text-sm font-bold font-mono ${regime.btcRsi4h>70?'text-red-400':regime.btcRsi4h<30?'text-green-400':'text-white'}`}>{fmt(regime.btcRsi4h,1)}</p></div>
-              <div><p className="text-[9px] text-zinc-500 mb-0.5">BTC 24h</p><p className={`text-sm font-bold font-mono ${regime.btc24hChange>=0?'text-green-400':'text-red-400'}`}>{regime.btc24hChange>=0?'+':''}{fmt(regime.btc24hChange,1)}%</p></div>
-              <div><p className="text-[9px] text-zinc-500 mb-0.5">4h Trend</p>
+              <div><p className="text-[10px] text-zinc-500 mb-0.5">RSI 4h</p><p className={`text-sm font-bold font-mono ${regime.btcRsi4h>70?'text-red-400':regime.btcRsi4h<30?'text-green-400':'text-white'}`}>{fmt(regime.btcRsi4h,1)}</p></div>
+              <div><p className="text-[10px] text-zinc-500 mb-0.5">BTC 24h</p><p className={`text-sm font-bold font-mono ${regime.btc24hChange>=0?'text-green-400':'text-red-400'}`}>{regime.btc24hChange>=0?'+':''}{fmt(regime.btc24hChange,1)}%</p></div>
+              <div><p className="text-[10px] text-zinc-500 mb-0.5">4h Trend</p>
                 <p className={`text-sm font-bold flex items-center gap-0.5 ${regime.btcTrend4h==='BULLISH'?'text-green-400':regime.btcTrend4h==='BEARISH'?'text-red-400':'text-zinc-400'}`}>
                   {regime.btcTrend4h==='BULLISH' && <TrendingUp className="w-3.5 h-3.5"/>}
                   {regime.btcTrend4h==='BEARISH' && <TrendingDown className="w-3.5 h-3.5"/>}
                   {!['BULLISH','BEARISH'].includes(regime.btcTrend4h) && <Minus className="w-3.5 h-3.5"/>}
-                  <span className="text-[11px]">{regime.btcTrend4h}</span>
+                  <span className="text-xs">{regime.btcTrend4h}</span>
                 </p>
               </div>
             </div>
@@ -1166,7 +1185,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
       {signals.length > 0 && (
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Recent Signals</p>
+            <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">Recent Signals</p>
             <div className="flex items-center gap-1.5 ml-auto">
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/20 text-green-400">{signals.filter(s=>s.type==='BUY').length} BUY</span>
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400">{signals.filter(s=>s.type==='SELL').length} SELL</span>
@@ -1188,7 +1207,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
                       <ConfBar confidence={sig.confidence} />
                       <span className="text-xs font-mono text-zinc-300 hidden sm:block">{sig.confidence}%</span>
                       <span className="text-xs font-mono text-zinc-500 hidden sm:block">{sig.rrRatio?.toFixed(1) ?? '—'}:1</span>
-                      <span className="text-[11px] text-zinc-600 tabular-nums">{sig.createdAt?timeAgo(String(sig.createdAt)):'—'}</span>
+                      <span className="text-xs text-zinc-600 tabular-nums">{sig.createdAt?timeAgo(String(sig.createdAt)):'—'}</span>
                     </div>
                   </div>
                   {(sig.entryPrice > 0 || sig.targetPrice > 0 || sig.stopLoss > 0) && (
@@ -1271,12 +1290,12 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
   const paginated = sorted.slice(page * SIG_PAGE_SIZE, (page + 1) * SIG_PAGE_SIZE)
 
   const presetDefs = [
-    {id:'active',  label:'Active',   cls:'bg-green-500/10 border-green-500/30 text-green-300'},
-    {id:'sent',    label:'📨 Sent',  cls:'bg-blue-500/10 border-blue-500/30 text-blue-300'},
-    {id:'won',     label:'✓ Won',    cls:'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'},
-    {id:'lost',    label:'✗ Lost',   cls:'bg-red-500/10 border-red-500/30 text-red-300'},
-    {id:'expired', label:'Expired',  cls:'bg-zinc-500/10 border-zinc-600/30 text-zinc-400'},
-    {id:'all',     label:'All',      cls:'border-zinc-600 text-zinc-300'},
+    {id:'active',  label:'Active'},
+    {id:'sent',    label:'Sent'},
+    {id:'won',     label:'Won'},
+    {id:'lost',    label:'Lost'},
+    {id:'expired', label:'Expired'},
+    {id:'all',     label:'All'},
   ]
   const getPresetCount = (id: string) => {
     if (!signals) return 0
@@ -1289,12 +1308,16 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
       {/* Lifecycle funnel */}
       <LifecycleFunnel signals={signals??[]} />
 
-      {/* Preset buttons */}
-      <div className="flex gap-2 flex-wrap">
+      {/* Preset pills */}
+      <div className="flex gap-1.5 flex-wrap">
         {presetDefs.map(p=>(
           <button key={p.id} onClick={()=>setPreset(p.id as typeof preset)}
-            className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${preset===p.id?p.cls:'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
-            {p.label} {signals?`(${getPresetCount(p.id)})` :''}
+            className={`text-xs px-3 py-1.5 rounded-full transition-all ${
+              preset===p.id
+                ? 'bg-zinc-700 border border-zinc-600 text-zinc-100 font-medium'
+                : 'text-zinc-500 hover:text-zinc-300'
+            }`}>
+            {p.label}{signals ? ` (${getPresetCount(p.id)})` : ''}
           </button>
         ))}
       </div>
@@ -1309,7 +1332,7 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
         />
         <div className="w-px bg-zinc-800 h-4"/>
         {/* Sort */}
-        <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Sort:</span>
+        <span className="text-[10px] text-zinc-500">Sort:</span>
         {(['confidence','grade','rr','time'] as const).map(s=>(
           <button key={s} onClick={()=>setSortBy(s)}
             className={`text-xs px-2.5 py-1 rounded border transition-colors ${sortBy===s?'bg-zinc-700 border-zinc-600 text-white':'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
@@ -1335,6 +1358,7 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
       </div>
 
       <StageLegend />
+      <ConfidenceBar signals={sorted} />
 
       {loading && <div className="space-y-2">{Array.from({length:5}).map((_,i)=><div key={i} className="skeleton h-14 rounded-xl"/>)}</div>}
       {!loading && sorted.length === 0 && (
@@ -1353,19 +1377,17 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
               <div className="px-4 pt-3 pb-2 flex items-center gap-3 cursor-pointer select-none"
                 onClick={()=>setExpandedId(isExpanded ? null : rowId)}>
                 <span className="font-semibold text-sm text-white w-20 shrink-0">{sig.symbol}</span>
-                <span className={`text-xs font-semibold w-8 shrink-0 ${isBuy?'text-green-400':'text-red-400'}`}>{sig.type}</span>
+                <span className={`text-sm font-bold w-8 shrink-0 ${isBuy?'text-emerald-400':'text-red-400'}`}>{sig.type}</span>
                 {sig.riskGrade && <GradeBadge grade={sig.riskGrade} />}
                 <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>
                   {STAGE_META[sig.lifecycleStage]?.label ?? (sig.lifecycleStage??'').replace(/_/g,' ')}
                 </span>
-                <FreshnessTag sig={sig} />
                 {sig.scannerMode && (
                   <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 hidden sm:inline ${MODE_COLORS[sig.scannerMode]??'text-zinc-400 border-zinc-600'}`}>
                     {sig.scannerMode.replace('_',' ')}
                   </span>
                 )}
                 <div className="ml-auto flex items-center gap-2.5 shrink-0">
-                  <RegimeAlignDot alignment={alignment} />
                   {sig.empiricalWr != null && (
                     <span className={`text-[10px] px-1.5 py-0.5 rounded border font-mono hidden md:inline ${
                       sig.empiricalWr >= 55 ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/5'
@@ -1375,10 +1397,9 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
                       P {sig.empiricalWr.toFixed(0)}%
                     </span>
                   )}
-                  <ConfBar confidence={sig.confidence} />
                   <span className="text-xs font-mono text-zinc-300 hidden sm:block w-8 text-right">{sig.confidence}%</span>
                   <span className="text-xs font-mono text-zinc-500 hidden sm:block">{sig.rrRatio?.toFixed(1) ?? '—'}:1</span>
-                  <span className="text-[11px] text-zinc-600 tabular-nums">{sig.createdAt?timeAgo(String(sig.createdAt)):'—'}</span>
+                  <span className="text-xs text-zinc-600 tabular-nums">{sig.createdAt?timeAgo(String(sig.createdAt)):'—'}</span>
                   <ChevronDown className={`w-3.5 h-3.5 text-zinc-600 transition-transform shrink-0 ${isExpanded?'rotate-180':''}`} />
                 </div>
               </div>
@@ -1511,7 +1532,7 @@ function CoinWatchlist({ signals }: { signals: TacticalSignalRow[] }) {
       </div>
 
       {coins.length === 0 ? (
-        <p className="text-[11px] text-zinc-600 text-center py-2">No coins yet — type a symbol above and press Enter</p>
+        <p className="text-[10px] text-zinc-600 text-center py-2">No coins yet — type a symbol above and press Enter</p>
       ) : (
         <div className="space-y-1.5">
           {coins.map(sym => {
@@ -1532,7 +1553,7 @@ function CoinWatchlist({ signals }: { signals: TacticalSignalRow[] }) {
                   <span className="text-[10px] text-zinc-600 flex-1">No recent signal</span>
                 )}
                 <button onClick={() => remove(sym)}
-                  className="ml-auto text-zinc-700 hover:text-zinc-400 text-[11px] shrink-0 transition-colors">✕</button>
+                  className="ml-auto text-zinc-700 hover:text-zinc-400 text-xs shrink-0 transition-colors">✕</button>
               </div>
             )
           })}
@@ -1562,7 +1583,7 @@ function AlphaWatchlist() {
   return (
     <div className="mt-2">
       <div className="flex items-center gap-2 mb-2">
-        <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Alpha Watchlist</p>
+        <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">Alpha Watchlist</p>
         <span className="text-[10px] text-zinc-600">Validated · not yet alerted · sorted by empirical WR</span>
         {signals.length > 0 && (
           <span className="ml-auto text-[10px] text-zinc-600">{signals.length} signals</span>
@@ -1577,7 +1598,7 @@ function AlphaWatchlist() {
       {signals.length > 0 && (
         <div className="space-y-1">
           {signals.map(s => (
-            <div key={s.id} className="bg-zinc-900/60 border border-zinc-800/70 rounded-lg px-4 py-2 flex items-center gap-3 flex-wrap text-[11px]">
+            <div key={s.id} className="bg-zinc-900/60 border border-zinc-800/70 rounded-lg px-4 py-2 flex items-center gap-3 flex-wrap text-xs">
               <span className="font-semibold text-white w-20 shrink-0">{s.symbol}</span>
               <span className={`font-semibold w-8 shrink-0 ${s.type==='BUY'?'text-green-400':'text-red-400'}`}>{s.type}</span>
               {s.risk_grade && (
@@ -1641,7 +1662,7 @@ function LifecycleFunnel({ signals }: { signals: TacticalSignalRow[] }) {
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-y-1">
-        <p className="text-[9px] text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
+        <p className="text-[10px] text-zinc-500 uppercase tracking-wide flex items-center gap-1.5">
           <BarChart2 className="w-3 h-3"/>Pipeline · last {signals.length} signals
         </p>
         <div className="flex items-center gap-2">
@@ -1666,7 +1687,7 @@ function LifecycleFunnel({ signals }: { signals: TacticalSignalRow[] }) {
             <div key={step.label} className="flex items-center flex-1 min-w-0">
               <div className="flex-1 min-w-0 bg-zinc-800/50 border border-zinc-700/40 rounded-lg px-2 py-2.5 text-center">
                 <div className="text-xl font-bold font-mono text-white leading-none">{step.count}</div>
-                <div className="text-[9px] text-zinc-500 uppercase tracking-wider mt-1 leading-tight">{step.label}</div>
+                <div className="text-[10px] text-zinc-500 mt-1 leading-tight">{step.label}</div>
                 {conv !== null && (
                   <div className={`text-[10px] font-semibold mt-0.5 ${convColor(step.count, prev)}`}>{conv}%</div>
                 )}
@@ -1679,23 +1700,23 @@ function LifecycleFunnel({ signals }: { signals: TacticalSignalRow[] }) {
 
       {/* Outcomes row */}
       <div className="flex items-center gap-3 pt-2.5 border-t border-zinc-800/60 flex-wrap">
-        <span className="text-[9px] text-zinc-600 uppercase tracking-wider font-semibold shrink-0">Outcomes</span>
+        <span className="text-[10px] text-zinc-600 font-semibold shrink-0">Outcomes</span>
         <div className="flex items-center gap-4 flex-1 flex-wrap">
           <div className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"/>
             <span className="text-sm font-bold font-mono text-emerald-400">{won}</span>
-            <span className="text-[9px] text-zinc-500">Won</span>
+            <span className="text-[10px] text-zinc-500">Won</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0"/>
             <span className="text-sm font-bold font-mono text-red-400">{lost}</span>
-            <span className="text-[9px] text-zinc-500">Lost</span>
+            <span className="text-[10px] text-zinc-500">Lost</span>
           </div>
           {expired > 0 && (
             <div className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 shrink-0"/>
               <span className="text-sm font-bold font-mono text-zinc-400">{expired}</span>
-              <span className="text-[9px] text-zinc-500">Expired</span>
+              <span className="text-[10px] text-zinc-500">Expired</span>
             </div>
           )}
         </div>
@@ -1877,7 +1898,7 @@ function RegimeHardGateCard({ counts24h }: { counts24h: Record<string, number> }
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <ShieldAlert className="w-4 h-4 text-zinc-500"/>
-          <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">Regime Hard Gate V2</p>
+          <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">Regime Hard Gate V2</p>
           <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${
             enabled === null ? 'text-zinc-500 border-zinc-700'
             : enabled ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
@@ -1898,15 +1919,15 @@ function RegimeHardGateCard({ counts24h }: { counts24h: Record<string, number> }
       </p>
       <div className="flex gap-6 flex-wrap">
         <div>
-          <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">24h Rejections</p>
+          <p className="text-[10px] text-zinc-500 mb-0.5">24h Rejections</p>
           <p className="text-lg font-bold font-mono text-red-400">{rej24h}</p>
         </div>
         <div>
-          <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">7d Rejections</p>
+          <p className="text-[10px] text-zinc-500 mb-0.5">7d Rejections</p>
           <p className="text-lg font-bold font-mono text-red-400">{count7d ?? '—'}</p>
         </div>
         <div>
-          <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Est. Avoided Loss (7d)</p>
+          <p className="text-[10px] text-zinc-500 mb-0.5">Est. Avoided Loss (7d)</p>
           <p className="text-lg font-bold font-mono text-emerald-400">
             {avoided7d != null ? `+${avoided7d.toFixed(1)}R` : '—'}
           </p>
@@ -1977,7 +1998,7 @@ function RegimeTab({ regime, scanStats, regimePerfData }: {
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Target className="w-4 h-4 text-zinc-500"/>
-              <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">Current Regime</span>
+              <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">Current Regime</span>
             </div>
             <span className="text-[10px] text-zinc-600 font-mono">{new Date(regime.computedAt).toLocaleTimeString()}</span>
           </div>
@@ -1991,20 +2012,20 @@ function RegimeTab({ regime, scanStats, regimePerfData }: {
           {currentPerfRow && (
             <div className="mt-3 pt-3 border-t border-zinc-800 flex gap-5 flex-wrap">
               <div>
-                <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Win Rate (7d)</p>
+                <p className="text-[10px] text-zinc-500 mb-0.5">Win Rate (7d)</p>
                 <p className={`text-sm font-bold font-mono ${(currentPerfRow.win_rate??0)>=0.48?'text-emerald-400':(currentPerfRow.win_rate??0)>=0.38?'text-amber-400':'text-red-400'}`}>
                   {currentPerfRow.win_rate != null ? `${Math.round(currentPerfRow.win_rate*100)}%` : '—'}
                 </p>
               </div>
               <div>
-                <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Expectancy</p>
+                <p className="text-[10px] text-zinc-500 mb-0.5">Expectancy</p>
                 <p className={`text-sm font-bold font-mono ${(currentPerfRow.expectancy??0)>0?'text-emerald-400':(currentPerfRow.expectancy??0)>-0.1?'text-amber-400':'text-red-400'}`}>
                   {currentPerfRow.expectancy != null ? `${Number(currentPerfRow.expectancy)>0?'+':''}${Number(currentPerfRow.expectancy).toFixed(2)}R` : '—'}
                 </p>
               </div>
               {currentPerfRow.n != null && (
                 <div>
-                  <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Sample</p>
+                  <p className="text-[10px] text-zinc-500 mb-0.5">Sample</p>
                   <p className="text-sm font-bold font-mono text-zinc-300">n={currentPerfRow.n}</p>
                 </div>
               )}
@@ -2020,23 +2041,23 @@ function RegimeTab({ regime, scanStats, regimePerfData }: {
         {/* Regime Gate Effectiveness */}
         {scanStats && scanStats.total_scans > 0 && (
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-            <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-3">Regime Gate · Last 24h ({scanStats.total_scans} scans)</p>
+            <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-3">Regime Gate · Last 24h ({scanStats.total_scans} scans)</p>
             <div className="flex flex-wrap gap-5">
               {regimeBlocked > 0 && (
                 <div>
-                  <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Blocked (contra-regime)</p>
+                  <p className="text-[10px] text-zinc-500 mb-0.5">Blocked (contra-regime)</p>
                   <p className="text-lg font-bold font-mono text-red-400">{regimeBlocked}</p>
                 </div>
               )}
               {totalAllowed > 0 && (
                 <div>
-                  <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Allowed</p>
+                  <p className="text-[10px] text-zinc-500 mb-0.5">Allowed</p>
                   <p className="text-lg font-bold font-mono text-emerald-400">{totalAllowed}</p>
                 </div>
               )}
               {nullBlocked > 0 && (
                 <div>
-                  <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">NULL Regime Rejected</p>
+                  <p className="text-[10px] text-zinc-500 mb-0.5">NULL Regime Rejected</p>
                   <p className="text-lg font-bold font-mono text-amber-400">{nullBlocked}</p>
                 </div>
               )}
@@ -2072,7 +2093,7 @@ function RegimeTab({ regime, scanStats, regimePerfData }: {
         {/* Regime History — distribution from performance data */}
         {perfRows.length > 0 && (
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-            <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-3">Regime Distribution · 7d Signal Sample</p>
+            <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-3">Regime Distribution · 7d Signal Sample</p>
             <div className="space-y-2">
               {perfRows.map(row => {
                 const totalPerfRows = perfRows.reduce((s, r) => s + (r.n ?? 0), 0)
@@ -2224,7 +2245,7 @@ export default function SignalsCenterPage() {
       <div className="flex gap-0 border-b border-zinc-800 -mx-1">
         {TABS.map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)}
-            className={`px-4 py-2 text-xs font-mono uppercase tracking-wider border-b-2 transition-colors ${
+            className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
               tab===t.id ? 'border-white text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'
             }`}>
             {t.label}

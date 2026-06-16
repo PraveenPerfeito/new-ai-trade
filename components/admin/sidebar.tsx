@@ -27,7 +27,7 @@ export function AdminSidebar() {
           </div>
           <div className="min-w-0">
             <p className="text-terminal-text text-sm font-semibold leading-tight tracking-wide">SignalEdge</p>
-            <p className="text-terminal-muted/50 text-[10px] uppercase tracking-[0.18em] mt-0.5">Command Center</p>
+            <p className="text-zinc-600 text-[10px] mt-0.5">Command Center</p>
           </div>
         </div>
       </div>
@@ -53,10 +53,10 @@ export function AdminSidebar() {
               <Icon size={16} strokeWidth={active ? 2.5 : 2} className="mt-0.5 shrink-0" />
               <div className="min-w-0">
                 <p className="text-sm font-semibold leading-tight truncate">{label}</p>
-                <p className="text-[10px] text-terminal-muted/50 mt-0.5 leading-tight truncate">{sub}</p>
+                <p className="text-[10px] text-zinc-600 mt-0.5 leading-tight truncate">{sub}</p>
               </div>
               {active && (
-                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-bull-default/70 animate-pulse-slow shrink-0 mt-1" />
+                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-bull-default/70 shrink-0 mt-1" />
               )}
             </Link>
           )
@@ -67,7 +67,6 @@ export function AdminSidebar() {
       <div className="px-4 py-3 border-t border-terminal-border">
         <div className="flex items-center gap-2">
           <span className="relative flex h-1.5 w-1.5 shrink-0">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-bull-default opacity-40" />
             <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-bull-default/70" />
           </span>
           <p className="text-terminal-muted/40 text-xs font-mono">Phase 7 · v1.0</p>

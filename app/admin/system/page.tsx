@@ -211,7 +211,7 @@ function PipelineIntegrityCard({
   return (
     <div className="glass-card rounded-xl p-4">
       <div className="flex items-center justify-between mb-2">
-        <p className="text-terminal-muted text-[9px] uppercase tracking-widest">Pipeline Integrity · HARDENING.1</p>
+        <p className="text-terminal-muted text-[10px] uppercase tracking-wide">Pipeline Integrity · HARDENING.1</p>
         <div className={`rounded-md px-2 py-0.5 border ${borderCls}`}>
           <span className={`font-mono font-bold text-sm ${scoreColor}`}>{score}/100</span>
         </div>
@@ -264,7 +264,7 @@ function GateRejectionGrid({ counts }: { counts?: Record<string, number> }) {
   const keys = Object.keys(GATE_REJECTION_LABELS)
   return (
     <div className="glass-card rounded-xl p-4">
-      <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-2">
+      <p className="text-terminal-muted text-[10px] uppercase tracking-wide mb-2">
         Gate Rejections - {analyticsWindowLabel(24)}
       </p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -356,7 +356,7 @@ function AdvancedOperationsAccordion({
           {/* Provider Diagnostics */}
           {providers && providers.length > 0 && (
             <div>
-              <p className="text-[9px] text-terminal-muted/50 uppercase tracking-widest mb-3">Provider Diagnostics</p>
+              <p className="text-[10px] text-terminal-muted/50 uppercase tracking-wide mb-3">Provider Diagnostics</p>
               <ProviderHealthTable providers={providers} />
             </div>
           )}
@@ -364,7 +364,7 @@ function AdvancedOperationsAccordion({
           {/* Queue & Scanner Diagnostics */}
           {monitor && (
             <div>
-              <p className="text-[9px] text-terminal-muted/50 uppercase tracking-widest mb-3">Queue & Scanner Diagnostics</p>
+              <p className="text-[10px] text-terminal-muted/50 uppercase tracking-wide mb-3">Queue & Scanner Diagnostics</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {([
                   { label: 'Scans Today',   val: monitor.metrics.scans_today.value,             lvl: monitor.metrics.scans_today.level },
@@ -377,7 +377,7 @@ function AdvancedOperationsAccordion({
                   { label: 'AI Fallback',   val: `${monitor.metrics.claude_fallback_pct.value}%`, lvl: monitor.metrics.claude_fallback_pct.level },
                 ] as { label: string; val: number | string; lvl: MonitorLevel }[]).map(({ label, val, lvl }) => (
                   <div key={label} className="glass-card rounded-lg px-3 py-2.5">
-                    <p className="text-[9px] text-terminal-muted/55 uppercase tracking-wider mb-1">{label}</p>
+                    <p className="text-[10px] text-terminal-muted/55 uppercase tracking-wider mb-1">{label}</p>
                     <p className={`text-sm font-mono font-semibold ${LEVEL_CLS[lvl]}`}>{val}</p>
                   </div>
                 ))}
@@ -388,7 +388,7 @@ function AdvancedOperationsAccordion({
           {/* Gate Rejection Diagnostics */}
           {scans && (
             <div>
-              <p className="text-[9px] text-terminal-muted/50 uppercase tracking-widest mb-3">Gate Rejection Diagnostics</p>
+              <p className="text-[10px] text-terminal-muted/50 uppercase tracking-wide mb-3">Gate Rejection Diagnostics</p>
               <PipelineIntegrityCard scans={scans} monitor={monitor ?? undefined} />
               <div className="mt-3"><GateRejectionGrid counts={scans.gate_rejections} /></div>
             </div>
@@ -396,7 +396,7 @@ function AdvancedOperationsAccordion({
 
           {/* Redis / Infra Configuration */}
           <div>
-            <p className="text-[9px] text-terminal-muted/50 uppercase tracking-widest mb-3">Redis & Infrastructure Config</p>
+            <p className="text-[10px] text-terminal-muted/50 uppercase tracking-wide mb-3">Redis & Infrastructure Config</p>
             <InfraConfigSection />
           </div>
 
@@ -471,7 +471,7 @@ function FounderOperationsCard({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {items.map(item => (
           <div key={item.label} className="bg-terminal-bg/40 rounded-lg px-3 py-2.5 border border-terminal-border/30">
-            <p className="text-[9px] text-terminal-muted/50 uppercase tracking-wider mb-1.5">{item.label}</p>
+            <p className="text-[10px] text-terminal-muted/50 uppercase tracking-wider mb-1.5">{item.label}</p>
             <div className="flex items-center gap-1.5">
               <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${sODot(item.level)}`} />
               <span className={`font-mono font-bold text-xs ${sOTxt(item.level)}`}>{item.value}</span>
@@ -482,7 +482,7 @@ function FounderOperationsCard({
 
       {/* Operational Controls (Phase B + C) */}
       <div>
-        <p className="text-[9px] text-terminal-muted/50 uppercase tracking-widest mb-2">Operational Controls</p>
+        <p className="text-[10px] text-terminal-muted/50 uppercase tracking-wide mb-2">Operational Controls</p>
         <div className="flex flex-wrap gap-2">
 
           {/* Run Scan Now (Phase C) */}
@@ -532,6 +532,9 @@ function FounderOperationsCard({
             <Activity size={11} />
             Telegram {flags === null ? '…' : flags.telegram_enabled ? 'ON' : 'OFF'}
           </button>
+
+          {/* Divider before destructive controls */}
+          <div className="w-px bg-zinc-700 self-stretch mx-1" />
 
           {/* Emergency Stop */}
           <button onClick={() => flags && onPatchFlag('features', 'emergency_stop', !flags.emergency_stop)}
@@ -660,19 +663,26 @@ function AnomaliesTab() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: 'Critical', count: counts.critical, color: 'text-bear-default',   border: 'border-bear-default/20',   bg: 'bg-bear-default/5'   },
-          { label: 'Warning',  count: counts.warning,  color: 'text-signal-high',    border: 'border-signal-high/20',    bg: 'bg-signal-high/5'    },
-          { label: 'Info',     count: counts.info,     color: 'text-signal-medium',  border: 'border-signal-medium/20',  bg: 'bg-signal-medium/5'  },
-          { label: 'Muted',    count: counts.muted,    color: 'text-zinc-500',       border: 'border-zinc-600/20',       bg: 'bg-zinc-800/20'      },
-        ].map(({ label, count, color, border, bg }) => (
-          <div key={label} className={`glass-card rounded-lg px-5 py-4 border ${border} ${bg}`}>
-            <p className="text-terminal-muted text-xs uppercase tracking-wider mb-1">{label}</p>
-            <p className={`font-mono font-bold text-3xl ${color}`}>{al ? '—' : count}</p>
-          </div>
-        ))}
-      </div>
+      {!al && counts.critical + counts.warning + counts.info + counts.muted === 0 ? (
+        <div className="glass-card rounded-lg px-5 py-4 border border-zinc-800 flex items-center gap-2.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 shrink-0" />
+          <p className="text-zinc-500 text-sm">No anomalies · System operating within normal parameters</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: 'Critical', count: counts.critical, color: 'text-bear-default',   border: 'border-bear-default/20',   bg: 'bg-bear-default/5'   },
+            { label: 'Warning',  count: counts.warning,  color: 'text-signal-high',    border: 'border-signal-high/20',    bg: 'bg-signal-high/5'    },
+            { label: 'Info',     count: counts.info,     color: 'text-signal-medium',  border: 'border-signal-medium/20',  bg: 'bg-signal-medium/5'  },
+            { label: 'Muted',    count: counts.muted,    color: 'text-zinc-500',       border: 'border-zinc-600/20',       bg: 'bg-zinc-800/20'      },
+          ].map(({ label, count, color, border, bg }) => (
+            <div key={label} className={`glass-card rounded-lg px-5 py-4 border ${border} ${bg}`}>
+              <p className="text-terminal-muted text-xs mb-1">{label}</p>
+              <p className={`font-mono font-bold text-2xl ${color}`}>{al ? '—' : count}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div>
         <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Recent Anomalies (last 96h)</p>
@@ -1002,15 +1012,16 @@ function validateField(entry: SettingEntry, value: boolean | number | string): s
 
 function valEq(a: unknown, b: unknown): boolean { return String(a) === String(b) }
 
-function Toggle({ value, onChange, disabled }: {
-  value: boolean; onChange: (v: boolean) => void; disabled?: boolean
+function Toggle({ value, onChange, disabled, danger }: {
+  value: boolean; onChange: (v: boolean) => void; disabled?: boolean; danger?: boolean
 }) {
+  const trackOn = danger ? 'bg-red-500' : 'bg-emerald-500'
   return (
     <button
       type="button" role="switch" aria-checked={value} disabled={disabled}
       onClick={() => !disabled && onChange(!value)}
       className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200
-        ${value ? 'bg-emerald-500' : 'bg-zinc-600'}
+        ${value ? trackOn : 'bg-zinc-600'}
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
     >
       <span className={`inline-block h-3.5 w-3.5 transform rounded-full shadow-md transition-transform duration-200
@@ -1066,7 +1077,7 @@ function FeatureFlagCard({ entry, value, onChange, isSaving, isSaved, error, p0N
   const modified = !valEq(value, entry.default)
   const needsAction = p0Note !== undefined && recommendedState !== undefined && value !== recommendedState
   return (
-    <div className={`glass-card rounded-lg p-4 flex items-start gap-3 transition-all border ${
+    <div className={`group glass-card rounded-lg p-4 flex items-start gap-3 transition-all border ${
       needsAction ? 'border-amber-500/50 bg-amber-500/5'
       : value ? 'border-emerald-500/30 bg-emerald-500/5'
       : 'border-zinc-700/50'
@@ -1074,7 +1085,7 @@ function FeatureFlagCard({ entry, value, onChange, isSaving, isSaved, error, p0N
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`text-sm font-mono leading-tight ${value ? 'text-terminal-text' : 'text-terminal-muted/70'}`}>{entry.label}</span>
-          <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded border font-bold tracking-wide ${
+          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border font-bold tracking-wide ${
             value ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
                   : 'bg-zinc-800/80 text-zinc-400 border-zinc-600/50'
           }`}>{value ? 'ON' : 'OFF'}</span>
@@ -1087,14 +1098,14 @@ function FeatureFlagCard({ entry, value, onChange, isSaving, isSaved, error, p0N
           {isSaving && <span className="text-xs text-terminal-muted animate-pulse">saving…</span>}
           {isSaved  && <CheckCircle2 size={10} className="text-bull-default" />}
         </div>
-        <p className={`text-xs mt-1 leading-relaxed ${value ? 'text-terminal-muted/60' : 'text-terminal-muted/45'}`}>{entry.description}</p>
+        <p className={`text-xs mt-1 leading-relaxed ${value ? 'text-terminal-muted/60' : 'text-terminal-muted/45'} ${needsAction ? '' : 'hidden group-hover:block'}`}>{entry.description}</p>
         {needsAction && p0Note && (
           <p className="text-[10px] text-amber-400/80 mt-1.5 font-mono leading-relaxed">{p0Note}</p>
         )}
         {error && <p className="text-xs text-bear-default mt-1">{error}</p>}
       </div>
       <div className="shrink-0 pt-0.5">
-        <Toggle value={value} onChange={onChange} disabled={isSaving} />
+        <Toggle value={value} onChange={onChange} disabled={isSaving} danger={entry.key === 'emergency_stop'} />
       </div>
     </div>
   )
@@ -1144,15 +1155,15 @@ function ModeCard({ mode, isActive, isApplying, disabled, onApply }: {
       <p className="text-[10px] text-terminal-muted/55 leading-relaxed mb-3">{mode.description}</p>
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <span className="text-[9px] text-terminal-muted/45 uppercase tracking-wider">Frequency</span>
+          <span className="text-[10px] text-terminal-muted/45 uppercase tracking-wider">Frequency</span>
           <DotIndicator value={mode.frequency} color={mode.color} />
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-[9px] text-terminal-muted/45 uppercase tracking-wider">Risk</span>
+          <span className="text-[10px] text-terminal-muted/45 uppercase tracking-wider">Risk</span>
           <DotIndicator value={mode.riskLevel} color={riskColor} />
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-[9px] text-terminal-muted/45 uppercase tracking-wider">Min R:R</span>
+          <span className="text-[10px] text-terminal-muted/45 uppercase tracking-wider">Min R:R</span>
           <span className="text-[10px] font-mono font-semibold" style={{ color: mode.color }}>{mode.rrExpected}</span>
         </div>
       </div>
@@ -1194,7 +1205,7 @@ function SafetyStatusCard({ settings, dirty }: {
         <span className="w-2.5 h-2.5 rounded-full bg-bull-default shrink-0" />
         <div>
           <p className="text-sm font-semibold text-terminal-text">Safety status: normal</p>
-          <p className="text-[11px] text-terminal-muted/60">AI validation, Telegram delivery, and operational switches are all in their expected states.</p>
+          <p className="text-xs text-terminal-muted/60">AI validation, Telegram delivery, and operational switches are all in their expected states.</p>
         </div>
       </div>
     )
@@ -1450,7 +1461,7 @@ function SettingsTab() {
                   </div>
                 </div>
                 <p className="text-[10px] text-terminal-muted/55 mb-1 leading-relaxed">{def.tagline}</p>
-                <p className="text-[9px] text-terminal-muted/35 mb-3 font-mono">{def.impact}</p>
+                <p className="text-[10px] text-terminal-muted/35 mb-3 font-mono">{def.impact}</p>
                 <div className="flex items-center gap-2 flex-wrap">
                   <SettingInput entry={entry} value={value} onChange={v => handleChange(entry, v)} disabled={saving.has(k)} />
                   {pct !== null && (
@@ -1537,7 +1548,7 @@ function SettingsTab() {
               <p className="text-terminal-text text-sm font-semibold">Feature Flags</p>
               {p0Pending > 0 && (
                 <>
-                  <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold">
                     {p0Pending} P0 fix{p0Pending > 1 ? 'es' : ''} pending
                   </span>
                   <button
@@ -1555,7 +1566,7 @@ function SettingsTab() {
                         await fetchSettings()
                       } catch {}
                     }}
-                    className="text-[9px] font-mono px-2.5 py-1 rounded border border-emerald-500/40 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors font-semibold"
+                    className="text-[10px] font-mono px-2.5 py-1 rounded border border-emerald-500/40 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors font-semibold"
                   >
                     ✓ Apply All Recommended
                   </button>
@@ -1566,7 +1577,7 @@ function SettingsTab() {
             {/* Signal Quality flags */}
             {qualityFlags.length > 0 && (
               <div className="space-y-2">
-                <p className="text-[9px] font-mono uppercase tracking-widest text-terminal-muted/50">Signal Quality</p>
+                <p className="text-[10px] font-mono uppercase tracking-wide text-terminal-muted/50">Signal Quality</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {qualityFlags.map(renderFlag)}
                 </div>
@@ -1576,7 +1587,7 @@ function SettingsTab() {
             {/* Operational flags */}
             {operationalFlags.length > 0 && (
               <div className="space-y-2">
-                <p className="text-[9px] font-mono uppercase tracking-widest text-terminal-muted/50">Operational</p>
+                <p className="text-[10px] font-mono uppercase tracking-wide text-terminal-muted/50">Operational</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {operationalFlags.map(renderFlag)}
                 </div>
@@ -1659,7 +1670,7 @@ function SettingsTab() {
                             {label}
                           </span>
                           {count > 0 && (
-                            <span className="text-[9px] px-1 py-0.5 rounded bg-signal-medium/20 text-signal-medium font-bold shrink-0">
+                            <span className="text-[10px] px-1 py-0.5 rounded bg-signal-medium/20 text-signal-medium font-bold shrink-0">
                               {count}
                             </span>
                           )}
@@ -1974,7 +1985,7 @@ export default function SystemPage() {
       <div className="flex gap-1 border-b border-terminal-border pb-0">
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-4 py-2 text-xs font-mono uppercase tracking-wider border-b-2 transition-colors ${tab === t.id ? 'border-terminal-text text-terminal-text' : 'border-transparent text-terminal-muted hover:text-terminal-text/70'}`}>
+            className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${tab === t.id ? 'border-terminal-text text-terminal-text' : 'border-transparent text-terminal-muted hover:text-terminal-text/70'}`}>
             {t.label}
           </button>
         ))}
@@ -2022,35 +2033,65 @@ export default function SystemPage() {
 
       {/* Service grid */}
       <div>
-        <p className="text-[9px] text-terminal-muted/50 uppercase tracking-widest mb-2.5">Service Status</p>
+        <p className="text-[10px] text-terminal-muted/50 uppercase tracking-wide mb-2.5">Service Status</p>
         {hl ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-12 rounded-lg" />)}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <ServiceCard name="Backend API" status={health?.status ?? 'unknown'} />
-            {Object.entries(health?.checks ?? {})
-              .filter(([svc]) => svc !== 'celery_worker_age_s')
-              .map(([svc, status]) => {
-                const ageS = svc === 'celery_worker' ? health?.checks?.celery_worker_age_s : undefined
-                const ageDetail = ageS ? `heartbeat ${ageS}s ago` : undefined
-                return (
-                  <ServiceCard
-                    key={svc}
-                    name={svc === 'celery_worker' ? 'Celery Worker' : svc.charAt(0).toUpperCase() + svc.slice(1).replace(/_/g, ' ')}
-                    status={status.startsWith('error:') ? 'error' : status}
-                    detail={status.startsWith('error:') ? status.slice(7) : ageDetail}
-                  />
-                )
-              })}
-          </div>
-        )}
+        ) : (() => {
+          const apiOk = ['ok', 'ready', 'HEALTHY'].includes(health?.status ?? '')
+          const checksOk = Object.entries(health?.checks ?? {})
+            .filter(([svc]) => svc !== 'celery_worker_age_s')
+            .every(([, st]) => ['ok', 'ready', 'not_configured', 'HEALTHY'].includes(st))
+          const allHealthy = apiOk && checksOk
+
+          if (allHealthy) {
+            const services = [
+              { name: 'Backend API', status: health?.status ?? 'ok' },
+              ...Object.entries(health?.checks ?? {})
+                .filter(([svc]) => svc !== 'celery_worker_age_s')
+                .map(([svc, st]) => ({
+                  name: svc === 'celery_worker' ? 'Celery Worker' : svc.charAt(0).toUpperCase() + svc.slice(1).replace(/_/g, ' '),
+                  status: st,
+                })),
+            ]
+            return (
+              <div className="flex flex-wrap gap-2 p-3 rounded-lg border border-zinc-800 bg-zinc-900/40">
+                {services.map(s => (
+                  <span key={s.name} className="flex items-center gap-1.5 text-xs text-zinc-400">
+                    <span className="w-1.5 h-1.5 rounded-full bg-bull-default shrink-0" />
+                    {s.name}
+                  </span>
+                ))}
+              </div>
+            )
+          }
+
+          return (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <ServiceCard name="Backend API" status={health?.status ?? 'unknown'} />
+              {Object.entries(health?.checks ?? {})
+                .filter(([svc]) => svc !== 'celery_worker_age_s')
+                .map(([svc, status]) => {
+                  const ageS = svc === 'celery_worker' ? health?.checks?.celery_worker_age_s : undefined
+                  const ageDetail = ageS ? `heartbeat ${ageS}s ago` : undefined
+                  return (
+                    <ServiceCard
+                      key={svc}
+                      name={svc === 'celery_worker' ? 'Celery Worker' : svc.charAt(0).toUpperCase() + svc.slice(1).replace(/_/g, ' ')}
+                      status={status.startsWith('error:') ? 'error' : status}
+                      detail={status.startsWith('error:') ? status.slice(7) : ageDetail}
+                    />
+                  )
+                })}
+            </div>
+          )
+        })()}
       </div>
 
       {/* Operational metrics */}
       <div>
-        <p className="text-[9px] text-terminal-muted/50 uppercase tracking-widest mb-2.5">Operational Metrics · {analyticsWindowLabel(24)}</p>
+        <p className="text-[10px] text-terminal-muted/50 uppercase tracking-wide mb-2.5">Operational Metrics · {analyticsWindowLabel(24)}</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <MetricCard
             label="Total Scans"
@@ -2133,7 +2174,7 @@ export default function SystemPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="glass-card rounded-xl p-4">
-              <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-2">Signals & Outcomes</p>
+              <p className="text-terminal-muted text-[10px] uppercase tracking-wide mb-2">Signals & Outcomes</p>
               <MonitorRow label={`Signals generated (${analyticsWindowLabel(monitor.metrics.signals_per_day.window_hours)})`} metric={monitor.metrics.signals_per_day} />
               <MonitorRow label="Win rate (7d)"          metric={monitor.metrics.win_rate_pct} />
               <MonitorRow label="SL rate (7d)"           metric={monitor.metrics.sl_rate_pct} />
@@ -2141,7 +2182,7 @@ export default function SystemPage() {
               <MonitorRow label="Telegram sends"         metric={monitor.metrics.telegram_sends_per_day} />
             </div>
             <div className="glass-card rounded-xl p-4">
-              <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-2">Scanner</p>
+              <p className="text-terminal-muted text-[10px] uppercase tracking-wide mb-2">Scanner</p>
               <MonitorRow label="Scans today"          metric={monitor.metrics.scans_today} />
               <MonitorRow label="Coins/run"            metric={monitor.metrics.coins_scanned_per_run} />
               <MonitorRow label="Last scan duration"   metric={monitor.metrics.scan_duration_s} />
@@ -2149,7 +2190,7 @@ export default function SystemPage() {
               <MonitorRow label="CMC credits/day"      metric={monitor.metrics.cmc_credits_per_day} />
             </div>
             <div className="glass-card rounded-xl p-4">
-              <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-2">Claude / AI</p>
+              <p className="text-terminal-muted text-[10px] uppercase tracking-wide mb-2">Claude / AI</p>
               <MonitorRow label="Claude calls"       metric={monitor.metrics.claude_calls_per_day} />
               <MonitorRow label="Heuristic calls"    metric={monitor.metrics.heuristic_calls_per_day} />
               <MonitorRow label="Fallback rate"      metric={monitor.metrics.claude_fallback_pct} />
