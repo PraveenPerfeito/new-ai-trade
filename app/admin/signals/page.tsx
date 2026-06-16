@@ -1097,9 +1097,9 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
           </div>
 
           {/* Manual scan — mode selector + trigger */}
-          <div className="mt-3 pt-3 border-t border-zinc-800/60">
-            <p className="text-[10px] text-zinc-500 mb-2">Manual Scan</p>
-            <div className="flex flex-wrap gap-1.5 mb-2.5">
+          <div className="mt-2 pt-2 border-t border-zinc-800/60">
+            <p className="text-[10px] text-zinc-500 mb-1.5">Manual Scan</p>
+            <div className="flex flex-wrap gap-1.5 mb-2">
               {MODES.map(m => (
                 <button key={m} onClick={() => onScanModeChange(m)}
                   className={`text-[10px] px-2.5 py-1 rounded-md border font-semibold transition-colors ${
@@ -1130,7 +1130,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
           </div>
 
           {signals.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-zinc-800/60 grid grid-cols-4 gap-1.5">
+            <div className="mt-2 pt-2 border-t border-zinc-800/60 grid grid-cols-4 gap-1.5">
               {[
                 { label: 'Active',  value: lc['ACTIVE']??0, color: 'text-blue-400' },
                 { label: 'Sent',    value: signals.filter(s => s.telegramSent || ['TELEGRAM_SENT','ACTIVE','STALE','TP_HIT','SL_HIT','CLOSED'].includes(s.lifecycleStage)).length, color: 'text-purple-400' },

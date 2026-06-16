@@ -39,30 +39,6 @@ export function computeLifecycleStage(
   return 'VALIDATED';
 }
 
-// ─── Display configuration ────────────────────────────────────────────────────
-
-export interface LifecycleConfig {
-  label:  string;
-  /** Tailwind text-color class */
-  color:  string;
-  /** Tailwind border/bg badge classes */
-  badge:  string;
-  order:  number;
-}
-
-export const LIFECYCLE_CONFIG: Record<SignalLifecycleStage, LifecycleConfig> = {
-  VALIDATED:     { label: 'Validated',     color: 'text-terminal-muted',  badge: 'text-terminal-muted border-terminal-border bg-transparent',               order: 1 },
-  AI_APPROVED:   { label: 'AI Approved',   color: 'text-purple-400',      badge: 'text-purple-400 border-purple-500/30 bg-purple-500/5',                    order: 2 },
-  SCREENED:      { label: 'Screened',      color: 'text-sky-400',         badge: 'text-sky-400 border-sky-500/30 bg-sky-500/5',                             order: 3 },
-  TELEGRAM_SENT: { label: 'Telegram Sent', color: 'text-signal-high',     badge: 'text-signal-high border-signal-high/30 bg-signal-high/5',                 order: 4 },
-  ACTIVE:        { label: 'Active',        color: 'text-bull-default',    badge: 'text-bull-default border-bull-default/30 bg-bull-default/5',               order: 4 },
-  STALE:         { label: 'Stale',         color: 'text-terminal-muted/60', badge: 'text-terminal-muted border-terminal-border bg-transparent',             order: 5 },
-  TP_HIT:        { label: 'TP Hit',        color: 'text-bull-default',    badge: 'text-bull-default border-bull-default/40 bg-bull-default/8 font-bold',     order: 6 },
-  SL_HIT:        { label: 'SL Hit',        color: 'text-bear-default',    badge: 'text-bear-default border-bear-default/40 bg-bear-default/8 font-bold',     order: 7 },
-  CLOSED:        { label: 'Closed',        color: 'text-terminal-muted',  badge: 'text-terminal-muted border-terminal-border bg-transparent',               order: 8 },
-  ANALYZED:      { label: 'Analyzed',      color: 'text-terminal-muted',  badge: 'text-terminal-muted border-terminal-border bg-transparent',               order: 9 },
-};
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Returns true if the stage represents an open / actionable signal. */
