@@ -305,6 +305,37 @@ const ADVANCED_FLAG_DEFS = [
   { key: 'regime_hard_gate_v2',       label: 'Regime Hard Gate v2',       desc: 'Hard-reject contra-regime unless HIGH_MOMENTUM OI' },
 ] as const
 
+// Flag categorization for Feature Flags section (SIGNAL.QUALITY.AUDIT.3)
+// tier 'quality' = direct trading/signal impact, always visible
+// tier 'operational' = system controls, visible
+// tier 'advanced' = background jobs / analytics only, collapsed by default
+const FLAG_META: Record<string, {
+  tier: 'quality' | 'operational' | 'advanced'
+  p0?: boolean
+  recommendedState?: boolean
+  p0Note?: string
+}> = {
+  high_confidence_mode_enabled:       { tier: 'quality',     p0: true, recommendedState: false, p0Note: '0/9 wins last 7D · disable to stop active losses' },
+  regime_hard_gate_v2:                { tier: 'quality',     p0: true, recommendedState: true,  p0Note: 'Contra-regime BUY: 19% WR, −0.405R · enable hard gate' },
+  early_breakout_penalty_v1:          { tier: 'quality',     p0: true, recommendedState: true,  p0Note: 'BUY+EARLY_BREAKOUT unpenalized · enable −8 setup score' },
+  probability_gate_v1:                { tier: 'quality',     p0: true, recommendedState: true,  p0Note: '2/3 live signals in WR<40% cohorts · enable Telegram gate' },
+  riskgrade_v2:                       { tier: 'quality',     p0: true, recommendedState: true,  p0Note: 'Heuristic grades inverted (Grade A < Grade C) · enable empirical grades' },
+  futures_intelligence:               { tier: 'quality' },
+  probability_gate_expectancy_filter: { tier: 'quality' },
+  ai_validation:                      { tier: 'operational' },
+  telegram:                           { tier: 'operational' },
+  emergency_stop:                     { tier: 'operational' },
+  maintenance_mode:                   { tier: 'operational' },
+  anomaly_detection:                  { tier: 'operational' },
+  output_collapse_alert:              { tier: 'operational' },
+  paper_trading_monitor:              { tier: 'advanced' },
+  backtesting:                        { tier: 'advanced' },
+  daily_analytics_snapshot:           { tier: 'advanced' },
+  rate_limiting:                      { tier: 'advanced' },
+  confidence_calibration_v2:          { tier: 'advanced' },
+  attribution_snapshots:              { tier: 'advanced' },
+}
+
 // ── Advanced Operations Accordion (Phase D) ───────────────────────────────────
 
 function AdvancedOperationsAccordion({
@@ -1041,12 +1072,12 @@ function Toggle({ value, onChange, disabled }: {
     <button
       type="button" role="switch" aria-checked={value} disabled={disabled}
       onClick={() => !disabled && onChange(!value)}
-      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors
-        ${value ? 'bg-bull-default/80' : 'bg-terminal-bright'}
+      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200
+        ${value ? 'bg-emerald-500' : 'bg-zinc-600'}
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
     >
-      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform
-        ${value ? 'translate-x-4' : 'translate-x-0.5'}`} />
+      <span className={`inline-block h-3.5 w-3.5 transform rounded-full shadow-md transition-transform duration-200
+        ${value ? 'bg-white translate-x-4' : 'bg-zinc-300 translate-x-0.5'}`} />
     </button>
   )
 }
@@ -1090,21 +1121,39 @@ function SettingInput({ entry, value, onChange, disabled }: {
   )
 }
 
-function FeatureFlagCard({ entry, value, onChange, isSaving, isSaved, error }: {
+function FeatureFlagCard({ entry, value, onChange, isSaving, isSaved, error, p0Note, recommendedState }: {
   entry: SettingEntry; value: boolean; onChange: (v: boolean) => void
   isSaving: boolean; isSaved: boolean; error: string | undefined
+  p0Note?: string; recommendedState?: boolean
 }) {
   const modified = !valEq(value, entry.default)
+  const needsAction = p0Note !== undefined && recommendedState !== undefined && value !== recommendedState
   return (
-    <div className={`glass-card rounded-lg p-4 flex items-start gap-3 transition-all border ${value ? 'border-bull-default/25' : 'border-terminal-border'}`}>
+    <div className={`glass-card rounded-lg p-4 flex items-start gap-3 transition-all border ${
+      needsAction ? 'border-amber-500/50 bg-amber-500/5'
+      : value ? 'border-emerald-500/30 bg-emerald-500/5'
+      : 'border-zinc-700/50'
+    }`}>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm text-terminal-text font-mono leading-tight">{entry.label}</span>
-          {modified && <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-signal-medium/10 text-signal-medium/70 border border-signal-medium/20">modified</span>}
+          <span className={`text-sm font-mono leading-tight ${value ? 'text-terminal-text' : 'text-terminal-muted/70'}`}>{entry.label}</span>
+          <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded border font-bold tracking-wide ${
+            value ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                  : 'bg-zinc-800/80 text-zinc-400 border-zinc-600/50'
+          }`}>{value ? 'ON' : 'OFF'}</span>
+          {needsAction && (
+            <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
+              {recommendedState ? '↑ enable' : '↓ disable'}
+            </span>
+          )}
+          {modified && !needsAction && <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-signal-medium/10 text-signal-medium/70 border border-signal-medium/20">modified</span>}
           {isSaving && <span className="text-xs text-terminal-muted animate-pulse">saving…</span>}
           {isSaved  && <CheckCircle2 size={10} className="text-bull-default" />}
         </div>
-        <p className="text-xs text-terminal-muted/60 mt-1 leading-relaxed">{entry.description}</p>
+        <p className={`text-xs mt-1 leading-relaxed ${value ? 'text-terminal-muted/60' : 'text-terminal-muted/45'}`}>{entry.description}</p>
+        {needsAction && p0Note && (
+          <p className="text-[10px] text-amber-400/80 mt-1.5 font-mono leading-relaxed">{p0Note}</p>
+        )}
         {error && <p className="text-xs text-bear-default mt-1">{error}</p>}
       </div>
       <div className="shrink-0 pt-0.5">
@@ -1251,6 +1300,7 @@ function SettingsTab() {
   const [applyingMode,    setApplyingMode]    = useState<ModeId | null>(null)
   const [activeMode,      setActiveMode]      = useState<ModeId | null>(null)
   const [allSettingsOpen, setAllSettingsOpen] = useState(false)
+  const [advFlagsOpen,    setAdvFlagsOpen]    = useState(false)
 
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
@@ -1522,21 +1572,77 @@ function SettingsTab() {
       </div>
 
       {/* ── Feature Flags ───────────────────────────────────────────────────── */}
-      <div className="space-y-3">
-        <p className="text-terminal-text text-sm font-semibold">Feature Flags</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {(settings['features']?.fields ?? [])
-            .filter(entry => !quickToggleKeys.some(q => q.group === 'features' && q.key === entry.key))
-            .map(entry => {
-              const k = `features.${entry.key}`
-              return (
-                <FeatureFlagCard key={entry.key} entry={entry} value={getValue(entry) as boolean}
-                  onChange={v => handleChange(entry, v)} isSaving={saving.has(k)}
-                  isSaved={saved.has(k)} error={errors[k]} />
-              )
-            })}
-        </div>
-      </div>
+      {(() => {
+        const allFlags = (settings['features']?.fields ?? [])
+          .filter(entry => !quickToggleKeys.some(q => q.group === 'features' && q.key === entry.key))
+        const qualityFlags     = allFlags.filter(e => (FLAG_META[e.key]?.tier ?? 'operational') === 'quality')
+        const operationalFlags = allFlags.filter(e => (FLAG_META[e.key]?.tier ?? 'operational') === 'operational')
+        const advancedFlags    = allFlags.filter(e => FLAG_META[e.key]?.tier === 'advanced')
+        const p0Pending = qualityFlags.filter(e => {
+          const m = FLAG_META[e.key]
+          if (!m?.p0 || m.recommendedState === undefined) return false
+          const cur = getValue(e) as boolean
+          return cur !== m.recommendedState
+        }).length
+        const renderFlag = (entry: SettingEntry) => {
+          const k = `features.${entry.key}`
+          const m = FLAG_META[entry.key]
+          return (
+            <FeatureFlagCard key={entry.key} entry={entry} value={getValue(entry) as boolean}
+              onChange={v => handleChange(entry, v)} isSaving={saving.has(k)}
+              isSaved={saved.has(k)} error={errors[k]}
+              p0Note={m?.p0Note} recommendedState={m?.recommendedState} />
+          )
+        }
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <p className="text-terminal-text text-sm font-semibold">Feature Flags</p>
+              {p0Pending > 0 && (
+                <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold">
+                  {p0Pending} P0 fix{p0Pending > 1 ? 'es' : ''} pending
+                </span>
+              )}
+            </div>
+
+            {/* Signal Quality flags */}
+            {qualityFlags.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[9px] font-mono uppercase tracking-widest text-terminal-muted/50">Signal Quality</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {qualityFlags.map(renderFlag)}
+                </div>
+              </div>
+            )}
+
+            {/* Operational flags */}
+            {operationalFlags.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[9px] font-mono uppercase tracking-widest text-terminal-muted/50">Operational</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {operationalFlags.map(renderFlag)}
+                </div>
+              </div>
+            )}
+
+            {/* Background & Analytics — collapsed by default */}
+            {advancedFlags.length > 0 && (
+              <div className="glass-card rounded-lg border border-terminal-border/40 overflow-hidden">
+                <button type="button" onClick={() => setAdvFlagsOpen(v => !v)}
+                  className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-terminal-bright/5 transition-colors">
+                  <span className="text-xs text-terminal-muted/60 font-mono">Background &amp; Analytics ({advancedFlags.length})</span>
+                  <ChevronDown size={12} className={`text-terminal-muted/40 transition-transform ${advFlagsOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {advFlagsOpen && (
+                  <div className="border-t border-terminal-border/30 p-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {advancedFlags.map(renderFlag)}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* ── Advanced Settings & Audit Log ───────────────────────────────────── */}
       <div className="glass-card rounded-xl overflow-hidden border border-terminal-border/50">

@@ -25,6 +25,10 @@ _LOCK_KEY_PREFIX     = "scheduler:lock:"
 _ENABLED_KEY         = "scheduler:enabled"
 _STATUS_CACHE_KEY    = "scheduler:status_cache"
 _STATUS_CACHE_TTL    = 5   # OPT-7: cache status for 5s — reduces 5 ops/call → 1 GET on hits
+# OPS.CONSOLIDATION.1 discipline: every key must have a TTL. 7 days covers any
+# realistic maintenance window; after 30 min of staleness status() falls back to
+# DB anyway, so expiry never causes a false "never scanned" display.
+_LAST_SCAN_TS_TTL    = 7 * 24 * 60 * 60  # 7 days
 
 # Overdue threshold: 2× the 15-min standard scan interval.
 # If enabled and last_scan_at is older than this, Beat is likely dead or
@@ -299,7 +303,7 @@ class SchedulerCoordinator:
 
     def record_scan_complete(self) -> None:
         try:
-            self._redis.set("scheduler:last_scan_ts", str(time.time()))
+            self._redis.set("scheduler:last_scan_ts", str(time.time()), ex=_LAST_SCAN_TS_TTL)
             self._redis.delete(_STATUS_CACHE_KEY)
         except Exception as exc:
             log.warning("record_scan_complete_redis_error", error=str(exc))
