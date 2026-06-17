@@ -39,10 +39,10 @@ export function SessionBadge({ email, lastSignIn }: Props) {
   return (
     <div className="flex items-center gap-2.5 shrink-0">
       {/* Identity */}
-      <div className="hidden sm:flex items-center gap-1.5 text-xs font-mono text-terminal-muted/60 select-none">
+      <div className="hidden sm:flex items-center gap-1.5 text-xs text-zinc-500 select-none">
         <User size={11} className="shrink-0" />
         <span title={email}>{shortEmail}</span>
-        <span className="text-terminal-muted/30">·</span>
+        <span className="text-zinc-700">·</span>
         <span title={lastSignIn ? new Date(lastSignIn).toLocaleString() : undefined}>
           {relativeTime(lastSignIn)}
         </span>
@@ -53,7 +53,7 @@ export function SessionBadge({ email, lastSignIn }: Props) {
         onClick={handleSignOut}
         disabled={loading}
         title="Sign out"
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded border border-terminal-border/50 text-terminal-muted/50 hover:text-bear-default hover:border-bear-default/30 transition-colors text-xs font-mono disabled:opacity-40"
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded border border-zinc-700/50 text-zinc-500 hover:text-bear-default hover:border-bear-default/30 transition-colors text-xs disabled:opacity-40"
       >
         {loading
           ? <Loader2 size={11} className="animate-spin" />

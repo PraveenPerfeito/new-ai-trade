@@ -14,7 +14,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   if (!user) redirect('/login')
 
   return (
-    <div className="flex h-screen overflow-hidden bg-terminal-bg">
+    <div className="flex h-screen overflow-hidden bg-zinc-950">
       <AdminSidebar />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AdminTopbar

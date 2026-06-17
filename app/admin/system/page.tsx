@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useCallback, useState, useEffect, useMemo, useRef } from 'react'
 import {
@@ -63,39 +63,39 @@ function InfraConfigSection() {
   }, [open, rows])
 
   return (
-    <div className="glass-card rounded-xl overflow-hidden border border-terminal-border/50">
+    <div className="glass-card rounded-xl overflow-hidden border border-zinc-800/50">
       <button type="button" onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-terminal-bright/5 transition-colors">
+        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-zinc-700/5 transition-colors">
         <div className="flex items-center gap-2">
-          <Lock size={13} className="text-terminal-muted/60" />
-          <span className="text-sm font-semibold text-terminal-text">Infrastructure Configuration</span>
-          <span className="text-[10px] text-terminal-muted/40 font-mono hidden sm:block">· read-only · engineering settings · change via settings API only</span>
+          <Lock size={13} className="text-zinc-500/60" />
+          <span className="text-sm font-semibold text-zinc-200">Infrastructure Configuration</span>
+          <span className="text-[10px] text-zinc-500/40 font-mono hidden sm:block">· read-only · engineering settings · change via settings API only</span>
         </div>
-        <ChevronDown size={14} className={`text-terminal-muted/50 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={14} className={`text-zinc-500/50 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="border-t border-terminal-border/40">
+        <div className="border-t border-zinc-800/40">
           {loadErr && <p className="px-5 py-4 text-bear-default text-xs">Failed to load: {loadErr}</p>}
-          {!loadErr && rows === null && <p className="px-5 py-4 text-terminal-muted text-xs">Loading…</p>}
+          {!loadErr && rows === null && <p className="px-5 py-4 text-zinc-500 text-xs">Loading…</p>}
           {rows !== null && (
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-terminal-border">
+                <tr className="border-b border-zinc-800">
                   {['Group', 'Setting', 'Value', 'Description'].map(h => (
-                    <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-4">{h}</th>
+                    <th key={h} className="text-zinc-500 text-xs uppercase tracking-wider text-left py-2 px-4">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {rows.map(r => (
-                  <tr key={`${r.group}.${r.key}`} className="border-b border-terminal-border/30">
-                    <td className="py-2 px-4 font-mono text-terminal-muted/60">{r.group}</td>
+                  <tr key={`${r.group}.${r.key}`} className="border-b border-zinc-800/30">
+                    <td className="py-2 px-4 font-mono text-zinc-500/60">{r.group}</td>
                     <td className="py-2 px-4">
-                      <p className="text-terminal-text font-mono">{r.label}</p>
-                      <p className="text-terminal-muted/40 font-mono text-[10px]">{r.key}{r.restart ? ' · ↻ restart' : ''}</p>
+                      <p className="text-zinc-200 font-mono">{r.label}</p>
+                      <p className="text-zinc-500/40 font-mono text-[10px]">{r.key}{r.restart ? ' · ↻ restart' : ''}</p>
                     </td>
-                    <td className="py-2 px-4 font-mono text-terminal-text">{String(r.value)}</td>
-                    <td className="py-2 px-4 text-terminal-muted/60 hidden md:table-cell">{r.description}</td>
+                    <td className="py-2 px-4 font-mono text-zinc-200">{String(r.value)}</td>
+                    <td className="py-2 px-4 text-zinc-500/60 hidden md:table-cell">{r.description}</td>
                   </tr>
                 ))}
               </tbody>
@@ -111,25 +111,25 @@ function ServiceCard({ name, status, detail }: { name: string; status: string; d
   const isConfigured = status !== 'not_configured'
   const isOk       = ['ok', 'ready', 'not_configured', 'HEALTHY'].includes(status)
   const isDegraded = status === 'DEGRADED'
-  const dotCls  = !isConfigured ? 'bg-terminal-muted/40'
+  const dotCls  = !isConfigured ? 'bg-zinc-500/40'
     : isDegraded ? 'bg-amber-400 animate-pulse'
     : isOk ? 'bg-bull-default' : 'bg-bear-default animate-pulse'
-  const borderCls = !isConfigured ? 'border-terminal-border'
+  const borderCls = !isConfigured ? 'border-zinc-800'
     : isDegraded ? 'border-amber-500/20'
     : isOk ? 'border-bull-default/20' : 'border-bear-default/20'
-  const textCls = !isConfigured ? 'text-terminal-muted/60'
+  const textCls = !isConfigured ? 'text-zinc-500/60'
     : isDegraded ? 'text-amber-400'
     : isOk ? 'text-bull-default' : 'text-bear-default'
   return (
     <div className={`glass-card rounded-lg px-4 py-3.5 border ${borderCls}`}>
       <div className="flex items-center gap-2.5">
         <span className={`w-2 h-2 rounded-full shrink-0 ${dotCls}`} />
-        <span className="text-terminal-text text-sm font-medium">{name}</span>
+        <span className="text-zinc-200 text-sm font-medium">{name}</span>
         <span className={`ml-auto font-mono text-xs font-bold uppercase ${textCls}`}>
           {status.replace(/_/g, ' ')}
         </span>
       </div>
-      {detail && <p className="text-terminal-muted/50 text-xs font-mono mt-1 ml-4.5 pl-0">{detail}</p>}
+      {detail && <p className="text-zinc-500/50 text-xs font-mono mt-1 ml-4.5 pl-0">{detail}</p>}
     </div>
   )
 }
@@ -149,8 +149,8 @@ const LEVEL_DOT: Record<MonitorLevel, string> = {
 
 function MonitorRow({ label, metric }: { label: string; metric: { value: number; unit: string; level: MonitorLevel } }) {
   return (
-    <div className="flex items-center justify-between py-1.5 border-b border-terminal-border/15 last:border-0">
-      <span className="text-terminal-muted text-xs">{label}</span>
+    <div className="flex items-center justify-between py-1.5 border-b border-zinc-800/15 last:border-0">
+      <span className="text-zinc-500 text-xs">{label}</span>
       <span className={`font-mono text-xs font-semibold ${LEVEL_CLS[metric.level]}`}>
         {metric.value.toLocaleString()}{metric.unit && ` ${metric.unit}`}
       </span>
@@ -168,14 +168,14 @@ const PIPELINE_CANON_KEYS = [
 
 function PipelineRow({ label, value, sub, ok }: { label: string; value: string; sub: string; ok: boolean }) {
   return (
-    <div className="flex items-center justify-between py-1.5 border-b border-terminal-border/15 last:border-0">
+    <div className="flex items-center justify-between py-1.5 border-b border-zinc-800/15 last:border-0">
       <div className="flex items-center gap-1.5">
         <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${ok ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`} />
-        <span className="text-terminal-muted text-xs">{label}</span>
+        <span className="text-zinc-500 text-xs">{label}</span>
       </div>
       <div className="text-right">
-        <span className="font-mono text-xs font-semibold text-terminal-text">{value}</span>
-        {sub && <span className="text-terminal-muted/40 text-[10px] ml-1.5">{sub}</span>}
+        <span className="font-mono text-xs font-semibold text-zinc-200">{value}</span>
+        {sub && <span className="text-zinc-500/40 text-[10px] ml-1.5">{sub}</span>}
       </div>
     </div>
   )
@@ -211,7 +211,7 @@ function PipelineIntegrityCard({
   return (
     <div className="glass-card rounded-xl p-4">
       <div className="flex items-center justify-between mb-2">
-        <p className="text-terminal-muted text-[10px] uppercase tracking-wide">Pipeline Integrity · HARDENING.1</p>
+        <p className="text-zinc-500 text-[10px] uppercase tracking-wide">Pipeline Integrity · HARDENING.1</p>
         <div className={`rounded-md px-2 py-0.5 border ${borderCls}`}>
           <span className={`font-mono font-bold text-sm ${scoreColor}`}>{score}/100</span>
         </div>
@@ -264,14 +264,14 @@ function GateRejectionGrid({ counts }: { counts?: Record<string, number> }) {
   const keys = Object.keys(GATE_REJECTION_LABELS)
   return (
     <div className="glass-card rounded-xl p-4">
-      <p className="text-terminal-muted text-[10px] uppercase tracking-wide mb-2">
+      <p className="text-zinc-500 text-[10px] uppercase tracking-wide mb-2">
         Gate Rejections - {analyticsWindowLabel(24)}
       </p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {keys.map((key) => (
-          <div key={key} className="rounded-lg border border-terminal-border/30 px-3 py-2">
-            <p className="text-terminal-muted/70 text-[10px]">{GATE_REJECTION_LABELS[key]}</p>
-            <p className="text-terminal-text font-mono font-semibold text-sm">{counts?.[key] ?? 0}</p>
+          <div key={key} className="rounded-lg border border-zinc-800/30 px-3 py-2">
+            <p className="text-zinc-500/70 text-[10px]">{GATE_REJECTION_LABELS[key]}</p>
+            <p className="text-zinc-200 font-mono font-semibold text-sm">{counts?.[key] ?? 0}</p>
           </div>
         ))}
       </div>
@@ -294,7 +294,7 @@ function sODot(level: 'green' | 'amber' | 'red' | 'neutral') {
   return level === 'green' ? 'bg-emerald-400' : level === 'amber' ? 'bg-amber-400 animate-pulse' : level === 'red' ? 'bg-red-400 animate-pulse' : 'bg-zinc-600'
 }
 function sOTxt(level: 'green' | 'amber' | 'red' | 'neutral') {
-  return level === 'green' ? 'text-emerald-400' : level === 'amber' ? 'text-amber-400' : level === 'red' ? 'text-red-400' : 'text-terminal-text'
+  return level === 'green' ? 'text-emerald-400' : level === 'amber' ? 'text-amber-400' : level === 'red' ? 'text-red-400' : 'text-zinc-200'
 }
 
 // Flag categorization for Feature Flags section (SIGNAL.QUALITY.AUDIT.3)
@@ -340,23 +340,23 @@ function AdvancedOperationsAccordion({
   const [open, setOpen] = useState(false)
 
   return (
-    <div className="glass-card rounded-xl overflow-hidden border border-terminal-border/50">
+    <div className="glass-card rounded-xl overflow-hidden border border-zinc-800/50">
       <button type="button" onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-terminal-bright/5 transition-colors">
+        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-zinc-700/5 transition-colors">
         <div className="flex items-center gap-2">
-          <Settings2 size={13} className="text-terminal-muted/60" />
-          <span className="text-sm font-semibold text-terminal-text">System Diagnostics</span>
-          <span className="text-[10px] text-terminal-muted/40 font-mono hidden sm:block">· provider health · queue metrics · gate analysis · infra config</span>
+          <Settings2 size={13} className="text-zinc-500/60" />
+          <span className="text-sm font-semibold text-zinc-200">System Diagnostics</span>
+          <span className="text-[10px] text-zinc-500/40 font-mono hidden sm:block">· provider health · queue metrics · gate analysis · infra config</span>
         </div>
-        <ChevronDown size={14} className={`text-terminal-muted/50 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={14} className={`text-zinc-500/50 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="border-t border-terminal-border/40 p-5 space-y-6">
+        <div className="border-t border-zinc-800/40 p-5 space-y-6">
 
           {/* Provider Diagnostics */}
           {providers && providers.length > 0 && (
             <div>
-              <p className="text-[10px] text-terminal-muted/50 uppercase tracking-wide mb-3">Provider Diagnostics</p>
+              <p className="text-[10px] text-zinc-500/50 uppercase tracking-wide mb-3">Provider Diagnostics</p>
               <ProviderHealthTable providers={providers} />
             </div>
           )}
@@ -364,7 +364,7 @@ function AdvancedOperationsAccordion({
           {/* Queue & Scanner Diagnostics */}
           {monitor && (
             <div>
-              <p className="text-[10px] text-terminal-muted/50 uppercase tracking-wide mb-3">Queue & Scanner Diagnostics</p>
+              <p className="text-[10px] text-zinc-500/50 uppercase tracking-wide mb-3">Queue & Scanner Diagnostics</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {([
                   { label: 'Scans Today',   val: monitor.metrics.scans_today.value,             lvl: monitor.metrics.scans_today.level },
@@ -377,7 +377,7 @@ function AdvancedOperationsAccordion({
                   { label: 'AI Fallback',   val: `${monitor.metrics.claude_fallback_pct.value}%`, lvl: monitor.metrics.claude_fallback_pct.level },
                 ] as { label: string; val: number | string; lvl: MonitorLevel }[]).map(({ label, val, lvl }) => (
                   <div key={label} className="glass-card rounded-lg px-3 py-2.5">
-                    <p className="text-[10px] text-terminal-muted/55 uppercase tracking-wider mb-1">{label}</p>
+                    <p className="text-[10px] text-zinc-500/55 uppercase tracking-wider mb-1">{label}</p>
                     <p className={`text-sm font-mono font-semibold ${LEVEL_CLS[lvl]}`}>{val}</p>
                   </div>
                 ))}
@@ -388,7 +388,7 @@ function AdvancedOperationsAccordion({
           {/* Gate Rejection Diagnostics */}
           {scans && (
             <div>
-              <p className="text-[10px] text-terminal-muted/50 uppercase tracking-wide mb-3">Gate Rejection Diagnostics</p>
+              <p className="text-[10px] text-zinc-500/50 uppercase tracking-wide mb-3">Gate Rejection Diagnostics</p>
               <PipelineIntegrityCard scans={scans} monitor={monitor ?? undefined} />
               <div className="mt-3"><GateRejectionGrid counts={scans.gate_rejections} /></div>
             </div>
@@ -396,7 +396,7 @@ function AdvancedOperationsAccordion({
 
           {/* Redis / Infra Configuration */}
           <div>
-            <p className="text-[10px] text-terminal-muted/50 uppercase tracking-wide mb-3">Redis & Infrastructure Config</p>
+            <p className="text-[10px] text-zinc-500/50 uppercase tracking-wide mb-3">Redis & Infrastructure Config</p>
             <InfraConfigSection />
           </div>
 
@@ -454,13 +454,13 @@ function FounderOperationsCard({
   const hasWarning  = flags != null && (!flags.ai_enabled || !flags.telegram_enabled || !celery?.enabled || flags.maintenance_mode)
 
   return (
-    <div className={`rounded-xl border p-5 space-y-5 ${hasCritical ? 'border-red-500/40 bg-red-900/10' : hasWarning ? 'border-amber-500/30 bg-amber-900/5' : 'border-terminal-border/70 bg-terminal-surface/30'}`}>
+    <div className={`rounded-xl border p-5 space-y-5 ${hasCritical ? 'border-red-500/40 bg-red-900/10' : hasWarning ? 'border-amber-500/30 bg-amber-900/5' : 'border-zinc-800/70 bg-zinc-900/30'}`}>
 
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${hasCritical ? 'bg-red-400 animate-pulse' : hasWarning ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`} />
-          <p className="text-sm font-semibold text-terminal-text">System Status</p>
+          <p className="text-sm font-semibold text-zinc-200">System Status</p>
         </div>
         <span className={`text-xs font-mono font-bold uppercase ${hasCritical ? 'text-red-400' : hasWarning ? 'text-amber-400' : 'text-emerald-400'}`}>
           {hasCritical ? 'CRITICAL' : hasWarning ? 'WARNING' : 'OPERATIONAL'}
@@ -470,8 +470,8 @@ function FounderOperationsCard({
       {/* Status grid (Phase A) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {items.map(item => (
-          <div key={item.label} className="bg-terminal-bg/40 rounded-lg px-3 py-2.5 border border-terminal-border/30">
-            <p className="text-[10px] text-terminal-muted/50 uppercase tracking-wider mb-1.5">{item.label}</p>
+          <div key={item.label} className="bg-zinc-950/40 rounded-lg px-3 py-2.5 border border-zinc-800/30">
+            <p className="text-[10px] text-zinc-500/50 uppercase tracking-wider mb-1.5">{item.label}</p>
             <div className="flex items-center gap-1.5">
               <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${sODot(item.level)}`} />
               <span className={`font-mono font-bold text-xs ${sOTxt(item.level)}`}>{item.value}</span>
@@ -482,7 +482,7 @@ function FounderOperationsCard({
 
       {/* Operational Controls (Phase B + C) */}
       <div>
-        <p className="text-[10px] text-terminal-muted/50 uppercase tracking-wide mb-2">Operational Controls</p>
+        <p className="text-[10px] text-zinc-500/50 uppercase tracking-wide mb-2">Operational Controls</p>
         <div className="flex flex-wrap gap-2">
 
           {/* Run Scan Now (Phase C) */}
@@ -491,7 +491,7 @@ function FounderOperationsCard({
             className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
               scanDone  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' :
               scanning  ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' :
-                          'bg-terminal-bg border-terminal-border text-terminal-text hover:border-terminal-bright'
+                          'bg-zinc-950 border-zinc-800 text-zinc-200 hover:border-zinc-700'
             }`}>
             {scanning ? <><RefreshCw size={11} className="animate-spin"/>Scanning…</> :
              scanDone  ? <><CheckCircle2 size={11}/>Done</> :
@@ -504,7 +504,7 @@ function FounderOperationsCard({
             className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
               celery?.enabled
                 ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
-                : 'bg-terminal-bg border-terminal-border text-terminal-text hover:border-terminal-bright'
+                : 'bg-zinc-950 border-zinc-800 text-zinc-200 hover:border-zinc-700'
             }`}>
             {celery?.enabled ? <><Square size={11}/>Pause Scanner</> : <><Play size={11}/>Enable Scanner</>}
           </button>
@@ -515,7 +515,7 @@ function FounderOperationsCard({
             className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
               flags?.ai_enabled
                 ? 'bg-purple-500/10 border-purple-500/30 text-purple-400 hover:bg-purple-500/20'
-                : 'bg-terminal-bg border-terminal-border text-terminal-muted hover:border-terminal-bright'
+                : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700'
             }`}>
             <Cpu size={11} />
             Claude AI {flags === null ? '…' : flags.ai_enabled ? 'ON' : 'OFF'}
@@ -527,7 +527,7 @@ function FounderOperationsCard({
             className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
               flags?.telegram_enabled
                 ? 'bg-sky-500/10 border-sky-500/30 text-sky-400 hover:bg-sky-500/20'
-                : 'bg-terminal-bg border-terminal-border text-terminal-muted hover:border-terminal-bright'
+                : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700'
             }`}>
             <Activity size={11} />
             Telegram {flags === null ? '…' : flags.telegram_enabled ? 'ON' : 'OFF'}
@@ -542,7 +542,7 @@ function FounderOperationsCard({
             className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
               flags?.emergency_stop
                 ? 'bg-red-500/20 border-red-500/50 text-red-400 hover:bg-red-500/30'
-                : 'bg-terminal-bg border-terminal-border text-terminal-muted/60 hover:border-terminal-bright'
+                : 'bg-zinc-950 border-zinc-800 text-zinc-500/60 hover:border-zinc-700'
             }`}>
             <AlertTriangle size={11} />
             Emergency Stop{flags?.emergency_stop ? ' — ACTIVE' : ''}
@@ -554,7 +554,7 @@ function FounderOperationsCard({
             className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
               flags?.maintenance_mode
                 ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
-                : 'bg-terminal-bg border-terminal-border text-terminal-muted/60 hover:border-terminal-bright'
+                : 'bg-zinc-950 border-zinc-800 text-zinc-500/60 hover:border-zinc-700'
             }`}>
             <Settings2 size={11} />
             Maintenance{flags?.maintenance_mode ? ' — ON' : ''}
@@ -656,9 +656,9 @@ function AnomaliesTab() {
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between">
-        <p className="text-terminal-muted text-sm">{lastCheck ? `Last check: ${formatTs(lastCheck)}` : 'Detect · acknowledge · mute · resolve operational events'}</p>
+        <p className="text-zinc-500 text-sm">{lastCheck ? `Last check: ${formatTs(lastCheck)}` : 'Detect · acknowledge · mute · resolve operational events'}</p>
         <button type="button" onClick={refresh}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-terminal-muted hover:text-terminal-text border border-terminal-border hover:border-terminal-bright rounded transition-all">
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-700 rounded transition-all">
           <RefreshCw size={11} className={al ? 'animate-spin' : ''}/>Refresh
         </button>
       </div>
@@ -677,7 +677,7 @@ function AnomaliesTab() {
             { label: 'Muted',    count: counts.muted,    color: 'text-zinc-500',       border: 'border-zinc-600/20',       bg: 'bg-zinc-800/20'      },
           ].map(({ label, count, color, border, bg }) => (
             <div key={label} className={`glass-card rounded-lg px-5 py-4 border ${border} ${bg}`}>
-              <p className="text-terminal-muted text-xs mb-1">{label}</p>
+              <p className="text-zinc-500 text-xs mb-1">{label}</p>
               <p className={`font-mono font-bold text-2xl ${color}`}>{al ? '—' : count}</p>
             </div>
           ))}
@@ -685,18 +685,18 @@ function AnomaliesTab() {
       )}
 
       <div>
-        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Recent Anomalies (last 96h)</p>
+        <p className="text-zinc-500 text-xs uppercase tracking-wider mb-3">Recent Anomalies (last 96h)</p>
         <div className="glass-card rounded-lg overflow-hidden">
           {al ? (
             Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="px-5 py-4 border-b border-terminal-border/50">
+              <div key={i} className="px-5 py-4 border-b border-zinc-800/50">
                 <div className="skeleton h-3 w-16 mb-2 rounded"/><div className="skeleton h-2.5 w-full mb-1 rounded"/><div className="skeleton h-2.5 w-2/3 rounded"/>
               </div>
             ))
           ) : !anomalies?.length ? (
             <div className="px-5 py-10 text-center space-y-1">
               <p className="text-bull-default text-sm font-semibold">No anomalies detected</p>
-              <p className="text-terminal-muted text-xs">{lastCheck ? 'System operating within normal parameters' : 'Health checks run hourly — anomaly monitoring starts after the first scan cycle'}</p>
+              <p className="text-zinc-500 text-xs">{lastCheck ? 'System operating within normal parameters' : 'Health checks run hourly — anomaly monitoring starts after the first scan cycle'}</p>
             </div>
           ) : (
             sortedAnomalies.map(a => {
@@ -706,7 +706,7 @@ function AnomaliesTab() {
               const stored = storedStates[key]
               const mutedRemaining = isMuted && stored?.mutedUntil ? Math.max(0, Math.ceil((stored.mutedUntil - Date.now()) / 60_000)) : null
               return (
-                <div key={key} className={`px-5 py-3.5 border-b border-terminal-border/50 last:border-0 hover:bg-terminal-bright/10 transition-colors ${isMuted ? 'opacity-50' : ''}`}>
+                <div key={key} className={`px-5 py-3.5 border-b border-zinc-800/50 last:border-0 hover:bg-zinc-700/10 transition-colors ${isMuted ? 'opacity-50' : ''}`}>
                   <div className="flex items-start gap-3">
                     <AnomalyBadge severity={a.severity}/>
                     <div className="flex-1 min-w-0">
@@ -714,27 +714,27 @@ function AnomaliesTab() {
                         <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold border ${STATE_BADGE_CLS[effectiveState]}`}>{STATE_LABEL[effectiveState]}</span>
                         {isMuted && mutedRemaining !== null && <span className="flex items-center gap-1 text-zinc-500 text-[10px] font-mono"><Clock size={10}/>{mutedRemaining}m remaining</span>}
                       </div>
-                      <p className="text-terminal-text text-xs leading-relaxed">{a.description}</p>
+                      <p className="text-zinc-200 text-xs leading-relaxed">{a.description}</p>
                       <div className="flex items-center gap-4 mt-1.5 flex-wrap">
-                        <span className="text-terminal-muted/60 text-xs font-mono uppercase tracking-wide">{a.anomaly_type.replace(/_/g, ' ')}</span>
-                        {a.metric_value != null && <span className="text-terminal-muted/60 text-xs font-mono">value: {a.metric_value} · threshold: {a.threshold ?? '—'}</span>}
-                        <span className="text-terminal-muted/40 text-xs font-mono ml-auto">{formatTs(a.detected_at)}</span>
+                        <span className="text-zinc-500/60 text-xs font-mono uppercase tracking-wide">{a.anomaly_type.replace(/_/g, ' ')}</span>
+                        {a.metric_value != null && <span className="text-zinc-500/60 text-xs font-mono">value: {a.metric_value} · threshold: {a.threshold ?? '—'}</span>}
+                        <span className="text-zinc-500/40 text-xs font-mono ml-auto">{formatTs(a.detected_at)}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-0.5 relative shrink-0">
-                      <button type="button" title="Acknowledge" onClick={()=>updateAnomalyState(a,'acknowledged')} className="p-1.5 rounded transition-colors hover:bg-terminal-bright/10 text-terminal-muted hover:text-amber-400"><CheckCircle2 size={14}/></button>
+                      <button type="button" title="Acknowledge" onClick={()=>updateAnomalyState(a,'acknowledged')} className="p-1.5 rounded transition-colors hover:bg-zinc-700/10 text-zinc-500 hover:text-amber-400"><CheckCircle2 size={14}/></button>
                       <div className="relative">
-                        <button type="button" title="Mute" onClick={()=>setMuteMenuFor(prev=>prev===key?null:key)} className="p-1.5 rounded transition-colors hover:bg-terminal-bright/10 text-terminal-muted hover:text-zinc-300"><BellOff size={14}/></button>
+                        <button type="button" title="Mute" onClick={()=>setMuteMenuFor(prev=>prev===key?null:key)} className="p-1.5 rounded transition-colors hover:bg-zinc-700/10 text-zinc-500 hover:text-zinc-300"><BellOff size={14}/></button>
                         {muteMenuFor===key && (
-                          <div className="absolute right-0 top-full mt-1 z-30 bg-terminal-surface border border-terminal-border rounded shadow-xl py-1 min-w-[96px]">
+                          <div className="absolute right-0 top-full mt-1 z-30 bg-zinc-900 border border-zinc-800 rounded shadow-xl py-1 min-w-[96px]">
                             {MUTE_DURATIONS.map(({label,ms})=>(
-                              <button key={label} type="button" onClick={()=>updateAnomalyState(a,'muted',Date.now()+ms)} className="w-full text-left px-3 py-1.5 text-xs text-terminal-text hover:bg-terminal-bright/10 transition-colors">{label}</button>
+                              <button key={label} type="button" onClick={()=>updateAnomalyState(a,'muted',Date.now()+ms)} className="w-full text-left px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-700/10 transition-colors">{label}</button>
                             ))}
                           </div>
                         )}
                       </div>
-                      <button type="button" title="Mark Resolved" onClick={()=>updateAnomalyState(a,'resolved')} className="p-1.5 rounded transition-colors hover:bg-terminal-bright/10 text-terminal-muted hover:text-green-400"><Shield size={14}/></button>
-                      <button type="button" title="View Details"  onClick={()=>setSelectedAnomaly(a)}            className="p-1.5 rounded transition-colors hover:bg-terminal-bright/10 text-terminal-muted hover:text-blue-400"><Eye size={14}/></button>
+                      <button type="button" title="Mark Resolved" onClick={()=>updateAnomalyState(a,'resolved')} className="p-1.5 rounded transition-colors hover:bg-zinc-700/10 text-zinc-500 hover:text-green-400"><Shield size={14}/></button>
+                      <button type="button" title="View Details"  onClick={()=>setSelectedAnomaly(a)}            className="p-1.5 rounded transition-colors hover:bg-zinc-700/10 text-zinc-500 hover:text-blue-400"><Eye size={14}/></button>
                     </div>
                   </div>
                 </div>
@@ -748,31 +748,31 @@ function AnomaliesTab() {
       {selectedAnomaly && selectedKey && (
         <>
           <div className="fixed inset-0 z-50 bg-black/40" onClick={()=>setSelectedAnomaly(null)}/>
-          <div className="fixed right-0 top-0 bottom-0 w-full max-w-sm z-50 bg-terminal-surface border-l border-terminal-border overflow-y-auto p-5 flex flex-col gap-4">
+          <div className="fixed right-0 top-0 bottom-0 w-full max-w-sm z-50 bg-zinc-900 border-l border-zinc-800 overflow-y-auto p-5 flex flex-col gap-4">
             <div className="flex items-start justify-between gap-2">
-              <h2 className="text-terminal-text text-sm font-semibold leading-snug">{selectedAnomaly.anomaly_type.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</h2>
-              <button type="button" onClick={()=>setSelectedAnomaly(null)} className="p-1 rounded text-terminal-muted hover:text-terminal-text hover:bg-terminal-bright/10 transition-colors shrink-0"><X size={14}/></button>
+              <h2 className="text-zinc-200 text-sm font-semibold leading-snug">{selectedAnomaly.anomaly_type.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</h2>
+              <button type="button" onClick={()=>setSelectedAnomaly(null)} className="p-1 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-700/10 transition-colors shrink-0"><X size={14}/></button>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <AnomalyBadge severity={selectedAnomaly.severity}/>
               <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold border ${STATE_BADGE_CLS[getEffectiveState(selectedAnomaly)]}`}>{STATE_LABEL[getEffectiveState(selectedAnomaly)]}</span>
             </div>
-            <p className="text-terminal-text text-xs leading-relaxed">{selectedAnomaly.description}</p>
+            <p className="text-zinc-200 text-xs leading-relaxed">{selectedAnomaly.description}</p>
             <div className="grid grid-cols-2 gap-2 text-xs">
               {[['Type',selectedAnomaly.anomaly_type],['Severity',selectedAnomaly.severity],['Source',getAnomalyMeta(selectedAnomaly.anomaly_type).source],['Provider',getAnomalyMeta(selectedAnomaly.anomaly_type).provider],['First Seen',formatTs(selectedAnomaly.detected_at)]].map(([label,value])=>(
-                <div key={label} className="glass-card rounded px-2.5 py-2"><p className="text-terminal-muted/60 uppercase tracking-wide text-[10px] mb-0.5">{label}</p><p className="text-terminal-text font-mono">{value}</p></div>
+                <div key={label} className="glass-card rounded px-2.5 py-2"><p className="text-zinc-500/60 uppercase tracking-wide text-[10px] mb-0.5">{label}</p><p className="text-zinc-200 font-mono">{value}</p></div>
               ))}
             </div>
             <div className="glass-card rounded-lg px-4 py-3 border border-amber-400/15 bg-amber-400/5">
               <div className="flex items-center gap-1.5 mb-1.5"><AlertTriangle size={12} className="text-amber-400"/><p className="text-amber-400 text-[10px] uppercase tracking-wider font-semibold">Suggested Action</p></div>
-              <p className="text-terminal-text text-xs leading-relaxed">{getAnomalyMeta(selectedAnomaly.anomaly_type).suggestedAction}</p>
+              <p className="text-zinc-200 text-xs leading-relaxed">{getAnomalyMeta(selectedAnomaly.anomaly_type).suggestedAction}</p>
             </div>
           </div>
         </>
       )}
 
       <div>
-        <p className="text-terminal-muted text-xs uppercase tracking-wider mb-3">Monitored Checks</p>
+        <p className="text-zinc-500 text-xs uppercase tracking-wider mb-3">Monitored Checks</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {[
             ['win_rate_degradation','Win rate drops ≥12 pp vs 30d baseline'],
@@ -785,8 +785,8 @@ function AnomaliesTab() {
             ['queue_backlog','Celery queue depth exceeds 10 / 30 tasks'],
           ].map(([name,desc])=>(
             <div key={name} className="glass-card rounded-md px-3 py-2 flex gap-2">
-              <span className="text-terminal-muted/60 font-mono text-xs shrink-0 mt-0.5">→</span>
-              <div><p className="text-terminal-text text-xs font-mono">{name}</p><p className="text-terminal-muted text-sm mt-1">{desc}</p></div>
+              <span className="text-zinc-500/60 font-mono text-xs shrink-0 mt-0.5">→</span>
+              <div><p className="text-zinc-200 text-xs font-mono">{name}</p><p className="text-zinc-500 text-sm mt-1">{desc}</p></div>
             </div>
           ))}
         </div>
@@ -1034,7 +1034,7 @@ function WiredChip({ state }: { state: WiredState }) {
   const cfg = {
     live:    { label: 'live',         cls: 'text-bull-default border-bull-default/30 bg-bull-default/5',      title: 'Read by the backend at runtime' },
     floors:  { label: 'floor',        cls: 'text-blue-400 border-blue-500/30 bg-blue-500/5',                  title: 'Applied as a floor on per-mode configs when Apply Founder Thresholds is ON' },
-    display: { label: 'display only', cls: 'text-terminal-muted/50 border-terminal-border/60 bg-transparent', title: 'No backend consumer reads this value' },
+    display: { label: 'display only', cls: 'text-zinc-500/50 border-zinc-800/60 bg-transparent', title: 'No backend consumer reads this value' },
   }[state]
   return (
     <span title={cfg.title} className={`text-[8px] px-1 py-0.5 rounded border font-mono uppercase tracking-wider ${cfg.cls}`}>
@@ -1047,7 +1047,7 @@ function SettingInput({ entry, value, onChange, disabled }: {
   entry: SettingEntry; value: boolean | number | string
   onChange: (v: boolean | number | string) => void; disabled?: boolean
 }) {
-  const base = 'bg-terminal-bg border border-terminal-border rounded px-2 py-1 font-mono text-xs text-terminal-text focus:outline-none focus:border-signal-medium/50 disabled:opacity-50'
+  const base = 'bg-zinc-950 border border-zinc-800 rounded px-2 py-1 font-mono text-xs text-zinc-200 focus:outline-none focus:border-signal-medium/50 disabled:opacity-50'
 
   if (entry.data_type === 'bool')
     return <Toggle value={value as boolean} onChange={onChange as (v: boolean) => void} disabled={disabled} />
@@ -1084,7 +1084,7 @@ function FeatureFlagCard({ entry, value, onChange, isSaving, isSaved, error, p0N
     }`}>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className={`text-sm font-mono leading-tight ${value ? 'text-terminal-text' : 'text-terminal-muted/70'}`}>{entry.label}</span>
+          <span className={`text-sm font-mono leading-tight ${value ? 'text-zinc-200' : 'text-zinc-500/70'}`}>{entry.label}</span>
           <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border font-bold tracking-wide ${
             value ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
                   : 'bg-zinc-800/80 text-zinc-400 border-zinc-600/50'
@@ -1095,10 +1095,10 @@ function FeatureFlagCard({ entry, value, onChange, isSaving, isSaved, error, p0N
             </span>
           )}
           {modified && !needsAction && <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-signal-medium/10 text-signal-medium/70 border border-signal-medium/20">modified</span>}
-          {isSaving && <span className="text-xs text-terminal-muted animate-pulse">saving…</span>}
+          {isSaving && <span className="text-xs text-zinc-500 animate-pulse">saving…</span>}
           {isSaved  && <CheckCircle2 size={10} className="text-bull-default" />}
         </div>
-        <p className={`text-xs mt-1 leading-relaxed ${value ? 'text-terminal-muted/60' : 'text-terminal-muted/45'} ${needsAction ? '' : 'hidden group-hover:block'}`}>{entry.description}</p>
+        <p className={`text-xs mt-1 leading-relaxed ${value ? 'text-zinc-500/60' : 'text-zinc-500/45'} ${needsAction ? '' : 'hidden group-hover:block'}`}>{entry.description}</p>
         {needsAction && p0Note && (
           <p className="text-[10px] text-amber-400/80 mt-1.5 font-mono leading-relaxed">{p0Note}</p>
         )}
@@ -1134,7 +1134,7 @@ function ModeCard({ mode, isActive, isApplying, disabled, onApply }: {
       disabled={disabled}
       className={`relative text-left w-full rounded-xl p-4 border transition-all ${
         disabled ? 'cursor-not-allowed opacity-60' : 'hover:scale-[1.01] active:scale-[0.99]'
-      } ${isActive ? '' : 'border-terminal-border/50 bg-transparent hover:border-terminal-border'}`}
+      } ${isActive ? '' : 'border-zinc-800/50 bg-transparent hover:border-zinc-800'}`}
       style={{
         borderColor:     isActive ? mode.color + '70' : undefined,
         backgroundColor: isActive ? mode.color + '0d' : undefined,
@@ -1150,20 +1150,20 @@ function ModeCard({ mode, isActive, isApplying, disabled, onApply }: {
         <span className="text-base leading-none" style={{ color: mode.color }}>
           {isApplying ? <span className="inline-block animate-spin text-sm">◌</span> : mode.icon}
         </span>
-        <span className="text-sm font-semibold text-terminal-text">{mode.label}</span>
+        <span className="text-sm font-semibold text-zinc-200">{mode.label}</span>
       </div>
-      <p className="text-[10px] text-terminal-muted/55 leading-relaxed mb-3">{mode.description}</p>
+      <p className="text-[10px] text-zinc-500/55 leading-relaxed mb-3">{mode.description}</p>
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] text-terminal-muted/45 uppercase tracking-wider">Frequency</span>
+          <span className="text-[10px] text-zinc-500/45 uppercase tracking-wider">Frequency</span>
           <DotIndicator value={mode.frequency} color={mode.color} />
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-[10px] text-terminal-muted/45 uppercase tracking-wider">Risk</span>
+          <span className="text-[10px] text-zinc-500/45 uppercase tracking-wider">Risk</span>
           <DotIndicator value={mode.riskLevel} color={riskColor} />
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-[10px] text-terminal-muted/45 uppercase tracking-wider">Min R:R</span>
+          <span className="text-[10px] text-zinc-500/45 uppercase tracking-wider">Min R:R</span>
           <span className="text-[10px] font-mono font-semibold" style={{ color: mode.color }}>{mode.rrExpected}</span>
         </div>
       </div>
@@ -1204,8 +1204,8 @@ function SafetyStatusCard({ settings, dirty }: {
       <div className="rounded-xl border border-bull-default/25 bg-bull-default/5 px-4 py-3 flex items-center gap-3">
         <span className="w-2.5 h-2.5 rounded-full bg-bull-default shrink-0" />
         <div>
-          <p className="text-sm font-semibold text-terminal-text">Safety status: normal</p>
-          <p className="text-xs text-terminal-muted/60">AI validation, Telegram delivery, and operational switches are all in their expected states.</p>
+          <p className="text-sm font-semibold text-zinc-200">Safety status: normal</p>
+          <p className="text-xs text-zinc-500/60">AI validation, Telegram delivery, and operational switches are all in their expected states.</p>
         </div>
       </div>
     )
@@ -1223,7 +1223,7 @@ function SafetyStatusCard({ settings, dirty }: {
         {issues.map((iss, i) => (
           <div key={i} className="text-xs">
             <span className="text-bear-default/90 font-semibold">{iss.label}</span>
-            <span className="text-terminal-muted/60"> — {iss.detail}</span>
+            <span className="text-zinc-500/60"> — {iss.detail}</span>
           </div>
         ))}
       </div>
@@ -1385,7 +1385,7 @@ function SettingsTab() {
 
   if (loading) {
     return (
-      <div className="glass-card rounded-lg p-10 text-center text-terminal-muted text-sm">
+      <div className="glass-card rounded-lg p-10 text-center text-zinc-500 text-sm">
         Loading configuration…
       </div>
     )
@@ -1410,10 +1410,10 @@ function SettingsTab() {
       {/* ── Quick Controls ──────────────────────────────────────────────────── */}
       <div className="space-y-3">
         <div className="flex items-baseline justify-between gap-3 flex-wrap">
-          <p className="text-terminal-text text-sm font-semibold">Quick Controls</p>
-          <p className="text-[10px] text-terminal-muted/50">
+          <p className="text-zinc-200 text-sm font-semibold">Quick Controls</p>
+          <p className="text-[10px] text-zinc-500/50">
             Emergency Stop · Maintenance also in{' '}
-            <a href="/admin/system?tab=settings" className="underline hover:text-terminal-text">System → Settings</a>
+            <a href="/admin/system?tab=settings" className="underline hover:text-zinc-200">System → Settings</a>
           </p>
         </div>
         {/* Toggles */}
@@ -1448,24 +1448,24 @@ function SettingsTab() {
                 errMsg       ? 'border-bear-default/30 bg-bear-default/5'
                 : isFieldDirty ? 'border-signal-medium/30'
                 : modified   ? 'border-signal-medium/20'
-                : 'border-terminal-border/50'
+                : 'border-zinc-800/50'
               }`}>
                 <div className="flex items-start justify-between gap-2 mb-1">
-                  <span className="text-sm font-medium text-terminal-text leading-tight">{def.label}</span>
+                  <span className="text-sm font-medium text-zinc-200 leading-tight">{def.label}</span>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {modified && !isFieldDirty && (
                       <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-signal-medium/10 text-signal-medium/70 border border-signal-medium/20">modified</span>
                     )}
-                    {saving.has(k) && <span className="text-[10px] text-terminal-muted animate-pulse">saving…</span>}
+                    {saving.has(k) && <span className="text-[10px] text-zinc-500 animate-pulse">saving…</span>}
                     {saved.has(k) && !isFieldDirty && <CheckCircle2 size={11} className="text-bull-default" />}
                   </div>
                 </div>
-                <p className="text-[10px] text-terminal-muted/55 mb-1 leading-relaxed">{def.tagline}</p>
-                <p className="text-[10px] text-terminal-muted/35 mb-3 font-mono">{def.impact}</p>
+                <p className="text-[10px] text-zinc-500/55 mb-1 leading-relaxed">{def.tagline}</p>
+                <p className="text-[10px] text-zinc-500/35 mb-3 font-mono">{def.impact}</p>
                 <div className="flex items-center gap-2 flex-wrap">
                   <SettingInput entry={entry} value={value} onChange={v => handleChange(entry, v)} disabled={saving.has(k)} />
                   {pct !== null && (
-                    <div className="flex-1 min-w-[48px] h-1.5 rounded-full bg-terminal-bright/25 overflow-hidden">
+                    <div className="flex-1 min-w-[48px] h-1.5 rounded-full bg-zinc-700/25 overflow-hidden">
                       <div className="h-full rounded-full transition-all"
                         style={{ width: `${Math.max(0, Math.min(100, pct))}%`, backgroundColor: barColor }} />
                     </div>
@@ -1490,7 +1490,7 @@ function SettingsTab() {
 
       {/* ── Operating Mode ──────────────────────────────────────────────────── */}
       <div className="space-y-3">
-        <p className="text-terminal-text text-sm font-semibold">Operating Mode</p>
+        <p className="text-zinc-200 text-sm font-semibold">Operating Mode</p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {OPERATING_MODES.filter(m => ['conservative', 'balanced', 'aggressive'].includes(m.id)).map(mode => (
             <ModeCard key={mode.id} mode={mode} isActive={activeMode === mode.id}
@@ -1498,22 +1498,22 @@ function SettingsTab() {
           ))}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] text-terminal-muted/50 uppercase tracking-wider shrink-0">Specialist:</span>
+          <span className="text-[10px] text-zinc-500/50 uppercase tracking-wider shrink-0">Specialist:</span>
           {OPERATING_MODES.filter(m => !['conservative', 'balanced', 'aggressive'].includes(m.id)).map(mode => (
             <button key={mode.id} type="button" title={mode.description}
               onClick={() => applyMode(mode)} disabled={!!applyingMode}
               className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
                 activeMode === mode.id
-                  ? 'border-bull-default/50 bg-bull-default/10 text-terminal-text'
-                  : 'border-terminal-border text-terminal-muted hover:text-terminal-text hover:border-terminal-border/80'
+                  ? 'border-bull-default/50 bg-bull-default/10 text-zinc-200'
+                  : 'border-zinc-800 text-zinc-500 hover:text-zinc-200 hover:border-zinc-800/80'
               }`}>
               <span style={{ color: mode.color }}>{mode.icon}</span>
               {applyingMode === mode.id ? 'Applying…' : mode.label}
-              <span className="text-terminal-muted/40 font-mono hidden sm:inline">RR {mode.rrExpected}</span>
+              <span className="text-zinc-500/40 font-mono hidden sm:inline">RR {mode.rrExpected}</span>
             </button>
           ))}
         </div>
-        <p className="text-[10px] text-terminal-muted/40 leading-relaxed">
+        <p className="text-[10px] text-zinc-500/40 leading-relaxed">
           Presets that set confidence below 85 (Aggressive, Futures Tactical, Rotation Hunter) conflict with the
           ALPHA.TRUTH.1 audit — the 80–85 band ran negative expectancy over 30d. Prefer Balanced/Conservative for live capital.
         </p>
@@ -1545,7 +1545,7 @@ function SettingsTab() {
         return (
           <div className="space-y-4">
             <div className="flex items-center gap-3 flex-wrap">
-              <p className="text-terminal-text text-sm font-semibold">Feature Flags</p>
+              <p className="text-zinc-200 text-sm font-semibold">Feature Flags</p>
               {p0Pending > 0 && (
                 <>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 font-bold">
@@ -1577,7 +1577,7 @@ function SettingsTab() {
             {/* Signal Quality flags */}
             {qualityFlags.length > 0 && (
               <div className="space-y-2">
-                <p className="text-[10px] font-mono uppercase tracking-wide text-terminal-muted/50">Signal Quality</p>
+                <p className="text-[10px] font-mono uppercase tracking-wide text-zinc-500/50">Signal Quality</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {qualityFlags.map(renderFlag)}
                 </div>
@@ -1587,7 +1587,7 @@ function SettingsTab() {
             {/* Operational flags */}
             {operationalFlags.length > 0 && (
               <div className="space-y-2">
-                <p className="text-[10px] font-mono uppercase tracking-wide text-terminal-muted/50">Operational</p>
+                <p className="text-[10px] font-mono uppercase tracking-wide text-zinc-500/50">Operational</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {operationalFlags.map(renderFlag)}
                 </div>
@@ -1596,14 +1596,14 @@ function SettingsTab() {
 
             {/* Background & Analytics — collapsed by default */}
             {advancedFlags.length > 0 && (
-              <div className="glass-card rounded-lg border border-terminal-border/40 overflow-hidden">
+              <div className="glass-card rounded-lg border border-zinc-800/40 overflow-hidden">
                 <button type="button" onClick={() => setAdvFlagsOpen(v => !v)}
-                  className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-terminal-bright/5 transition-colors">
-                  <span className="text-xs text-terminal-muted/60 font-mono">Background &amp; Analytics ({advancedFlags.length})</span>
-                  <ChevronDown size={12} className={`text-terminal-muted/40 transition-transform ${advFlagsOpen ? 'rotate-180' : ''}`} />
+                  className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-zinc-700/5 transition-colors">
+                  <span className="text-xs text-zinc-500/60 font-mono">Background &amp; Analytics ({advancedFlags.length})</span>
+                  <ChevronDown size={12} className={`text-zinc-500/40 transition-transform ${advFlagsOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {advFlagsOpen && (
-                  <div className="border-t border-terminal-border/30 p-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div className="border-t border-zinc-800/30 p-3 grid grid-cols-1 md:grid-cols-2 gap-2">
                     {advancedFlags.map(renderFlag)}
                   </div>
                 )}
@@ -1614,13 +1614,13 @@ function SettingsTab() {
       })()}
 
       {/* ── Advanced Settings & Audit Log ───────────────────────────────────── */}
-      <div className="glass-card rounded-xl overflow-hidden border border-terminal-border/50">
+      <div className="glass-card rounded-xl overflow-hidden border border-zinc-800/50">
         <button type="button" onClick={() => setAllSettingsOpen(v => !v)}
-          className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-terminal-bright/5 transition-colors">
+          className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-zinc-700/5 transition-colors">
           <div className="flex items-center gap-2">
-            <Database size={14} className="text-terminal-muted/60" />
-            <span className="text-sm font-semibold text-terminal-text">Advanced Settings &amp; Audit Log</span>
-            <span className="text-[10px] text-terminal-muted/40 font-mono hidden sm:block">
+            <Database size={14} className="text-zinc-500/60" />
+            <span className="text-sm font-semibold text-zinc-200">Advanced Settings &amp; Audit Log</span>
+            <span className="text-[10px] text-zinc-500/40 font-mono hidden sm:block">
               · tuning-phase knobs · change history
             </span>
           </div>
@@ -1630,14 +1630,14 @@ function SettingsTab() {
                 {Object.keys(dirty).length} unsaved
               </span>
             )}
-            <ChevronDown size={14} className={`text-terminal-muted/50 transition-transform ${allSettingsOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown size={14} className={`text-zinc-500/50 transition-transform ${allSettingsOpen ? 'rotate-180' : ''}`} />
           </div>
         </button>
 
         {allSettingsOpen && (
-          <div className="flex min-h-[400px] border-t border-terminal-border/40">
+          <div className="flex min-h-[400px] border-t border-zinc-800/40">
             {/* Left nav */}
-            <div className="w-44 sm:w-52 shrink-0 border-r border-terminal-border/40 py-2">
+            <div className="w-44 sm:w-52 shrink-0 border-r border-zinc-800/40 py-2">
               {[...advTabs.filter(t => t !== 'audit'), 'audit'].map(tab => {
                 const isActive = activeAdvTab === tab
                 const count    = tab !== 'audit' ? dirtyKeys(tab) : 0
@@ -1654,8 +1654,8 @@ function SettingsTab() {
                     onClick={() => { setActiveAdvTab(tab); setResetConfirm(null) }}
                     className={`w-full text-left px-3 py-2.5 transition-colors relative ${
                       isActive
-                        ? 'bg-terminal-bright/15 text-terminal-text'
-                        : 'text-terminal-muted hover:bg-terminal-bright/5 hover:text-terminal-text'
+                        ? 'bg-zinc-700/15 text-zinc-200'
+                        : 'text-zinc-500 hover:bg-zinc-700/5 hover:text-zinc-200'
                     }`}
                   >
                     {isActive && (
@@ -1666,7 +1666,7 @@ function SettingsTab() {
                         style={{ backgroundColor: dotColor[tab] ?? '#6b7280' }} />
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <span className={`text-xs font-semibold truncate ${isActive ? 'text-terminal-text' : ''}`}>
+                          <span className={`text-xs font-semibold truncate ${isActive ? 'text-zinc-200' : ''}`}>
                             {label}
                           </span>
                           {count > 0 && (
@@ -1675,7 +1675,7 @@ function SettingsTab() {
                             </span>
                           )}
                         </div>
-                        <p className="text-[10px] text-terminal-muted/45 truncate leading-tight mt-0.5 hidden sm:block">
+                        <p className="text-[10px] text-zinc-500/45 truncate leading-tight mt-0.5 hidden sm:block">
                           {desc.split('·')[0].trim()}
                         </p>
                       </div>
@@ -1691,10 +1691,10 @@ function SettingsTab() {
                 <>
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-terminal-text text-sm font-medium">{SETTINGS_GROUP_LABELS[activeAdvTab] ?? activeAdvTab}</p>
-                      <p className="text-terminal-muted/60 text-xs mt-0.5">{SETTINGS_GROUP_DESCRIPTIONS[activeAdvTab]}</p>
+                      <p className="text-zinc-200 text-sm font-medium">{SETTINGS_GROUP_LABELS[activeAdvTab] ?? activeAdvTab}</p>
+                      <p className="text-zinc-500/60 text-xs mt-0.5">{SETTINGS_GROUP_DESCRIPTIONS[activeAdvTab]}</p>
                       {advMeta && (
-                        <div className="flex items-center gap-3 mt-1.5 text-xs font-mono text-terminal-muted/40">
+                        <div className="flex items-center gap-3 mt-1.5 text-xs font-mono text-zinc-500/40">
                           <span className="flex items-center gap-1"><Clock size={9} />{formatRelative(advMeta.updated_at)}</span>
                           <span>schema v{advMeta.schema_version} · data v{advMeta.data_version}</span>
                           <span>by {advMeta.updated_by}</span>
@@ -1703,14 +1703,14 @@ function SettingsTab() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <button onClick={() => { setAuditGroup(activeAdvTab); setActiveAdvTab('audit') }}
-                        className="flex items-center gap-1.5 text-xs px-2 py-1 rounded border transition-colors font-mono text-terminal-muted border-terminal-border hover:text-terminal-text">
+                        className="flex items-center gap-1.5 text-xs px-2 py-1 rounded border transition-colors font-mono text-zinc-500 border-zinc-800 hover:text-zinc-200">
                         <History size={10} />History
                       </button>
                       <button onClick={() => handleResetGroup(activeAdvTab)}
                         className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded border transition-colors font-mono ${
                           resetConfirm === activeAdvTab
                             ? 'text-bear-default border-bear-default/40 bg-bear-default/5'
-                            : 'text-terminal-muted border-terminal-border hover:text-terminal-text'
+                            : 'text-zinc-500 border-zinc-800 hover:text-zinc-200'
                         }`}>
                         <RotateCcw size={10} />
                         {resetConfirm === activeAdvTab ? 'Confirm?' : 'Defaults'}
@@ -1732,13 +1732,13 @@ function SettingsTab() {
 
                   <div className="glass-card rounded-lg overflow-hidden">
                     {!advFields.length ? (
-                      <div className="px-5 py-8 text-center text-terminal-muted text-sm">No settings in this group</div>
+                      <div className="px-5 py-8 text-center text-zinc-500 text-sm">No settings in this group</div>
                     ) : (
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="border-b border-terminal-border">
+                          <tr className="border-b border-zinc-800">
                             {[['Setting', 'w-44'], ['Value', ''], ['Default', 'w-24 hidden md:table-cell'], ['Description', 'hidden lg:table-cell'], ['', 'w-20']].map(([h, cls]) => (
-                              <th key={h} className={`text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-4 ${cls}`}>{h}</th>
+                              <th key={h} className={`text-zinc-500 text-xs uppercase tracking-wider text-left py-2 px-4 ${cls}`}>{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -1751,15 +1751,15 @@ function SettingsTab() {
                             const isSavedK     = saved.has(k)
                             const errMsg       = errors[k]
                             return (
-                              <tr key={entry.key} className={`border-b border-terminal-border/30 transition-colors ${
-                                errMsg ? 'bg-bear-default/5' : isFieldDirty ? 'bg-signal-medium/5' : 'hover:bg-terminal-bright/5'
+                              <tr key={entry.key} className={`border-b border-zinc-800/30 transition-colors ${
+                                errMsg ? 'bg-bear-default/5' : isFieldDirty ? 'bg-signal-medium/5' : 'hover:bg-zinc-700/5'
                               }`}>
                                 <td className="py-2.5 px-4">
                                   <div className="flex items-center gap-1.5">
-                                    <p className="text-terminal-text font-mono">{entry.label}</p>
+                                    <p className="text-zinc-200 font-mono">{entry.label}</p>
                                     <WiredChip state={wiredState(entry.category, entry.key)} />
                                   </div>
-                                  <p className="text-terminal-muted/50 text-xs font-mono">{entry.key}</p>
+                                  <p className="text-zinc-500/50 text-xs font-mono">{entry.key}</p>
                                   {entry.requires_restart && <span className="text-xs text-signal-high">↻ restart</span>}
                                 </td>
                                 <td className="py-2.5 px-4">
@@ -1777,16 +1777,16 @@ function SettingsTab() {
                                     )
                                   })()}
                                 </td>
-                                <td className="py-2.5 px-4 font-mono text-terminal-muted/50 text-xs hidden md:table-cell">{String(entry.default)}</td>
-                                <td className="py-2.5 px-4 text-terminal-muted/60 hidden lg:table-cell">
+                                <td className="py-2.5 px-4 font-mono text-zinc-500/50 text-xs hidden md:table-cell">{String(entry.default)}</td>
+                                <td className="py-2.5 px-4 text-zinc-500/60 hidden lg:table-cell">
                                   {entry.description}
                                   {entry.min_val != null && entry.max_val != null && (
-                                    <span className="ml-1 text-terminal-muted/30 font-mono">[{entry.min_val}–{entry.max_val}]</span>
+                                    <span className="ml-1 text-zinc-500/30 font-mono">[{entry.min_val}–{entry.max_val}]</span>
                                   )}
                                 </td>
                                 <td className="py-2.5 px-4">
                                   <div className="flex items-center justify-end gap-1.5">
-                                    {isSavingK && <span className="text-xs text-terminal-muted font-mono animate-pulse">saving…</span>}
+                                    {isSavingK && <span className="text-xs text-zinc-500 font-mono animate-pulse">saving…</span>}
                                     {isSavedK && !isFieldDirty && <CheckCircle2 size={13} className="text-bull-default" />}
                                     {isFieldDirty && !isSavingK && !errMsg && (
                                       <button onClick={() => handleManualSave(entry)}
@@ -1810,62 +1810,62 @@ function SettingsTab() {
               {activeAdvTab === 'audit' && (
                 <>
                   <div className="flex items-center gap-3 flex-wrap">
-                    <p className="text-terminal-muted text-xs uppercase tracking-wider flex-1">Configuration Change History</p>
+                    <p className="text-zinc-500 text-xs uppercase tracking-wider flex-1">Configuration Change History</p>
                     <select value={auditGroup} onChange={e => setAuditGroup(e.target.value)}
-                      className="bg-terminal-bg border border-terminal-border rounded px-2 py-1 text-xs font-mono text-terminal-text focus:outline-none cursor-pointer">
+                      className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs font-mono text-zinc-200 focus:outline-none cursor-pointer">
                       <option value="all">All groups</option>
                       {Object.keys(settings).map(g => <option key={g} value={g}>{SETTINGS_GROUP_LABELS[g] ?? g}</option>)}
                     </select>
                     <button onClick={() => fetchAudit(auditGroup)}
-                      className="flex items-center gap-1 text-terminal-muted text-xs hover:text-terminal-text font-mono transition-colors">
+                      className="flex items-center gap-1 text-zinc-500 text-xs hover:text-zinc-200 font-mono transition-colors">
                       <RefreshCw size={10} />Refresh
                     </button>
                   </div>
                   <div className="glass-card rounded-lg overflow-hidden">
                     {auditLoading ? (
                       Array.from({ length: 5 }).map((_, i) => (
-                        <div key={i} className="px-4 py-3 border-b border-terminal-border/40 flex gap-4">
+                        <div key={i} className="px-4 py-3 border-b border-zinc-800/40 flex gap-4">
                           <div className="skeleton h-3 w-20 rounded" />
                           <div className="skeleton h-3 w-28 rounded" />
                           <div className="skeleton h-3 w-40 rounded" />
                         </div>
                       ))
                     ) : !auditLog.length ? (
-                      <div className="px-5 py-10 text-center text-terminal-muted text-sm">No configuration changes recorded yet</div>
+                      <div className="px-5 py-10 text-center text-zinc-500 text-sm">No configuration changes recorded yet</div>
                     ) : (
                       <div className="overflow-x-auto">
                         <table className="w-full text-xs min-w-[620px]">
                           <thead>
-                            <tr className="border-b border-terminal-border">
+                            <tr className="border-b border-zinc-800">
                               {['Group', 'Version', 'Changed Fields', 'By', 'When'].map(h => (
-                                <th key={h} className="text-terminal-muted text-xs uppercase tracking-wider text-left py-2 px-3">{h}</th>
+                                <th key={h} className="text-zinc-500 text-xs uppercase tracking-wider text-left py-2 px-3">{h}</th>
                               ))}
                             </tr>
                           </thead>
                           <tbody>
                             {auditLog.map(entry => (
-                              <tr key={entry.id} className="border-b border-terminal-border/30 hover:bg-terminal-bright/10">
-                                <td className="py-2.5 px-3 font-mono text-terminal-muted/60 text-xs">{SETTINGS_GROUP_LABELS[entry.group_name] ?? entry.group_name}</td>
+                              <tr key={entry.id} className="border-b border-zinc-800/30 hover:bg-zinc-700/10">
+                                <td className="py-2.5 px-3 font-mono text-zinc-500/60 text-xs">{SETTINGS_GROUP_LABELS[entry.group_name] ?? entry.group_name}</td>
                                 <td className="py-2.5 px-3 font-mono text-xs whitespace-nowrap">
                                   <span className="text-bear-default/60">v{entry.old_version}</span>
-                                  <span className="text-terminal-muted/30"> → </span>
+                                  <span className="text-zinc-500/30"> → </span>
                                   <span className="text-bull-default">v{entry.new_version}</span>
                                 </td>
                                 <td className="py-2.5 px-3 text-xs max-w-xs">
                                   <div className="space-y-0.5">
                                     {Object.entries(entry.changed_fields as Record<string, AuditChangedField>).map(([field, diff]) => (
                                       <div key={field} className="font-mono">
-                                        <span className="text-terminal-text">{field}</span>
-                                        <span className="text-terminal-muted/30"> </span>
+                                        <span className="text-zinc-200">{field}</span>
+                                        <span className="text-zinc-500/30"> </span>
                                         <span className="text-bear-default/70">{JSON.stringify(diff.old)}</span>
-                                        <span className="text-terminal-muted/30"> → </span>
+                                        <span className="text-zinc-500/30"> → </span>
                                         <span className="text-bull-default">{JSON.stringify(diff.new)}</span>
                                       </div>
                                     ))}
                                   </div>
                                 </td>
-                                <td className="py-2.5 px-3 font-mono text-terminal-muted text-xs">{entry.updated_by}</td>
-                                <td className="py-2.5 px-3 font-mono text-terminal-muted/50 text-xs whitespace-nowrap">
+                                <td className="py-2.5 px-3 font-mono text-zinc-500 text-xs">{entry.updated_by}</td>
+                                <td className="py-2.5 px-3 font-mono text-zinc-500/50 text-xs whitespace-nowrap">
                                   <span title={new Date(entry.updated_at).toLocaleString()}>{formatRelative(entry.updated_at)}</span>
                                 </td>
                               </tr>
@@ -1977,15 +1977,15 @@ export default function SystemPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-terminal-text text-xl font-semibold">System Health</h1>
-        <p className="text-terminal-muted text-sm mt-1">Service status · database truth · Redis fallback counters</p>
+        <h1 className="text-zinc-200 text-xl font-semibold">System Health</h1>
+        <p className="text-zinc-500 text-sm mt-1">Service status · database truth · Redis fallback counters</p>
       </div>
 
       {/* Tab nav */}
-      <div className="flex gap-1 border-b border-terminal-border pb-0">
+      <div className="flex gap-1 border-b border-zinc-800 pb-0">
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${tab === t.id ? 'border-terminal-text text-terminal-text' : 'border-transparent text-terminal-muted hover:text-terminal-text/70'}`}>
+            className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${tab === t.id ? 'border-zinc-200 text-zinc-200' : 'border-transparent text-zinc-500 hover:text-zinc-200/70'}`}>
             {t.label}
           </button>
         ))}
@@ -2024,7 +2024,7 @@ export default function SystemPage() {
             <span className={`font-mono font-bold text-base uppercase ${health.status === 'ready' ? 'text-bull-default' : 'text-bear-default'}`}>
               System {health.status}
             </span>
-            <p className="text-xs text-terminal-muted/60 mt-0.5">
+            <p className="text-xs text-zinc-500/60 mt-0.5">
               {health.status === 'ready' ? 'All services operating normally' : 'One or more services degraded — check below'}
             </p>
           </div>
@@ -2033,7 +2033,7 @@ export default function SystemPage() {
 
       {/* Service grid */}
       <div>
-        <p className="text-[10px] text-terminal-muted/50 uppercase tracking-wide mb-2.5">Service Status</p>
+        <p className="text-[10px] text-zinc-500/50 uppercase tracking-wide mb-2.5">Service Status</p>
         {hl ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-12 rounded-lg" />)}
@@ -2091,7 +2091,7 @@ export default function SystemPage() {
 
       {/* Operational metrics */}
       <div>
-        <p className="text-[10px] text-terminal-muted/50 uppercase tracking-wide mb-2.5">Operational Metrics · {analyticsWindowLabel(24)}</p>
+        <p className="text-[10px] text-zinc-500/50 uppercase tracking-wide mb-2.5">Operational Metrics · {analyticsWindowLabel(24)}</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <MetricCard
             label="Total Scans"
@@ -2150,7 +2150,7 @@ export default function SystemPage() {
         <div>
           <div className="flex items-center gap-2 mb-3">
             <span className={`w-2 h-2 rounded-full shrink-0 ${LEVEL_DOT[monitor.overall_level]}`} />
-            <p className="text-terminal-muted text-xs uppercase tracking-wider font-semibold">
+            <p className="text-zinc-500 text-xs uppercase tracking-wider font-semibold">
               Operational Monitoring - DB Truth / UTC Counters
             </p>
             <span className={`ml-auto text-[10px] font-mono font-bold uppercase ${LEVEL_CLS[monitor.overall_level]}`}>
@@ -2174,7 +2174,7 @@ export default function SystemPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="glass-card rounded-xl p-4">
-              <p className="text-terminal-muted text-[10px] uppercase tracking-wide mb-2">Signals & Outcomes</p>
+              <p className="text-zinc-500 text-[10px] uppercase tracking-wide mb-2">Signals & Outcomes</p>
               <MonitorRow label={`Signals generated (${analyticsWindowLabel(monitor.metrics.signals_per_day.window_hours)})`} metric={monitor.metrics.signals_per_day} />
               <MonitorRow label="Win rate (7d)"          metric={monitor.metrics.win_rate_pct} />
               <MonitorRow label="SL rate (7d)"           metric={monitor.metrics.sl_rate_pct} />
@@ -2182,7 +2182,7 @@ export default function SystemPage() {
               <MonitorRow label="Telegram sends"         metric={monitor.metrics.telegram_sends_per_day} />
             </div>
             <div className="glass-card rounded-xl p-4">
-              <p className="text-terminal-muted text-[10px] uppercase tracking-wide mb-2">Scanner</p>
+              <p className="text-zinc-500 text-[10px] uppercase tracking-wide mb-2">Scanner</p>
               <MonitorRow label="Scans today"          metric={monitor.metrics.scans_today} />
               <MonitorRow label="Coins/run"            metric={monitor.metrics.coins_scanned_per_run} />
               <MonitorRow label="Last scan duration"   metric={monitor.metrics.scan_duration_s} />
@@ -2190,14 +2190,14 @@ export default function SystemPage() {
               <MonitorRow label="CMC credits/day"      metric={monitor.metrics.cmc_credits_per_day} />
             </div>
             <div className="glass-card rounded-xl p-4">
-              <p className="text-terminal-muted text-[10px] uppercase tracking-wide mb-2">Claude / AI</p>
+              <p className="text-zinc-500 text-[10px] uppercase tracking-wide mb-2">Claude / AI</p>
               <MonitorRow label="Claude calls"       metric={monitor.metrics.claude_calls_per_day} />
               <MonitorRow label="Heuristic calls"    metric={monitor.metrics.heuristic_calls_per_day} />
               <MonitorRow label="Fallback rate"      metric={monitor.metrics.claude_fallback_pct} />
               <MonitorRow label="Est. cost today"    metric={monitor.metrics.estimated_cost_usd} />
             </div>
           </div>
-          <p className="text-terminal-muted/30 text-[10px] font-mono mt-2">
+          <p className="text-zinc-500/30 text-[10px] font-mono mt-2">
             Generated {new Date(monitor.generated_at).toLocaleTimeString()} · signals source: {monitor.metrics.signals_per_day.source ?? 'unknown'} · Redis counters reset midnight UTC
           </p>
         </div>

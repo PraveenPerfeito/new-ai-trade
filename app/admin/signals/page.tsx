@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import {
@@ -885,8 +885,8 @@ function OpsToggle({ label, description, enabled, loading, icon, onEnable, onDis
     <div className={cn('glass-card rounded-xl p-4 flex items-start sm:items-center gap-4 flex-col sm:flex-row transition-colors', inverse && isActive ? 'border-red-500/40 bg-red-900/10' : '')}>
       <div className={cn('p-2.5 rounded-lg shrink-0', inverse && isActive ? 'bg-red-500/20 text-red-400' : isActive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-zinc-800 text-zinc-500')}>{icon}</div>
       <div className="flex-1 min-w-0">
-        <p className="text-terminal-text font-semibold text-sm">{label}</p>
-        <p className="text-terminal-muted text-xs mt-0.5 leading-relaxed">{description}</p>
+        <p className="text-zinc-200 font-semibold text-sm">{label}</p>
+        <p className="text-zinc-500 text-xs mt-0.5 leading-relaxed">{description}</p>
       </div>
       <div className="flex items-center gap-3 shrink-0">
         <span className={cn('text-xs font-mono px-2 py-0.5 rounded-md border',
@@ -1196,8 +1196,10 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
           <div className="space-y-1.5">
             {signals.slice(0,6).map((sig,i)=>{
               const alignment = computeRegimeAlignment(sig.type, currentRegime ?? sig.marketRegime)
+              const isOverviewBuy = sig.type === 'BUY'
               return (
-                <div key={sig.id??i} className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 hover:border-zinc-700 transition-colors">
+                <div key={sig.id??i} className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 hover:border-zinc-700 transition-colors relative overflow-hidden">
+                  <div className={`absolute inset-y-0 left-0 w-[3px] ${isOverviewBuy ? 'bg-emerald-500/60' : 'bg-red-500/60'}`} />
                   <div className="flex items-center gap-3">
                     <span className="font-semibold text-sm text-white w-16 shrink-0">{sig.symbol}</span>
                     <span className={`text-xs font-semibold w-8 shrink-0 ${sig.type==='BUY'?'text-green-400':'text-red-400'}`}>{sig.type}</span>
@@ -1374,7 +1376,9 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
           const alignment = computeRegimeAlignment(sig.type, currentRegime ?? sig.marketRegime)
           const isBuy = sig.type === 'BUY'
           return (
-            <div key={rowId} className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden hover:border-zinc-700 transition-colors">
+            <div key={rowId} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden hover:border-zinc-700 transition-colors relative">
+              {/* Direction accent bar */}
+              <div className={`absolute inset-y-0 left-0 w-[3px] ${isBuy ? 'bg-emerald-500/60' : 'bg-red-500/60'}`} />
               {/* Main row — clickable to expand */}
               <div className="px-4 pt-3 pb-2 flex items-center gap-3 cursor-pointer select-none"
                 onClick={()=>setExpandedId(isExpanded ? null : rowId)}>
@@ -2077,8 +2081,8 @@ function RegimeTab({ regime, scanStats, regimePerfData }: {
         {/* Apply Regime Settings */}
         <div className="glass-card rounded-xl p-4 flex items-start sm:items-center justify-between gap-4 flex-col sm:flex-row">
           <div>
-            <p className="text-terminal-text text-sm font-semibold">Apply Regime Settings</p>
-            <p className="text-terminal-muted text-xs mt-0.5">
+            <p className="text-zinc-200 text-sm font-semibold">Apply Regime Settings</p>
+            <p className="text-zinc-500 text-xs mt-0.5">
               Sets scanner to <span className="font-mono text-zinc-300">{targetPreset}</span> preset for {REGIME_LABEL[regime.regime]}
             </p>
           </div>
@@ -2240,12 +2244,12 @@ export default function SignalsCenterPage() {
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-semibold text-terminal-text">Signals</h1>
+        <h1 className="text-xl font-semibold text-zinc-200">Signals</h1>
         <p className="text-xs text-zinc-500 mt-0.5">Overview · Signals · Regime</p>
       </div>
 
       {/* Tab nav */}
-      <div className="flex gap-1 border-b border-terminal-border pb-0">
+      <div className="flex gap-1 border-b border-zinc-800 pb-0">
         {TABS.map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)}
             className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
