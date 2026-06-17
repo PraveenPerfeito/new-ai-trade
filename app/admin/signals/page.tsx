@@ -1204,7 +1204,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
                   <div className={`absolute inset-y-0 left-0 w-[3px] ${isOverviewBuy ? 'bg-emerald-500/70' : 'bg-red-500/70'}`} />
                   <div className="flex items-center gap-3">
                     <span className="font-semibold text-sm text-white w-16 shrink-0">{sig.symbol}</span>
-                    <span className={`text-xs font-semibold w-8 shrink-0 ${sig.type==='BUY'?'text-green-400':'text-red-400'}`}>{sig.type}</span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${sig.type==='BUY' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25' : 'text-red-400 bg-red-500/10 border-red-500/25'}`}>{sig.type}</span>
                     {sig.riskGrade && <GradeBadge grade={sig.riskGrade} />}
                     <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>{STAGE_META[sig.lifecycleStage]?.label ?? (sig.lifecycleStage??'').replace(/_/g,' ')}</span>
                     <FreshnessTag sig={sig} />
@@ -1385,7 +1385,7 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
               <div className="px-4 pt-3 pb-2 flex items-center gap-3 cursor-pointer select-none"
                 onClick={()=>setExpandedId(isExpanded ? null : rowId)}>
                 <span className="font-semibold text-sm text-white w-20 shrink-0">{sig.symbol}</span>
-                <span className={`text-sm font-bold w-8 shrink-0 ${isBuy?'text-emerald-400':'text-red-400'}`}>{sig.type}</span>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded border shrink-0 ${isBuy ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25' : 'text-red-400 bg-red-500/10 border-red-500/25'}`}>{sig.type}</span>
                 {sig.riskGrade && <GradeBadge grade={sig.riskGrade} />}
                 <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>
                   {STAGE_META[sig.lifecycleStage]?.label ?? (sig.lifecycleStage??'').replace(/_/g,' ')}

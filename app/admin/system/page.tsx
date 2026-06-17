@@ -111,15 +111,15 @@ function ServiceCard({ name, status, detail }: { name: string; status: string; d
   const isConfigured = status !== 'not_configured'
   const isOk       = ['ok', 'ready', 'not_configured', 'HEALTHY'].includes(status)
   const isDegraded = status === 'DEGRADED'
-  const dotCls  = !isConfigured ? 'bg-zinc-500/40'
+  const dotCls  = !isConfigured ? 'bg-zinc-600'
     : isDegraded ? 'bg-amber-400 animate-pulse'
-    : isOk ? 'bg-bull-default' : 'bg-bear-default animate-pulse'
+    : isOk ? 'bg-zinc-400' : 'bg-bear-default animate-pulse'
   const borderCls = !isConfigured ? 'border-zinc-800'
     : isDegraded ? 'border-amber-500/20'
-    : isOk ? 'border-bull-default/20' : 'border-bear-default/20'
+    : isOk ? 'border-zinc-700/60' : 'border-bear-default/20'
   const textCls = !isConfigured ? 'text-zinc-500/60'
     : isDegraded ? 'text-amber-400'
-    : isOk ? 'text-bull-default' : 'text-bear-default'
+    : isOk ? 'text-zinc-400' : 'text-bear-default'
   return (
     <div className={`glass-card rounded-lg px-4 py-3.5 border ${borderCls}`}>
       <div className="flex items-center gap-2.5">
