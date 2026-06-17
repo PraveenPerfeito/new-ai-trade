@@ -79,7 +79,7 @@ function CalibrationTable({ bands }: { bands: EdgeReport['confidence_calibration
               <td className="py-2.5 px-3">
                 {b.insufficient_data
                   ? <span className="text-[10px] text-zinc-500/40 border border-zinc-800 rounded px-1.5 py-0.5">WARMING</span>
-                  : <span className="text-[10px] text-bull-default/70 border border-bull-default/20 rounded px-1.5 py-0.5">OK</span>
+                  : <span className="text-[10px] text-zinc-400/70 border border-zinc-700/50 rounded px-1.5 py-0.5">OK</span>
                 }
               </td>
             </tr>
@@ -247,7 +247,7 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
             <div className="mt-4 pt-4 border-t border-zinc-800/50 flex gap-6 text-xs font-mono text-zinc-500">
               <span>TP: <span className="text-bull-default">{overall.tp_hits}</span></span>
               <span>SL: <span className="text-bear-default">{overall.sl_hits}</span></span>
-              <span>TO: <span className="text-zinc-200">{overall.timeouts}</span></span>
+              <span>TO: <span className="text-amber-400">{overall.timeouts}</span></span>
               {overall.win_rate_ci && (
                 <span>95% CI: [{(overall.win_rate_ci[0] * 100).toFixed(1)}%, {(overall.win_rate_ci[1] * 100).toFixed(1)}%]</span>
               )}
@@ -277,7 +277,7 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
               <span className="text-zinc-500 text-xs">Label:</span>
               <span className="text-zinc-200 text-xs font-mono">{cal.calibration.label.replace(/_/g, ' ')}</span>
               <span className="text-zinc-500 text-xs">Monotone:</span>
-              <span className={`text-xs font-mono ${cal.calibration.is_monotone ? 'text-bull-default' : 'text-bear-default'}`}>
+              <span className={`text-xs font-mono ${cal.calibration.is_monotone ? 'text-emerald-400' : 'text-red-400'}`}>
                 {cal.calibration.is_monotone === null ? '—' : cal.calibration.is_monotone ? 'yes' : 'no'}
               </span>
               {cal.optimal_threshold != null && (
@@ -712,7 +712,7 @@ function RiskGradeAnalysis({ rows }: { rows: AttributionDimension[] }) {
                   </td>
                   <td className="py-2 px-3 font-mono text-zinc-500 hidden sm:table-cell">{rr(d.avgRRAchieved)}</td>
                   <td className="py-2 px-3 font-mono text-zinc-500/50">
-                    {target && <span className={wrOk ? 'text-bull-default/60' : 'text-zinc-500/40'}>{target}</span>}
+                    {target && <span className={wrOk ? 'text-zinc-500/60' : 'text-zinc-500/40'}>{target}</span>}
                   </td>
                 </tr>
               )
@@ -979,8 +979,8 @@ function CalibrationHealthPanel({
       </div>
 
       {healthy && (
-        <div className="flex items-center gap-2 text-xs text-bull-default/80 mb-3">
-          <span className="w-1.5 h-1.5 rounded-full bg-bull-default"/>
+        <div className="flex items-center gap-2 text-xs text-zinc-400 mb-3">
+          <span className="w-1.5 h-1.5 rounded-full bg-zinc-400"/>
           Grades monotonic · confidence bands monotonic — no inversions detected
         </div>
       )}

@@ -695,7 +695,7 @@ function AnomaliesTab() {
             ))
           ) : !anomalies?.length ? (
             <div className="px-5 py-10 text-center space-y-1">
-              <p className="text-bull-default text-sm font-semibold">No anomalies detected</p>
+              <p className="text-zinc-400 text-sm font-semibold">No anomalies detected</p>
               <p className="text-zinc-500 text-xs">{lastCheck ? 'System operating within normal parameters' : 'Health checks run hourly — anomaly monitoring starts after the first scan cycle'}</p>
             </div>
           ) : (
@@ -1032,7 +1032,7 @@ function Toggle({ value, onChange, disabled, danger }: {
 
 function WiredChip({ state }: { state: WiredState }) {
   const cfg = {
-    live:    { label: 'live',         cls: 'text-bull-default border-bull-default/30 bg-bull-default/5',      title: 'Read by the backend at runtime' },
+    live:    { label: 'live',         cls: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/5',        title: 'Read by the backend at runtime' },
     floors:  { label: 'floor',        cls: 'text-blue-400 border-blue-500/30 bg-blue-500/5',                  title: 'Applied as a floor on per-mode configs when Apply Founder Thresholds is ON' },
     display: { label: 'display only', cls: 'text-zinc-500/50 border-zinc-800/60 bg-transparent', title: 'No backend consumer reads this value' },
   }[state]
@@ -1096,7 +1096,7 @@ function FeatureFlagCard({ entry, value, onChange, isSaving, isSaved, error, p0N
           )}
           {modified && !needsAction && <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-signal-medium/10 text-signal-medium/70 border border-signal-medium/20">modified</span>}
           {isSaving && <span className="text-xs text-zinc-500 animate-pulse">saving…</span>}
-          {isSaved  && <CheckCircle2 size={10} className="text-bull-default" />}
+          {isSaved  && <CheckCircle2 size={10} className="text-zinc-500" />}
         </div>
         <p className={`text-xs mt-1 leading-relaxed ${value ? 'text-zinc-500/60' : 'text-zinc-500/45'} ${needsAction ? '' : 'hidden group-hover:block'}`}>{entry.description}</p>
         {needsAction && p0Note && (
@@ -1201,8 +1201,8 @@ function SafetyStatusCard({ settings, dirty }: {
 
   if (issues.length === 0) {
     return (
-      <div className="rounded-xl border border-bull-default/25 bg-bull-default/5 px-4 py-3 flex items-center gap-3">
-        <span className="w-2.5 h-2.5 rounded-full bg-bull-default shrink-0" />
+      <div className="rounded-xl border border-zinc-700/50 bg-zinc-900/60 px-4 py-3 flex items-center gap-3">
+        <span className="w-2.5 h-2.5 rounded-full bg-zinc-400 shrink-0" />
         <div>
           <p className="text-sm font-semibold text-zinc-200">Safety status: normal</p>
           <p className="text-xs text-zinc-500/60">AI validation, Telegram delivery, and operational switches are all in their expected states.</p>
@@ -1457,7 +1457,7 @@ function SettingsTab() {
                       <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-signal-medium/10 text-signal-medium/70 border border-signal-medium/20">modified</span>
                     )}
                     {saving.has(k) && <span className="text-[10px] text-zinc-500 animate-pulse">saving…</span>}
-                    {saved.has(k) && !isFieldDirty && <CheckCircle2 size={11} className="text-bull-default" />}
+                    {saved.has(k) && !isFieldDirty && <CheckCircle2 size={11} className="text-zinc-500" />}
                   </div>
                 </div>
                 <p className="text-[10px] text-zinc-500/55 mb-1 leading-relaxed">{def.tagline}</p>
@@ -1504,7 +1504,7 @@ function SettingsTab() {
               onClick={() => applyMode(mode)} disabled={!!applyingMode}
               className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
                 activeMode === mode.id
-                  ? 'border-bull-default/50 bg-bull-default/10 text-zinc-200'
+                  ? 'border-blue-500/40 bg-blue-500/10 text-zinc-200'
                   : 'border-zinc-800 text-zinc-500 hover:text-zinc-200 hover:border-zinc-800/80'
               }`}>
               <span style={{ color: mode.color }}>{mode.icon}</span>
@@ -1659,7 +1659,7 @@ function SettingsTab() {
                     }`}
                   >
                     {isActive && (
-                      <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full bg-bull-default/70" />
+                      <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full bg-blue-400/70" />
                     )}
                     <div className="flex items-center gap-2 pl-1.5">
                       <span className="w-2 h-2 rounded-full shrink-0 opacity-70"
@@ -1787,7 +1787,7 @@ function SettingsTab() {
                                 <td className="py-2.5 px-4">
                                   <div className="flex items-center justify-end gap-1.5">
                                     {isSavingK && <span className="text-xs text-zinc-500 font-mono animate-pulse">saving…</span>}
-                                    {isSavedK && !isFieldDirty && <CheckCircle2 size={13} className="text-bull-default" />}
+                                    {isSavedK && !isFieldDirty && <CheckCircle2 size={13} className="text-zinc-500" />}
                                     {isFieldDirty && !isSavingK && !errMsg && (
                                       <button onClick={() => handleManualSave(entry)}
                                         className="flex items-center gap-1 px-2 py-1 rounded bg-signal-medium/10 border border-signal-medium/30 text-signal-medium text-xs hover:bg-signal-medium/20 font-mono transition-colors">
@@ -1847,9 +1847,9 @@ function SettingsTab() {
                               <tr key={entry.id} className="border-b border-zinc-800/30 hover:bg-zinc-700/10">
                                 <td className="py-2.5 px-3 font-mono text-zinc-500/60 text-xs">{SETTINGS_GROUP_LABELS[entry.group_name] ?? entry.group_name}</td>
                                 <td className="py-2.5 px-3 font-mono text-xs whitespace-nowrap">
-                                  <span className="text-bear-default/60">v{entry.old_version}</span>
-                                  <span className="text-zinc-500/30"> → </span>
-                                  <span className="text-bull-default">v{entry.new_version}</span>
+                                  <span className="text-zinc-500/50">v{entry.old_version}</span>
+                                  <span className="text-zinc-600"> → </span>
+                                  <span className="text-blue-400">v{entry.new_version}</span>
                                 </td>
                                 <td className="py-2.5 px-3 text-xs max-w-xs">
                                   <div className="space-y-0.5">
@@ -1859,7 +1859,7 @@ function SettingsTab() {
                                         <span className="text-zinc-500/30"> </span>
                                         <span className="text-bear-default/70">{JSON.stringify(diff.old)}</span>
                                         <span className="text-zinc-500/30"> → </span>
-                                        <span className="text-bull-default">{JSON.stringify(diff.new)}</span>
+                                        <span className="text-blue-400">{JSON.stringify(diff.new)}</span>
                                       </div>
                                     ))}
                                   </div>
@@ -2016,12 +2016,12 @@ export default function SystemPage() {
       {!hl && health && (
         <div className={`rounded-xl px-5 py-4 border flex items-center gap-4 ${
           health.status === 'ready'
-            ? 'bg-bull-default/5 border-bull-default/20'
+            ? 'bg-zinc-900/60 border-zinc-800'
             : 'bg-bear-default/5 border-bear-default/20'
         }`}>
-          <span className={`w-3 h-3 rounded-full shrink-0 ${health.status === 'ready' ? 'bg-bull-default animate-pulse-slow' : 'bg-bear-default animate-pulse'}`} />
+          <span className={`w-3 h-3 rounded-full shrink-0 ${health.status === 'ready' ? 'bg-zinc-400' : 'bg-bear-default animate-pulse'}`} />
           <div>
-            <span className={`font-mono font-bold text-base uppercase ${health.status === 'ready' ? 'text-bull-default' : 'text-bear-default'}`}>
+            <span className={`font-mono font-bold text-base uppercase ${health.status === 'ready' ? 'text-zinc-300' : 'text-bear-default'}`}>
               System {health.status}
             </span>
             <p className="text-xs text-zinc-500/60 mt-0.5">
@@ -2059,7 +2059,7 @@ export default function SystemPage() {
               <div className="flex flex-wrap gap-2 p-3 rounded-lg border border-zinc-800 bg-zinc-900/40">
                 {services.map(s => (
                   <span key={s.name} className="flex items-center gap-1.5 text-xs text-zinc-400">
-                    <span className="w-1.5 h-1.5 rounded-full bg-bull-default shrink-0" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0" />
                     {s.name}
                   </span>
                 ))}

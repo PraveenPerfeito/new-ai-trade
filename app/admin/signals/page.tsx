@@ -1117,7 +1117,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
                   ? 'bg-blue-500/10 border border-blue-500/30 text-blue-400'
                   : scanning || celery?.scanning
                   ? 'bg-zinc-800 border border-zinc-700 text-zinc-500 cursor-not-allowed'
-                  : 'bg-bull-default/10 border border-bull-default/30 text-bull-text hover:bg-bull-default/20'
+                  : 'bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20'
               }`}>
               {scanning ? <><span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"/> Queuing…</>
                : scanDone ? <><CheckCircle2 className="w-3 h-3"/> Queued ✓</>
@@ -1535,7 +1535,7 @@ function CoinWatchlist({ signals }: { signals: TacticalSignalRow[] }) {
           className="flex-1 bg-zinc-800/80 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
         />
         <button onClick={add}
-          className="px-3 py-1.5 rounded-lg bg-bull-default/10 border border-bull-default/30 text-bull-text text-xs font-semibold hover:bg-bull-default/20 transition-colors">
+          className="px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-semibold hover:bg-blue-500/20 transition-colors">
           + Add
         </button>
       </div>
