@@ -301,7 +301,7 @@ async def force_failover(body: ForceFailoverBody) -> dict:
 @router.post("/clear-cache")
 async def clear_cache() -> dict:
     redis = await get_redis()
-    keys = await redis.keys(COINS_CACHE_PAT)
+    keys = [k async for k in redis.scan_iter(match=COINS_CACHE_PAT, count=100)]
     if keys:
         await redis.delete(*keys)
     log.info("provider_cache_cleared", keys_deleted=len(keys))

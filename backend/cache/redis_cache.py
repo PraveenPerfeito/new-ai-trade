@@ -94,7 +94,7 @@ class RedisCache:
         try:
             redis = await get_redis()
             pattern = self._key("*")
-            keys = await redis.keys(pattern)
+            keys = [k async for k in redis.scan_iter(match=pattern, count=100)]
             if keys:
                 await redis.delete(*keys)
         except Exception:
@@ -118,7 +118,10 @@ class RedisCache:
     async def size(self) -> int:
         try:
             redis = await get_redis()
-            return len(await redis.keys(self._key("*")))
+            count = 0
+            async for _ in redis.scan_iter(match=self._key("*"), count=100):
+                count += 1
+            return count
         except Exception:
             return len(self._fallback)
 
