@@ -29,7 +29,7 @@ interface _Entry {
   error:       string | null
   lastUpdated: Date | null
   subscribers: Set<() => void>
-  timer:       ReturnType<typeof setInterval> | null
+  timer:       ReturnType<typeof setInterval> | number | null
   fetcherRef:  { current: () => Promise<unknown> }
   intervalMs:  number
 }
@@ -73,7 +73,7 @@ function _startTimer(key: string): void {
   if (e.intervalMs > 0) {
     e.timer = setInterval(() => _run(key), e.intervalMs)
   } else {
-    e.timer = -1 as unknown as ReturnType<typeof setInterval>
+    e.timer = -1
   }
 }
 
@@ -82,7 +82,7 @@ function _release(key: string, subscriber: () => void): void {
   if (!e) return
   e.subscribers.delete(subscriber)
   if (e.subscribers.size === 0) {
-    if (e.timer !== null && e.timer as unknown as number !== -1) { clearInterval(e.timer) }
+    if (e.timer !== null && e.timer !== -1) { clearInterval(e.timer as ReturnType<typeof setInterval>) }
     e.timer = null
     _entries.delete(key)
   }

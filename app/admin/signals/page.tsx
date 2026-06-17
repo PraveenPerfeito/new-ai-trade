@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import {
@@ -65,26 +65,26 @@ const REGIME_META: Record<string, { desc: string; implication: string }> = {
   CAPITULATION:    { desc: 'Extreme fear — RSI < 22, mass selling', implication: 'High-conviction long setups may be viable — capitulation often precedes reversals' },
 }
 const MODE_COLORS: Record<string, string> = {
-  spot:            'text-sky-400     border-sky-400/20     bg-sky-400/5',
-  futures:         'text-purple-400  border-purple-400/20  bg-purple-400/5',
-  high_confidence: 'text-emerald-400 border-emerald-400/20 bg-emerald-400/5',
-  trending:        'text-amber-400   border-amber-400/20   bg-amber-400/5',
+  spot:            'text-zinc-400   border-zinc-700     bg-zinc-800/50',
+  futures:         'text-blue-400   border-blue-500/30  bg-blue-500/10',
+  high_confidence: 'text-amber-400  border-amber-500/30 bg-amber-500/10',
+  trending:        'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
 }
 const MODES: ScannerMode[] = ['spot', 'futures', 'high_confidence', 'trending']
 const MODE_FIRE_MINUTES: Record<string, number[]> = {
   spot: [0,15,30,45], futures: [10,40], high_confidence: [5,35], trending: [20,50],
 }
 const STAGE_META: Record<string, { label: string; color: string }> = {
-  VALIDATED:     { label: 'Validated',   color: 'text-zinc-400    bg-zinc-500/10    border-zinc-500/20'    },
-  AI_APPROVED:   { label: 'AI Approved', color: 'text-purple-400  bg-purple-500/10  border-purple-500/20'  },
-  SCREENED:      { label: 'Screened',    color: 'text-sky-400     bg-sky-500/10     border-sky-500/20'     },
-  TELEGRAM_SENT: { label: 'Sent',        color: 'text-blue-400   bg-blue-500/10   border-blue-500/20'   },
-  ACTIVE:        { label: 'Active',      color: 'text-green-400   bg-green-500/10   border-green-500/20'   },
-  STALE:         { label: 'Stale',       color: 'text-amber-400   bg-amber-500/10   border-amber-500/20'   },
-  TP_HIT:        { label: 'TP Hit',      color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
-  SL_HIT:        { label: 'SL Hit',      color: 'text-red-400     bg-red-500/10     border-red-500/20'     },
-  CLOSED:        { label: 'Closed',      color: 'text-zinc-500    bg-zinc-500/10    border-zinc-600/20'    },
-  ANALYZED:      { label: 'Analyzed',    color: 'text-indigo-400  bg-indigo-500/10  border-indigo-500/20'  },
+  VALIDATED:     { label: 'Validated',   color: 'text-zinc-500   bg-zinc-500/10   border-zinc-600/20'    },
+  AI_APPROVED:   { label: 'AI Approved', color: 'text-violet-400 bg-violet-500/10 border-violet-500/25'  },
+  SCREENED:      { label: 'Screened',    color: 'text-sky-400    bg-sky-500/10    border-sky-500/20'     },
+  TELEGRAM_SENT: { label: 'Sent',        color: 'text-blue-400   bg-blue-500/10   border-blue-500/20'    },
+  ACTIVE:        { label: 'Active',      color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
+  STALE:         { label: 'Stale',       color: 'text-zinc-500   bg-zinc-500/10   border-zinc-600/20'    },
+  TP_HIT:        { label: 'TP Hit',      color: 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30' },
+  SL_HIT:        { label: 'SL Hit',      color: 'text-red-400    bg-red-500/10    border-red-500/20'     },
+  CLOSED:        { label: 'Closed',      color: 'text-zinc-500   bg-zinc-500/10   border-zinc-600/20'    },
+  ANALYZED:      { label: 'Analyzed',    color: 'text-zinc-500   bg-zinc-500/10   border-zinc-600/20'    },
 }
 const STAGE_TIPS: Record<string, string> = {
   VALIDATED:     'Passed all 11 scanner gates — queued for AI or heuristic review',
@@ -117,12 +117,40 @@ function StageLegend() {
     </div>
   )
 }
+function ConfidenceBar({ signals }: { signals: TacticalSignalRow[] }) {
+  const t90  = signals.filter(s => (s.confidence ?? 0) >= 90).length
+  const t85  = signals.filter(s => (s.confidence ?? 0) >= 85 && (s.confidence ?? 0) < 90).length
+  const t80  = signals.filter(s => (s.confidence ?? 0) >= 80 && (s.confidence ?? 0) < 85).length
+  const tLow = signals.filter(s => (s.confidence ?? 0) < 80).length
+  const total = signals.length
+  if (total === 0) return null
+  const pct = (n: number) => Math.round((n / total) * 100)
+  return (
+    <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-zinc-900/50 border border-zinc-800">
+      <span className="text-[10px] text-zinc-600 font-medium uppercase tracking-wide shrink-0 mr-1">Confidence</span>
+      <div className="flex-1 flex h-1.5 rounded-full overflow-hidden gap-px">
+        {t90  > 0 && <div className="bg-emerald-500"   style={{ width: `${pct(t90)}%` }} title={`90+: ${t90}`}  />}
+        {t85  > 0 && <div className="bg-blue-500"      style={{ width: `${pct(t85)}%` }} title={`85-89: ${t85}`}/>}
+        {t80  > 0 && <div className="bg-amber-500"     style={{ width: `${pct(t80)}%` }} title={`80-84: ${t80}`}/>}
+        {tLow > 0 && <div className="bg-zinc-600"      style={{ width: `${pct(tLow)}%`}} title={`<80: ${tLow}`} />}
+      </div>
+      <div className="flex items-center gap-3 shrink-0">
+        {t90  > 0 && <span className="text-[10px] text-emerald-400 font-mono">90+ <span className="text-zinc-500">({t90})</span></span>}
+        {t85  > 0 && <span className="text-[10px] text-blue-400 font-mono">85-89 <span className="text-zinc-500">({t85})</span></span>}
+        {t80  > 0 && <span className="text-[10px] text-amber-400 font-mono">80-84 <span className="text-zinc-500">({t80})</span></span>}
+        {tLow > 0 && <span className="text-[10px] text-zinc-500 font-mono">&lt;80 <span className="text-zinc-600">({tLow})</span></span>}
+      </div>
+    </div>
+  )
+}
 const GRADE_STYLE: Record<string, string> = {
-  A: 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30',
-  B: 'text-blue-300    bg-blue-500/15    border-blue-500/30',
-  C: 'text-amber-300   bg-amber-500/15   border-amber-500/30',
-  D: 'text-red-300     bg-red-500/15     border-red-500/30',
-  F: 'text-red-400     bg-red-500/20     border-red-500/40',
+  'A+': 'text-emerald-300 bg-emerald-500/15 border-emerald-500/35',
+  A:    'text-green-300   bg-green-500/12   border-green-500/30',
+  'B+': 'text-blue-300   bg-blue-500/15    border-blue-500/30',
+  B:    'text-amber-300  bg-amber-500/12   border-amber-500/30',
+  C:    'text-zinc-300   bg-zinc-500/10    border-zinc-600/20',
+  D:    'text-red-300    bg-red-500/15     border-red-500/30',
+  F:    'text-red-400    bg-red-500/20     border-red-500/40',
 }
 const GRADE_RANK: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, F: 4 }
 // Preset display info for preview modal
@@ -322,7 +350,7 @@ function FounderCommandCenter({ trackRecord }: { trackRecord: TrackRecordRespons
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-4">
       <div className="flex items-center gap-2 mb-3">
         <BarChart2 className="w-3.5 h-3.5 text-zinc-500" />
-        <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">Verified Performance</span>
+        <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">Verified Performance</span>
         <span className="text-[10px] text-zinc-600 font-mono ml-auto">{trackRecord.source}</span>
       </div>
       <div className="grid grid-cols-3 gap-3 mb-4">
@@ -332,23 +360,23 @@ function FounderCommandCenter({ trackRecord }: { trackRecord: TrackRecordRespons
           const wr  = toNum(w.win_rate)
           return (
           <div key={label} className="bg-zinc-800/50 rounded-lg px-3 py-2.5">
-            <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">{label} · {w.resolved} resolved</p>
+            <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-2">{label} · {w.resolved} resolved</p>
             <div className="space-y-1.5">
               <div className="flex justify-between items-center">
                 <span className="text-[10px] text-zinc-500">Win Rate</span>
-                <span className={`text-[11px] font-mono font-bold ${wrColor(wr)}`}>
+                <span className={`text-xs font-mono font-bold ${wrColor(wr)}`}>
                   {wr != null ? `${wr}%` : '—'}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-[10px] text-zinc-500">Expectancy</span>
-                <span className={`text-[11px] font-mono font-bold ${expColor(exp)}`}>
+                <span className={`text-xs font-mono font-bold ${expColor(exp)}`}>
                   {exp != null ? `${exp > 0 ? '+' : ''}${exp.toFixed(2)}R` : '—'}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-[10px] text-zinc-500">Prof Factor</span>
-                <span className={`text-[11px] font-mono font-bold ${pfColor(pf)}`}>
+                <span className={`text-xs font-mono font-bold ${pfColor(pf)}`}>
                   {pf != null ? pf.toFixed(2) : '—'}
                 </span>
               </div>
@@ -358,7 +386,7 @@ function FounderCommandCenter({ trackRecord }: { trackRecord: TrackRecordRespons
       </div>
       {(trackRecord.by_mode_30d ?? []).length > 0 && (
         <div className="mb-3">
-          <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">By Mode · 30d</p>
+          <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-2">By Mode · 30d</p>
           <div className="flex flex-wrap gap-2">
             {(trackRecord.by_mode_30d ?? []).map(m => {
               const mExp = toNum(m.exp)
@@ -410,11 +438,11 @@ function GradeValidationStrip() {
   if (empirical.length === 0 && heuristic.length === 0) return null
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3">
-      <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2.5">Grade Validation · Historical Win Rates</p>
+      <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-2.5">Grade Validation · Historical Win Rates</p>
       <div className="space-y-2">
         {empirical.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[9px] text-emerald-500 uppercase tracking-wider shrink-0 w-14">Empirical</span>
+            <span className="text-[10px] text-emerald-500 shrink-0 w-14">Empirical</span>
             {empirical.map(g => (
               <span key={g.grade ?? 'unknown'} className={cn('text-[10px] px-2 py-0.5 rounded border font-mono', GRADE_STYLE[g.grade?.charAt(0) ?? ''] ?? 'text-zinc-400 border-zinc-700 bg-zinc-800')}
                 title={`n=${g.n} · Exp: ${g.exp != null ? (Number(g.exp) > 0 ? '+' : '') + Number(g.exp).toFixed(2) + 'R' : '—'} · PF: ${g.pf != null ? Number(g.pf).toFixed(1) : '—'}`}>
@@ -425,7 +453,7 @@ function GradeValidationStrip() {
         )}
         {heuristic.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[9px] text-zinc-500 uppercase tracking-wider shrink-0 w-14">Heuristic</span>
+            <span className="text-[10px] text-zinc-500 shrink-0 w-14">Heuristic</span>
             {heuristic.map(g => (
               <span key={g.grade} className="text-[10px] px-2 py-0.5 rounded border font-mono text-zinc-400 border-zinc-700"
                 title={`n=${g.n} · Exp: ${g.exp != null ? (Number(g.exp) > 0 ? '+' : '') + Number(g.exp).toFixed(2) + 'R' : '—'}`}>
@@ -492,13 +520,12 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
   const fd         = sig.futuresData
   const hasFutures = !!fd && (sig.scannerMode === 'futures' || sig.scannerMode === 'high_confidence')
 
-  const indRaw    = sig.indicators as unknown as Record<string, unknown>
-  const ema200Raw = indRaw?.ema200 as number | null | undefined
-  const ema200Pos = ema200Raw && sig.indicators.currentPrice
-    ? (sig.indicators.currentPrice > ema200Raw ? 'ABOVE' : 'BELOW') : null
-  const candlePat = (indRaw?.candle_pattern as string | null | undefined) ?? null
-  const bbRaw     = indRaw?.bb as Record<string, unknown> | null | undefined
-  const bbSqueeze = bbRaw?.squeeze as boolean | null | undefined
+  const ind       = sig.indicators
+  const ema200Raw = ind?.ema200
+  const ema200Pos = ema200Raw && ind.currentPrice
+    ? (ind.currentPrice > ema200Raw ? 'ABOVE' : 'BELOW') : null
+  const candlePat = ind?.candle_pattern ?? null
+  const bbSqueeze = ind?.bb?.squeeze ?? null
   const hasExtTech = !!(ema200Pos || (candlePat && candlePat !== 'NONE') || bbSqueeze)
 
   const aiExp         = sig.aiExplainability
@@ -517,294 +544,275 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
   const hasMoreDetails = secondaryFields.length > 0 || hasTechnical || hasFutures || hasExtTech ||
     !!(aiContCase || aiCautionCase || hasAI || contCase)
 
-  if (primaryFields.length === 0 && !hasAI && !hasSetup && qs == null && !hasEmpiricalData) {
+  const hasIntelSection = primaryFields.length > 0 || secondaryFields.length > 0
+  const hasTechSection  = hasTechnical || hasExtTech || hasFutures || hasSetup
+  const hasAiSection    = !!(aiContCase || aiCautionCase || hasAI || contCase)
+  const hasQualitySection = hasEmpiricalData || qs != null || rs != null || slDistPct != null || tpDistPct != null || hasWhySection || aiSummary || hasRisksStrengths
+
+  if (!hasQualitySection && !hasIntelSection && !hasTechSection && !hasAiSection) {
     return (
-      <div className="border-t border-zinc-800 px-4 py-3 text-[11px] text-zinc-600">
+      <div className="border-t border-zinc-800 px-4 py-3 text-xs text-zinc-600">
         No intelligence data available for this signal.
       </div>
     )
   }
 
   return (
-    <div className="border-t border-zinc-800 px-4 py-3 space-y-2.5">
-      {/* 1. Empirical Trust */}
-      {hasEmpiricalData && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 rounded-lg bg-zinc-800/40 border border-zinc-700/50">
-          <span className="text-[10px] text-zinc-500 uppercase tracking-widest shrink-0">Empirical</span>
-          {sig.empiricalWr != null && (
-            <span className={`text-[11px] font-mono font-bold ${sig.empiricalWr >= 55 ? 'text-emerald-400' : sig.empiricalWr >= 45 ? 'text-blue-400' : 'text-amber-400'}`}>
-              {sig.empiricalWr.toFixed(0)}% WR
-            </span>
-          )}
-          {sig.empiricalN != null && (
-            <span className="text-[10px] text-zinc-500 font-mono">n={sig.empiricalN}</span>
-          )}
-          {sig.empiricalGrade && (
-            <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded border', GRADE_STYLE[sig.empiricalGrade.charAt(0)] ?? 'text-zinc-500 border-zinc-700 bg-zinc-800')}>
-              Emp {sig.empiricalGrade}
-            </span>
-          )}
-        </div>
-      )}
-      {/* 2. Quality + Risk + trade distances */}
-      {(qs != null || rs != null || slDistPct || tpDistPct) && (
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
-          {qs != null && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Quality</span>
-              <div className="flex items-center gap-1.5">
-                <div className="w-14 h-1 bg-zinc-700 rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full ${qs >= 70 ? 'bg-emerald-400' : qs >= 50 ? 'bg-blue-400' : 'bg-amber-400'}`}
-                    style={{ width: `${Math.min(100, qs)}%` }} />
-                </div>
-                <span className={`text-[11px] font-mono font-semibold ${qs >= 70 ? 'text-emerald-400' : qs >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>
-                  {Math.round(qs)}/100
+    <div className="border-t border-zinc-800 px-4 py-3 space-y-3 divide-y divide-zinc-800/60">
+
+      {/* ── Section 1: Signal Quality (always open) ── */}
+      {hasQualitySection && (
+        <div className="space-y-2 pt-1 first:pt-0">
+          <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide">Signal Quality</p>
+
+          {/* Empirical trust row */}
+          {hasEmpiricalData && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-1.5 rounded-lg bg-zinc-800/40 border border-zinc-700/50">
+              <span className="text-[10px] text-zinc-500">Empirical</span>
+              {sig.empiricalWr != null && (
+                <span className={`text-xs font-mono font-bold ${sig.empiricalWr >= 55 ? 'text-emerald-400' : sig.empiricalWr >= 45 ? 'text-blue-400' : 'text-amber-400'}`}>
+                  {sig.empiricalWr.toFixed(0)}% WR
                 </span>
-              </div>
+              )}
+              {sig.empiricalN != null && <span className="text-[10px] text-zinc-500 font-mono">n={sig.empiricalN}</span>}
+              {sig.empiricalGrade && (
+                <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded border', GRADE_STYLE[sig.empiricalGrade.charAt(0)] ?? 'text-zinc-500 border-zinc-700 bg-zinc-800')}>
+                  Emp {sig.empiricalGrade}
+                </span>
+              )}
             </div>
           )}
-          {rs != null && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Risk</span>
-              <span className={`text-[11px] font-mono font-semibold ${rs <= 25 ? 'text-emerald-400' : rs <= 45 ? 'text-blue-400' : rs <= 60 ? 'text-amber-400' : 'text-red-400'}`}>
-                {Math.round(rs)}/100
-              </span>
-            </div>
-          )}
-          {tpDistPct && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">TP dist</span>
-              <span className="text-[11px] font-mono font-semibold text-emerald-400">{tpDistPct}</span>
-            </div>
-          )}
-          {slDistPct && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">SL dist</span>
-              <span className="text-[11px] font-mono font-semibold text-red-400">{slDistPct}</span>
-            </div>
-          )}
-        </div>
-      )}
-      {/* 3. Primary intel: Breakout + OI + Regime + ADX */}
-      {primaryFields.length > 0 && (
-        <div className="flex flex-wrap gap-x-5 gap-y-1.5">
-          {primaryFields.map((f, i) => (
-            <div key={i} className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{f.label}</span>
-              <span className={cn('text-[11px] font-mono font-semibold', f.color ?? 'text-zinc-300')}>{f.value}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      {/* 4. Why this signal */}
-      {hasWhySection && (
-        <div className="flex flex-wrap gap-x-5 gap-y-1.5">
-          {contProb != null && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Continuation</span>
-              <span className={`text-[11px] font-mono font-semibold ${contProb >= 60 ? 'text-emerald-400' : contProb >= 40 ? 'text-amber-400' : 'text-red-400'}`}>
-                {contProb}%
-              </span>
-            </div>
-          )}
-          {iq != null && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Entry Quality</span>
-              <span className={`text-[11px] font-mono font-semibold ${iq >= 70 ? 'text-emerald-400' : iq >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>
-                {Math.round(iq)}/100
-              </span>
-            </div>
-          )}
-          {iScore != null && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Institutional</span>
-              <span className={`text-[11px] font-mono font-semibold ${iScore >= 70 ? 'text-emerald-400' : iScore >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>
-                {Math.round(iScore)}/100
-              </span>
-            </div>
-          )}
-          {ras != null && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Regime Adj</span>
-              <span className={`text-[11px] font-mono font-semibold ${ras >= 5 ? 'text-emerald-400' : ras >= 0 ? 'text-zinc-300' : 'text-amber-400'}`}>
-                {ras > 0 ? '+' : ''}{Math.round(ras)}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-      {/* 5. AI summary + strengths/risks (max 2 each) */}
-      {(aiSummary || hasRisksStrengths) && (
-        <div className="space-y-1.5">
-          {aiSummary && (
-            <p className="text-[11px] text-zinc-300 font-medium leading-snug">{aiSummary}</p>
-          )}
-          {hasRisksStrengths && (
-            <div className="space-y-1">
-              {(sig.strengths?.length ?? 0) > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {sig.strengths!.slice(0, 2).map((s, i) => (
-                    <span key={i} className="text-[9px] text-emerald-400/80 border border-emerald-500/20 bg-emerald-500/5 px-1.5 py-0.5 rounded">
-                      ✓ {s}
-                    </span>
-                  ))}
+
+          {/* Quality / Risk / TP-SL dist */}
+          {(qs != null || rs != null || slDistPct || tpDistPct) && (
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+              {qs != null && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-zinc-500">Quality</span>
+                  <div className="w-14 h-1 bg-zinc-700 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${qs >= 70 ? 'bg-emerald-400' : qs >= 50 ? 'bg-blue-400' : 'bg-amber-400'}`} style={{ width: `${Math.min(100, qs)}%` }} />
+                  </div>
+                  <span className={`text-xs font-mono font-semibold ${qs >= 70 ? 'text-emerald-400' : qs >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>{Math.round(qs)}/100</span>
                 </div>
               )}
-              {(sig.risks?.length ?? 0) > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {sig.risks!.slice(0, 2).map((r, i) => (
-                    <span key={i} className="text-[9px] text-red-400/80 border border-red-500/20 bg-red-500/5 px-1.5 py-0.5 rounded">
-                      ⚠ {r}
-                    </span>
-                  ))}
+              {rs != null && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-zinc-500">Risk</span>
+                  <span className={`text-xs font-mono font-semibold ${rs <= 25 ? 'text-emerald-400' : rs <= 45 ? 'text-blue-400' : rs <= 60 ? 'text-amber-400' : 'text-red-400'}`}>{Math.round(rs)}/100</span>
+                </div>
+              )}
+              {tpDistPct && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-zinc-500">TP dist</span>
+                  <span className="text-xs font-mono font-semibold text-emerald-400">{tpDistPct}</span>
+                </div>
+              )}
+              {slDistPct && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-zinc-500">SL dist</span>
+                  <span className="text-xs font-mono font-semibold text-red-400">{slDistPct}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Why scores */}
+          {hasWhySection && (
+            <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+              {contProb != null && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-zinc-500">Continuation</span>
+                  <span className={`text-xs font-mono font-semibold ${contProb >= 60 ? 'text-emerald-400' : contProb >= 40 ? 'text-amber-400' : 'text-red-400'}`}>{contProb}%</span>
+                </div>
+              )}
+              {iq != null && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-zinc-500">Entry Quality</span>
+                  <span className={`text-xs font-mono font-semibold ${iq >= 70 ? 'text-emerald-400' : iq >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>{Math.round(iq)}/100</span>
+                </div>
+              )}
+              {iScore != null && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-zinc-500">Institutional</span>
+                  <span className={`text-xs font-mono font-semibold ${iScore >= 70 ? 'text-emerald-400' : iScore >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>{Math.round(iScore)}/100</span>
+                </div>
+              )}
+              {ras != null && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-zinc-500">Regime Adj</span>
+                  <span className={`text-xs font-mono font-semibold ${ras >= 5 ? 'text-emerald-400' : ras >= 0 ? 'text-zinc-300' : 'text-amber-400'}`}>{ras > 0 ? '+' : ''}{Math.round(ras)}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* AI summary + strengths / risks */}
+          {(aiSummary || hasRisksStrengths) && (
+            <div className="space-y-1.5">
+              {aiSummary && <p className="text-xs text-zinc-300 font-medium leading-snug">{aiSummary}</p>}
+              {hasRisksStrengths && (
+                <div className="space-y-1">
+                  {(sig.strengths?.length ?? 0) > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {sig.strengths!.slice(0, 2).map((s, i) => (
+                        <span key={i} className="text-[10px] text-emerald-400/80 border border-emerald-500/20 bg-emerald-500/5 px-1.5 py-0.5 rounded">✓ {s}</span>
+                      ))}
+                    </div>
+                  )}
+                  {(sig.risks?.length ?? 0) > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {sig.risks!.slice(0, 2).map((r, i) => (
+                        <span key={i} className="text-[10px] text-red-400/80 border border-red-500/20 bg-red-500/5 px-1.5 py-0.5 rounded">⚠ {r}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )}
         </div>
       )}
-      {/* 6. Setup description */}
-      {hasSetup && (
-        <p className="text-[10px] text-zinc-500 leading-relaxed border-l-2 border-zinc-800 pl-2.5 font-mono">
-          {sig.setupDescription!.replace(/\s*\|\s*ADX:.*$/i, '')}
-        </p>
-      )}
-      {/* More Details — collapsed by default */}
-      {hasMoreDetails && (
-        <details className="group">
-          <summary className="list-none flex items-center gap-2 cursor-pointer select-none text-[10px] text-zinc-500 hover:text-zinc-400 transition-colors pt-0.5">
-            <span className="group-open:hidden">▸</span>
-            <span className="hidden group-open:inline">▾</span>
-            <span className="uppercase tracking-wider">More Details</span>
+
+      {/* ── Section 2: Intelligence (collapsible, default open) ── */}
+      {hasIntelSection && (
+        <details open className="group pt-2.5">
+          <summary className="list-none flex items-center justify-between cursor-pointer select-none mb-1.5">
+            <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide">Intelligence</span>
+            <span className="text-[10px] text-zinc-600 group-open:hidden">▸ show</span>
+            <span className="text-[10px] text-zinc-600 hidden group-open:block">▾ hide</span>
           </summary>
-          <div className="pt-2.5 space-y-2.5">
-            {/* Secondary intel */}
-            {secondaryFields.length > 0 && (
+          <div className="space-y-1.5">
+            {primaryFields.length > 0 && (
               <div className="flex flex-wrap gap-x-5 gap-y-1.5">
-                {secondaryFields.map((f, i) => (
+                {primaryFields.map((f, i) => (
                   <div key={i} className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{f.label}</span>
-                    <span className={cn('text-[11px] font-mono font-semibold', f.color ?? 'text-zinc-300')}>{f.value}</span>
+                    <span className="text-[10px] text-zinc-500">{f.label}</span>
+                    <span className={cn('text-xs font-mono font-semibold', f.color ?? 'text-zinc-300')}>{f.value}</span>
                   </div>
                 ))}
               </div>
             )}
-            {/* Technical */}
+            {secondaryFields.length > 0 && (
+              <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+                {secondaryFields.map((f, i) => (
+                  <div key={i} className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-zinc-500">{f.label}</span>
+                    <span className={cn('text-xs font-mono font-semibold', f.color ?? 'text-zinc-300')}>{f.value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </details>
+      )}
+
+      {/* ── Section 3: Technical (collapsible, default closed) ── */}
+      {hasTechSection && (
+        <details className="group pt-2.5">
+          <summary className="list-none flex items-center justify-between cursor-pointer select-none mb-1.5">
+            <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide">Technical</span>
+            <span className="text-[10px] text-zinc-600 group-open:hidden">▸ show</span>
+            <span className="text-[10px] text-zinc-600 hidden group-open:block">▾ hide</span>
+          </summary>
+          <div className="space-y-2">
             {hasTechnical && (
               <div className="flex flex-wrap gap-x-5 gap-y-1.5">
                 {rsi != null && rsi > 0 && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">RSI 1h</span>
-                    <span className={`text-[11px] font-mono font-semibold ${rsi >= 70 ? 'text-red-400' : rsi >= 60 ? 'text-amber-400' : rsi <= 30 ? 'text-green-400' : rsi <= 40 ? 'text-emerald-400' : 'text-zinc-300'}`}>
-                      {rsi.toFixed(1)}
-                    </span>
+                    <span className="text-[10px] text-zinc-500">RSI 1h</span>
+                    <span className={`text-xs font-mono font-semibold ${rsi >= 70 ? 'text-red-400' : rsi >= 60 ? 'text-amber-400' : rsi <= 30 ? 'text-green-400' : rsi <= 40 ? 'text-emerald-400' : 'text-zinc-300'}`}>{rsi.toFixed(1)}</span>
                   </div>
                 )}
                 {volumeSpike != null && volumeSpike > 0 && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Vol Spike</span>
-                    <span className={`text-[11px] font-mono font-semibold ${volumeSpike >= 2.5 ? 'text-emerald-400' : volumeSpike >= 1.5 ? 'text-blue-400' : volumeSpike < 0.8 ? 'text-red-400' : 'text-zinc-300'}`}>
-                      {volumeSpike.toFixed(1)}×
-                    </span>
+                    <span className="text-[10px] text-zinc-500">Vol Spike</span>
+                    <span className={`text-xs font-mono font-semibold ${volumeSpike >= 2.5 ? 'text-emerald-400' : volumeSpike >= 1.5 ? 'text-blue-400' : volumeSpike < 0.8 ? 'text-red-400' : 'text-zinc-300'}`}>{volumeSpike.toFixed(1)}×</span>
                   </div>
                 )}
               </div>
             )}
-            {/* Extended technical */}
             {hasExtTech && (
               <div className="flex flex-wrap gap-x-5 gap-y-1.5 items-center">
                 {ema200Pos && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">EMA200</span>
-                    <span className={`text-[11px] font-mono font-semibold ${ema200Pos === 'ABOVE' ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {ema200Pos} {ema200Pos === 'ABOVE' ? '↑' : '↓'}
-                    </span>
+                    <span className="text-[10px] text-zinc-500">EMA200</span>
+                    <span className={`text-xs font-mono font-semibold ${ema200Pos === 'ABOVE' ? 'text-emerald-400' : 'text-red-400'}`}>{ema200Pos} {ema200Pos === 'ABOVE' ? '↑' : '↓'}</span>
                   </div>
                 )}
                 {candlePat && candlePat !== 'NONE' && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Pattern</span>
-                    <span className="text-[11px] font-mono font-semibold text-blue-400">{candlePat.replace(/_/g, ' ')}</span>
+                    <span className="text-[10px] text-zinc-500">Pattern</span>
+                    <span className="text-xs font-mono font-semibold text-blue-400">{candlePat.replace(/_/g, ' ')}</span>
                   </div>
                 )}
                 {bbSqueeze && (
-                  <span className="text-[10px] font-semibold text-purple-400 border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.5 rounded">
-                    ⚡ BB SQUEEZE
-                  </span>
+                  <span className="text-[10px] font-semibold text-purple-400 border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.5 rounded">⚡ BB SQUEEZE</span>
                 )}
               </div>
             )}
-            {/* Futures intelligence */}
             {hasFutures && fd && (
               <div className="flex flex-wrap gap-x-5 gap-y-1.5">
                 {fd.fundingRate != null && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Funding Rate</span>
-                    <span className={`text-[11px] font-mono font-semibold ${Math.abs(fd.fundingRate) > 0.0005 ? 'text-amber-400' : 'text-zinc-300'}`}>
+                    <span className="text-[10px] text-zinc-500">Funding Rate</span>
+                    <span className={`text-xs font-mono font-semibold ${Math.abs(fd.fundingRate) > 0.0005 ? 'text-amber-400' : 'text-zinc-300'}`}>
                       {fd.fundingRate >= 0 ? '+' : ''}{(fd.fundingRate * 100).toFixed(4)}%
                     </span>
                   </div>
                 )}
                 {fd.fundingRateAnnualized != null && Math.abs(fd.fundingRateAnnualized) > 0 && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Annualized</span>
-                    <span className={`text-[11px] font-mono font-semibold ${Math.abs(fd.fundingRateAnnualized) > 50 ? 'text-red-400' : Math.abs(fd.fundingRateAnnualized) > 20 ? 'text-amber-400' : 'text-zinc-300'}`}>
+                    <span className="text-[10px] text-zinc-500">Annualized</span>
+                    <span className={`text-xs font-mono font-semibold ${Math.abs(fd.fundingRateAnnualized) > 50 ? 'text-red-400' : Math.abs(fd.fundingRateAnnualized) > 20 ? 'text-amber-400' : 'text-zinc-300'}`}>
                       {fd.fundingRateAnnualized >= 0 ? '+' : ''}{fd.fundingRateAnnualized.toFixed(1)}%
                     </span>
                   </div>
                 )}
                 {fd.fundingBias && fd.fundingBias !== 'NEUTRAL' && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Fund Bias</span>
-                    <span className={`text-[11px] font-mono font-semibold ${fd.fundingBias === 'SHORT_HEAVY' ? 'text-emerald-400' : 'text-amber-400'}`}>
-                      {fd.fundingBias.replace('_', ' ')}
-                    </span>
+                    <span className="text-[10px] text-zinc-500">Fund Bias</span>
+                    <span className={`text-xs font-mono font-semibold ${fd.fundingBias === 'SHORT_HEAVY' ? 'text-emerald-400' : 'text-amber-400'}`}>{fd.fundingBias.replace('_', ' ')}</span>
                   </div>
                 )}
                 {fd.oiTrend && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">OI Trend</span>
-                    <span className={`text-[11px] font-mono font-semibold ${fd.oiTrend === 'RISING' ? 'text-emerald-400' : fd.oiTrend === 'FALLING' ? 'text-red-400' : 'text-zinc-400'}`}>
-                      {fd.oiTrend}
-                    </span>
+                    <span className="text-[10px] text-zinc-500">OI Trend</span>
+                    <span className={`text-xs font-mono font-semibold ${fd.oiTrend === 'RISING' ? 'text-emerald-400' : fd.oiTrend === 'FALLING' ? 'text-red-400' : 'text-zinc-400'}`}>{fd.oiTrend}</span>
                   </div>
                 )}
                 {fd.oiChange24h != null && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">OI 24h</span>
-                    <span className={`text-[11px] font-mono font-semibold ${fd.oiChange24h > 5 ? 'text-emerald-400' : fd.oiChange24h < -5 ? 'text-red-400' : 'text-zinc-300'}`}>
+                    <span className="text-[10px] text-zinc-500">OI 24h</span>
+                    <span className={`text-xs font-mono font-semibold ${fd.oiChange24h > 5 ? 'text-emerald-400' : fd.oiChange24h < -5 ? 'text-red-400' : 'text-zinc-300'}`}>
                       {fd.oiChange24h > 0 ? '+' : ''}{fd.oiChange24h.toFixed(1)}%
                     </span>
                   </div>
                 )}
                 {fd.longShortRatio != null && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">L/S Ratio</span>
-                    <span className="text-[11px] font-mono font-semibold text-zinc-300">{fd.longShortRatio.toFixed(2)}</span>
+                    <span className="text-[10px] text-zinc-500">L/S Ratio</span>
+                    <span className="text-xs font-mono font-semibold text-zinc-300">{fd.longShortRatio.toFixed(2)}</span>
                   </div>
                 )}
                 {fd.momentumScore != null && fd.momentumScore > 0 && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Momentum</span>
-                    <span className={`text-[11px] font-mono font-semibold ${fd.momentumScore >= 70 ? 'text-emerald-400' : fd.momentumScore >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>
-                      {fd.momentumScore}/100
-                    </span>
+                    <span className="text-[10px] text-zinc-500">Momentum</span>
+                    <span className={`text-xs font-mono font-semibold ${fd.momentumScore >= 70 ? 'text-emerald-400' : fd.momentumScore >= 50 ? 'text-blue-400' : 'text-amber-400'}`}>{fd.momentumScore}/100</span>
                   </div>
                 )}
                 {sig.maxSafeLeverage != null && sig.maxSafeLeverage > 0 && (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Max Lev</span>
-                    <span className="text-[11px] font-mono font-semibold text-zinc-300">{sig.maxSafeLeverage}×</span>
+                    <span className="text-[10px] text-zinc-500">Max Lev</span>
+                    <span className="text-xs font-mono font-semibold text-zinc-300">{sig.maxSafeLeverage}×</span>
                   </div>
                 )}
               </div>
             )}
-            {/* Liquidation zones */}
-            {hasFutures && fd && fd.liquidationZones && fd.liquidationZones.length > 0 && (
+            {hasFutures && fd && (fd.liquidationZones?.length ?? 0) > 0 && (
               <div className="space-y-1">
-                <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Liquidation Zones</p>
+                <p className="text-[10px] text-zinc-500">Liquidation Zones</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {fd.liquidationZones.slice(0, 4).map((z, i) => (
+                  {fd.liquidationZones!.slice(0, 4).map((z, i) => (
                     <span key={i} className={`text-[10px] font-mono px-2 py-0.5 rounded border ${z.side === 'LONG_LIQ' ? 'text-red-400 border-red-500/20 bg-red-500/5' : 'text-emerald-400 border-emerald-500/20 bg-emerald-500/5'}`}>
                       {z.side === 'LONG_LIQ' ? '↓' : '↑'} ${z.price.toFixed(2)} · {z.distancePct.toFixed(1)}% away
                       {z.strength !== 'WEAK' && <span className="ml-1 opacity-60">({z.strength.toLowerCase()})</span>}
@@ -813,30 +821,42 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
                 </div>
               </div>
             )}
-            {/* Continuation reason */}
+            {hasSetup && (
+              <p className="text-[10px] text-zinc-500 leading-relaxed border-l-2 border-zinc-800 pl-2.5 font-mono">
+                {sig.setupDescription!.replace(/\s*\|\s*ADX:.*$/i, '')}
+              </p>
+            )}
+          </div>
+        </details>
+      )}
+
+      {/* ── Section 4: AI Analysis (collapsible, default open) ── */}
+      {hasAiSection && (
+        <details open className="group pt-2.5">
+          <summary className="list-none flex items-center justify-between cursor-pointer select-none mb-1.5">
+            <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide">AI Analysis</span>
+            <span className="text-[10px] text-zinc-600 group-open:hidden">▸ show</span>
+            <span className="text-[10px] text-zinc-600 hidden group-open:block">▾ hide</span>
+          </summary>
+          <div className="space-y-1.5">
             {contCase && (
               <p className="text-[10px] text-zinc-500 leading-relaxed border-l-2 border-zinc-800 pl-2.5 italic">{contCase}</p>
             )}
-            {/* AI continuation + caution */}
             {(aiContCase || aiCautionCase) && (
               <div className="space-y-1.5">
-                {aiContCase && (
-                  <p className="text-[10px] text-emerald-400/75 leading-relaxed border-l-2 border-emerald-600/30 pl-2.5">↗ {aiContCase}</p>
-                )}
-                {aiCautionCase && (
-                  <p className="text-[10px] text-amber-400/75 leading-relaxed border-l-2 border-amber-600/30 pl-2.5">⚠ {aiCautionCase}</p>
-                )}
+                {aiContCase && <p className="text-[10px] text-emerald-400/75 leading-relaxed border-l-2 border-emerald-600/30 pl-2.5">↗ {aiContCase}</p>}
+                {aiCautionCase && <p className="text-[10px] text-amber-400/75 leading-relaxed border-l-2 border-amber-600/30 pl-2.5">⚠ {aiCautionCase}</p>}
               </div>
             )}
-            {/* Full AI reasoning */}
             {hasAI && (
-              <p className="text-[11px] text-zinc-400 leading-relaxed border-l-2 border-zinc-700 pl-2.5 italic">
+              <p className="text-xs text-zinc-400 leading-relaxed border-l-2 border-zinc-700 pl-2.5 italic">
                 &ldquo;{sig.aiReasoning!}&rdquo;
               </p>
             )}
           </div>
         </details>
       )}
+
     </div>
   )
 }
@@ -850,9 +870,9 @@ function MetricTile({ label, value, sub, accent = 'default' }: {
   const colors = { green:'text-green-400', red:'text-red-400', amber:'text-amber-400', blue:'text-blue-400', default:'text-white' }
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
-      <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">{label}</div>
+      <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1">{label}</div>
       <div className={`text-xl font-bold font-mono ${colors[accent]}`}>{value}</div>
-      {sub && <div className="text-[11px] text-zinc-600 mt-0.5">{sub}</div>}
+      {sub && <div className="text-[10px] text-zinc-600 mt-0.5">{sub}</div>}
     </div>
   )
 }
@@ -866,8 +886,8 @@ function OpsToggle({ label, description, enabled, loading, icon, onEnable, onDis
     <div className={cn('glass-card rounded-xl p-4 flex items-start sm:items-center gap-4 flex-col sm:flex-row transition-colors', inverse && isActive ? 'border-red-500/40 bg-red-900/10' : '')}>
       <div className={cn('p-2.5 rounded-lg shrink-0', inverse && isActive ? 'bg-red-500/20 text-red-400' : isActive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-zinc-800 text-zinc-500')}>{icon}</div>
       <div className="flex-1 min-w-0">
-        <p className="text-terminal-text font-semibold text-sm">{label}</p>
-        <p className="text-terminal-muted text-xs mt-0.5 leading-relaxed">{description}</p>
+        <p className="text-zinc-200 font-semibold text-sm">{label}</p>
+        <p className="text-zinc-500 text-xs mt-0.5 leading-relaxed">{description}</p>
       </div>
       <div className="flex items-center gap-3 shrink-0">
         <span className={cn('text-xs font-mono px-2 py-0.5 rounded-md border',
@@ -910,12 +930,12 @@ function dotColor(level: KpiLevel) {
 function ScorecardCell({ label, value, level, sub }: { label: string; value: string; level: KpiLevel; sub?: string }) {
   return (
     <div className="flex flex-col gap-0.5 min-w-0">
-      <span className="text-[9px] text-zinc-500 uppercase tracking-widest leading-none">{label}</span>
+      <span className="text-[10px] text-zinc-500 uppercase tracking-wide leading-none">{label}</span>
       <div className="flex items-center gap-1.5">
         <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor(level)}`} />
         <span className={`text-base font-bold font-mono leading-none ${kpiColor(level)}`}>{value}</span>
       </div>
-      {sub && <span className="text-[9px] text-zinc-600 leading-none">{sub}</span>}
+      {sub && <span className="text-[10px] text-zinc-600 leading-none">{sub}</span>}
     </div>
   )
 }
@@ -924,7 +944,7 @@ function SignalQualityScorecard({ counts, gradeAPct }: { counts: SignalCounts | 
   if (!counts || counts.resolved_7d === 0) {
     return (
       <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3">
-        <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2">Signal Quality Scorecard</p>
+        <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-2">Signal Quality Scorecard</p>
         <p className="text-zinc-600 text-xs">No resolved signals yet — scorecard updates after first resolved trade.</p>
       </div>
     )
@@ -942,7 +962,7 @@ function SignalQualityScorecard({ counts, gradeAPct }: { counts: SignalCounts | 
 
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3">
-      <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-3">Signal Quality Scorecard · 7d · {counts.resolved_7d} resolved</p>
+      <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-3">Signal Quality Scorecard · 7d · {counts.resolved_7d} resolved</p>
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <ScorecardCell label="Win Rate"       value={`${wr}%`}    level={wrLevel}  />
         <ScorecardCell label="Expectancy"     value={`${exp > 0 ? '+' : ''}${exp}R`} level={expLevel} />
@@ -960,20 +980,22 @@ function SystemStatusBanner({ celery, flags, providers }: {
   celery: CeleryStatus | null; flags: OpsFlags | null; providers: ProviderStatus[]
 }) {
   const issues: string[] = []
-  if (flags?.emergency_stop)  issues.push('Emergency Stop ACTIVE')
-  if (flags?.maintenance_mode) issues.push('Maintenance Mode ON')
-  if (celery?.is_overdue && celery?.enabled) issues.push('Scanner overdue')
-  if (!celery?.enabled) issues.push('Scanner paused')
+  if (flags?.emergency_stop)   issues.push('🛑 Emergency Stop ACTIVE')
+  if (flags?.maintenance_mode) issues.push('🔧 Maintenance Mode ON')
+  if (flags !== null && !flags.telegram)     issues.push('📵 Telegram OFF — no alerts sending')
+  if (flags !== null && !flags.ai_validation) issues.push('🤖 AI Validation OFF')
+  if (celery?.is_overdue && celery?.enabled) issues.push('⏰ Scanner overdue')
+  if (celery !== null && !celery.enabled)    issues.push('⏸ Scanner paused')
   const unhealthy = providers.filter(p => !p.healthy)
-  if (unhealthy.length > 0) issues.push(`${unhealthy.length} provider${unhealthy.length > 1 ? 's' : ''} unhealthy`)
+  if (unhealthy.length > 0) issues.push(`⚠ ${unhealthy.length} provider${unhealthy.length > 1 ? 's' : ''} down`)
 
   const ok = issues.length === 0
   return (
-    <div className={cn('rounded-lg px-4 py-2.5 flex items-center gap-3 text-sm',
-      ok ? 'bg-emerald-500/5 border border-emerald-500/20' : 'bg-amber-500/5 border border-amber-500/25')}>
-      <span className={`w-2 h-2 rounded-full shrink-0 ${ok ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`} />
-      <span className={ok ? 'text-emerald-300' : 'text-amber-300'}>
-        {ok ? 'All Systems Operational' : `${issues.length} Issue${issues.length > 1 ? 's' : ''} Detected: ${issues.join(' · ')}`}
+    <div className={cn('rounded-lg px-4 py-2.5 flex items-start gap-3',
+      ok ? 'border border-zinc-800' : 'bg-amber-500/5 border border-amber-500/25')}>
+      <span className={`w-2 h-2 rounded-full shrink-0 mt-1 ${ok ? 'bg-zinc-600' : 'bg-amber-400 animate-pulse'}`} />
+      <span className={`text-sm ${ok ? 'text-zinc-500' : 'text-amber-300'}`}>
+        {ok ? 'All Systems Operational — scanner active, Telegram enabled' : issues.join('  ·  ')}
       </span>
     </div>
   )
@@ -985,7 +1007,7 @@ function ProviderHealthRow({ providers }: { providers: ProviderStatus[] }) {
   if (providers.length === 0) return null
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3">
-      <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2.5">Provider Health</p>
+      <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-2.5">Provider Health</p>
       <div className="flex flex-wrap gap-x-5 gap-y-2">
         {providers.map(p => (
           <div key={p.name} className="flex items-center gap-2">
@@ -1002,10 +1024,15 @@ function ProviderHealthRow({ providers }: { providers: ProviderStatus[] }) {
 
 // ── Overview tab ───────────────────────────────────────────────────────────────
 
-function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, countdown, flags, trackRecord }: {
+function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, countdown, flags, trackRecord,
+  scanMode, onScanModeChange, onScanNow, scanning, scanDone, scanError,
+  onTogglePause, pausing }: {
   celery: CeleryStatus | null; regime: RegimeData | null; signalCounts: SignalCounts | null
   providers: ProviderStatus[]; cache: CacheTelemetry | null; flags: OpsFlags | null
   signals: TacticalSignalRow[]; countdown: number | null; trackRecord: TrackRecordResponse | null
+  scanMode: ScannerMode; onScanModeChange: (m: ScannerMode) => void
+  onScanNow: () => void; scanning: boolean; scanDone: boolean; scanError: string | null
+  onTogglePause: () => void; pausing: boolean
 }) {
   const lc = signals.reduce<Record<string,number>>((a,s)=>{ a[s.lifecycleStage]=(a[s.lifecycleStage]??0)+1; return a }, {})
   const currentRegime = regime?.regime ?? null
@@ -1017,7 +1044,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
     : null
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* System Status Banner */}
       <SystemStatusBanner celery={celery} flags={flags} providers={providers} />
 
@@ -1028,35 +1055,89 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
           celery.scanning  ? 'bg-blue-500/5 border-blue-500/25' :
           celery.is_overdue ? 'bg-amber-500/5 border-amber-500/25' : 'bg-zinc-900 border-zinc-800'
         }`}>
-          <div className="flex items-center gap-2 mb-4">
-            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-              celery?.scanning ? 'bg-blue-400 animate-pulse' :
-              celery?.enabled && celery?.is_overdue ? 'bg-amber-400 animate-pulse' :
-              celery?.enabled ? 'bg-green-400 animate-pulse' : 'bg-zinc-600'
-            }`} />
-            <span className={`text-sm font-semibold ${celery?.is_overdue && celery?.enabled ? 'text-amber-300' : 'text-white'}`}>
-              {celery===null ? 'Connecting…' : celery.scanning ? `Scanning — ${celery.running_modes.join(', ')||'standard'}` :
-               celery.enabled && celery.is_overdue ? 'Auto-scan Overdue' : celery.enabled ? 'Auto-scan Active' : 'Auto-scan Paused'}
-            </span>
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                celery?.scanning ? 'bg-blue-400 animate-pulse' :
+                celery?.enabled && celery?.is_overdue ? 'bg-amber-400 animate-pulse' :
+                celery?.enabled ? 'bg-green-400 animate-pulse' : 'bg-zinc-600'
+              }`} />
+              <span className={`text-sm font-semibold truncate ${
+                celery?.is_overdue && celery?.enabled ? 'text-amber-300' :
+                !celery?.enabled ? 'text-zinc-500' : 'text-white'
+              }`}>
+                {celery===null ? 'Connecting…' : celery.scanning ? `Scanning — ${celery.running_modes.join(', ')||'standard'}` :
+                 celery.enabled && celery.is_overdue ? 'Auto-scan Overdue' : celery.enabled ? 'Auto-scan Active' : 'Auto-scan Stopped'}
+              </span>
+            </div>
+            <button onClick={onTogglePause} disabled={pausing || celery===null}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors shrink-0 ${
+                pausing ? 'text-zinc-500 border-zinc-700 bg-zinc-800 cursor-not-allowed'
+                : celery?.enabled
+                ? 'text-red-400 border-red-500/40 bg-red-500/10 hover:bg-red-500/20'
+                : 'text-emerald-400 border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25'
+              }`}>
+              {pausing
+                ? <><span className="w-2 h-2 rounded-full border-2 border-zinc-500 border-t-transparent animate-spin inline-block"/> Working…</>
+                : celery?.enabled
+                ? <><Square className="w-3 h-3 fill-current"/> Stop Scanner</>
+                : <><Play className="w-3 h-3 fill-current"/> Start Scanner</>}
+            </button>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-zinc-800/60 rounded-lg px-3 py-2.5">
-              <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1">Last Scan</p>
+              <p className="text-[10px] text-zinc-500 mb-1">Last Scan</p>
               <p className="text-sm font-mono font-semibold text-white">{celery?.last_scan_at ? timeAgo(celery.last_scan_at) : '—'}</p>
             </div>
             <div className="bg-zinc-800/60 rounded-lg px-3 py-2.5">
-              <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1">Next Scan</p>
+              <p className="text-[10px] text-zinc-500 mb-1">Next Scan</p>
               <p className={`text-sm font-mono font-semibold ${celery?.scanning ? 'text-blue-400' : celery?.is_overdue && celery?.enabled ? 'text-amber-400' : 'text-white'}`}>
                 {celery?.scanning ? 'Running now' : celery?.enabled && celery?.is_overdue ? 'Overdue' : celery?.enabled && countdown!==null ? fmtCd(countdown) : '—'}
               </p>
             </div>
           </div>
+
+          {/* Manual scan — single row: label + mode chips + trigger */}
+          <div className="mt-2 pt-2 border-t border-zinc-800/60 flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] text-zinc-500 shrink-0">Manual Scan</span>
+            {MODES.map(m => (
+              <button key={m} onClick={() => onScanModeChange(m)}
+                className={`text-[10px] px-2.5 py-1 rounded-md border font-semibold transition-colors ${
+                  scanMode === m
+                    ? MODE_COLORS[m] + ' opacity-100'
+                    : 'text-zinc-500 border-zinc-700 bg-transparent hover:text-zinc-300 hover:border-zinc-600'
+                }`}>
+                {modeDisplayLabel(m)}
+              </button>
+            ))}
+            <button onClick={onScanNow} disabled={scanning || celery?.scanning}
+              className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                scanDone
+                  ? 'bg-blue-500/10 border border-blue-500/30 text-blue-400'
+                  : scanning || celery?.scanning
+                  ? 'bg-zinc-800 border border-zinc-700 text-zinc-500 cursor-not-allowed'
+                  : 'bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20'
+              }`}>
+              {scanning ? <><span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"/> Queuing…</>
+               : scanDone ? <><CheckCircle2 className="w-3 h-3"/> Queued ✓</>
+               : <><Play className="w-3 h-3"/> Scan Now</>}
+            </button>
+            {scanError && <p className="text-[10px] text-red-400 w-full mt-0.5">{scanError}</p>}
+          </div>
+
           {signals.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {(lc['ACTIVE']??0) > 0 && <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400"><span className="w-1 h-1 rounded-full bg-blue-400"/>{lc['ACTIVE']} Active</span>}
-              {((lc['TELEGRAM_SENT']??0)+(lc['AI_APPROVED']??0)+(lc['SCREENED']??0)) > 0 && <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400"><Zap className="w-2.5 h-2.5"/>{(lc['TELEGRAM_SENT']??0)+(lc['AI_APPROVED']??0)+(lc['SCREENED']??0)} Sent</span>}
-              {(lc['TP_HIT']??0) > 0 && <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"><CheckCircle2 className="w-2.5 h-2.5"/>{lc['TP_HIT']} TP</span>}
-              {(lc['SL_HIT']??0) > 0 && <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400"><XCircle className="w-2.5 h-2.5"/>{lc['SL_HIT']} SL</span>}
+            <div className="mt-2 pt-2 border-t border-zinc-800/60 grid grid-cols-4 gap-1.5">
+              {[
+                { label: 'Active',  value: lc['ACTIVE']??0, color: 'text-blue-400' },
+                { label: 'Sent',    value: signals.filter(s => s.telegramSent || ['TELEGRAM_SENT','ACTIVE','STALE','TP_HIT','SL_HIT','CLOSED'].includes(s.lifecycleStage)).length, color: 'text-purple-400' },
+                { label: 'TP Hit',  value: lc['TP_HIT']??0,  color: 'text-emerald-400' },
+                { label: 'SL Hit',  value: lc['SL_HIT']??0,  color: 'text-red-400' },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="bg-zinc-800/50 rounded-lg px-2 py-2 text-center">
+                  <div className={`text-base font-bold font-mono leading-none ${color}`}>{value}</div>
+                  <div className="text-[10px] text-zinc-500 mt-1 leading-none">{label}</div>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -1065,7 +1146,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
           <div className={`lg:col-span-2 rounded-xl border p-5 bg-zinc-900 h-full ${REGIME_BORDER[regime.regime]}`}>
             <div className="flex items-center gap-1.5 mb-3">
               <Activity className="w-3.5 h-3.5 text-zinc-500"/>
-              <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">Market Regime</span>
+              <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">Market Regime</span>
             </div>
             <div className={`text-2xl font-bold mb-1.5 ${REGIME_COLOR[regime.regime]}`}>{REGIME_LABEL[regime.regime]}</div>
             {REGIME_META[regime.regime] && (
@@ -1074,14 +1155,14 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
               </p>
             )}
             <div className="grid grid-cols-3 gap-2">
-              <div><p className="text-[9px] text-zinc-500 mb-0.5">RSI 4h</p><p className={`text-sm font-bold font-mono ${regime.btcRsi4h>70?'text-red-400':regime.btcRsi4h<30?'text-green-400':'text-white'}`}>{fmt(regime.btcRsi4h,1)}</p></div>
-              <div><p className="text-[9px] text-zinc-500 mb-0.5">BTC 24h</p><p className={`text-sm font-bold font-mono ${regime.btc24hChange>=0?'text-green-400':'text-red-400'}`}>{regime.btc24hChange>=0?'+':''}{fmt(regime.btc24hChange,1)}%</p></div>
-              <div><p className="text-[9px] text-zinc-500 mb-0.5">4h Trend</p>
+              <div><p className="text-[10px] text-zinc-500 mb-0.5">RSI 4h</p><p className={`text-sm font-bold font-mono ${regime.btcRsi4h>70?'text-red-400':regime.btcRsi4h<30?'text-green-400':'text-white'}`}>{fmt(regime.btcRsi4h,1)}</p></div>
+              <div><p className="text-[10px] text-zinc-500 mb-0.5">BTC 24h</p><p className={`text-sm font-bold font-mono ${regime.btc24hChange>=0?'text-green-400':'text-red-400'}`}>{regime.btc24hChange>=0?'+':''}{fmt(regime.btc24hChange,1)}%</p></div>
+              <div><p className="text-[10px] text-zinc-500 mb-0.5">4h Trend</p>
                 <p className={`text-sm font-bold flex items-center gap-0.5 ${regime.btcTrend4h==='BULLISH'?'text-green-400':regime.btcTrend4h==='BEARISH'?'text-red-400':'text-zinc-400'}`}>
                   {regime.btcTrend4h==='BULLISH' && <TrendingUp className="w-3.5 h-3.5"/>}
                   {regime.btcTrend4h==='BEARISH' && <TrendingDown className="w-3.5 h-3.5"/>}
                   {!['BULLISH','BEARISH'].includes(regime.btcTrend4h) && <Minus className="w-3.5 h-3.5"/>}
-                  <span className="text-[11px]">{regime.btcTrend4h}</span>
+                  <span className="text-xs">{regime.btcTrend4h}</span>
                 </p>
               </div>
             </div>
@@ -1107,7 +1188,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
       {signals.length > 0 && (
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Recent Signals</p>
+            <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">Recent Signals</p>
             <div className="flex items-center gap-1.5 ml-auto">
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/20 text-green-400">{signals.filter(s=>s.type==='BUY').length} BUY</span>
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400">{signals.filter(s=>s.type==='SELL').length} SELL</span>
@@ -1116,11 +1197,13 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
           <div className="space-y-1.5">
             {signals.slice(0,6).map((sig,i)=>{
               const alignment = computeRegimeAlignment(sig.type, currentRegime ?? sig.marketRegime)
+              const isOverviewBuy = sig.type === 'BUY'
               return (
-                <div key={sig.id??i} className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 hover:border-zinc-700 transition-colors">
+                <div key={sig.id??i} className={`rounded-xl px-4 py-2.5 transition-colors relative overflow-hidden border ${isOverviewBuy ? 'bg-zinc-900 border-emerald-900/50 hover:border-emerald-800/70' : 'bg-zinc-900 border-red-900/50 hover:border-red-800/70'}`}>
+                  <div className={`absolute inset-y-0 left-0 w-[3px] ${isOverviewBuy ? 'bg-emerald-500/70' : 'bg-red-500/70'}`} />
                   <div className="flex items-center gap-3">
                     <span className="font-semibold text-sm text-white w-16 shrink-0">{sig.symbol}</span>
-                    <span className={`text-xs font-semibold w-8 shrink-0 ${sig.type==='BUY'?'text-green-400':'text-red-400'}`}>{sig.type}</span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${sig.type==='BUY' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25' : 'text-red-400 bg-red-500/10 border-red-500/25'}`}>{sig.type}</span>
                     {sig.riskGrade && <GradeBadge grade={sig.riskGrade} />}
                     <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>{STAGE_META[sig.lifecycleStage]?.label ?? (sig.lifecycleStage??'').replace(/_/g,' ')}</span>
                     <FreshnessTag sig={sig} />
@@ -1129,7 +1212,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
                       <ConfBar confidence={sig.confidence} />
                       <span className="text-xs font-mono text-zinc-300 hidden sm:block">{sig.confidence}%</span>
                       <span className="text-xs font-mono text-zinc-500 hidden sm:block">{sig.rrRatio?.toFixed(1) ?? '—'}:1</span>
-                      <span className="text-[11px] text-zinc-600 tabular-nums">{sig.createdAt?timeAgo(String(sig.createdAt)):'—'}</span>
+                      <span className="text-xs text-zinc-600 tabular-nums">{sig.createdAt?timeAgo(String(sig.createdAt)):'—'}</span>
                     </div>
                   </div>
                   {(sig.entryPrice > 0 || sig.targetPrice > 0 || sig.stopLoss > 0) && (
@@ -1212,12 +1295,12 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
   const paginated = sorted.slice(page * SIG_PAGE_SIZE, (page + 1) * SIG_PAGE_SIZE)
 
   const presetDefs = [
-    {id:'active',  label:'Active',   cls:'bg-green-500/10 border-green-500/30 text-green-300'},
-    {id:'sent',    label:'📨 Sent',  cls:'bg-blue-500/10 border-blue-500/30 text-blue-300'},
-    {id:'won',     label:'✓ Won',    cls:'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'},
-    {id:'lost',    label:'✗ Lost',   cls:'bg-red-500/10 border-red-500/30 text-red-300'},
-    {id:'expired', label:'Expired',  cls:'bg-zinc-500/10 border-zinc-600/30 text-zinc-400'},
-    {id:'all',     label:'All',      cls:'border-zinc-600 text-zinc-300'},
+    {id:'active',  label:'Active'},
+    {id:'sent',    label:'Sent'},
+    {id:'won',     label:'Won'},
+    {id:'lost',    label:'Lost'},
+    {id:'expired', label:'Expired'},
+    {id:'all',     label:'All'},
   ]
   const getPresetCount = (id: string) => {
     if (!signals) return 0
@@ -1226,16 +1309,20 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
   }
 
   return (
-    <div className="space-y-4 max-w-5xl">
+    <div className="space-y-6">
       {/* Lifecycle funnel */}
       <LifecycleFunnel signals={signals??[]} />
 
-      {/* Preset buttons */}
-      <div className="flex gap-2 flex-wrap">
+      {/* Preset pills */}
+      <div className="flex gap-1.5 flex-wrap">
         {presetDefs.map(p=>(
           <button key={p.id} onClick={()=>setPreset(p.id as typeof preset)}
-            className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${preset===p.id?p.cls:'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
-            {p.label} {signals?`(${getPresetCount(p.id)})` :''}
+            className={`text-xs px-3 py-1.5 rounded-full transition-all ${
+              preset===p.id
+                ? 'bg-zinc-700 border border-zinc-600 text-zinc-100 font-medium'
+                : 'text-zinc-500 hover:text-zinc-300'
+            }`}>
+            {p.label}{signals ? ` (${getPresetCount(p.id)})` : ''}
           </button>
         ))}
       </div>
@@ -1250,7 +1337,7 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
         />
         <div className="w-px bg-zinc-800 h-4"/>
         {/* Sort */}
-        <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Sort:</span>
+        <span className="text-[10px] text-zinc-500">Sort:</span>
         {(['confidence','grade','rr','time'] as const).map(s=>(
           <button key={s} onClick={()=>setSortBy(s)}
             className={`text-xs px-2.5 py-1 rounded border transition-colors ${sortBy===s?'bg-zinc-700 border-zinc-600 text-white':'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
@@ -1276,6 +1363,7 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
       </div>
 
       <StageLegend />
+      <ConfidenceBar signals={sorted} />
 
       {loading && <div className="space-y-2">{Array.from({length:5}).map((_,i)=><div key={i} className="skeleton h-14 rounded-xl"/>)}</div>}
       {!loading && sorted.length === 0 && (
@@ -1289,37 +1377,37 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
           const alignment = computeRegimeAlignment(sig.type, currentRegime ?? sig.marketRegime)
           const isBuy = sig.type === 'BUY'
           return (
-            <div key={rowId} className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden hover:border-zinc-700 transition-colors">
+            <div key={rowId} className={`rounded-xl overflow-hidden transition-colors relative border ${isBuy ? 'bg-zinc-900 border-emerald-900/50 hover:border-emerald-800/70' : 'bg-zinc-900 border-red-900/50 hover:border-red-800/70'}`}>
+              {/* Direction accent bar */}
+              <div className={`absolute inset-y-0 left-0 w-[3px] ${isBuy ? 'bg-emerald-500/70' : 'bg-red-500/70'}`} />
               {/* Main row — clickable to expand */}
               <div className="px-4 pt-3 pb-2 flex items-center gap-3 cursor-pointer select-none"
                 onClick={()=>setExpandedId(isExpanded ? null : rowId)}>
                 <span className="font-semibold text-sm text-white w-20 shrink-0">{sig.symbol}</span>
-                <span className={`text-xs font-semibold w-8 shrink-0 ${isBuy?'text-green-400':'text-red-400'}`}>{sig.type}</span>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded border shrink-0 ${isBuy ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25' : 'text-red-400 bg-red-500/10 border-red-500/25'}`}>{sig.type}</span>
                 {sig.riskGrade && <GradeBadge grade={sig.riskGrade} />}
                 <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STAGE_META[sig.lifecycleStage]?.color??'text-zinc-500 border-zinc-700 bg-zinc-800'}`}>
                   {STAGE_META[sig.lifecycleStage]?.label ?? (sig.lifecycleStage??'').replace(/_/g,' ')}
                 </span>
-                <FreshnessTag sig={sig} />
                 {sig.scannerMode && (
                   <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 hidden sm:inline ${MODE_COLORS[sig.scannerMode]??'text-zinc-400 border-zinc-600'}`}>
                     {sig.scannerMode.replace('_',' ')}
                   </span>
                 )}
                 <div className="ml-auto flex items-center gap-2.5 shrink-0">
-                  <RegimeAlignDot alignment={alignment} />
                   {sig.empiricalWr != null && (
                     <span className={`text-[10px] px-1.5 py-0.5 rounded border font-mono hidden md:inline ${
-                      sig.empiricalWr >= 55 ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/5'
-                      : sig.empiricalWr >= 45 ? 'text-blue-400 border-blue-500/30 bg-blue-500/5'
-                      : 'text-red-400 border-red-500/30 bg-red-500/5'}`}
+                      sig.empiricalWr >= 70 ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+                      : sig.empiricalWr >= 55 ? 'text-blue-400 border-blue-500/30 bg-blue-500/10'
+                      : sig.empiricalWr >= 40 ? 'text-amber-400 border-amber-500/30 bg-amber-500/10'
+                      : 'text-red-400 border-red-500/30 bg-red-500/10'}`}
                       title={`Outcome-derived probability: this signal's cohort won ${sig.empiricalWr.toFixed(0)}% historically (n=${sig.empiricalN}). Primary over stated confidence.`}>
                       P {sig.empiricalWr.toFixed(0)}%
                     </span>
                   )}
-                  <ConfBar confidence={sig.confidence} />
                   <span className="text-xs font-mono text-zinc-300 hidden sm:block w-8 text-right">{sig.confidence}%</span>
                   <span className="text-xs font-mono text-zinc-500 hidden sm:block">{sig.rrRatio?.toFixed(1) ?? '—'}:1</span>
-                  <span className="text-[11px] text-zinc-600 tabular-nums">{sig.createdAt?timeAgo(String(sig.createdAt)):'—'}</span>
+                  <span className="text-xs text-zinc-600 tabular-nums">{sig.createdAt?timeAgo(String(sig.createdAt)):'—'}</span>
                   <ChevronDown className={`w-3.5 h-3.5 text-zinc-600 transition-transform shrink-0 ${isExpanded?'rotate-180':''}`} />
                 </div>
               </div>
@@ -1371,15 +1459,114 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
         </div>
       )}
 
+      {/* Coin Watchlist — manual coin tracker */}
+      <details className="group" open>
+        <summary className="text-xs text-zinc-400 cursor-pointer hover:text-zinc-200 select-none list-none flex items-center gap-1.5 font-medium">
+          <span className="group-open:rotate-90 transition-transform inline-block">▶</span> My Watchlist
+          <span className="text-zinc-600 font-normal">(manually tracked coins)</span>
+        </summary>
+        <div className="mt-2">
+          <CoinWatchlist signals={signals??[]} />
+        </div>
+      </details>
+
       {/* Alpha Watchlist — collapsed by default */}
       <details className="group">
         <summary className="text-xs text-zinc-500 cursor-pointer hover:text-zinc-300 select-none list-none flex items-center gap-1.5">
-          <span className="group-open:rotate-90 transition-transform">▶</span> Alpha Watchlist
+          <span className="group-open:rotate-90 transition-transform inline-block">▶</span> Alpha Watchlist
+          <span className="text-zinc-600 text-[10px] font-normal">(auto — validated signals not sent)</span>
         </summary>
         <div className="mt-2">
           <AlphaWatchlist />
         </div>
       </details>
+    </div>
+  )
+}
+
+// ── Manual Coin Watchlist ───────────────────────────────────────────────────────
+
+function CoinWatchlist({ signals }: { signals: TacticalSignalRow[] }) {
+  const STORAGE_KEY = 'signals:watchlist-coins'
+  const [coins, setCoins] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') } catch { return [] }
+  })
+  const [input, setInput] = useState('')
+
+  const persist = (next: string[]) => {
+    setCoins(next)
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)) } catch { /* */ }
+  }
+
+  const add = () => {
+    const sym = input.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+    if (!sym || coins.includes(sym)) { setInput(''); return }
+    persist([...coins, sym])
+    setInput('')
+  }
+
+  const remove = (sym: string) => persist(coins.filter(c => c !== sym))
+
+  // Build a quick lookup: symbol → most recent signal
+  const sigBySymbol = new Map<string, TacticalSignalRow>()
+  for (const s of signals) {
+    const existing = sigBySymbol.get(s.symbol)
+    if (!existing || s.createdAt > existing.createdAt) {
+      sigBySymbol.set(s.symbol, s)
+    }
+  }
+
+  const STAGE_DOT: Record<string, string> = {
+    ACTIVE: 'bg-blue-400', TELEGRAM_SENT: 'bg-purple-400', AI_APPROVED: 'bg-purple-400',
+    SCREENED: 'bg-sky-400', TP_HIT: 'bg-emerald-400', SL_HIT: 'bg-red-400',
+    STALE: 'bg-zinc-600', CLOSED: 'bg-zinc-600', ANALYZED: 'bg-zinc-600', VALIDATED: 'bg-zinc-600',
+  }
+
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
+      {/* Add coin input */}
+      <div className="flex gap-2">
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value.toUpperCase())}
+          onKeyDown={e => e.key === 'Enter' && add()}
+          placeholder="Add coin symbol e.g. BTC"
+          className="flex-1 bg-zinc-800/80 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
+        />
+        <button onClick={add}
+          className="px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-semibold hover:bg-blue-500/20 transition-colors">
+          + Add
+        </button>
+      </div>
+
+      {coins.length === 0 ? (
+        <p className="text-[10px] text-zinc-600 text-center py-2">No coins yet — type a symbol above and press Enter</p>
+      ) : (
+        <div className="space-y-1.5">
+          {coins.map(sym => {
+            const sig = sigBySymbol.get(sym)
+            return (
+              <div key={sym} className="flex items-center gap-2 rounded-lg bg-zinc-800/50 px-3 py-2">
+                <span className="text-xs font-semibold text-white w-16 shrink-0">{sym}</span>
+                {sig ? (
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STAGE_DOT[sig.lifecycleStage] ?? 'bg-zinc-600'}`}/>
+                    <span className={`text-[10px] font-semibold shrink-0 ${sig.type === 'BUY' ? 'text-emerald-400' : 'text-red-400'}`}>{sig.type}</span>
+                    <span className="text-[10px] text-zinc-500 shrink-0">{sig.scannerMode}</span>
+                    <span className="text-[10px] text-zinc-400 shrink-0">{sig.confidence}%</span>
+                    {sig.riskGrade && <span className="text-[10px] text-zinc-500 shrink-0">Gr.{sig.riskGrade}</span>}
+                    <span className="text-[10px] text-zinc-600 truncate">{timeAgo(typeof sig.createdAt === 'string' ? sig.createdAt : sig.createdAt.toISOString())}</span>
+                  </div>
+                ) : (
+                  <span className="text-[10px] text-zinc-600 flex-1">No recent signal</span>
+                )}
+                <button onClick={() => remove(sym)}
+                  className="ml-auto text-zinc-700 hover:text-zinc-400 text-xs shrink-0 transition-colors">✕</button>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -1404,7 +1591,7 @@ function AlphaWatchlist() {
   return (
     <div className="mt-2">
       <div className="flex items-center gap-2 mb-2">
-        <p className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Alpha Watchlist</p>
+        <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">Alpha Watchlist</p>
         <span className="text-[10px] text-zinc-600">Validated · not yet alerted · sorted by empirical WR</span>
         {signals.length > 0 && (
           <span className="ml-auto text-[10px] text-zinc-600">{signals.length} signals</span>
@@ -1419,7 +1606,7 @@ function AlphaWatchlist() {
       {signals.length > 0 && (
         <div className="space-y-1">
           {signals.map(s => (
-            <div key={s.id} className="bg-zinc-900/60 border border-zinc-800/70 rounded-lg px-4 py-2 flex items-center gap-3 flex-wrap text-[11px]">
+            <div key={s.id} className="bg-zinc-900/60 border border-zinc-800/70 rounded-lg px-4 py-2 flex items-center gap-3 flex-wrap text-xs">
               <span className="font-semibold text-white w-20 shrink-0">{s.symbol}</span>
               <span className={`font-semibold w-8 shrink-0 ${s.type==='BUY'?'text-green-400':'text-red-400'}`}>{s.type}</span>
               {s.risk_grade && (
@@ -1454,10 +1641,11 @@ function LifecycleFunnel({ signals }: { signals: TacticalSignalRow[] }) {
   // is always ~100% — show the AI vs Screened split instead.
   const aiCount   = signals.filter(s => s.validationSource === 'CLAUDE' || s.lifecycleStage === 'AI_APPROVED').length
   const scrCount  = signals.filter(s => s.validationSource === 'HEURISTIC' || s.lifecycleStage === 'SCREENED').length
-  // Sent = actually delivered to Telegram. Outcomes register for ALL accepted
-  // signals, so inferring "sent" from outcome stages overcounts — use the boolean.
-  const sent      = signals.filter(s => s.telegramSent).length
-  const active    = (counts['ACTIVE'] ?? 0) + (counts['TELEGRAM_SENT'] ?? 0)
+  // Sent — use telegramSent when populated; fall back to lifecycle-stage inference
+  // for older signals where telegram_sent column was NULL (pre-TELEGRAM.RELIABILITY.1).
+  const sentStages = new Set(['TELEGRAM_SENT','ACTIVE','STALE','TP_HIT','SL_HIT','CLOSED','ANALYZED'])
+  const sent       = signals.filter(s => s.telegramSent || sentStages.has(s.lifecycleStage)).length
+  const active    = signals.filter(s => s.lifecycleStage === 'ACTIVE' || s.lifecycleStage === 'TELEGRAM_SENT').length
   const won       = counts['TP_HIT'] ?? 0
   const lost      = counts['SL_HIT'] ?? 0
   const expired   = (counts['STALE']??0) + (counts['CLOSED']??0)
@@ -1483,7 +1671,7 @@ function LifecycleFunnel({ signals }: { signals: TacticalSignalRow[] }) {
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-y-1">
-        <p className="text-[9px] text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
+        <p className="text-[10px] text-zinc-500 uppercase tracking-wide flex items-center gap-1.5">
           <BarChart2 className="w-3 h-3"/>Pipeline · last {signals.length} signals
         </p>
         <div className="flex items-center gap-2">
@@ -1508,7 +1696,7 @@ function LifecycleFunnel({ signals }: { signals: TacticalSignalRow[] }) {
             <div key={step.label} className="flex items-center flex-1 min-w-0">
               <div className="flex-1 min-w-0 bg-zinc-800/50 border border-zinc-700/40 rounded-lg px-2 py-2.5 text-center">
                 <div className="text-xl font-bold font-mono text-white leading-none">{step.count}</div>
-                <div className="text-[9px] text-zinc-500 uppercase tracking-wider mt-1 leading-tight">{step.label}</div>
+                <div className="text-[10px] text-zinc-500 mt-1 leading-tight">{step.label}</div>
                 {conv !== null && (
                   <div className={`text-[10px] font-semibold mt-0.5 ${convColor(step.count, prev)}`}>{conv}%</div>
                 )}
@@ -1521,23 +1709,23 @@ function LifecycleFunnel({ signals }: { signals: TacticalSignalRow[] }) {
 
       {/* Outcomes row */}
       <div className="flex items-center gap-3 pt-2.5 border-t border-zinc-800/60 flex-wrap">
-        <span className="text-[9px] text-zinc-600 uppercase tracking-wider font-semibold shrink-0">Outcomes</span>
+        <span className="text-[10px] text-zinc-600 font-semibold shrink-0">Outcomes</span>
         <div className="flex items-center gap-4 flex-1 flex-wrap">
           <div className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"/>
             <span className="text-sm font-bold font-mono text-emerald-400">{won}</span>
-            <span className="text-[9px] text-zinc-500">Won</span>
+            <span className="text-[10px] text-zinc-500">Won</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0"/>
             <span className="text-sm font-bold font-mono text-red-400">{lost}</span>
-            <span className="text-[9px] text-zinc-500">Lost</span>
+            <span className="text-[10px] text-zinc-500">Lost</span>
           </div>
           {expired > 0 && (
             <div className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 shrink-0"/>
               <span className="text-sm font-bold font-mono text-zinc-400">{expired}</span>
-              <span className="text-[9px] text-zinc-500">Expired</span>
+              <span className="text-[10px] text-zinc-500">Expired</span>
             </div>
           )}
         </div>
@@ -1719,7 +1907,7 @@ function RegimeHardGateCard({ counts24h }: { counts24h: Record<string, number> }
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <ShieldAlert className="w-4 h-4 text-zinc-500"/>
-          <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">Regime Hard Gate V2</p>
+          <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">Regime Hard Gate V2</p>
           <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${
             enabled === null ? 'text-zinc-500 border-zinc-700'
             : enabled ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
@@ -1740,15 +1928,15 @@ function RegimeHardGateCard({ counts24h }: { counts24h: Record<string, number> }
       </p>
       <div className="flex gap-6 flex-wrap">
         <div>
-          <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">24h Rejections</p>
+          <p className="text-[10px] text-zinc-500 mb-0.5">24h Rejections</p>
           <p className="text-lg font-bold font-mono text-red-400">{rej24h}</p>
         </div>
         <div>
-          <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">7d Rejections</p>
+          <p className="text-[10px] text-zinc-500 mb-0.5">7d Rejections</p>
           <p className="text-lg font-bold font-mono text-red-400">{count7d ?? '—'}</p>
         </div>
         <div>
-          <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Est. Avoided Loss (7d)</p>
+          <p className="text-[10px] text-zinc-500 mb-0.5">Est. Avoided Loss (7d)</p>
           <p className="text-lg font-bold font-mono text-emerald-400">
             {avoided7d != null ? `+${avoided7d.toFixed(1)}R` : '—'}
           </p>
@@ -1813,13 +2001,13 @@ function RegimeTab({ regime, scanStats, regimePerfData }: {
         />
       )}
 
-      <div className="space-y-4 max-w-3xl">
+      <div className="space-y-6">
         {/* Current Regime Card */}
         <div className={`rounded-xl border p-6 bg-zinc-900 ${REGIME_BORDER[regime.regime]}`}>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Target className="w-4 h-4 text-zinc-500"/>
-              <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">Current Regime</span>
+              <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">Current Regime</span>
             </div>
             <span className="text-[10px] text-zinc-600 font-mono">{new Date(regime.computedAt).toLocaleTimeString()}</span>
           </div>
@@ -1833,20 +2021,20 @@ function RegimeTab({ regime, scanStats, regimePerfData }: {
           {currentPerfRow && (
             <div className="mt-3 pt-3 border-t border-zinc-800 flex gap-5 flex-wrap">
               <div>
-                <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Win Rate (7d)</p>
+                <p className="text-[10px] text-zinc-500 mb-0.5">Win Rate (7d)</p>
                 <p className={`text-sm font-bold font-mono ${(currentPerfRow.win_rate??0)>=0.48?'text-emerald-400':(currentPerfRow.win_rate??0)>=0.38?'text-amber-400':'text-red-400'}`}>
                   {currentPerfRow.win_rate != null ? `${Math.round(currentPerfRow.win_rate*100)}%` : '—'}
                 </p>
               </div>
               <div>
-                <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Expectancy</p>
+                <p className="text-[10px] text-zinc-500 mb-0.5">Expectancy</p>
                 <p className={`text-sm font-bold font-mono ${(currentPerfRow.expectancy??0)>0?'text-emerald-400':(currentPerfRow.expectancy??0)>-0.1?'text-amber-400':'text-red-400'}`}>
                   {currentPerfRow.expectancy != null ? `${Number(currentPerfRow.expectancy)>0?'+':''}${Number(currentPerfRow.expectancy).toFixed(2)}R` : '—'}
                 </p>
               </div>
               {currentPerfRow.n != null && (
                 <div>
-                  <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Sample</p>
+                  <p className="text-[10px] text-zinc-500 mb-0.5">Sample</p>
                   <p className="text-sm font-bold font-mono text-zinc-300">n={currentPerfRow.n}</p>
                 </div>
               )}
@@ -1862,23 +2050,23 @@ function RegimeTab({ regime, scanStats, regimePerfData }: {
         {/* Regime Gate Effectiveness */}
         {scanStats && scanStats.total_scans > 0 && (
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-            <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-3">Regime Gate · Last 24h ({scanStats.total_scans} scans)</p>
+            <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-3">Regime Gate · Last 24h ({scanStats.total_scans} scans)</p>
             <div className="flex flex-wrap gap-5">
               {regimeBlocked > 0 && (
                 <div>
-                  <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Blocked (contra-regime)</p>
+                  <p className="text-[10px] text-zinc-500 mb-0.5">Blocked (contra-regime)</p>
                   <p className="text-lg font-bold font-mono text-red-400">{regimeBlocked}</p>
                 </div>
               )}
               {totalAllowed > 0 && (
                 <div>
-                  <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">Allowed</p>
+                  <p className="text-[10px] text-zinc-500 mb-0.5">Allowed</p>
                   <p className="text-lg font-bold font-mono text-emerald-400">{totalAllowed}</p>
                 </div>
               )}
               {nullBlocked > 0 && (
                 <div>
-                  <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-0.5">NULL Regime Rejected</p>
+                  <p className="text-[10px] text-zinc-500 mb-0.5">NULL Regime Rejected</p>
                   <p className="text-lg font-bold font-mono text-amber-400">{nullBlocked}</p>
                 </div>
               )}
@@ -1895,8 +2083,8 @@ function RegimeTab({ regime, scanStats, regimePerfData }: {
         {/* Apply Regime Settings */}
         <div className="glass-card rounded-xl p-4 flex items-start sm:items-center justify-between gap-4 flex-col sm:flex-row">
           <div>
-            <p className="text-terminal-text text-sm font-semibold">Apply Regime Settings</p>
-            <p className="text-terminal-muted text-xs mt-0.5">
+            <p className="text-zinc-200 text-sm font-semibold">Apply Regime Settings</p>
+            <p className="text-zinc-500 text-xs mt-0.5">
               Sets scanner to <span className="font-mono text-zinc-300">{targetPreset}</span> preset for {REGIME_LABEL[regime.regime]}
             </p>
           </div>
@@ -1914,7 +2102,7 @@ function RegimeTab({ regime, scanStats, regimePerfData }: {
         {/* Regime History — distribution from performance data */}
         {perfRows.length > 0 && (
           <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-            <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-3">Regime Distribution · 7d Signal Sample</p>
+            <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-3">Regime Distribution · 7d Signal Sample</p>
             <div className="space-y-2">
               {perfRows.map(row => {
                 const totalPerfRows = perfRows.reduce((s, r) => s + (r.n ?? 0), 0)
@@ -1962,11 +2150,11 @@ export default function SignalsCenterPage() {
 
   // ── Shared data polling (singleton registry) ───────────────────────────────
   const celeryFetcher  = useCallback(()=>adminApi.scheduler.status().then(r=>r.success?r.data:null), [])
-  const regimeFetcher  = useCallback(()=>fetch('/api/market/intelligence').then(r=>r.json()).then(j=>j.regime??null), [])
-  const countsFetcher  = useCallback(()=>fetch('/api/signals/counts').then(r=>r.json()), [])
-  const cacheFetcher   = useCallback(()=>fetch('/api/cache/intelligence').then(r=>r.json()).then(j=>j.telemetry??null), [])
+  const regimeFetcher  = useCallback(()=>fetch('/api/market/intelligence').then(r=>r.ok?r.json():null).then(j=>j?.regime??null), [])
+  const countsFetcher  = useCallback(()=>fetch('/api/signals/counts').then(r=>r.ok?r.json():null), [])
+  const cacheFetcher   = useCallback(()=>fetch('/api/cache/intelligence').then(r=>r.ok?r.json():null).then(j=>j?.telemetry??null), [])
   const provFetcher    = useCallback(()=>fetch('/api/health/providers').then(r=>r.json()).then(j=>j.providers??[]).catch(()=>[]), [])
-  // REDIS.OPTIMIZATION.2: same shared feed as SignalsTab/TacticalTab; overview slices 6
+  // REDIS.OPTIMIZATION.2: same shared feed as SignalsTab; full 100 passed to OverviewTab
   const sigFetcher     = useCallback(()=>fetch('/api/signals/tactical?limit=100&lifecycleStage=all').then(r=>r.json()).then(j=>j.signals??[]).catch(()=>[]), [])
   const flagsFetcher   = useCallback(async ()=>{
     const [featRes,aiRes] = await Promise.all([adminApi.settings.group('features'),adminApi.settings.group('ai')])
@@ -2055,18 +2243,18 @@ export default function SignalsCenterPage() {
   const currentRegime = regime?.regime ?? null
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 max-w-6xl mx-auto">
+    <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div>
-        <h1 className="text-lg sm:text-xl font-semibold text-white">Signals</h1>
+        <h1 className="text-xl font-semibold text-zinc-200">Signals</h1>
         <p className="text-xs text-zinc-500 mt-0.5">Overview · Signals · Regime</p>
       </div>
 
       {/* Tab nav */}
-      <div className="flex gap-0 border-b border-zinc-800 -mx-1">
+      <div className="flex gap-1 border-b border-zinc-800 pb-0">
         {TABS.map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)}
-            className={`px-4 py-2 text-xs font-mono uppercase tracking-wider border-b-2 transition-colors ${
+            className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
               tab===t.id ? 'border-white text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'
             }`}>
             {t.label}
@@ -2078,9 +2266,12 @@ export default function SignalsCenterPage() {
       {tab==='overview' && (
         <OverviewTab
           celery={celery??null} regime={regime??null} signalCounts={signalCounts??null}
-          providers={providers??[]} cache={cache??null} signals={recentSignals??[]}
+          providers={providers??[]} cache={cache??null} signals={recentFeed??[]}
           flags={flags} countdown={countdown}
           trackRecord={trackRecord??null}
+          scanMode={scanMode} onScanModeChange={setScanMode}
+          onScanNow={handleScanNow} scanning={scanning} scanDone={scanDone} scanError={opError}
+          onTogglePause={handlePause} pausing={pausing}
         />
       )}
       {tab==='signals'  && <SignalsTab  currentRegime={currentRegime} />}

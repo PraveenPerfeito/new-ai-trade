@@ -122,11 +122,13 @@ class SettingsService:
         if entry and not self._is_stale(entry):
             return entry.data, entry.version
 
-        # 2. Redis
+        # 2. Redis — single MGET instead of two sequential GETs
         try:
             redis = await get_redis()
-            raw  = await redis.get(f"settings:d:{group_name}")
-            ver  = await redis.get(f"settings:v:{group_name}")
+            raw, ver = await redis.mget(
+                f"settings:d:{group_name}",
+                f"settings:v:{group_name}",
+            )
             if raw and ver:
                 data = {**defaults, **json.loads(raw)}
                 version = int(ver)
@@ -144,14 +146,16 @@ class SettingsService:
         else:
             data, version = defaults, 0
 
-        # Populate caches
+        # Populate caches — pipelined write
         self._mem[group_name] = _CacheEntry(data=data, version=version,
                                              loaded_at=time.monotonic())
         try:
             redis = await get_redis()
-            await redis.setex(f"settings:d:{group_name}", _REDIS_TTL,
-                              json.dumps(data, default=str))
-            await redis.setex(f"settings:v:{group_name}", _REDIS_TTL, str(version))
+            pipe = redis.pipeline()
+            pipe.setex(f"settings:d:{group_name}", _REDIS_TTL,
+                       json.dumps(data, default=str))
+            pipe.setex(f"settings:v:{group_name}", _REDIS_TTL, str(version))
+            await pipe.execute()
         except Exception:
             pass
 
@@ -162,9 +166,12 @@ class SettingsService:
         self._mem.pop(group_name, None)
         try:
             redis = await get_redis()
-            await redis.delete(f"settings:d:{group_name}", f"settings:v:{group_name}")
-            await redis.incr("settings:generation")
-            await redis.expire("settings:generation", 86_400)
+            pipe = redis.pipeline()
+            pipe.delete(f"settings:d:{group_name}", f"settings:v:{group_name}")
+            pipe.incr("settings:generation")
+            pipe.expire("settings:generation", 86_400)
+            await pipe.execute()
+            # publish must run outside pipeline (returns message receiver count, not queued)
             await redis.publish("settings_changed", group_name)
         except Exception:
             pass

@@ -24,12 +24,12 @@ export function ProviderHealthTable({ providers }: { providers: ProviderCheckRes
   const sorted = PROVIDER_ORDER.map(n => providers.find(p => p.name === n)).filter(Boolean) as ProviderCheckResult[]
   return (
     <div className="glass-card rounded-xl p-4 overflow-x-auto">
-      <p className="text-terminal-muted text-[9px] uppercase tracking-widest mb-3">
+      <p className="text-zinc-500 text-[10px] uppercase tracking-wide mb-3 font-medium">
         Provider Health — 8 Services
       </p>
       <table className="w-full text-xs">
         <thead>
-          <tr className="text-terminal-muted/60 text-[10px] uppercase">
+          <tr className="text-zinc-600 text-[10px] uppercase">
             <th className="text-left pb-2 font-medium w-28">Provider</th>
             <th className="text-left pb-2 font-medium">Role</th>
             <th className="text-right pb-2 font-medium w-16">Status</th>
@@ -37,20 +37,20 @@ export function ProviderHealthTable({ providers }: { providers: ProviderCheckRes
             <th className="text-left pb-2 font-medium pl-3">Note</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-terminal-border/10">
+        <tbody className="divide-y divide-zinc-800/50">
           {sorted.map(p => (
             <tr key={p.name}>
-              <td className="py-1.5 text-terminal-text font-semibold">{p.name}</td>
-              <td className="py-1.5 text-terminal-muted/70">{PROVIDER_ROLE[p.name] ?? ''}</td>
+              <td className="py-1.5 text-zinc-200 font-medium">{p.name}</td>
+              <td className="py-1.5 text-zinc-500">{PROVIDER_ROLE[p.name] ?? ''}</td>
               <td className="py-1.5 text-right">
                 <span className={`font-mono font-bold text-[10px] uppercase ${p.healthy ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {p.healthy ? '✓ UP' : '✗ DOWN'}
+                  {p.healthy ? '✓ Up' : '✗ Down'}
                 </span>
               </td>
-              <td className="py-1.5 text-right font-mono text-terminal-muted/70">
+              <td className="py-1.5 text-right font-mono text-zinc-500">
                 {p.latencyMs > 0 ? `${p.latencyMs}ms` : '—'}
               </td>
-              <td className="py-1.5 pl-3 text-terminal-muted/60 max-w-xs truncate">
+              <td className="py-1.5 pl-3 text-zinc-600 max-w-xs truncate">
                 {p.error
                   ? <span className="text-red-400/80">{p.error}</span>
                   : p.note ?? ''}
