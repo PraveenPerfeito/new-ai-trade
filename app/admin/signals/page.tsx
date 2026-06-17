@@ -65,26 +65,26 @@ const REGIME_META: Record<string, { desc: string; implication: string }> = {
   CAPITULATION:    { desc: 'Extreme fear — RSI < 22, mass selling', implication: 'High-conviction long setups may be viable — capitulation often precedes reversals' },
 }
 const MODE_COLORS: Record<string, string> = {
-  spot:            'text-zinc-300 border-zinc-700 bg-zinc-800/50',
-  futures:         'text-zinc-300 border-zinc-700 bg-zinc-800/50',
-  high_confidence: 'text-zinc-300 border-zinc-700 bg-zinc-800/50',
-  trending:        'text-zinc-300 border-zinc-700 bg-zinc-800/50',
+  spot:            'text-zinc-400   border-zinc-700     bg-zinc-800/50',
+  futures:         'text-blue-400   border-blue-500/30  bg-blue-500/10',
+  high_confidence: 'text-amber-400  border-amber-500/30 bg-amber-500/10',
+  trending:        'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
 }
 const MODES: ScannerMode[] = ['spot', 'futures', 'high_confidence', 'trending']
 const MODE_FIRE_MINUTES: Record<string, number[]> = {
   spot: [0,15,30,45], futures: [10,40], high_confidence: [5,35], trending: [20,50],
 }
 const STAGE_META: Record<string, { label: string; color: string }> = {
-  VALIDATED:     { label: 'Validated',   color: 'text-zinc-500 bg-zinc-500/10 border-zinc-600/20' },
-  AI_APPROVED:   { label: 'AI Approved', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
-  SCREENED:      { label: 'Screened',    color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
-  TELEGRAM_SENT: { label: 'Sent',        color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
-  ACTIVE:        { label: 'Active',      color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
-  STALE:         { label: 'Stale',       color: 'text-zinc-500 bg-zinc-500/10 border-zinc-600/20' },
-  TP_HIT:        { label: 'TP Hit',      color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
-  SL_HIT:        { label: 'SL Hit',      color: 'text-red-400 bg-red-500/10 border-red-500/20'   },
-  CLOSED:        { label: 'Closed',      color: 'text-zinc-500 bg-zinc-500/10 border-zinc-600/20' },
-  ANALYZED:      { label: 'Analyzed',    color: 'text-zinc-500 bg-zinc-500/10 border-zinc-600/20' },
+  VALIDATED:     { label: 'Validated',   color: 'text-zinc-500   bg-zinc-500/10   border-zinc-600/20'    },
+  AI_APPROVED:   { label: 'AI Approved', color: 'text-violet-400 bg-violet-500/10 border-violet-500/25'  },
+  SCREENED:      { label: 'Screened',    color: 'text-sky-400    bg-sky-500/10    border-sky-500/20'     },
+  TELEGRAM_SENT: { label: 'Sent',        color: 'text-blue-400   bg-blue-500/10   border-blue-500/20'    },
+  ACTIVE:        { label: 'Active',      color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
+  STALE:         { label: 'Stale',       color: 'text-zinc-500   bg-zinc-500/10   border-zinc-600/20'    },
+  TP_HIT:        { label: 'TP Hit',      color: 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30' },
+  SL_HIT:        { label: 'SL Hit',      color: 'text-red-400    bg-red-500/10    border-red-500/20'     },
+  CLOSED:        { label: 'Closed',      color: 'text-zinc-500   bg-zinc-500/10   border-zinc-600/20'    },
+  ANALYZED:      { label: 'Analyzed',    color: 'text-zinc-500   bg-zinc-500/10   border-zinc-600/20'    },
 }
 const STAGE_TIPS: Record<string, string> = {
   VALIDATED:     'Passed all 11 scanner gates — queued for AI or heuristic review',
@@ -144,11 +144,13 @@ function ConfidenceBar({ signals }: { signals: TacticalSignalRow[] }) {
   )
 }
 const GRADE_STYLE: Record<string, string> = {
-  A: 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30',
-  B: 'text-blue-300    bg-blue-500/15    border-blue-500/30',
-  C: 'text-amber-300   bg-amber-500/15   border-amber-500/30',
-  D: 'text-red-300     bg-red-500/15     border-red-500/30',
-  F: 'text-red-400     bg-red-500/20     border-red-500/40',
+  'A+': 'text-emerald-300 bg-emerald-500/15 border-emerald-500/35',
+  A:    'text-green-300   bg-green-500/12   border-green-500/30',
+  'B+': 'text-blue-300   bg-blue-500/15    border-blue-500/30',
+  B:    'text-amber-300  bg-amber-500/12   border-amber-500/30',
+  C:    'text-zinc-300   bg-zinc-500/10    border-zinc-600/20',
+  D:    'text-red-300    bg-red-500/15     border-red-500/30',
+  F:    'text-red-400    bg-red-500/20     border-red-500/40',
 }
 const GRADE_RANK: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, F: 4 }
 // Preset display info for preview modal
@@ -1198,8 +1200,8 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
               const alignment = computeRegimeAlignment(sig.type, currentRegime ?? sig.marketRegime)
               const isOverviewBuy = sig.type === 'BUY'
               return (
-                <div key={sig.id??i} className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 hover:border-zinc-700 transition-colors relative overflow-hidden">
-                  <div className={`absolute inset-y-0 left-0 w-[3px] ${isOverviewBuy ? 'bg-emerald-500/60' : 'bg-red-500/60'}`} />
+                <div key={sig.id??i} className={`rounded-xl px-4 py-2.5 transition-colors relative overflow-hidden border ${isOverviewBuy ? 'bg-zinc-900 border-emerald-900/50 hover:border-emerald-800/70' : 'bg-zinc-900 border-red-900/50 hover:border-red-800/70'}`}>
+                  <div className={`absolute inset-y-0 left-0 w-[3px] ${isOverviewBuy ? 'bg-emerald-500/70' : 'bg-red-500/70'}`} />
                   <div className="flex items-center gap-3">
                     <span className="font-semibold text-sm text-white w-16 shrink-0">{sig.symbol}</span>
                     <span className={`text-xs font-semibold w-8 shrink-0 ${sig.type==='BUY'?'text-green-400':'text-red-400'}`}>{sig.type}</span>
@@ -1376,9 +1378,9 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
           const alignment = computeRegimeAlignment(sig.type, currentRegime ?? sig.marketRegime)
           const isBuy = sig.type === 'BUY'
           return (
-            <div key={rowId} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden hover:border-zinc-700 transition-colors relative">
+            <div key={rowId} className={`rounded-xl overflow-hidden transition-colors relative border ${isBuy ? 'bg-zinc-900 border-emerald-900/50 hover:border-emerald-800/70' : 'bg-zinc-900 border-red-900/50 hover:border-red-800/70'}`}>
               {/* Direction accent bar */}
-              <div className={`absolute inset-y-0 left-0 w-[3px] ${isBuy ? 'bg-emerald-500/60' : 'bg-red-500/60'}`} />
+              <div className={`absolute inset-y-0 left-0 w-[3px] ${isBuy ? 'bg-emerald-500/70' : 'bg-red-500/70'}`} />
               {/* Main row — clickable to expand */}
               <div className="px-4 pt-3 pb-2 flex items-center gap-3 cursor-pointer select-none"
                 onClick={()=>setExpandedId(isExpanded ? null : rowId)}>
@@ -1396,9 +1398,10 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
                 <div className="ml-auto flex items-center gap-2.5 shrink-0">
                   {sig.empiricalWr != null && (
                     <span className={`text-[10px] px-1.5 py-0.5 rounded border font-mono hidden md:inline ${
-                      sig.empiricalWr >= 55 ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/5'
-                      : sig.empiricalWr >= 45 ? 'text-blue-400 border-blue-500/30 bg-blue-500/5'
-                      : 'text-red-400 border-red-500/30 bg-red-500/5'}`}
+                      sig.empiricalWr >= 70 ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+                      : sig.empiricalWr >= 55 ? 'text-blue-400 border-blue-500/30 bg-blue-500/10'
+                      : sig.empiricalWr >= 40 ? 'text-amber-400 border-amber-500/30 bg-amber-500/10'
+                      : 'text-red-400 border-red-500/30 bg-red-500/10'}`}
                       title={`Outcome-derived probability: this signal's cohort won ${sig.empiricalWr.toFixed(0)}% historically (n=${sig.empiricalN}). Primary over stated confidence.`}>
                       P {sig.empiricalWr.toFixed(0)}%
                     </span>

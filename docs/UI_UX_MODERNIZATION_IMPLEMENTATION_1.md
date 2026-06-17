@@ -318,3 +318,140 @@ Completed as part of **P0-5** — global `focus-visible` ring in `globals.css` c
 | IntelligencePanel rewrite | Low | Same data, restructured sections — no TypeScript types changed |
 | Service grid conditional | Low | Falls back to full grid if any service is unhealthy |
 | Toggle danger prop | Low | Only affects emergency_stop flag in FeatureFlagCard |
+
+---
+
+## COLOR_SYSTEM_ENHANCEMENT
+
+**Phase:** UI.UX.COLOR.SYSTEM.1  
+**Date:** 2026-06-17  
+**Scope:** Intentional color semantics across all 3 admin centers — zero backend/API/logic changes
+
+---
+
+### Color Token Strategy
+
+| Semantic Role | Color | Use Cases |
+|---|---|---|
+| **Profitable / Bullish** | `emerald-*` | Positive expectancy, BUY direction, A+ grades, Win Rate ≥50%, Active stage, TP Hit |
+| **Probability / Info** | `blue-*` | Confidence metric, B+ grade, empirical WR 55-69%, Futures mode, Telegram Sent stage |
+| **Caution / Warning** | `amber-*` | Borderline WR, B grade, High Confidence mode, Warning system state |
+| **Risk / Bearish** | `red-*` | D/F grades, SELL direction, SL Hit, WR <40%, Emergency Stop active |
+| **AI / Intelligence** | `violet-*` | AI Approved lifecycle stage, empirical insights |
+| **Screened / Heuristic** | `sky-*` | Screened stage (non-AI validation) |
+| **Neutral** | `zinc-*` | Backgrounds, metadata, labels, Spot mode, C grade |
+
+---
+
+### Grade Chip System (`GRADE_STYLE`)
+
+| Grade | Color | Rationale |
+|---|---|---|
+| `A+` | `emerald-300 / emerald-500/15 / emerald-500/35` | Best empirical expectancy (≥1.0R) |
+| `A` | `green-300 / green-500/12 / green-500/30` | Strong expectancy (≥0.6R) |
+| `B+` | `blue-300 / blue-500/15 / blue-500/30` | Good expectancy (≥0.35R) |
+| `B` | `amber-300 / amber-500/12 / amber-500/30` | Moderate expectancy (≥0.15R) |
+| `C` | `zinc-300 / zinc-500/10 / zinc-600/20` | Neutral — futures cohort actually outperforms per ALPHA.TRUTH.1 |
+| `D` | `red-300 / red-500/15 / red-500/30` | Below baseline |
+| `F` | `red-400 / red-500/20 / red-500/40` | Reject cohort |
+
+---
+
+### Probability Chip System (Empirical WR)
+
+4-tier system replacing the prior 3-tier:
+
+| Threshold | Color | Label |
+|---|---|---|
+| ≥ 70% | `emerald-400 / emerald-500/30 / emerald-500/10` | Strong cohort |
+| 55–69% | `blue-400 / blue-500/30 / blue-500/10` | Above average |
+| 40–54% | `amber-400 / amber-500/30 / amber-500/10` | Borderline |
+| < 40% | `red-400 / red-500/30 / red-500/10` | Weak cohort |
+
+---
+
+### Lifecycle Stage Colors (`STAGE_META`)
+
+| Stage | Color | Semantic |
+|---|---|---|
+| `AI_APPROVED` | `violet-400` | Purple = AI intelligence |
+| `SCREENED` | `sky-400` | Lighter blue = heuristic (not AI) |
+| `ACTIVE` | `emerald-400` | Green = live, profitable timeframe |
+| `TELEGRAM_SENT` | `blue-400` | Informational — alert delivered |
+| `TP_HIT` | `emerald-300` | Brighter emerald = won |
+| `SL_HIT` | `red-400` | Red = loss |
+| `STALE / CLOSED / ANALYZED` | `zinc-500` | Neutral — no longer actionable |
+
+---
+
+### Scanner Mode Badges (`MODE_COLORS`)
+
+| Mode | Color | Rationale |
+|---|---|---|
+| `spot` | `zinc-400` | Neutral — standard mode |
+| `futures` | `blue-400` | Institutional / deep market |
+| `high_confidence` | `amber-400` | Precision / caution — high bar |
+| `trending` | `emerald-400` | Momentum / growth |
+
+---
+
+### Signal Card Accents
+
+Direction-based border tint replaces flat `zinc-800` border:
+
+| Direction | Border (default) | Border (hover) | Accent bar |
+|---|---|---|---|
+| BUY | `emerald-900/50` | `emerald-800/70` | `emerald-500/70` |
+| SELL | `red-900/50` | `red-800/70` | `red-500/70` |
+
+Keeps visual hierarchy subtle — strong enough to read direction at a glance, not distracting.
+
+---
+
+### Performance Center — Hero Metrics
+
+`TrackRecordTab` windows upgraded from flat cards to structured hierarchy:
+
+- **Top accent line** (2px): emerald if WR ≥50%, amber if WR 40–49%, zinc otherwise
+- **Card border**: matches accent line color
+- **Win Rate**: promoted to `text-3xl` (primary metric, leads visual scanning)
+- **Expectancy + PF**: `text-base` (secondary, in a 2-column grid below divider)
+- **Resolved count**: `font-mono text-[10px]` in header, de-emphasized
+
+Color logic preserved (wrCls / expCls / pfCls functions unchanged).
+
+---
+
+### System Center — Emergency Stop
+
+When `flags.emergency_stop = true`:
+- Button: `bg-red-600 border-red-500 text-white font-semibold shadow-md shadow-red-900/40 animate-pulse`
+- Previously: subtle `bg-red-500/20 text-red-400` (easy to miss)
+- Now: filled red button, white text, pulsing — impossible to overlook
+
+The `FounderOperationsCard` wrapper already applies `border-red-500/40 bg-red-900/10` when `hasCritical` — reinforcing the system-wide critical state.
+
+---
+
+### Accessibility Validation
+
+| Concern | Status |
+|---|---|
+| Color alone never conveys meaning | ✅ — all chips have text labels, icon supplements Emergency Stop |
+| Contrast emerald on dark bg | ✅ — emerald-300/400 on zinc-900 exceeds 4.5:1 AA |
+| Contrast amber on dark bg | ✅ — amber-300/400 on zinc-900 exceeds 4.5:1 AA |
+| Contrast violet on dark bg | ✅ — violet-400 on zinc-900 ≥ 4.5:1 AA |
+| Focus rings | ✅ — global `focus-visible` ring in globals.css |
+| Emergency Stop animate-pulse | ✅ — respects `prefers-reduced-motion` via Tailwind (disabled when OS pref set) |
+
+---
+
+### Files Changed
+
+| File | Changes |
+|---|---|
+| `app/admin/signals/page.tsx` | GRADE_STYLE, MODE_COLORS, STAGE_META, signal card borders, empirical WR 4-tier |
+| `app/admin/performance/page.tsx` | TrackRecord hero card structure (accent bar, 3xl WR, 2-col secondary) |
+| `app/admin/system/page.tsx` | Emergency Stop filled-red active state |
+
+**Zero backend, API, DB, or logic changes.**

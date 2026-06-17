@@ -539,10 +539,10 @@ function FounderOperationsCard({
           {/* Emergency Stop */}
           <button onClick={() => flags && onPatchFlag('features', 'emergency_stop', !flags.emergency_stop)}
             disabled={opLoading || flags === null}
-            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-all disabled:opacity-40 ${
               flags?.emergency_stop
-                ? 'bg-red-500/20 border-red-500/50 text-red-400 hover:bg-red-500/30'
-                : 'bg-zinc-950 border-zinc-800 text-zinc-500/60 hover:border-zinc-700'
+                ? 'bg-red-600 border-red-500 text-white font-semibold hover:bg-red-500 shadow-md shadow-red-900/40 animate-pulse'
+                : 'bg-zinc-950 border-zinc-800 text-zinc-500/60 hover:border-zinc-700 hover:text-zinc-400'
             }`}>
             <AlertTriangle size={11} />
             Emergency Stop{flags?.emergency_stop ? ' — ACTIVE' : ''}

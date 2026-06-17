@@ -1115,29 +1115,44 @@ function TrackRecordTab({ data, loading }: { data: import('@/lib/admin-api').Tra
 
       {/* Performance windows */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {windows.map(({ label, w: win }) => (
-          <div key={label} className="glass-card rounded-xl p-5">
-            <p className="text-zinc-500 text-[10px] tracking-wide font-medium mb-4">{label} · {win.resolved} resolved</p>
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              <div className="text-center">
-                <p className={`font-mono font-semibold text-2xl leading-none ${wrCls(win.win_rate)}`}>{w(win.win_rate)}</p>
-                <p className="text-zinc-500 text-[10px] mt-1.5">Win Rate</p>
+        {windows.map(({ label, w: win }) => {
+          const isGood = win.win_rate != null && win.win_rate >= 50
+          const isWarn = win.win_rate != null && win.win_rate >= 40 && win.win_rate < 50
+          const accentBorder = isGood ? 'border-emerald-900/60' : isWarn ? 'border-amber-900/50' : 'border-zinc-800'
+          const accentBar    = isGood ? 'bg-emerald-500' : isWarn ? 'bg-amber-500' : 'bg-zinc-600'
+          return (
+          <div key={label} className={`glass-card rounded-xl overflow-hidden border ${accentBorder}`}>
+            {/* Top accent line */}
+            <div className={`h-[2px] w-full ${accentBar}`} />
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-5">
+                <span className="text-zinc-400 text-xs font-semibold tracking-wide">{label}</span>
+                <span className="text-zinc-600 text-[10px] font-mono">{win.resolved} resolved</span>
               </div>
-              <div className="text-center">
-                <p className={`font-mono font-semibold text-2xl leading-none ${expCls(win.expectancy)}`}>{e(win.expectancy)}</p>
-                <p className="text-zinc-500 text-[10px] mt-1.5">Expectancy</p>
+              {/* Primary metric — Win Rate */}
+              <div className="mb-4">
+                <p className={`font-mono font-bold text-3xl leading-none ${wrCls(win.win_rate)}`}>{w(win.win_rate)}</p>
+                <p className="text-zinc-500 text-[10px] mt-1.5 uppercase tracking-wide">Win Rate</p>
               </div>
-              <div className="text-center">
-                <p className={`font-mono font-semibold text-2xl leading-none ${pfCls(win.pf)}`}>{p(win.pf)}</p>
-                <p className="text-zinc-500 text-[10px] mt-1.5">Prof Factor</p>
+              {/* Secondary metrics */}
+              <div className="grid grid-cols-2 gap-3 pt-3 border-t border-zinc-800/50">
+                <div>
+                  <p className={`font-mono font-semibold text-base leading-none ${expCls(win.expectancy)}`}>{e(win.expectancy)}</p>
+                  <p className="text-zinc-600 text-[10px] mt-1">Expectancy</p>
+                </div>
+                <div>
+                  <p className={`font-mono font-semibold text-base leading-none ${pfCls(win.pf)}`}>{p(win.pf)}</p>
+                  <p className="text-zinc-600 text-[10px] mt-1">Prof Factor</p>
+                </div>
               </div>
-            </div>
-            <div className="border-t border-zinc-800/40 pt-2.5 flex justify-between items-center">
-              <span className="text-zinc-500 text-[10px]">Wins / Losses</span>
-              <span className="font-mono text-xs text-zinc-500">{win.wins}W / {win.losses}L</span>
+              <div className="mt-3 pt-2.5 border-t border-zinc-800/30 flex justify-between items-center">
+                <span className="text-zinc-600 text-[10px]">Wins / Losses</span>
+                <span className="font-mono text-[10px] text-zinc-500">{win.wins}W · {win.losses}L</span>
+              </div>
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* By mode (30d) */}
