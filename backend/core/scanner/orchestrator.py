@@ -556,11 +556,20 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                     # Telegram send (signal stays persisted + outcome-tracked)
                     # when cohort WR is below floor — or, with the v1 expectancy
                     # filter ON, when cohort expectancy is below floor.
+                    #
+                    # Gate uses regime-specific cohorts ONLY (regime|type|breakout,
+                    # regime|type, regime).  conf_band/global fallbacks cover the full
+                    # population (WR 31-42% globally) — treating them as "known bad"
+                    # would suppress every signal.  Unknown at regime level → never gate.
+                    _GATE_LEVELS = {"regime|type|breakout", "regime|type", "regime"}
+                    _regime_cohort = _cohort if (_cohort is not None and _cohort.level in _GATE_LEVELS) else None
+                    _gate_wr  = _regime_cohort.wr  if _regime_cohort is not None else None
+                    _gate_exp = _regime_cohort.exp if _regime_cohort is not None else None
                     from backend.analytics.probability import should_suppress_send  # noqa: PLC0415
                     if should_suppress_send(
-                        prob_gate_enabled, signal.empirical_wr, min_empirical_wr,
+                        prob_gate_enabled, _gate_wr, min_empirical_wr,
                         expectancy_filter=exp_filter_enabled,
-                        empirical_exp=(_cohort.exp if _cohort is not None else None),
+                        empirical_exp=_gate_exp,
                         min_expectancy=min_empirical_exp,
                     ):
                         gate_rejections_total.labels(gate="probability_send_gate").inc()
@@ -568,9 +577,9 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                             "probability_gate_suppressed_send",
                             symbol=signal.symbol,
                             type=signal.type.value,
-                            empirical_wr=signal.empirical_wr,
+                            empirical_wr=_gate_wr,
                             empirical_n=signal.empirical_n,
-                            empirical_exp=(_cohort.exp if _cohort is not None else None),
+                            empirical_exp=_gate_exp,
                             threshold=min_empirical_wr,
                             min_expectancy=min_empirical_exp if exp_filter_enabled else None,
                         )
