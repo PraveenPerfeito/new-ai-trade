@@ -520,13 +520,12 @@ function IntelligencePanel({ sig }: { sig: TacticalSignalRow }) {
   const fd         = sig.futuresData
   const hasFutures = !!fd && (sig.scannerMode === 'futures' || sig.scannerMode === 'high_confidence')
 
-  const indRaw    = sig.indicators as unknown as Record<string, unknown>
-  const ema200Raw = indRaw?.ema200 as number | null | undefined
-  const ema200Pos = ema200Raw && sig.indicators.currentPrice
-    ? (sig.indicators.currentPrice > ema200Raw ? 'ABOVE' : 'BELOW') : null
-  const candlePat = (indRaw?.candle_pattern as string | null | undefined) ?? null
-  const bbRaw     = indRaw?.bb as Record<string, unknown> | null | undefined
-  const bbSqueeze = bbRaw?.squeeze as boolean | null | undefined
+  const ind       = sig.indicators
+  const ema200Raw = ind?.ema200
+  const ema200Pos = ema200Raw && ind.currentPrice
+    ? (ind.currentPrice > ema200Raw ? 'ABOVE' : 'BELOW') : null
+  const candlePat = ind?.candle_pattern ?? null
+  const bbSqueeze = ind?.bb?.squeeze ?? null
   const hasExtTech = !!(ema200Pos || (candlePat && candlePat !== 'NONE') || bbSqueeze)
 
   const aiExp         = sig.aiExplainability
@@ -2151,9 +2150,9 @@ export default function SignalsCenterPage() {
 
   // ── Shared data polling (singleton registry) ───────────────────────────────
   const celeryFetcher  = useCallback(()=>adminApi.scheduler.status().then(r=>r.success?r.data:null), [])
-  const regimeFetcher  = useCallback(()=>fetch('/api/market/intelligence').then(r=>r.json()).then(j=>j.regime??null), [])
-  const countsFetcher  = useCallback(()=>fetch('/api/signals/counts').then(r=>r.json()), [])
-  const cacheFetcher   = useCallback(()=>fetch('/api/cache/intelligence').then(r=>r.json()).then(j=>j.telemetry??null), [])
+  const regimeFetcher  = useCallback(()=>fetch('/api/market/intelligence').then(r=>r.ok?r.json():null).then(j=>j?.regime??null), [])
+  const countsFetcher  = useCallback(()=>fetch('/api/signals/counts').then(r=>r.ok?r.json():null), [])
+  const cacheFetcher   = useCallback(()=>fetch('/api/cache/intelligence').then(r=>r.ok?r.json():null).then(j=>j?.telemetry??null), [])
   const provFetcher    = useCallback(()=>fetch('/api/health/providers').then(r=>r.json()).then(j=>j.providers??[]).catch(()=>[]), [])
   // REDIS.OPTIMIZATION.2: same shared feed as SignalsTab; full 100 passed to OverviewTab
   const sigFetcher     = useCallback(()=>fetch('/api/signals/tactical?limit=100&lifecycleStage=all').then(r=>r.json()).then(j=>j.signals??[]).catch(()=>[]), [])

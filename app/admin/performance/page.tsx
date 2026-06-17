@@ -1344,7 +1344,7 @@ function AttributionTab({
           </div>
 
           {(() => {
-            const verdicts = ai?.verdicts ?? (ai as unknown as { verdict_distribution?: Record<string, number> })?.verdict_distribution ?? {}
+            const verdicts = ai?.verdicts ?? ai?.verdict_distribution ?? {}
             const totalVerd = Object.values(verdicts as Record<string, number>).reduce((a: number, b: number) => a + b, 0)
             return totalVerd > 0 ? (
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">

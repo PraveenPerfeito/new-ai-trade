@@ -66,7 +66,7 @@ async def _read_config() -> dict[str, Any]:
 
 async def _write_config(cfg: dict[str, Any]) -> None:
     redis = await get_redis()
-    await redis.set(CONFIG_KEY, json.dumps(cfg))
+    await redis.setex(CONFIG_KEY, 7 * 24 * 60 * 60, json.dumps(cfg))
 
 
 async def _get_metrics(redis, name: str) -> dict[str, Any]:

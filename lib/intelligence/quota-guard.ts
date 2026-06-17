@@ -9,6 +9,7 @@ const PER_MINUTE_LIMIT = 30;
 
 const KEY_USED        = 'intel:quota:used';
 const KEY_RESET_AT    = 'intel:quota:reset_at';
+const QUOTA_KEY_TTL   = 40 * 24 * 60 * 60; // 40 days — covers monthly billing cycle + buffer
 const KEY_MINUTE_LOG  = 'intel:quota:minute_log';   // sorted set: member=timestamp, score=timestamp
 
 export class QuotaGuard {
@@ -74,7 +75,7 @@ export class QuotaGuard {
 
       // Ensure reset_at is seeded
       if (!resetAtRaw) {
-        await redis.set(KEY_RESET_AT, resetAt).catch(() => {});
+        await redis.set(KEY_RESET_AT, resetAt, 'EX', QUOTA_KEY_TTL).catch(() => {});
       }
 
       const warningLevel = this.calcWarningLevel(pctUsed, reqLastMin);
@@ -116,8 +117,8 @@ export class QuotaGuard {
   async resetMonthly(): Promise<void> {
     try {
       const redis = getRedis();
-      await redis.set(KEY_USED, '0');
-      await redis.set(KEY_RESET_AT, this.nextMonthReset());
+      await redis.set(KEY_USED, '0', 'EX', QUOTA_KEY_TTL);
+      await redis.set(KEY_RESET_AT, this.nextMonthReset(), 'EX', QUOTA_KEY_TTL);
       this.invalidateCache();
       log.info('quota_monthly_reset');
     } catch (err) {
@@ -132,7 +133,7 @@ export class QuotaGuard {
       const current = parseInt((await redis.get(KEY_USED)) ?? '0', 10) || 0;
       // Only update if CMC reports more usage than we've tracked (conservative)
       if (creditsUsed > current) {
-        await redis.set(KEY_USED, String(creditsUsed));
+        await redis.set(KEY_USED, String(creditsUsed), 'EX', QUOTA_KEY_TTL);
         this.invalidateCache();
         log.info({ creditsUsed }, 'quota_seeded_from_cmc_key_info');
       }

@@ -32,10 +32,14 @@ export interface TechnicalIndicators {
   macd: MACDResult;
   ema20: number;
   ema50: number;
+  ema200?: number | null;
   atr: number;
   volumeSpike: number;
   currentPrice: number;
   trend: 'BULLISH' | 'BEARISH' | 'RANGING';
+  candle_pattern?: string | null;
+  bb?: { upper: number; lower: number; middle: number; squeeze?: boolean; width?: number } | null;
+  ema_cross?: string | null;
 }
 
 export type SignalType = 'BUY' | 'SELL' | 'NEUTRAL';
