@@ -263,9 +263,9 @@ class AISettings(BaseSettingsGroup):
         json_schema_extra={'restart': True},
     )
     max_tokens: int = Field(
-        500, ge=50, le=4_096,
+        768, ge=50, le=4_096,
         title='Max Response Tokens',
-        description='Token budget for each Claude validation response',
+        description='Token budget for each Claude validation response. Runtime floor is 768 — values below this are silently raised.',
     )
     temperature: float = Field(
         0.3, ge=0.0, le=1.0,

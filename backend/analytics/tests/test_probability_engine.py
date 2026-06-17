@@ -123,10 +123,14 @@ class TestDeliveryGateV1:
 
 
 class TestFlagsAndDims:
-    def test_flags_default_off(self):
+    def test_flags_default_state(self):
+        # P0 flags promoted to ON by SQA3 (2026-06-16)
         ff = FeatureFlags()
-        assert ff.probability_gate_v1 is False
-        assert ff.riskgrade_v2 is False
+        assert ff.probability_gate_v1 is True
+        assert ff.riskgrade_v2 is True
+        assert ff.regime_hard_gate_v2 is True
+        assert ff.early_breakout_penalty_v1 is True
+        assert ff.high_confidence_mode_enabled is False
 
     def test_min_empirical_exp_default(self):
         assert ScannerSettings().min_empirical_exp == 0.0
