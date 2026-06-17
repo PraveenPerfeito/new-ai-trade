@@ -18,16 +18,9 @@ BEAT_SCHEDULE = {
             "queue": "celery",
         },
     },
-    # High-confidence scan: every 30 minutes
-    "auto-scan-high-confidence": {
-        "task": "backend.workers.scan_task.run_scheduled_scan",
-        "schedule": crontab(minute="5,35"),
-        "kwargs": {"mode": "high_confidence"},
-        "options": {
-            "expires": 17 * 60,
-            "queue": "celery",
-        },
-    },
+    # high_confidence scan removed — mode permanently OFF (high_confidence_mode_enabled=False
+    # default since dd10788; P0 audit: 26.8% WR 30d, 0/9 wins last week; saves 1,440 msgs/month)
+
     # Futures scan: every 30 minutes, offset by 10 minutes to avoid pile-up
     "auto-scan-futures": {
         "task": "backend.workers.scan_task.run_scheduled_scan",

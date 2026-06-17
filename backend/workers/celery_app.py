@@ -61,6 +61,16 @@ def create_celery() -> Celery:
     if settings.result_backend and settings.result_backend.startswith("rediss://"):
         conf["redis_backend_use_ssl"] = {"ssl_cert_reqs": ssl.CERT_NONE}
 
+    # Redis broker: increase BLPOP poll timeout to 30s so the worker waits up to 30s
+    # before re-polling when the queue is idle.  Reduces Redis ops from ~86K/day to
+    # ~2,880/day (~97% reduction) while adding at most 30s latency on manual scans.
+    # Scheduled tasks (every 15 min) are completely unaffected.
+    if settings.broker_url.startswith(("redis://", "rediss://")):
+        conf["broker_transport_options"] = {
+            "socket_timeout": 30,
+            "socket_keepalive": True,
+        }
+
     app.conf.update(conf)
 
     return app
