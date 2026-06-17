@@ -128,7 +128,7 @@ async def flush_queue(timeout_s: float = 20.0) -> bool:
     returns are silently destroyed (audited tail-loss on multi-signal scans).
     Returns True when fully drained, False on timeout (remaining are logged).
     """
-    if _queue is None or _queue.empty() and _queue._unfinished_tasks == 0:  # noqa: SLF001
+    if _queue is None:
         return True
     _get_queue()   # ensure a live worker on the current loop
     try:
@@ -161,7 +161,7 @@ async def _mark_alert_cooldown(dedup_key: str, confidence: int | None = None) ->
     try:
         from backend.cache.redis_cache import get_redis  # noqa: PLC0415
         redis = await get_redis()
-        await redis.setex(dedup_key, ALERT_COOLDOWN_HOURS * 3600, str(int(confidence or 0) or 999))
+        await redis.setex(dedup_key, ALERT_COOLDOWN_HOURS * 3600, str(confidence if confidence is not None else 0))
     except Exception as exc:
         log.warning("alert_cooldown_mark_failed", key=dedup_key, error=str(exc))
 
@@ -357,6 +357,7 @@ def _leverage_text(max_lev: int, mode: str) -> str:
 async def send_signal_alert(signal: Signal) -> bool:
     """Format and enqueue a detailed signal alert. Skips if same symbol+direction was alerted within 4h."""
     # ── Operational gate: check all Telegram / emergency switches ────────────
+    tg_cfg = None
     try:
         from backend.system_settings.service import get_settings_service
         from backend.system_settings.groups import TelegramSettings, FeatureFlags
