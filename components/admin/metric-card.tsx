@@ -45,7 +45,7 @@ export function MetricCard({
   return (
     <div className={`glass-card rounded-xl p-5 border ${border} ${className}`}>
       <div className="flex items-center justify-between mb-2.5">
-        <span className="text-zinc-500 text-[11px] uppercase tracking-wide font-medium">{label}</span>
+        <span className="text-zinc-500 text-xs uppercase tracking-wide font-medium">{label}</span>
         {icon && <span className={`${text} opacity-60`}>{icon}</span>}
       </div>
 

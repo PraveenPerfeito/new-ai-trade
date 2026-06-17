@@ -1136,7 +1136,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
               ].map(({ label, value, color }) => (
                 <div key={label} className="bg-zinc-800/50 rounded-lg px-2 py-2 text-center">
                   <div className={`text-base font-bold font-mono leading-none ${color}`}>{value}</div>
-                  <div className="text-[9px] text-zinc-500 mt-1 leading-none">{label}</div>
+                  <div className="text-[10px] text-zinc-500 mt-1 leading-none">{label}</div>
                 </div>
               ))}
             </div>
