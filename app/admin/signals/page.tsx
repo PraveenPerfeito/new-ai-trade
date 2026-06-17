@@ -1096,37 +1096,32 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
             </div>
           </div>
 
-          {/* Manual scan — mode selector + trigger */}
-          <div className="mt-2 pt-2 border-t border-zinc-800/60">
-            <p className="text-[10px] text-zinc-500 mb-1.5">Manual Scan</p>
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              {MODES.map(m => (
-                <button key={m} onClick={() => onScanModeChange(m)}
-                  className={`text-[10px] px-2.5 py-1 rounded-md border font-semibold transition-colors ${
-                    scanMode === m
-                      ? MODE_COLORS[m] + ' opacity-100'
-                      : 'text-zinc-500 border-zinc-700 bg-transparent hover:text-zinc-300 hover:border-zinc-600'
-                  }`}>
-                  {modeDisplayLabel(m)}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <button onClick={onScanNow} disabled={scanning || celery?.scanning}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                  scanDone
-                    ? 'bg-blue-500/10 border border-blue-500/30 text-blue-400'
-                    : scanning || celery?.scanning
-                    ? 'bg-zinc-800 border border-zinc-700 text-zinc-500 cursor-not-allowed'
-                    : 'bg-bull-default/10 border border-bull-default/30 text-bull-text hover:bg-bull-default/20'
+          {/* Manual scan — single row: label + mode chips + trigger */}
+          <div className="mt-2 pt-2 border-t border-zinc-800/60 flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] text-zinc-500 shrink-0">Manual Scan</span>
+            {MODES.map(m => (
+              <button key={m} onClick={() => onScanModeChange(m)}
+                className={`text-[10px] px-2.5 py-1 rounded-md border font-semibold transition-colors ${
+                  scanMode === m
+                    ? MODE_COLORS[m] + ' opacity-100'
+                    : 'text-zinc-500 border-zinc-700 bg-transparent hover:text-zinc-300 hover:border-zinc-600'
                 }`}>
-                {scanning ? <><span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"/> Queuing…</>
-                 : scanDone ? <><CheckCircle2 className="w-3 h-3"/> Queued ✓</>
-                 : <><Play className="w-3 h-3"/> Scan Now</>}
+                {modeDisplayLabel(m)}
               </button>
-              {scanDone && <span className="text-[10px] text-zinc-500">Running in background — watch status above</span>}
-            </div>
-            {scanError && <p className="text-[10px] text-red-400 mt-1.5">{scanError}</p>}
+            ))}
+            <button onClick={onScanNow} disabled={scanning || celery?.scanning}
+              className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                scanDone
+                  ? 'bg-blue-500/10 border border-blue-500/30 text-blue-400'
+                  : scanning || celery?.scanning
+                  ? 'bg-zinc-800 border border-zinc-700 text-zinc-500 cursor-not-allowed'
+                  : 'bg-bull-default/10 border border-bull-default/30 text-bull-text hover:bg-bull-default/20'
+              }`}>
+              {scanning ? <><span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"/> Queuing…</>
+               : scanDone ? <><CheckCircle2 className="w-3 h-3"/> Queued ✓</>
+               : <><Play className="w-3 h-3"/> Scan Now</>}
+            </button>
+            {scanError && <p className="text-[10px] text-red-400 w-full mt-0.5">{scanError}</p>}
           </div>
 
           {signals.length > 0 && (
