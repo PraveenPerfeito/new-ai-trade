@@ -109,8 +109,9 @@ class TestHighConfidenceFlag:
 # ── 4. Probability gate ───────────────────────────────────────────────────────
 
 class TestProbabilityGate:
-    def test_flag_defaults_off(self):
-        assert FeatureFlags().probability_gate_enabled is False
+    def test_flag_defaults_on(self):
+        # Changed to True by SQA3 code-default update (probability gate active by default)
+        assert FeatureFlags().probability_gate_enabled is True
 
     def test_threshold_default(self):
         assert ScannerSettings().min_empirical_wr == 45.0

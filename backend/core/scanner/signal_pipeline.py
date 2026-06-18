@@ -1142,7 +1142,16 @@ async def scan_coin(
         elif btc_regime == "HIGH_VOLATILITY":
             regime_adj = 5
 
-        required_confidence = config.min_confidence + regime_adj
+        # HEURISTIC.CALIBRATION.1 — heuristic scores start at 45 and are conservative
+        # by design (Claude's threshold was calibrated for Claude's 0-100 scale where
+        # strong signals naturally reach 87-95; heuristic equivalents score ~5-8 pts lower).
+        # When AI is off, lower required_confidence so heuristic-80 signals (which would
+        # be Claude-85+ signals) are not over-filtered. min(config, 80) never loosens
+        # TRENDING (78) or raises it beyond the mode minimum.
+        _base_confidence = config.min_confidence
+        if ai.validation_source == "HEURISTIC":
+            _base_confidence = min(_base_confidence, 80)
+        required_confidence = _base_confidence + regime_adj
         confidence_penalty, penalty_reasons = _null_setup_confidence_penalty(
             setup, signal_type, mode, volatility
         )

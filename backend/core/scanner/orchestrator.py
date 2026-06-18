@@ -551,7 +551,15 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                     except Exception:
                         pass
 
-                if signal.confidence >= alert_thr:
+                # HEURISTIC.CALIBRATION.1 — when AI is off, heuristic scores are ~5-8
+                # pts lower than Claude equivalents; mirror the pipeline adjustment
+                # so heuristic-80+ signals are Telegram-eligible (not just persisted).
+                _effective_alert_thr = (
+                    min(alert_thr, 80)
+                    if signal.validation_source != "CLAUDE"
+                    else alert_thr
+                )
+                if signal.confidence >= _effective_alert_thr:
                     # PHASE.9.1/P1 — probability delivery gate: suppress the
                     # Telegram send (signal stays persisted + outcome-tracked)
                     # when cohort WR is below floor — or, with the v1 expectancy
