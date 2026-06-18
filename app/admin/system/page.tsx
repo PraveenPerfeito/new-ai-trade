@@ -15,6 +15,7 @@ import {
   SettingsGroupResponse,
   AuditEntry,
   AuditChangedField,
+  TelegramDeliveryResponse,
 } from '@/lib/admin-api'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
 import { useSharedPolling } from '@/lib/use-shared-polling'
@@ -313,7 +314,6 @@ const FLAG_META: Record<string, {
   probability_gate_v1:                { tier: 'quality',     p0: true, recommendedState: true,  p0Note: '2/3 live signals in WR<40% cohorts · enable Telegram gate' },
   riskgrade_v2:                       { tier: 'quality',     p0: true, recommendedState: true,  p0Note: 'Heuristic grades inverted (Grade A < Grade C) · enable empirical grades' },
   futures_intelligence:               { tier: 'quality' },
-  probability_gate_expectancy_filter: { tier: 'quality' },
   ai_validation:                      { tier: 'operational' },
   telegram:                           { tier: 'operational' },
   emergency_stop:                     { tier: 'operational' },
@@ -326,6 +326,47 @@ const FLAG_META: Record<string, {
   rate_limiting:                      { tier: 'advanced' },
   confidence_calibration_v2:          { tier: 'advanced' },
   attribution_snapshots:              { tier: 'advanced' },
+}
+
+// ── Telegram Delivery Card ────────────────────────────────────────────────────
+
+function TelegramDeliveryCard({ data }: { data: TelegramDeliveryResponse | null }) {
+  if (!data) return null
+  const w = data.h24
+  const deliveryRate = w.queued > 0 ? Math.round((w.delivered / w.queued) * 100) : null
+  const rows: [string, number, string][] = [
+    ['Generated',  w.generated,        'text-zinc-400'],
+    ['Eligible',   w.eligible,         'text-zinc-400'],
+    ['Queued',     w.queued,           'text-zinc-300'],
+    ['Delivered',  w.delivered,        'text-emerald-400'],
+    ['Failed',     w.failed,           w.failed > 0 ? 'text-bear-default' : 'text-zinc-500'],
+    ['Shadowed',   w.shadowed,         'text-zinc-500'],
+    ['Unresolved', w.unresolved,       w.unresolved > 0 ? 'text-amber-400' : 'text-zinc-500'],
+  ]
+  return (
+    <div className="glass-card rounded-xl p-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-zinc-300 text-sm font-medium">Telegram Delivery</p>
+        <span className={`text-xs font-mono px-2 py-0.5 rounded-full ${
+          deliveryRate === null ? 'bg-zinc-800 text-zinc-500'
+          : deliveryRate >= 90  ? 'bg-emerald-900/40 text-emerald-400'
+          : deliveryRate >= 70  ? 'bg-amber-900/40 text-amber-400'
+          : 'bg-bear-default/10 text-bear-default'
+        }`}>
+          {deliveryRate !== null ? `${deliveryRate}% delivery` : 'no data'}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+        {rows.map(([label, val, cls]) => (
+          <div key={label} className="flex justify-between items-center py-0.5">
+            <span className="text-zinc-500 text-xs">{label}</span>
+            <span className={`text-xs font-mono ${cls}`}>{val}</span>
+          </div>
+        ))}
+      </div>
+      <p className="text-zinc-600 text-[10px] mt-2">24h rolling window</p>
+    </div>
+  )
 }
 
 // ── System Diagnostics Accordion ─────────────────────────────────────────────
@@ -1900,12 +1941,14 @@ export default function SystemPage() {
   const scanFetcher     = useCallback(() => adminApi.analytics.scans(24), [])
   const aiFetcher       = useCallback(() => adminApi.analytics.ai(24), [])
   const monitorFetcher  = useCallback(() => adminApi.analytics.monitor(), [])
+  const tgDeliveryFetcher = useCallback(() => adminApi.analytics.telegramDelivery(), [])
 
-  const { data: health,   loading: hl } = useAutoRefresh<HealthReady>(healthFetcher, 120_000)
-  const { data: provData }              = useAutoRefresh<{ providers: ProviderCheckResult[] }>(providerFetcher, 120_000)
-  const { data: scans }                 = useAutoRefresh<ScanSummaryResponse>(scanFetcher, 120_000)
-  const { data: ai }                    = useAutoRefresh<AiSummaryResponse>(aiFetcher, 120_000)
-  const { data: monitor }               = useSharedPolling<MonitorSnapshot>('admin:monitor', monitorFetcher, 120_000)
+  const { data: health,     loading: hl } = useAutoRefresh<HealthReady>(healthFetcher, 120_000)
+  const { data: provData }                = useAutoRefresh<{ providers: ProviderCheckResult[] }>(providerFetcher, 120_000)
+  const { data: scans }                   = useAutoRefresh<ScanSummaryResponse>(scanFetcher, 120_000)
+  const { data: ai }                      = useAutoRefresh<AiSummaryResponse>(aiFetcher, 120_000)
+  const { data: monitor }                 = useSharedPolling<MonitorSnapshot>('admin:monitor', monitorFetcher, 120_000)
+  const { data: tgDelivery }              = useAutoRefresh<TelegramDeliveryResponse>(tgDeliveryFetcher, 300_000)
 
   // ── Founder operations state (Phase A–C) ──────────────────────────────────
   const celeryFetcher   = useCallback(() => adminApi.scheduler.status().then(r => r.success ? r.data : null), [])
@@ -2202,6 +2245,9 @@ export default function SystemPage() {
           </p>
         </div>
       )}
+
+      {/* Telegram delivery funnel — TELEGRAM.RELIABILITY.1 WS5 */}
+      <TelegramDeliveryCard data={tgDelivery ?? null} />
 
       {/* Advanced Operations accordion — Phase D */}
       <AdvancedOperationsAccordion

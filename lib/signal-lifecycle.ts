@@ -34,7 +34,11 @@ export function computeLifecycleStage(
   }
 
   if (signal.aiValidated) {
-    return signal.validationSource === 'HEURISTIC' ? 'SCREENED' : 'AI_APPROVED';
+    // Treat null/undefined as HEURISTIC — pre-migration rows default to SCREENED
+    // to avoid falsely badging AI-off signals as AI_APPROVED.
+    return (!signal.validationSource || signal.validationSource === 'HEURISTIC')
+      ? 'SCREENED'
+      : 'AI_APPROVED';
   }
   return 'VALIDATED';
 }

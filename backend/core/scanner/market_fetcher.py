@@ -212,6 +212,12 @@ async def _flush_binance_metrics() -> None:
         if timeouts.get("futures"):
             pipe.hincrby(_BINANCE_META_KEY, "klineTimeouts:futures", timeouts["futures"])
         await pipe.execute()
+        # Wire Binance error count to monitoring dashboard (record_binance_error was
+        # defined but never called — anomaly detector's binance_errors threshold was
+        # permanently 0 before this fix).
+        if errors:
+            from backend.analytics.monitoring import _incr  # noqa: PLC0415
+            await _incr("binance_errors", len(errors))
     except Exception:
         pass
 

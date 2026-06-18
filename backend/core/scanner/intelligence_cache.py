@@ -209,45 +209,27 @@ async def read_top_movers() -> list[str]:
     return []
 
 
-# Redis keys for fallback visibility (Phase 7.3A.8)
-FALLBACK_STATUS_KEY    = "intel:fallback:status"     # admin-visible JSON status blob
+# Redis key for Telegram alert throttle (Phase 7.3A.8)
 FALLBACK_ALERT_TTL_KEY = "intel:fallback:alert_sent"  # throttle key — 15-min TTL
-FALLBACK_STATUS_TTL    = 30 * 60   # 30 min
 FALLBACK_ALERT_TTL     = 15 * 60   # 15 min — minimum gap between Telegram alerts
 
 
 async def _record_fallback_event(coin_count: int, reason: str = "cache_cold") -> bool:
     """
-    Persist fallback status in Redis for admin visibility and determine whether
-    a Telegram alert should be sent (throttled to once per 15 minutes).
+    Determine whether a CMC-cold Telegram alert should be sent (throttled to
+    once per 15 minutes).
 
     Returns True if a Telegram alert should be fired, False if throttled.
     """
-    import time as _time  # noqa: PLC0415
     should_alert = False
     try:
         redis = await get_redis()
-
-        # Admin-visible status blob (30-min TTL)
-        status = json.dumps({
-            "active":           True,
-            "fallback_provider": "coingecko",
-            "primary_provider":  "coinmarketcap",
-            "reason":           reason,
-            "detected_at":      datetime.now(timezone.utc).isoformat(),
-            "coin_count":       coin_count,
-        })
-        await redis.setex(FALLBACK_STATUS_KEY, FALLBACK_STATUS_TTL, status)
-
-        # Alert throttle check
         already_alerted = await redis.exists(FALLBACK_ALERT_TTL_KEY)
         if not already_alerted:
             await redis.setex(FALLBACK_ALERT_TTL_KEY, FALLBACK_ALERT_TTL, "1")
             should_alert = True
-
     except Exception as exc:
         log.warning("fallback_event_record_failed", error=str(exc))
-
     return should_alert
 
 
@@ -324,12 +306,8 @@ async def _fallback_cmc_direct(limit: int) -> IntelligenceCacheResult:
 async def _fallback_coingecko(limit: int, reason: str = "cache_cold") -> IntelligenceCacheResult:
     """
     CoinGecko fallback when the Redis intelligence cache is cold or unreadable.
-
-    Phase 7.3A.8 additions:
-      - Sets Redis intel:fallback:status for admin dashboard visibility
-      - Increments intel:fallback:count_24h for daily frequency tracking
-      - Sends Telegram operational alert (throttled to once per 15 min)
-      - Increments Prometheus intelligence_fallback_total counter
+    Sends a Telegram ops alert throttled to once per 15 min and increments the
+    Prometheus intelligence_fallback_total counter.
     """
     from backend.core.scanner.market_fetcher import _fetch_coingecko  # noqa: PLC0415
 
