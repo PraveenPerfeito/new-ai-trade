@@ -235,7 +235,7 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
               <StatPair label="Expectancy"   value={overall?.expectancy != null ? `${Number(overall.expectancy) > 0 ? '+' : ''}${Number(overall.expectancy).toFixed(2)}R` : '—'} accent={overall?.expectancy && Number(overall.expectancy) > 0 ? 'text-bull-default' : 'text-bear-default'} />
               <StatPair label="Profit Factor" value={overall?.profit_factor != null ? Number(overall.profit_factor).toFixed(2) : '—'} accent={overall?.profit_factor && Number(overall.profit_factor) >= 1.5 ? 'text-bull-default' : 'text-zinc-200'} />
               <StatPair label="Max DD"       value={overall?.max_drawdown_r != null ? `${Number(overall.max_drawdown_r).toFixed(1)}R` : '—'} accent="text-bear-default" />
-              <StatPair label="Sharpe"       value={overall?.sharpe != null ? Number(overall.sharpe).toFixed(2) : '—'} accent={overall?.sharpe && Number(overall.sharpe) > 1 ? 'text-bull-default' : 'text-zinc-200'} />
+              <StatPair label="Sharpe"       value={overall?.sharpe_ratio != null ? Number(overall.sharpe_ratio).toFixed(2) : '—'} accent={overall?.sharpe_ratio && Number(overall.sharpe_ratio) > 1 ? 'text-bull-default' : 'text-zinc-200'} />
             </div>
           )}
           {!loading && (!overall || overall.total === 0) && (
@@ -477,7 +477,7 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
 
       {edge && (
         <p className="text-zinc-500/40 text-xs font-mono">
-          Generated {formatTs(edge.generated_at)} - {explicitWindowNote(edge.window_hours)}
+          Generated {formatTs((edge as { report_date?: string }).report_date ?? edge.generated_at)} - {explicitWindowNote(edge.window_hours)}
         </p>
       )}
     </div>
@@ -1092,7 +1092,7 @@ function TrackRecordTab({ data, loading }: { data: import('@/lib/admin-api').Tra
   if (loading) return <div className="text-zinc-500 text-sm py-8 text-center">Loading track record…</div>
   if (!data)   return <div className="text-zinc-500 text-sm py-8 text-center">No track record data available.</div>
 
-  const w = (wr: number | null) => wr == null ? '—' : `${wr}%`
+  const w = (wr: number | null) => wr == null ? '—' : `${Number(wr).toFixed(1)}%`
   const e = (ex: number | null) => ex == null ? '—' : `${Number(ex) > 0 ? '+' : ''}${Number(ex).toFixed(2)}R`
   const p = (pf: number | null) => pf == null ? '—' : Number(pf).toFixed(2)
   const wrCls = (wr: number | null) => wr == null ? 'text-zinc-500' : wr >= 50 ? 'text-bull-default' : wr >= 40 ? 'text-blue-400' : wr >= 30 ? 'text-amber-400' : 'text-bear-default'

@@ -28,10 +28,11 @@ export async function GET() {
       admin.from('signals').select('id').gte('created_at', since7d),
 
       // Win rate + expectancy from resolved outcomes (7d)
+      // Include TIMEOUT in denominator to match Edge tab formula
       admin.from('signal_outcomes')
-        .select('outcome, return_r')
+        .select('outcome, rr_achieved')
         .gte('created_at', since7d)
-        .in('outcome', ['TP_HIT', 'SL_HIT']),
+        .in('outcome', ['TP_HIT', 'SL_HIT', 'TIMEOUT']),
     ])
 
     const signalsToday = todayRes.count ?? 0
@@ -61,15 +62,15 @@ export async function GET() {
       const tpHits = outcomes.filter((o) => o.outcome === 'TP_HIT').length
       winRate7d    = Math.round((tpHits / resolved7d) * 100)
 
-      const returnsWithValue = outcomes.filter((o) => o.return_r != null)
+      const returnsWithValue = outcomes.filter((o) => o.rr_achieved != null)
       if (returnsWithValue.length > 0) {
-        const sumR = returnsWithValue.reduce((s, o) => s + (o.return_r as number), 0)
+        const sumR = returnsWithValue.reduce((s, o) => s + (o.rr_achieved as number), 0)
         expectancy7d = Math.round((sumR / returnsWithValue.length) * 100) / 100
       }
 
       // Profit factor = gross profit / gross loss
-      const tpReturns = outcomes.filter((o) => o.outcome === 'TP_HIT' && o.return_r != null).map((o) => o.return_r as number)
-      const slReturns = outcomes.filter((o) => o.outcome === 'SL_HIT' && o.return_r != null).map((o) => o.return_r as number)
+      const tpReturns = outcomes.filter((o) => o.outcome === 'TP_HIT' && o.rr_achieved != null).map((o) => o.rr_achieved as number)
+      const slReturns = outcomes.filter((o) => o.outcome === 'SL_HIT' && o.rr_achieved != null).map((o) => o.rr_achieved as number)
       if (tpReturns.length > 0 && slReturns.length > 0) {
         const grossProfit = tpReturns.reduce((s, v) => s + v, 0)
         const grossLoss   = Math.abs(slReturns.reduce((s, v) => s + v, 0))

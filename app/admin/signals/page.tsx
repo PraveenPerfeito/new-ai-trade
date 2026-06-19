@@ -2204,7 +2204,7 @@ export default function SignalsCenterPage() {
       emergency_stop:   Boolean(field(featRes,'emergency_stop')),
       maintenance_mode: Boolean(field(featRes,'maintenance_mode')),
       telegram:         Boolean(field(featRes,'telegram')),
-      ai_validation:    Boolean(field(featRes,'ai_validation')),
+      ai_validation:    Boolean(field(aiRes,'enabled')),
       _aiEnabled:       Boolean(field(aiRes,'enabled')),
     }
   }, [])

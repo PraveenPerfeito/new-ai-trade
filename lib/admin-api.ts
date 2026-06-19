@@ -225,7 +225,7 @@ export interface EdgeReport {
     expectancy: number | null
     profit_factor: number | null
     max_drawdown_r: number | null
-    sharpe: number | null
+    sharpe_ratio: number | null
     insufficient_data: boolean
     win_rate_ci: [number, number] | null
     tp_hits: number
@@ -272,7 +272,8 @@ export interface EdgeReport {
     warning?: string
   }
   window_hours: number
-  generated_at: string
+  generated_at: string   // Python key: report_date (mapped here for consistency)
+  report_date?: string   // Python returns this key — alias accepted by the frontend
 }
 
 export interface CoinStats {
