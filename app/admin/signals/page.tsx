@@ -152,7 +152,7 @@ const GRADE_STYLE: Record<string, string> = {
   D:    'text-red-300    bg-red-500/15     border-red-500/30',
   F:    'text-red-400    bg-red-500/20     border-red-500/40',
 }
-const GRADE_RANK: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, F: 4 }
+const GRADE_RANK: Record<string, number> = { 'A+': 0, A: 1, 'B+': 2, B: 3, C: 4, D: 5, F: 6 }
 // Preset display info for preview modal
 const PRESET_DISPLAY: Record<string, { label: string; changes: string[] }> = {
   conservative: { label: 'Conservative', changes: ['Min confidence: ~87', 'Min RR: 2.5:1', 'Fewer signals / scan'] },
@@ -1253,12 +1253,15 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
 const SIG_PAGE_SIZE = 20
 
 function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
-  const [typeFilter,  setTypeFilter]  = useState<'all'|'BUY'|'SELL'>('all')
-  const [modeFilter,  setModeFilter]  = useState<string>('all')
-  const [sortBy,      setSortBy]      = useState<'confidence'|'grade'|'rr'|'time'>('confidence')
-  const [expandedId,  setExpandedId]  = useState<string|null>(null)
-  const [search,      setSearch]      = useState('')
-  const [page,        setPage]        = useState(0)
+  const [typeFilter,      setTypeFilter]      = useState<'all'|'BUY'|'SELL'>('all')
+  const [modeFilter,      setModeFilter]      = useState<string>('all')
+  const [gradeFilter,     setGradeFilter]     = useState<string>('all')
+  const [timeframeFilter, setTimeframeFilter] = useState<string>('all')
+  const [confFilter,      setConfFilter]      = useState<string>('all')
+  const [sortBy,          setSortBy]          = useState<'confidence'|'grade'|'rr'|'time'>('time')
+  const [expandedId,      setExpandedId]      = useState<string|null>(null)
+  const [search,          setSearch]          = useState('')
+  const [page,            setPage]            = useState(0)
   const [preset, setPreset] = useState<'active'|'sent'|'won'|'lost'|'expired'|'all'>('active')
   const stageMap: Record<string, SignalLifecycleStage[]> = {
     active:  ['ACTIVE','AI_APPROVED','SCREENED','TELEGRAM_SENT'],
@@ -1268,7 +1271,7 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
     expired: ['STALE','CLOSED'],
   }
 
-  useEffect(() => { setPage(0) }, [typeFilter, modeFilter, sortBy, search, preset])
+  useEffect(() => { setPage(0) }, [typeFilter, modeFilter, gradeFilter, timeframeFilter, confFilter, sortBy, search, preset])
 
   // REDIS.OPTIMIZATION.2: one shared tactical feed for SignalsTab + TacticalTab
   // + Overview (was 3 separate polls of the same endpoint at 60-120s)
@@ -1284,6 +1287,12 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
     (!presetStages || presetStages.includes(s.lifecycleStage)) &&
     (typeFilter==='all'||s.type===typeFilter) &&
     (modeFilter==='all'||s.scannerMode===modeFilter) &&
+    (gradeFilter==='all'||(s.riskGrade??'')===gradeFilter||(s.empiricalGrade??'')===gradeFilter) &&
+    (timeframeFilter==='all'||s.timeframe===timeframeFilter) &&
+    (confFilter==='all'||
+      (confFilter==='90+'  && (s.confidence??0)>=90) ||
+      (confFilter==='85-89'&& (s.confidence??0)>=85 && (s.confidence??0)<90) ||
+      (confFilter==='80-84'&& (s.confidence??0)>=80 && (s.confidence??0)<85)) &&
     (search===''||s.symbol.toUpperCase().includes(search.toUpperCase()))
   )
 
@@ -1360,6 +1369,35 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
           <button key={m} onClick={()=>setModeFilter(m)}
             className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${modeFilter===m?(MODE_COLORS[m]||'bg-zinc-700 border-zinc-600 text-white'):'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
             {m==='all'?'All Modes':m.replace('_',' ')}
+          </button>
+        ))}
+        <div className="w-px bg-zinc-800 h-4 mx-1"/>
+        {/* Timeframe filter */}
+        <span className="text-[10px] text-zinc-500">TF:</span>
+        {(['all','1h','4h','1d'] as const).map(tf=>(
+          <button key={tf} onClick={()=>setTimeframeFilter(tf)}
+            className={`text-xs px-2.5 py-1 rounded border transition-colors ${timeframeFilter===tf?'bg-zinc-700 border-zinc-600 text-white':'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
+            {tf==='all'?'All':tf}
+          </button>
+        ))}
+        <div className="w-px bg-zinc-800 h-4 mx-1"/>
+        {/* Grade filter */}
+        <span className="text-[10px] text-zinc-500">Grade:</span>
+        {(['all','A+','A','B+','B','C','D'] as const).map(g=>(
+          <button key={g} onClick={()=>setGradeFilter(g)}
+            className={`text-[10px] px-2 py-1 rounded border transition-colors font-semibold ${gradeFilter===g?(GRADE_STYLE[g]??'bg-zinc-700 border-zinc-600 text-white'):'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
+            {g}
+          </button>
+        ))}
+        <div className="w-px bg-zinc-800 h-4 mx-1"/>
+        {/* Confidence band filter */}
+        <span className="text-[10px] text-zinc-500">Conf:</span>
+        {(['all','90+','85-89','80-84'] as const).map(c=>(
+          <button key={c} onClick={()=>setConfFilter(c)}
+            className={`text-[10px] px-2 py-1 rounded border transition-colors ${confFilter===c?
+              (c==='90+'?'bg-emerald-500/20 border-emerald-500/50 text-emerald-300':c==='85-89'?'bg-blue-500/20 border-blue-500/50 text-blue-300':'bg-amber-500/20 border-amber-500/50 text-amber-300')
+              :'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
+            {c==='all'?'All':c}
           </button>
         ))}
       </div>
