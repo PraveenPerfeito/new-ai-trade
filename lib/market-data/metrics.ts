@@ -5,6 +5,7 @@ const LATENCY_WINDOW = 100;  // keep last N latency samples
 const ERROR_WINDOW   = 100;  // keep last N error timestamps
 const KEY_PREFIX     = 'providers:metrics:';
 const FLUSH_INTERVAL = 60_000;  // flush in-memory buffer to Redis at most once per 60s
+const METRICS_TTL    = 7 * 24 * 3600;  // 7 days — prevent unbounded key accumulation
 
 function key(name: ProviderName, field: string): string {
   return `${KEY_PREFIX}${name}:${field}`;
@@ -33,12 +34,14 @@ export class ProviderMetrics {
     try {
       const redis = getRedis()
       const pipe = redis.multi()
-      for (const l of latencies) pipe.lpush(key(this.name, 'latency'), l)
+      for (const l of latencies) pipe.rpush(key(this.name, 'latency'), l)
       pipe
-        .ltrim(key(this.name, 'latency'), 0, LATENCY_WINDOW - 1)
+        .ltrim(key(this.name, 'latency'), -LATENCY_WINDOW, -1)
+        .expire(key(this.name, 'latency'), METRICS_TTL)
         .hset(key(this.name, 'meta'), 'lastSuccess', lastSuccess)
         .hincrby(key(this.name, 'meta'), 'requestsToday', successes)
         .hincrby(key(this.name, 'meta'), 'requestsTotal', successes)
+        .expire(key(this.name, 'meta'), METRICS_TTL)
       await pipe.exec()
     } catch {
       // non-fatal — metrics are best-effort
@@ -50,15 +53,23 @@ export class ProviderMetrics {
     const now = Date.now();
     await redis
       .multi()
-      .lpush(key(this.name, 'errors'), now)
-      .ltrim(key(this.name, 'errors'), 0, ERROR_WINDOW - 1)
+      .rpush(key(this.name, 'errors'), now)
+      .ltrim(key(this.name, 'errors'), -ERROR_WINDOW, -1)
+      .expire(key(this.name, 'errors'), METRICS_TTL)
       .hset(key(this.name, 'meta'), 'lastError', errorMsg.slice(0, 200))
       .hincrby(key(this.name, 'meta'), 'errorCount', 1)
+      .expire(key(this.name, 'meta'), METRICS_TTL)
       .exec();
   }
 
   async incrementQuota(n = 1): Promise<void> {
-    await getRedis().hincrby(key(this.name, 'quota'), 'used', n);
+    // CMC quota is tracked in intel:quota:used by quota-guard.ts — skip duplicate write
+    if (this.name === 'coinmarketcap') return;
+    await getRedis()
+      .multi()
+      .hincrby(key(this.name, 'quota'), 'used', n)
+      .expire(key(this.name, 'quota'), METRICS_TTL)
+      .exec();
   }
 
   async setQuotaLimit(limit: number, resetAt: string | null): Promise<void> {

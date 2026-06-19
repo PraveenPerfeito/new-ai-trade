@@ -386,6 +386,8 @@ class RiskSettings(BaseSettingsGroup):
 
 
 # ── 6. Paper Trading ──────────────────────────────────────────────────────────
+# DEPRECATED: Paper trading is not an active feature. Group preserved for DB
+# migration safety — do not delete.
 
 class PaperTradingSettings(BaseSettingsGroup):
     GROUP_NAME:     ClassVar[str] = 'paper_trading'

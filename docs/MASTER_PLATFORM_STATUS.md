@@ -142,7 +142,16 @@ Key reductions implemented:
 - CMC cache refresh has no UI entry point (W4/BF1) — add to System → Health tab
 - Day 7 recovery checkpoint: 2026-06-23 — assess if WR recovering to 33–38%
 - MARKET_STRUCTURE.FIX.1 POSTFIX.1: verify reduced `ms_sr_rejection` + `ms_trend_exhaustion` counts
-- `outcome_learning.py` attribution INSERT needs try/except
+- P1-02: `_NULL_CONFIDENCE_PENALTIES` × 0.7 for heuristic path — deferred to 2026-06-23 with outcome data
+
+### Applied 2026-06-19 (PLATFORM_STABILIZATION_1 P1+P2)
+- ✅ P1-01: Display-only callout banner added to scanner/signals/risk groups in Settings tab (`app/admin/system/page.tsx`)
+- ✅ P1-03: `scheduler:enabled` 90-day TTL (earlier SIGNAL_ENGINE_TRUTH_1 pass)
+- ✅ P2-01: 7-day EXPIRE on all `providers:metrics:*` keys (TypeScript + Python Binance pipeline)
+- ✅ P2-02: LPUSH → RPUSH + LTRIM(-N,-1) standardized in `lib/market-data/metrics.ts`
+- ✅ P2-03: Dead `providers:metrics:coinmarketcap:quota` write removed (CMC uses `intel:quota:used`)
+- ✅ P2-05: `PaperTradingSettings` deprecation comment added to `groups.py`
+- ✅ `outcome_learning.py`: attribution INSERT wrapped in try/except with warning log
 
 ### Applied 2026-06-19 (SIGNAL_ENGINE_TRUTH_1)
 - ✅ FUTURES `min_confidence` 82→85 — 82-84 band is negative-expectancy

@@ -154,14 +154,18 @@ async def compute_snapshots() -> dict:
         )]
         tuples = aggregate_rows(rows, window)
         if tuples:
-            await pool.executemany(
-                """
-                INSERT INTO attribution_snapshots
-                    (window_days, dim_key, dim_value, n, tp, sl, wr, exp, pf)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                """,
-                tuples,
-            )
+            try:
+                await pool.executemany(
+                    """
+                    INSERT INTO attribution_snapshots
+                        (window_days, dim_key, dim_value, n, tp, sl, wr, exp, pf)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    """,
+                    tuples,
+                )
+            except Exception as exc:
+                log.warning("snapshot_insert_failed", window_days=window, error=str(exc))
+                tuples = []
         inserted_total += len(tuples)
         log.info("attribution_snapshot_window_done", window_days=window,
                  outcomes=len(rows), cells=len(tuples))

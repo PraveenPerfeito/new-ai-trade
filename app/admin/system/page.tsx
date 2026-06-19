@@ -1771,6 +1771,16 @@ function SettingsTab() {
                     </div>
                   )}
 
+                  {['scanner', 'signals', 'risk'].includes(activeAdvTab) && (
+                    <div className="flex items-start gap-2.5 px-4 py-3 rounded-lg bg-zinc-800/60 border border-zinc-700/40 text-zinc-400 text-xs">
+                      <span className="shrink-0 mt-0.5 text-zinc-500">ℹ</span>
+                      <span>
+                        These values are <span className="font-semibold text-zinc-300">display only</span> — no backend consumer reads them directly.
+                        Scanner numerics (<code className="text-zinc-400">min_confidence</code>, <code className="text-zinc-400">alert_confidence</code>, <code className="text-zinc-400">max_coins_per_run</code>) and <code className="text-zinc-400">min_rr_ratio</code> take effect as <span className="font-semibold text-zinc-300">floors</span> on per-mode scan configs only when <code className="text-blue-400">apply_founder_thresholds</code> is <span className="font-semibold text-zinc-300">ON</span> (Feature Flags).
+                      </span>
+                    </div>
+                  )}
+
                   <div className="glass-card rounded-lg overflow-hidden">
                     {!advFields.length ? (
                       <div className="px-5 py-8 text-center text-zinc-500 text-sm">No settings in this group</div>

@@ -13,9 +13,9 @@ Full audit across 10 domains (Scanner, Signal Quality, Probability Engine, Redis
 | Priority | Count | Status |
 |----------|-------|--------|
 | P0 | 6 | ✅ All fixed — commit `75d0014` |
-| P1 | 4 | Pending |
-| P2 | 5 | Pending |
-| P3 | 2 | Pending |
+| P1 | 4 | ✅ 3 fixed (2026-06-19) · P1-02 deferred to 2026-06-23 checkpoint |
+| P2 | 5 | ✅ All fixed (2026-06-19) |
+| P3 | 2 | ✅ Both already done |
 
 | Classification | Count |
 |----------------|-------|
@@ -101,7 +101,7 @@ Full audit across 10 domains (Scanner, Signal Quality, Probability Engine, Redis
 ## P1 — Reliability Improvements
 
 ### P1-01 — Dead settings groups: scanner numerics, signals, risk, infra
-**Classification:** FIX  
+**Classification:** FIX · **Status:** ✅ Fixed (2026-06-19)  
 **Domain:** Settings  
 **Impact:** SETTINGS.WIRE.1 (June 2026) found that scanner numeric settings (`min_confidence`, `min_rr_ratio`, `max_coins_per_run`, etc. in the `scanner` group), the entire `signals` group, `risk` group, and `infra` group had zero backend consumers. The scanner uses hardcoded `CONFIGS` dicts plus the `SCANNER_MIN_CONFIDENCE_ALERT` env var, not the settings DB. The Quick Controls UI shows these sliders as if they have effect — they are placebo unless `features.apply_founder_thresholds = true` (default OFF).  
 **Risk:** Medium — founder believes they are tuning signal quality when settings have no effect  
@@ -112,7 +112,7 @@ Full audit across 10 domains (Scanner, Signal Quality, Probability Engine, Redis
 ---
 
 ### P1-02 — `null_setup_confidence_penalty` magnitudes misaligned with heuristic scale
-**Classification:** FIX  
+**Classification:** FIX · **Status:** ⏳ Deferred — requires 7d outcome data (checkpoint 2026-06-23)  
 **Domain:** Scanner / Signal Quality  
 **Impact:** The penalty applies after heuristic scoring. For SELL+SPOT+LOW_VOLATILITY+EMA_ALIGNMENT signals (which describes the majority of SPOT SELL signals in SIDEWAYS regime), the penalty is −14 points. Heuristic scores start at 45 and max at 95; a strong signal scores ~88. After −14 penalty, adjusted confidence = 74 — below even the new HEURISTIC.CALIBRATION.1 threshold of 80. This was the root cause of zero Telegram signals (fixed by lowering threshold, not by adjusting penalty). The penalty was designed for Claude's 0-100 scale where 88 → 74 is still strong; on the heuristic scale this is a disproportionate deduction.  
 **Risk:** Medium — suppresses valid signals; AVAX SELL at raw=95 dropped to 85, BNB SELL at 88 dropped to 74  
@@ -123,7 +123,7 @@ Full audit across 10 domains (Scanner, Signal Quality, Probability Engine, Redis
 ---
 
 ### P1-03 — `scheduler:enabled` has no TTL — orphan key on full redeploy
-**Classification:** FIX  
+**Classification:** FIX · **Status:** ✅ Fixed (2026-06-19 — SIGNAL_ENGINE_TRUTH_1 pass)  
 **Domain:** Redis  
 **Impact:** `coordinator.py` writes `scheduler:enabled` with SET (no TTL) when enable()/disable() is called. If the Redis instance is wiped and the key is lost, `is_enabled()` returns True (fail-open) which is correct. But if a deployment resets the Upstash instance, the key persists across instances. More importantly: the key accumulates indefinitely with no expiry. This is intentional for toggle-state persistence, but a 90-day safety TTL would self-clean zombie keys after major redeployments.  
 **Risk:** Low (operational) / Medium (ops hygiene)  
@@ -134,7 +134,7 @@ Full audit across 10 domains (Scanner, Signal Quality, Probability Engine, Redis
 ---
 
 ### P1-04 — Documentation: CLAUDE.md and DEPLOYMENT.md stale migration references
-**Classification:** FIX  
+**Classification:** FIX · **Status:** ✅ Fixed (CLAUDE.md updated; DEPLOYMENT.md already complete)  
 **Domain:** Documentation  
 **Impact:** CLAUDE.md decision #59 still reads "6 pending DB migrations" — all 7 migrations are confirmed applied (per user confirmation earlier in this session). DEPLOYMENT.md lists the same 7 migrations without indicating which are applied. This creates confusion for any fresh deploy or handoff.  
 **Risk:** Low (no production impact) / Medium (onboarding confusion)  
@@ -147,7 +147,7 @@ Full audit across 10 domains (Scanner, Signal Quality, Probability Engine, Redis
 ## P2 — Cleanup
 
 ### P2-01 — `providers:metrics` Redis hashes/lists have no TTL
-**Classification:** FIX  
+**Classification:** FIX · **Status:** ✅ Fixed (2026-06-19)  
 **Domain:** Redis  
 **Impact:** Six provider metric hash keys (`providers:metrics:{name}:meta`, `:latency`, `:errors`) have no TTL. They are bounded in size (latency/errors lists LTRIM'd to 100 entries) but the keys themselves persist forever. On decommission or provider removal, these keys accumulate in Upstash indefinitely.  
 **Risk:** Low  
@@ -158,7 +158,7 @@ Full audit across 10 domains (Scanner, Signal Quality, Probability Engine, Redis
 ---
 
 ### P2-02 — Binance latency: LPUSH (TypeScript) vs RPUSH (Python) inconsistency
-**Classification:** FIX  
+**Classification:** FIX · **Status:** ✅ Fixed (2026-06-19)  
 **Domain:** Redis  
 **Impact:** TypeScript writes `providers:metrics:binance:latency` with LPUSH (prepend), Python writes with RPUSH (append). The ring buffer ordering is inconsistent. The p95 latency calculation is order-independent so there is no functional bug, but this is an undocumented inconsistency that could confuse future debugging.  
 **Risk:** Low  
@@ -169,7 +169,7 @@ Full audit across 10 domains (Scanner, Signal Quality, Probability Engine, Redis
 ---
 
 ### P2-03 — `providers:metrics:coinmarketcap:quota` dead for display
-**Classification:** REMOVE  
+**Classification:** REMOVE · **Status:** ✅ Fixed (2026-06-19)  
 **Domain:** Redis  
 **Impact:** TypeScript writes `providers:metrics:coinmarketcap:quota` but `providers.py` explicitly bypasses it at read time, substituting `intel:quota:used` instead. The quota hash for CMC is never displayed. It is incremented on every CMC call but never read.  
 **Risk:** Low  
@@ -191,7 +191,7 @@ Full audit across 10 domains (Scanner, Signal Quality, Probability Engine, Redis
 ---
 
 ### P2-05 — `paper_trading` settings group: hidden in UI but still in groups.py
-**Classification:** ARCHIVE  
+**Classification:** ARCHIVE · **Status:** ✅ Fixed (2026-06-19)  
 **Domain:** Settings  
 **Impact:** `PaperTradingSettings` group exists in `groups.py` and is loaded by the settings service, but is explicitly hidden in the Settings UI (SETTINGS.SIMPLIFY.1). It can still be written/read via the API. No backend code consumes it (paper trading is not an active feature).  
 **Risk:** Low  
