@@ -101,7 +101,7 @@ export const tacticalQuerySchema = z.object({
   limit:          z.coerce.number().int().min(1).max(200).default(100),
   minConfidence:  z.coerce.number().int().min(0).max(100).default(70),
   lifecycleStage: z.enum([
-    'VALIDATED', 'AI_APPROVED', 'TELEGRAM_SENT', 'ACTIVE',
+    'VALIDATED', 'AI_APPROVED', 'SCREENED', 'TELEGRAM_SENT', 'ACTIVE',
     'STALE', 'TP_HIT', 'SL_HIT', 'CLOSED', 'ANALYZED', 'all',
   ]).default('all'),
   type:  z.enum(['BUY', 'SELL', 'all']).default('all'),
