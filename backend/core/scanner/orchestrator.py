@@ -573,13 +573,17 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                     _regime_cohort = _cohort if (_cohort is not None and _cohort.level in _GATE_LEVELS) else None
                     _gate_wr  = _regime_cohort.wr  if _regime_cohort is not None else None
                     _gate_exp = _regime_cohort.exp if _regime_cohort is not None else None
-                    from backend.analytics.probability import should_suppress_send  # noqa: PLC0415
+                    from backend.analytics.probability import should_suppress_send, empirical_grade  # noqa: PLC0415
+                    # Grade D backstop must use regime-level cohort grade only —
+                    # same restriction as _gate_wr.  Global/conf_band fallbacks
+                    # produce Grade D at ~20% WR and would suppress every signal.
+                    _regime_grade = empirical_grade(_regime_cohort.exp, _regime_cohort.n) if _regime_cohort is not None else None
                     if should_suppress_send(
                         prob_gate_enabled, _gate_wr, min_empirical_wr,
                         expectancy_filter=exp_filter_enabled,
                         empirical_exp=_gate_exp,
                         min_expectancy=min_empirical_exp,
-                        empirical_grade=getattr(signal, "empirical_grade", None),
+                        empirical_grade=_regime_grade,
                     ):
                         gate_rejections_total.labels(gate="probability_send_gate").inc()
                         log.info(
