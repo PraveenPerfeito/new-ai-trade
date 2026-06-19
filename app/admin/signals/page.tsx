@@ -1273,9 +1273,11 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
   // REDIS.OPTIMIZATION.2: one shared tactical feed for SignalsTab + TacticalTab
   // + Overview (was 3 separate polls of the same endpoint at 60-120s)
   const fetcher = useCallback(() =>
-    fetch('/api/signals/tactical?limit=100&lifecycleStage=all')
-      .then(r=>r.json()).then(j=>j.signals??[]).catch(()=>[]), [])
-  const { data: signals, loading } = useSharedPolling<TacticalSignalRow[]>('trading:tactical-feed', fetcher, 120_000)
+    fetch('/api/signals/tactical?limit=200&lifecycleStage=all')
+      .then(r=>r.json()).then(j=>({ signals: j.signals??[], dbTotal: j.dbTotal??null })).catch(()=>({ signals: [], dbTotal: null })), [])
+  const { data: feed, loading } = useSharedPolling<{ signals: TacticalSignalRow[]; dbTotal: number|null }>('trading:tactical-feed', fetcher, 120_000)
+  const signals = feed?.signals ?? null
+  const dbTotal = feed?.dbTotal ?? null
 
   const presetStages = preset === 'all' ? null : (stageMap[preset] ?? null)
   const filtered = (signals??[]).filter(s=>
@@ -1444,7 +1446,8 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
       {sorted.length > SIG_PAGE_SIZE && (
         <div className="flex items-center justify-between pt-1">
           <span className="text-xs text-zinc-500">
-            {page * SIG_PAGE_SIZE + 1}–{Math.min((page + 1) * SIG_PAGE_SIZE, sorted.length)} of {sorted.length}
+            {page * SIG_PAGE_SIZE + 1}–{Math.min((page + 1) * SIG_PAGE_SIZE, sorted.length)} of {sorted.length} loaded
+            {dbTotal !== null && dbTotal > sorted.length ? <span className="text-zinc-600"> · {dbTotal} in last 7d</span> : null}
           </span>
           <div className="flex gap-2">
             <button disabled={page === 0} onClick={()=>setPage(p=>p-1)}
@@ -2154,8 +2157,8 @@ export default function SignalsCenterPage() {
   const countsFetcher  = useCallback(()=>fetch('/api/signals/counts').then(r=>r.ok?r.json():null), [])
   const cacheFetcher   = useCallback(()=>fetch('/api/cache/intelligence').then(r=>r.ok?r.json():null).then(j=>j?.telemetry??null), [])
   const provFetcher    = useCallback(()=>fetch('/api/health/providers').then(r=>r.json()).then(j=>j.providers??[]).catch(()=>[]), [])
-  // REDIS.OPTIMIZATION.2: same shared feed as SignalsTab; full 100 passed to OverviewTab
-  const sigFetcher     = useCallback(()=>fetch('/api/signals/tactical?limit=100&lifecycleStage=all').then(r=>r.json()).then(j=>j.signals??[]).catch(()=>[]), [])
+  // REDIS.OPTIMIZATION.2: same shared feed as SignalsTab; full 200 passed to OverviewTab
+  const sigFetcher     = useCallback(()=>fetch('/api/signals/tactical?limit=200&lifecycleStage=all').then(r=>r.json()).then(j=>({ signals: j.signals??[], dbTotal: j.dbTotal??null })).catch(()=>({ signals: [], dbTotal: null })), [])
   const flagsFetcher   = useCallback(async ()=>{
     const [featRes,aiRes] = await Promise.all([adminApi.settings.group('features'),adminApi.settings.group('ai')])
     const field = (res: { fields: {key:string;value:unknown}[] }, k: string) => res.fields.find(f=>f.key===k)?.value
@@ -2178,8 +2181,8 @@ export default function SignalsCenterPage() {
   const { data: signalCounts }                          = useSharedPolling<SignalCounts|null>('trading:counts',      countsFetcher,       120_000)
   const { data: cache }                                 = useSharedPolling<CacheTelemetry|null>('trading:cache',     cacheFetcher,        120_000)
   const { data: providers }                             = useSharedPolling<ProviderStatus[]> ('trading:providers',   provFetcher,         120_000)
-  const { data: recentFeed }                            = useSharedPolling<TacticalSignalRow[]>('trading:tactical-feed',sigFetcher,       120_000)
-  const recentSignals = recentFeed ? recentFeed.slice(0, 6) : null
+  const { data: recentFeed }                            = useSharedPolling<{ signals: TacticalSignalRow[]; dbTotal: number|null }>('trading:tactical-feed',sigFetcher,       120_000)
+  const recentSignals = recentFeed?.signals.slice(0, 6) ?? null
   const { data: flagsData,  refresh: refreshFlags }     = useSharedPolling<{emergency_stop:boolean;maintenance_mode:boolean;telegram:boolean;ai_validation:boolean;_aiEnabled:boolean}|null>('trading:flags', flagsFetcher, 120_000)
   const { data: scanStats }                             = useSharedPolling<ScanSummaryResponse|null>('trading:scans',scansFetcher,        120_000)
   const { data: auditEntries }                          = useSharedPolling<AuditEntry[]|null>('trading:audit',       auditFetcher,        120_000)
@@ -2266,7 +2269,7 @@ export default function SignalsCenterPage() {
       {tab==='overview' && (
         <OverviewTab
           celery={celery??null} regime={regime??null} signalCounts={signalCounts??null}
-          providers={providers??[]} cache={cache??null} signals={recentFeed??[]}
+          providers={providers??[]} cache={cache??null} signals={recentFeed?.signals??[]}
           flags={flags} countdown={countdown}
           trackRecord={trackRecord??null}
           scanMode={scanMode} onScanModeChange={setScanMode}

@@ -17,6 +17,20 @@ export async function GET(req: NextRequest) {
   const { limit, minConfidence, lifecycleStage, type, mode } = parsed.data;
 
   try {
+    // Count total DB signals matching criteria — returned as dbTotal so the UI
+    // can show "showing X of Y" without a second API call.
+    let dbTotal: number | null = null;
+    try {
+      const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const adminForCount = createSupabaseAdminClient();
+      const { count } = await adminForCount
+        .from('signals')
+        .select('*', { count: 'exact', head: true })
+        .gte('confidence', minConfidence)
+        .gte('created_at', cutoff);
+      dbTotal = count;
+    } catch { /* non-fatal — UI degrades gracefully */ }
+
     // Fetch more than needed to allow filtering
     const raw = await getRecentSignals(limit * 2, minConfidence);
 
@@ -77,6 +91,7 @@ export async function GET(req: NextRequest) {
       success: true,
       signals: sliced,
       total:   sliced.length,
+      dbTotal,              // DB count of all signals in 7d window matching minConfidence
       filters: {
         applied: { lifecycleStage, type, mode, minConfidence },
         totalBeforeFilter,
