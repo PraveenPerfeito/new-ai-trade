@@ -160,6 +160,18 @@ Key reductions implemented:
 - ✅ Grade D empirical backstop in `should_suppress_send()` — suppresses Grade D even without WR stamp
 - ✅ `scheduler:enabled` Redis key — 90-day TTL added (prevents orphaned key accumulation)
 
+### Applied 2026-06-19 (TELEGRAM.GATE.FIX.1) — commit `9457738`
+- ✅ **P0 — Telegram signals restored**: Grade D backstop in `should_suppress_send()` restricted to regime-level cohort grade only. Was using `signal.empirical_grade` (from any cohort level including global at ~20% WR → Grade D) → suppressed ALL signals since backstop was added. Now uses `_regime_grade` from `_regime_cohort` only — `None` when no regime-level cohort with n≥30 → never gates (consistent with WR gate behavior). **Root cause of zero Telegram signals June 15–19 confirmed and fixed.**
+
+### Applied 2026-06-19 (PRODUCTION.TRUTH.VERIFICATION.1) — commit `57e9cea`
+- ✅ **P0 FG-01**: counts route queried `return_r` (non-existent) — all WR/expectancy/PF metrics returned 0. Fixed to `rr_achieved`.
+- ✅ **P0 FG-02**: win_rate_7d denominator excluded TIMEOUT outcomes → inflated vs Edge tab. Added TIMEOUT to resolved set.
+- ✅ **P0 H-02**: SystemStatusBanner AI status read from `features.ai_validation` (non-existent) → always showed AI OFF. Fixed to `ai.enabled`.
+- ✅ **P1 PC-03**: `sharpe_ratio` (Python) vs `sharpe` (TypeScript) → Sharpe always blank. Fixed TypeScript interface + render.
+- ✅ **P1 PC-04**: `report_date` (Python) vs `generated_at` (TypeScript) → Edge tab timestamp always blank. Fixed to read `report_date ?? generated_at`.
+- ✅ **P1 H-11**: win_rate rendered as raw float `42.857142857%`. Added `.toFixed(1)` rounding in TrackRecordTab.
+- See `docs/PRODUCTION_TRUTH_VERIFICATION_1.md` for full 64-finding audit (12 P0 / 33 P1 / 19 P2).
+
 ---
 
 ## KEY ADMIN ROUTES
