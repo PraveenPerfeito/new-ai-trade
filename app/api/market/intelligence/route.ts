@@ -9,8 +9,16 @@ import {
 export const runtime   = 'nodejs';
 export const dynamic   = 'force-dynamic';
 
+// 300s in-process cache — regime tab polls every 120s; keeping cache > poll interval
+// eliminates 3 Redis reads per poll (2,160 ops/day → ~432 ops/day).
+let _cache: { data: unknown; ts: number } | null = null;
+const _CACHE_TTL = 300_000;
+
 /** GET /api/market/intelligence — aggregated market intelligence from caches */
 export async function GET() {
+  if (_cache && Date.now() - _cache.ts < _CACHE_TTL) {
+    return NextResponse.json(_cache.data);
+  }
   try {
     const [regime, global_, trending, listings] = await Promise.all([
       getMarketRegime(),
@@ -19,7 +27,7 @@ export async function GET() {
       readListings(),
     ]);
 
-    return NextResponse.json({
+    const payload = {
       success: true,
       regime: {
         regime:      regime.regime,
@@ -41,7 +49,9 @@ export async function GET() {
           }
         : null,
       computedAt: new Date().toISOString(),
-    });
+    };
+    _cache = { data: payload, ts: Date.now() };
+    return NextResponse.json(payload);
   } catch (err) {
     return NextResponse.json(
       { success: false, error: err instanceof Error ? err.message : String(err) },

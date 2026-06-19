@@ -46,7 +46,7 @@ export async function preloadIntelligence(): Promise<PreloadResult> {
           CACHE_GROUPS.listings.redisKey,
           JSON.stringify(snap),
           'PX',
-          CACHE_GROUPS.listings.ttlMs * 2, // keep twice TTL so reads never 404
+          CACHE_GROUPS.listings.ttlMs * 6, // 6× TTL keeps key alive across reduced cron interval
         );
         await quota.consume(1);
         refreshed.push('listings');
@@ -68,7 +68,7 @@ export async function preloadIntelligence(): Promise<PreloadResult> {
           CACHE_GROUPS.global.redisKey,
           JSON.stringify(snap),
           'PX',
-          CACHE_GROUPS.global.ttlMs * 2,
+          CACHE_GROUPS.global.ttlMs * 6,
         );
         await quota.consume(1);
         refreshed.push('global');
@@ -90,7 +90,7 @@ export async function preloadIntelligence(): Promise<PreloadResult> {
           CACHE_GROUPS.trending.redisKey,
           JSON.stringify(snap),
           'PX',
-          CACHE_GROUPS.trending.ttlMs * 2,
+          CACHE_GROUPS.trending.ttlMs * 6,
         );
         await quota.consume(1);
         refreshed.push('trending');
@@ -112,7 +112,7 @@ export async function preloadIntelligence(): Promise<PreloadResult> {
           CACHE_GROUPS.categories.redisKey,
           JSON.stringify(snap),
           'PX',
-          CACHE_GROUPS.categories.ttlMs * 2,
+          CACHE_GROUPS.categories.ttlMs * 6,
         );
         await quota.consume(1);
         refreshed.push('categories');
@@ -148,7 +148,10 @@ async function isStale(
     const parsed = JSON.parse(raw) as { refreshedAt?: string };
     if (!parsed.refreshedAt) return true;
     const age = Date.now() - new Date(parsed.refreshedAt).getTime();
-    return age >= CACHE_GROUPS[group].ttlMs;
+    // 3× threshold: preloader only refreshes data that is well past stale,
+    // matching the reduced cron frequency (listings 15min, global/trending 30min).
+    // Prevents the preloader from racing against cron jobs on every Python scan trigger.
+    return age >= CACHE_GROUPS[group].ttlMs * 3;
   } catch {
     return true;
   }

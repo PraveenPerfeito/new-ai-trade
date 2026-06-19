@@ -6,7 +6,7 @@ import { getWorkerStatuses } from './workers';
 import { IntelligenceTelemetry, CacheGroupMeta } from './types';
 
 let _telCache: { data: IntelligenceTelemetry; ts: number } | null = null
-const _TEL_TTL = 60_000  // 60s — Cache tab polls every 180s so this saves ~66% of Redis reads
+const _TEL_TTL = 180_000  // 180s > 120s poll interval — cache always warm, zero Redis reads per poll cycle
 
 export async function getIntelligenceTelemetry(): Promise<IntelligenceTelemetry> {
   if (_telCache && Date.now() - _telCache.ts < _TEL_TTL) return _telCache.data

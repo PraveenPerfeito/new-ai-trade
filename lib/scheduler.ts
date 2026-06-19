@@ -399,9 +399,11 @@ if (!g.__market_scanner_sched) {
     runStartupCheck();
   }
   g.__market_scanner_sched = new ScanScheduler();
-
-  // Start background intelligence cache refresh workers (HMR-safe via globalThis registry)
-  startIntelligenceWorkers();
+  // Intelligence workers run as Vercel cron jobs (vercel.json) — no setIntervals here.
+  // Calling startIntelligenceWorkers() at module level causes double-execution:
+  // the warm /api/scheduler/status function instance runs its own intervals
+  // alongside the cron jobs, doubling Redis ops. Workers are started explicitly
+  // by startScheduler() only when the TypeScript scanner path is used.
 }
 
 export const scheduler = g.__market_scanner_sched;

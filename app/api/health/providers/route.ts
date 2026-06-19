@@ -9,7 +9,7 @@ const log = createLogger('api/health/providers')
 
 // In-process cache — avoids Redis TTL calls on every dashboard poll
 let _cache: { providers: ProviderStatus[]; ts: number } | null = null
-const MEM_TTL_MS = 90_000  // 90s — aligns with 120s dashboard poll
+const MEM_TTL_MS = 300_000  // 300s > 120s poll — cache stays warm between polls, eliminating Redis reads
 
 export interface ProviderStatus {
   name:      string

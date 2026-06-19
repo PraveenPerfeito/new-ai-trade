@@ -159,7 +159,7 @@ export async function tickListings(): Promise<void> {
 
   const snap  = normalizeListings(raw);
   const redis = getRedis();
-  await redis.set(CACHE_GROUPS.listings.redisKey, JSON.stringify(snap), 'PX', CACHE_GROUPS.listings.ttlMs * 2);
+  await redis.set(CACHE_GROUPS.listings.redisKey, JSON.stringify(snap), 'PX', CACHE_GROUPS.listings.ttlMs * 6);
   if (usedCmc) await quota.consume(1);
   log.debug({ count: snap.coins.length, source: usedCmc ? 'cmc' : 'coingecko' }, 'worker_listings_refreshed');
 }
@@ -170,7 +170,7 @@ export async function tickGlobal(): Promise<void> {
   const raw  = await fetchGlobalMetrics();
   const snap = normalizeGlobal(raw);
   const redis = getRedis();
-  await redis.set(CACHE_GROUPS.global.redisKey, JSON.stringify(snap), 'PX', CACHE_GROUPS.global.ttlMs * 2);
+  await redis.set(CACHE_GROUPS.global.redisKey, JSON.stringify(snap), 'PX', CACHE_GROUPS.global.ttlMs * 6);
   await quota.consume(1);
   log.debug('worker_global_refreshed');
 }
@@ -181,7 +181,7 @@ export async function tickTrending(): Promise<void> {
   const raw  = await fetchTrending(20);
   const snap = normalizeTrending(raw);
   const redis = getRedis();
-  await redis.set(CACHE_GROUPS.trending.redisKey, JSON.stringify(snap), 'PX', CACHE_GROUPS.trending.ttlMs * 2);
+  await redis.set(CACHE_GROUPS.trending.redisKey, JSON.stringify(snap), 'PX', CACHE_GROUPS.trending.ttlMs * 6);
   await quota.consume(1);
   log.debug({ count: snap.trending.length }, 'worker_trending_refreshed');
 }
@@ -192,7 +192,7 @@ async function tickCategories(): Promise<void> {
   const raw  = await fetchCategories();
   const snap = normalizeCategories(raw);
   const redis = getRedis();
-  await redis.set(CACHE_GROUPS.categories.redisKey, JSON.stringify(snap), 'PX', CACHE_GROUPS.categories.ttlMs * 2);
+  await redis.set(CACHE_GROUPS.categories.redisKey, JSON.stringify(snap), 'PX', CACHE_GROUPS.categories.ttlMs * 6);
   await quota.consume(1);
   log.debug({ count: snap.categories.length }, 'worker_categories_refreshed');
 }

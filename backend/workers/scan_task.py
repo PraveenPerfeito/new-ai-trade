@@ -25,6 +25,12 @@ logger = get_task_logger(__name__)
 
 ScanMode = Literal["standard", "high_confidence", "futures", "trending"]
 
+# Intelligence refresh throttle — only call /api/intelligence/refresh every Nth scan.
+# Cron jobs handle the scheduled refreshes; this is only a fallback safety net.
+# At 192 scans/day × 1/5 = ~38 refresh calls/day instead of 192.
+_intel_refresh_counter = 0
+_INTEL_REFRESH_EVERY_N = 5
+
 # ── Transient error classification ───────────────────────────────────────────
 # These error substrings indicate connectivity / resource issues that are safe
 # to retry.  Logic errors and scanner assertion failures are NOT retried.
@@ -203,8 +209,12 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
                     await check_output_collapse()
                 except Exception as exc:
                     logger.warning(f"output_collapse_check_failed error={exc}")
-                # Keep intelligence cache warm on Vercel after each scan cycle
-                await _trigger_intelligence_refresh()
+                # Keep intelligence cache warm — throttled to every Nth scan.
+                # Vercel cron jobs are the primary refresh mechanism; this is a fallback.
+                global _intel_refresh_counter
+                _intel_refresh_counter += 1
+                if _intel_refresh_counter % _INTEL_REFRESH_EVERY_N == 0:
+                    await _trigger_intelligence_refresh()
                 return result
             finally:
                 # TELEGRAM.RELIABILITY.1 WS1 — drain queued alerts BEFORE this
