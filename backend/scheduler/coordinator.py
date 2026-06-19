@@ -104,7 +104,7 @@ class SchedulerCoordinator:
 
     def enable(self) -> None:
         try:
-            self._redis.set(_ENABLED_KEY, "1")   # no TTL — persists until explicitly disabled
+            self._redis.set(_ENABLED_KEY, "1", ex=90 * 24 * 60 * 60)  # 90-day TTL prevents orphaned key
             self._redis.delete(_STATUS_CACHE_KEY)
         except Exception as exc:
             log.warning("scheduler_enable_redis_error", error=str(exc))
@@ -113,7 +113,7 @@ class SchedulerCoordinator:
 
     def disable(self) -> None:
         try:
-            self._redis.set(_ENABLED_KEY, "0")   # no TTL — persists until explicitly re-enabled
+            self._redis.set(_ENABLED_KEY, "0", ex=90 * 24 * 60 * 60)  # 90-day TTL prevents orphaned key
             self._redis.delete(_STATUS_CACHE_KEY)
         except Exception as exc:
             log.warning("scheduler_disable_redis_error", error=str(exc))

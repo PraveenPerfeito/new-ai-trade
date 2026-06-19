@@ -121,6 +121,18 @@ class TestDeliveryGateV1:
         assert should_suppress_send(True, 60.0, 45.0, expectancy_filter=True,
                                     empirical_exp=None, min_expectancy=0.0) is False
 
+    def test_grade_d_backstop_suppresses_without_wr(self):
+        # Grade D (WR 13.6%) suppressed even when empirical_wr stamp is absent
+        assert should_suppress_send(True, None, 45.0, empirical_grade="D") is True
+
+    def test_grade_d_backstop_off_when_disabled(self):
+        # Gate disabled → Grade D still delivers
+        assert should_suppress_send(False, None, 45.0, empirical_grade="D") is False
+
+    def test_grade_a_not_backstopped(self):
+        # Only Grade D triggers the backstop
+        assert should_suppress_send(True, None, 45.0, empirical_grade="A") is False
+
 
 class TestFlagsAndDims:
     def test_flags_default_state(self):

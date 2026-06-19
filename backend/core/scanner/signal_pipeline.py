@@ -52,7 +52,7 @@ CONFIGS: dict[ScannerMode, ScannerConfig] = {
         min_market_cap=1_000_000_000,
         min_volume_24h=200_000_000,
         min_rr_ratio=2.0,
-        min_confidence=82,
+        min_confidence=85,            # raised from 82 — 82-84 band is negative-expectancy (SIGNAL_ENGINE_TRUTH_1)
         max_coins_to_scan=50,         # up from 40
         scanner_mode=ScannerMode.FUTURES,
     ),
@@ -68,7 +68,7 @@ CONFIGS: dict[ScannerMode, ScannerConfig] = {
         min_market_cap=50_000_000,    # lowered from 100M — catches emerging coins
         min_volume_24h=10_000_000,    # lowered from 20M
         min_rr_ratio=2.0,
-        min_confidence=78,
+        min_confidence=85,            # raised from 78 — 78-84 band is negative-expectancy (SIGNAL_ENGINE_TRUTH_1)
         max_coins_to_scan=80,         # up from 60
         scanner_mode=ScannerMode.TRENDING,
     ),
@@ -1161,6 +1161,7 @@ async def scan_coin(
         # Applied after penalty so the net is fair; clamped to 100.
         # OI_NEUTRAL / STABLE_funding / HIGH_MOMENTUM_BREAKOUT / 20d_low are futures-only
         # where data is available; breakout boosts apply across all modes.
+        _pre_boost_confidence = adjusted_confidence  # snapshot before boost for inflation cap
         _boost = 0
         _boost_reasons: list[str] = []
 
@@ -1205,6 +1206,25 @@ async def scan_coin(
                 raw_confidence=ai.confidence,
                 adjusted_confidence=adjusted_confidence,
             )
+
+        # SIGNAL_ENGINE_TRUTH_1: Intelligence boost inflation cap for FUTURES/TRENDING.
+        # 90-94 band WR = 31.4% (WORSE than 85-89 at 42.1%). Borderline signals
+        # (pre-boost < 87) boosted into 90-94 are not 90+ confidence signals.
+        # HIGH_MOMENTUM_BREAKOUT (WR 81.8%) is exempt — that boost is justified.
+        if (_boost > 0
+                and _pre_boost_confidence < 87
+                and adjusted_confidence > 89
+                and setup.breakout_strength != "HIGH_MOMENTUM_BREAKOUT"):
+            log.info(
+                "boost_inflation_cap",
+                symbol=coin.symbol,
+                pre_boost=_pre_boost_confidence,
+                boosted=adjusted_confidence,
+                capped=89,
+                boost=_boost,
+                reasons=_boost_reasons,
+            )
+            adjusted_confidence = 89
 
         # CONFIDENCE.TRUTH.1: Spot signals without confirmed breakout account for 58%
         # of all 90+ SL_HIT. Cap at 88 to keep them in the better-performing 85-89

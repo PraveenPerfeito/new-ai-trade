@@ -18,8 +18,8 @@
 | Mode | Min MCap | Min Vol | Min Confidence | Max Coins | Status |
 |------|---------|---------|----------------|-----------|--------|
 | SPOT | $200M | $20M | 85 | 80 | ACTIVE |
-| FUTURES | $1B | $200M | 82 | 50 | ACTIVE |
-| TRENDING | $50M | $10M | 78 | 80 | ACTIVE |
+| FUTURES | $1B | $200M | **85** | 50 | ACTIVE — raised from 82 (SIGNAL_ENGINE_TRUTH_1) |
+| TRENDING | $50M | $10M | **85** | 80 | ACTIVE — raised from 78 (SIGNAL_ENGINE_TRUTH_1) |
 | HIGH_CONFIDENCE | $2B | $500M | 87 | 30 | **PAUSED** — `high_confidence_mode_enabled=False` (0/9 wins last 7D) |
 
 **Beat schedule:** SPOT every 15 min · FUTURES every 30 min · TRENDING every 30 min · HIGH_CONFIDENCE task exists but blocked by operational gate
@@ -135,7 +135,7 @@ Key reductions implemented:
 ## OPEN ITEMS (prioritized)
 
 ### Must-Fix (P0 — within 24h)
-- `test_probability_engine.py:129` asserts `ff.riskgrade_v2 is False` — fails with current default `True`. Update assertion.
+- ✅ `test_probability_engine.py:129` — resolved (SQA3 updated the test)
 
 ### High Priority (P1 — within 7 days)
 - `telegram_delivered = NULL` for 626 sent signals — WS2 drain worker not writing back to DB
@@ -144,9 +144,12 @@ Key reductions implemented:
 - MARKET_STRUCTURE.FIX.1 POSTFIX.1: verify reduced `ms_sr_rejection` + `ms_trend_exhaustion` counts
 - `outcome_learning.py` attribution INSERT needs try/except
 
-### Pending Founder Decisions (target ~2026-06-30)
-- TRENDING `min_confidence` 78→85 (conditional on TRENDING WR ≥50%)
-- FUTURES `min_confidence` 82→85 (conditional on FUTURES WR ≥50%)
+### Applied 2026-06-19 (SIGNAL_ENGINE_TRUTH_1)
+- ✅ FUTURES `min_confidence` 82→85 — 82-84 band is negative-expectancy
+- ✅ TRENDING `min_confidence` 78→85 — 78-84 band is negative-expectancy
+- ✅ Intelligence boost inflation cap — base_conf < 87 + boost > 89 → capped at 89 (HIGH_MOMENTUM exempt)
+- ✅ Grade D empirical backstop in `should_suppress_send()` — suppresses Grade D even without WR stamp
+- ✅ `scheduler:enabled` Redis key — 90-day TTL added (prevents orphaned key accumulation)
 
 ---
 

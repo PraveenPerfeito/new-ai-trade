@@ -579,6 +579,7 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                         expectancy_filter=exp_filter_enabled,
                         empirical_exp=_gate_exp,
                         min_expectancy=min_empirical_exp,
+                        empirical_grade=getattr(signal, "empirical_grade", None),
                     ):
                         gate_rejections_total.labels(gate="probability_send_gate").inc()
                         log.info(

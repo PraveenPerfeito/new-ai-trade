@@ -175,6 +175,7 @@ def should_suppress_send(
     expectancy_filter: bool = False,
     empirical_exp: float | None = None,
     min_expectancy: float = 0.0,
+    empirical_grade: str | None = None,
 ) -> bool:
     """
     Delivery-gate decision (PHASE.9.1).  Suppress ONLY when the gate is enabled
@@ -182,10 +183,16 @@ def should_suppress_send(
     the probability_gate_v1 expectancy filter is on, a known cohort expectancy
     below min_expectancy.  Unknown probability/expectancy (no cohort with
     n ≥ MIN_N) always delivers — the gate must never punish missing data.
+
+    Grade D backstop (SIGNAL_ENGINE_TRUTH_1): empirical Grade D (WR 13.6%,
+    Exp -0.581R) is suppressed even when the cohort WR stamp is absent, because
+    the grade itself is a reliable proxy for the losing cohort.
     """
     if not enabled:
         return False
     if empirical_wr is not None and empirical_wr < threshold:
+        return True
+    if empirical_grade == "D":
         return True
     if expectancy_filter and empirical_exp is not None and empirical_exp < min_expectancy:
         return True
