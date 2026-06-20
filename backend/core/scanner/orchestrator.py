@@ -530,13 +530,6 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
                     continue
 
                 signal.id = sig_id
-                # Monitoring counter (fire-and-forget)
-                try:
-                    from backend.analytics.monitoring import record_signal as _mon_signal  # noqa: PLC0415
-                    t = asyncio.create_task(_mon_signal())
-                    t.add_done_callback(lambda t: _on_task_done(t, "monitor_signal"))
-                except Exception:
-                    pass
 
                 # PHASE.9.1 — persist the probability stamp (best-effort; tolerates
                 # the migration not having run yet)

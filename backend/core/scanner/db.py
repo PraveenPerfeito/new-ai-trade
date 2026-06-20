@@ -213,13 +213,19 @@ async def mark_signal_telegram_sent(signal_id: str) -> None:
     pool = await _pool()
     if not pool:
         return
-    try:
-        await pool.execute(
-            "UPDATE signals SET telegram_sent = true WHERE id = $1::uuid",
-            signal_id,
-        )
-    except Exception as exc:
-        log.warning("db_mark_telegram_sent_failed", signal_id=signal_id, error=str(exc))
+    for attempt in range(2):
+        try:
+            await pool.execute(
+                "UPDATE signals SET telegram_sent = true WHERE id = $1::uuid",
+                signal_id,
+            )
+            return
+        except Exception as exc:
+            if attempt == 0:
+                log.warning("db_mark_telegram_sent_retry", signal_id=signal_id, error=str(exc))
+                await asyncio.sleep(0.5)
+            else:
+                log.warning("db_mark_telegram_sent_failed", signal_id=signal_id, error=str(exc))
 
 
 # ── Coins ─────────────────────────────────────────────────────────────────────

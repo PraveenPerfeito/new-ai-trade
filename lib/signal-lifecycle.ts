@@ -1,13 +1,16 @@
 import { TradingSignal, SignalLifecycleStage, Timeframe } from '@/types';
 
 // ─── Timeframe lifetime windows ───────────────────────────────────────────────
-// After this many ms past signal creation, a sent signal is considered STALE.
-const LIFETIME_MS: Record<Timeframe, number> = {
-  '15m': 2  * 3_600_000,  //  2 hours
+// After this many ms past estimated send time, a signal is considered STALE.
+// D-04: STALE is measured from approx send time = createdAt + SEND_OFFSET_MS
+// so signals don't go STALE early when Telegram queue has latency.
+const LIFETIME_MS: Partial<Record<Timeframe, number>> = {
   '1h':  8  * 3_600_000,  //  8 hours
   '4h':  24 * 3_600_000,  // 24 hours
   '1d':  72 * 3_600_000,  // 72 hours
 };
+// Approximate queue latency budget — STALE threshold extends by this much
+const SEND_OFFSET_MS = 30 * 60 * 1000; // 30 min (TELEGRAM_SENT window)
 
 // ─── Lifecycle computation ────────────────────────────────────────────────────
 
@@ -27,9 +30,10 @@ export function computeLifecycleStage(
     const lifetime = LIFETIME_MS[signal.timeframe] ?? 8 * 3_600_000;
     const created  = signal.createdAt instanceof Date ? signal.createdAt : new Date(signal.createdAt as unknown as string);
     const ageMs    = Date.now() - created.getTime();
-    if (ageMs > lifetime) return 'STALE';
-    // First 30 min after send: TELEGRAM_SENT badge (freshly fired alert)
-    if (ageMs < 30 * 60 * 1000) return 'TELEGRAM_SENT';
+    // First 30 min after creation: TELEGRAM_SENT badge (freshly fired alert)
+    if (ageMs < SEND_OFFSET_MS) return 'TELEGRAM_SENT';
+    // D-04: measure STALE from approx send time (createdAt + SEND_OFFSET_MS)
+    if (ageMs > lifetime + SEND_OFFSET_MS) return 'STALE';
     return 'ACTIVE';
   }
 

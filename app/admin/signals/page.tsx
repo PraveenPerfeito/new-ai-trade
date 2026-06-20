@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { adminApi } from '@/lib/admin-api'
 import type { AuditEntry, HealthReady, ScanSummaryResponse, TrackRecordResponse } from '@/lib/admin-api'
+import { isActiveStage } from '@/lib/signal-lifecycle'
 import { useSharedPolling } from '@/lib/use-shared-polling'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
 import { cn } from '@/lib/utils'
@@ -75,7 +76,6 @@ const MODE_FIRE_MINUTES: Record<string, number[]> = {
   spot: [0,15,30,45], futures: [10,40], high_confidence: [5,35], trending: [20,50],
 }
 const STAGE_META: Record<string, { label: string; color: string }> = {
-  VALIDATED:     { label: 'Validated',   color: 'text-zinc-500   bg-zinc-500/10   border-zinc-600/20'    },
   AI_APPROVED:   { label: 'AI Approved', color: 'text-violet-400 bg-violet-500/10 border-violet-500/25'  },
   SCREENED:      { label: 'Screened',    color: 'text-sky-400    bg-sky-500/10    border-sky-500/20'     },
   TELEGRAM_SENT: { label: 'Sent',        color: 'text-blue-400   bg-blue-500/10   border-blue-500/20'    },
@@ -84,19 +84,16 @@ const STAGE_META: Record<string, { label: string; color: string }> = {
   TP_HIT:        { label: 'TP Hit',      color: 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30' },
   SL_HIT:        { label: 'SL Hit',      color: 'text-red-400    bg-red-500/10    border-red-500/20'     },
   CLOSED:        { label: 'Closed',      color: 'text-zinc-500   bg-zinc-500/10   border-zinc-600/20'    },
-  ANALYZED:      { label: 'Analyzed',    color: 'text-zinc-500   bg-zinc-500/10   border-zinc-600/20'    },
 }
 const STAGE_TIPS: Record<string, string> = {
-  VALIDATED:     'Passed all 11 scanner gates — queued for AI or heuristic review',
   AI_APPROVED:   'Claude AI reviewed & approved · confidence ≥ 80%',
   SCREENED:      'Heuristic rules approved · fires when AI is disabled or setup score < 78',
-  TELEGRAM_SENT: 'Alert delivered to Telegram channel',
+  TELEGRAM_SENT: 'Alert delivered to Telegram channel · first 30 min after send',
   ACTIVE:        'Signal is live within its trading window · 1h → 8h · 4h → 24h · 1d → 72h',
-  STALE:         'Trading window expired — TP/SL not hit · no longer actionable',
+  STALE:         'Trading window expired — not a loss, just outside the signal\'s time window',
   TP_HIT:        'Take-profit target reached · winning trade · outcome recorded',
   SL_HIT:        'Stop-loss triggered · losing trade · outcome recorded',
   CLOSED:        'Timed out without hitting TP or SL',
-  ANALYZED:      'Outcome included in attribution & edge analytics',
 }
 function StageLegend() {
   return (
@@ -127,7 +124,7 @@ function ConfidenceBar({ signals }: { signals: TacticalSignalRow[] }) {
   const pct = (n: number) => Math.round((n / total) * 100)
   return (
     <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-zinc-900/50 border border-zinc-800">
-      <span className="text-[10px] text-zinc-600 font-medium uppercase tracking-wide shrink-0 mr-1">Confidence</span>
+      <span className="text-[10px] text-zinc-600 font-medium uppercase tracking-wide shrink-0 mr-1">Confidence <span className="normal-case font-normal">(filtered)</span></span>
       <div className="flex-1 flex h-1.5 rounded-full overflow-hidden gap-px">
         {t90  > 0 && <div className="bg-emerald-500"   style={{ width: `${pct(t90)}%` }} title={`90+: ${t90}`}  />}
         {t85  > 0 && <div className="bg-blue-500"      style={{ width: `${pct(t85)}%` }} title={`85-89: ${t85}`}/>}
@@ -1136,7 +1133,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
           {signals.length > 0 && (
             <div className="mt-2 pt-2 border-t border-zinc-800/60 grid grid-cols-4 gap-1.5">
               {[
-                { label: 'Active',  value: lc['ACTIVE']??0, color: 'text-blue-400' },
+                { label: 'Active',  value: signals.filter(s => isActiveStage(s.lifecycleStage)).length, color: 'text-blue-400' },
                 { label: 'Sent',    value: signals.filter(s => s.telegramSent || ['TELEGRAM_SENT','ACTIVE','STALE','TP_HIT','SL_HIT','CLOSED'].includes(s.lifecycleStage)).length, color: 'text-purple-400' },
                 { label: 'TP Hit',  value: lc['TP_HIT']??0,  color: 'text-emerald-400' },
                 { label: 'SL Hit',  value: lc['SL_HIT']??0,  color: 'text-red-400' },
@@ -1295,7 +1292,7 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
     (!presetStages || presetStages.includes(s.lifecycleStage)) &&
     (typeFilter==='all'||s.type===typeFilter) &&
     (modeFilter==='all'||s.scannerMode===modeFilter) &&
-    (gradeFilter==='all'||(s.riskGrade??'')===gradeFilter||(s.empiricalGrade??'')===gradeFilter) &&
+    (gradeFilter==='all'||(s.empiricalGrade ?? s.riskGrade ?? '')===gradeFilter) &&
     (timeframeFilter==='all'||s.timeframe===timeframeFilter) &&
     (confFilter==='all'||
       (confFilter==='90+'  && (s.confidence??0)>=90) ||
@@ -1350,7 +1347,7 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
       <div className="flex flex-wrap gap-2 items-center">
         {/* Symbol search */}
         <input
-          type="text" placeholder="Symbol…" value={search}
+          type="text" placeholder="Symbol… (local)" value={search}
           onChange={e => setSearch(e.target.value)}
           className="text-xs px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-500 w-24"
         />
@@ -1492,8 +1489,8 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
       {sorted.length > SIG_PAGE_SIZE && (
         <div className="flex items-center justify-between pt-1">
           <span className="text-xs text-zinc-500">
-            {page * SIG_PAGE_SIZE + 1}–{Math.min((page + 1) * SIG_PAGE_SIZE, sorted.length)} of {sorted.length} loaded
-            {dbTotal !== null && dbTotal > sorted.length ? <span className="text-zinc-600"> · {dbTotal} in last 7d</span> : null}
+            {page * SIG_PAGE_SIZE + 1}–{Math.min((page + 1) * SIG_PAGE_SIZE, sorted.length)} of {sorted.length} shown
+            {dbTotal !== null ? <span className="text-zinc-600"> · {dbTotal} in DB</span> : null}
           </span>
           <div className="flex gap-2">
             <button disabled={page === 0} onClick={()=>setPage(p=>p-1)}
@@ -1690,11 +1687,9 @@ function LifecycleFunnel({ signals }: { signals: TacticalSignalRow[] }) {
   // is always ~100% — show the AI vs Screened split instead.
   const aiCount   = signals.filter(s => s.validationSource === 'CLAUDE' || s.lifecycleStage === 'AI_APPROVED').length
   const scrCount  = signals.filter(s => s.validationSource === 'HEURISTIC' || s.lifecycleStage === 'SCREENED').length
-  // Sent — use telegramSent when populated; fall back to lifecycle-stage inference
-  // for older signals where telegram_sent column was NULL (pre-TELEGRAM.RELIABILITY.1).
-  const sentStages = new Set(['TELEGRAM_SENT','ACTIVE','STALE','TP_HIT','SL_HIT','CLOSED','ANALYZED'])
-  const sent       = signals.filter(s => s.telegramSent || sentStages.has(s.lifecycleStage)).length
-  const active    = signals.filter(s => s.lifecycleStage === 'ACTIVE' || s.lifecycleStage === 'TELEGRAM_SENT').length
+  // PCT-02: use telegram_sent bool only (stage inference double-counts)
+  const sent   = signals.filter(s => s.telegramSent).length
+  const active = signals.filter(s => s.lifecycleStage === 'ACTIVE' || s.lifecycleStage === 'TELEGRAM_SENT').length
   const won       = counts['TP_HIT'] ?? 0
   const lost      = counts['SL_HIT'] ?? 0
   const expired   = (counts['STALE']??0) + (counts['CLOSED']??0)
@@ -1709,9 +1704,9 @@ function LifecycleFunnel({ signals }: { signals: TacticalSignalRow[] }) {
   }
 
   const steps = [
-    { label: 'Generated', count: generated },
-    { label: 'Sent',      count: sent      },
-    { label: 'Active',    count: active    },
+    { label: 'Generated', count: generated, tip: '' },
+    { label: 'Sent',      count: sent,      tip: 'Delivered to Telegram channel' },
+    { label: 'Active',    count: active,    tip: 'Live within trading window · Signals that expire (STALE) are not losses — just outside the time window' },
   ]
   const resolved = won + lost
   const winRate = resolved > 0 ? Math.round(won / resolved * 100) : null
@@ -1743,7 +1738,7 @@ function LifecycleFunnel({ signals }: { signals: TacticalSignalRow[] }) {
           const conv = idx > 0 && prev > 0 ? Math.round(step.count / prev * 100) : null
           return (
             <div key={step.label} className="flex items-center flex-1 min-w-0">
-              <div className="flex-1 min-w-0 bg-zinc-800/50 border border-zinc-700/40 rounded-lg px-2 py-2.5 text-center">
+              <div className="flex-1 min-w-0 bg-zinc-800/50 border border-zinc-700/40 rounded-lg px-2 py-2.5 text-center" title={step.tip || undefined}>
                 <div className="text-xl font-bold font-mono text-white leading-none">{step.count}</div>
                 <div className="text-[10px] text-zinc-500 mt-1 leading-tight">{step.label}</div>
                 {conv !== null && (

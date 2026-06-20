@@ -150,20 +150,22 @@ async def track_record() -> dict[str, Any]:
     async def _window(days: int) -> dict:
         row = await pool.fetchrow(
             """
-            SELECT count(*)                                  AS resolved,
+            SELECT count(*)                                   AS resolved,
                    count(*) FILTER (WHERE outcome='TP_HIT')  AS wins,
                    count(*) FILTER (WHERE outcome='SL_HIT')  AS losses,
+                   count(*) FILTER (WHERE outcome='TIMEOUT') AS timeouts,
                    round(avg(rr_achieved)::numeric, 4)       AS expectancy,
                    round((sum(rr_achieved) FILTER (WHERE rr_achieved > 0)
                      / NULLIF(abs(sum(rr_achieved) FILTER (WHERE rr_achieved < 0)), 0))::numeric, 4) AS pf
             FROM signal_outcomes
-            WHERE outcome IN ('TP_HIT','SL_HIT')
-              AND created_at > NOW() - make_interval(days => $1)
+            WHERE outcome IN ('TP_HIT','SL_HIT','TIMEOUT')
+              AND created_at > NOW() - $1 * INTERVAL '1 day'
             """,
             days,
         )
         d = dict(row)
-        total = (d["wins"] or 0) + (d["losses"] or 0)
+        # PC-01/02: include TIMEOUT in denominator to match Edge tab (avoids WR inflation)
+        total = (d["wins"] or 0) + (d["losses"] or 0) + (d["timeouts"] or 0)
         d["win_rate"] = round((d["wins"] or 0) / total * 100, 2) if total else None
         return d
 
@@ -174,7 +176,7 @@ async def track_record() -> dict[str, Any]:
                  / NULLIF(count(*), 0) * 100, 1) AS wr,
                round(avg(rr_achieved)::numeric, 3) AS exp
         FROM signal_outcomes
-        WHERE outcome IN ('TP_HIT','SL_HIT') AND created_at > NOW() - INTERVAL '30 days'
+        WHERE outcome IN ('TP_HIT','SL_HIT','TIMEOUT') AND created_at > NOW() - INTERVAL '30 days'
         GROUP BY 1 ORDER BY 2 DESC
         """
     )
@@ -206,24 +208,33 @@ async def track_record() -> dict[str, Any]:
 async def telegram_delivery() -> dict[str, Any]:
     """
     TELEGRAM.RELIABILITY.1 WS5 — delivery funnel ground truth (24h + 7d).
-    generated → eligible (conf ≥ 85) → queued (telegram_sent) → delivered /
+    generated → eligible (conf ≥ alert_conf) → queued (telegram_sent) → delivered /
     failed / unresolved, plus suppression visibility: shadowed (dedup within
     1h of a sent twin) and other (rate-cap / gates / tail-loss era).
     """
     from backend.database.session import get_pool
     pool = await get_pool()
 
+    # TG-B3: read alert_confidence from settings instead of hardcoding 85
+    try:
+        from backend.system_settings.groups import ScannerSettings  # noqa: PLC0415
+        from backend.system_settings.service import get_settings_service  # noqa: PLC0415
+        _sc = get_settings_service().get_group(ScannerSettings)
+        alert_conf: int = _sc.alert_confidence
+    except Exception:
+        alert_conf = 85
+
     async def _window(hours: int) -> dict:
         row = await pool.fetchrow(
             """
             SELECT count(*)                                              AS generated,
-                   count(*) FILTER (WHERE confidence >= 85)              AS eligible,
+                   count(*) FILTER (WHERE confidence >= $2)              AS eligible,
                    count(*) FILTER (WHERE telegram_sent)                 AS queued,
                    count(*) FILTER (WHERE telegram_delivered IS TRUE)    AS delivered,
                    count(*) FILTER (WHERE telegram_delivered IS FALSE)   AS failed,
                    count(*) FILTER (WHERE telegram_sent
                                     AND telegram_delivered IS NULL)      AS unresolved,
-                   count(*) FILTER (WHERE confidence >= 85 AND NOT telegram_sent
+                   count(*) FILTER (WHERE confidence >= $2 AND NOT telegram_sent
                      AND EXISTS (
                        SELECT 1 FROM signals p
                        WHERE p.symbol = signals.symbol AND p.type = signals.type
@@ -232,9 +243,10 @@ async def telegram_delivery() -> dict[str, Any]:
                                               AND signals.created_at
                      ))                                                  AS shadowed
             FROM signals
-            WHERE created_at > NOW() - make_interval(hours => $1)
+            WHERE created_at > NOW() - $1 * INTERVAL '1 hour'
             """,
             hours,
+            alert_conf,
         )
         d = dict(row)
         d["suppressed_other"] = max(0, (d["eligible"] - d["queued"]) - d["shadowed"])
