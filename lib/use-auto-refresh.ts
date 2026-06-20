@@ -22,6 +22,11 @@ export function useAutoRefresh<T>(
   const fetcherRef = useRef<() => Promise<T>>(fetcher)
   useEffect(() => { fetcherRef.current = fetcher })
 
+  // H-16: keep intervalMs stable via ref so the effect fires once;
+  // prevents interval reset if caller ever passes a dynamic value
+  const intervalMsRef = useRef(intervalMs)
+  useEffect(() => { intervalMsRef.current = intervalMs })
+
   const refresh = useCallback(() => {
     abortRef.current?.abort()
     abortRef.current = new AbortController()
@@ -45,13 +50,13 @@ export function useAutoRefresh<T>(
 
   useEffect(() => {
     refresh()
-    if (intervalMs <= 0) return
-    const id = setInterval(refresh, intervalMs)
+    if (intervalMsRef.current <= 0) return
+    const id = setInterval(refresh, intervalMsRef.current)
     return () => {
       clearInterval(id)
       abortRef.current?.abort()
     }
-  }, [refresh, intervalMs])
+  }, [refresh]) // intervalMs flows through ref — effect fires once on mount
 
   return { data, loading, error, lastUpdated, refresh }
 }

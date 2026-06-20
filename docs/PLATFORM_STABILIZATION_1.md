@@ -13,7 +13,7 @@ Full audit across 10 domains (Scanner, Signal Quality, Probability Engine, Redis
 | Priority | Count | Status |
 |----------|-------|--------|
 | P0 | 6 | ✅ All fixed — commit `75d0014` |
-| P1 | 4 | ✅ 3 fixed (2026-06-19) · P1-02 deferred to 2026-06-23 checkpoint |
+| P1 | 4 | ✅ All fixed — P1-02 commit `590e850` (2026-06-20) |
 | P2 | 5 | ✅ All fixed (2026-06-19) |
 | P3 | 2 | ✅ Both already done |
 
@@ -112,7 +112,7 @@ Full audit across 10 domains (Scanner, Signal Quality, Probability Engine, Redis
 ---
 
 ### P1-02 — `null_setup_confidence_penalty` magnitudes misaligned with heuristic scale
-**Classification:** FIX · **Status:** ⏳ Deferred — requires 7d outcome data (checkpoint 2026-06-23)  
+**Classification:** FIX · **Status:** ✅ Fixed (2026-06-20 — commit `590e850`)  
 **Domain:** Scanner / Signal Quality  
 **Impact:** The penalty applies after heuristic scoring. For SELL+SPOT+LOW_VOLATILITY+EMA_ALIGNMENT signals (which describes the majority of SPOT SELL signals in SIDEWAYS regime), the penalty is −14 points. Heuristic scores start at 45 and max at 95; a strong signal scores ~88. After −14 penalty, adjusted confidence = 74 — below even the new HEURISTIC.CALIBRATION.1 threshold of 80. This was the root cause of zero Telegram signals (fixed by lowering threshold, not by adjusting penalty). The penalty was designed for Claude's 0-100 scale where 88 → 74 is still strong; on the heuristic scale this is a disproportionate deduction.  
 **Risk:** Medium — suppresses valid signals; AVAX SELL at raw=95 dropped to 85, BNB SELL at 88 dropped to 74  

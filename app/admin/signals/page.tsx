@@ -1685,11 +1685,13 @@ function LifecycleFunnel({ signals }: { signals: TacticalSignalRow[] }) {
   const generated = signals.length
   // Every persisted signal is validated (AI or heuristic), so an "Approved" step
   // is always ~100% — show the AI vs Screened split instead.
-  const aiCount   = signals.filter(s => s.validationSource === 'CLAUDE' || s.lifecycleStage === 'AI_APPROVED').length
-  const scrCount  = signals.filter(s => s.validationSource === 'HEURISTIC' || s.lifecycleStage === 'SCREENED').length
+  const aiCount  = signals.filter(s => s.validationSource === 'CLAUDE' || s.lifecycleStage === 'AI_APPROVED').length
+  const scrCount = signals.length - aiCount  // all non-AI signals, including null validationSource
   // PCT-02: use telegram_sent bool only (stage inference double-counts)
   const sent   = signals.filter(s => s.telegramSent).length
   const active = signals.filter(s => s.lifecycleStage === 'ACTIVE' || s.lifecycleStage === 'TELEGRAM_SENT').length
+  // PCT-05: null validationSource falls through to Screened (D-03 intentional default —
+  // pre-migration rows default to SCREENED to avoid false AI_APPROVED badges)
   const won       = counts['TP_HIT'] ?? 0
   const lost      = counts['SL_HIT'] ?? 0
   const expired   = (counts['STALE']??0) + (counts['CLOSED']??0)
