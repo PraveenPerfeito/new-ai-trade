@@ -1155,6 +1155,12 @@ async def scan_coin(
         confidence_penalty, penalty_reasons = _null_setup_confidence_penalty(
             setup, signal_type, mode, volatility
         )
+        # P1-02 (PLATFORM_STABILIZATION_1): penalties were calibrated for Claude's
+        # 0-100 range where 88→74 is still strong.  On the heuristic scale a strong
+        # signal peaks at ~88-92; the same -14 deduction kills valid signals.
+        # Scale by 0.7× for HEURISTIC to restore proportionality.
+        if ai.validation_source == "HEURISTIC" and confidence_penalty > 0:
+            confidence_penalty = round(confidence_penalty * 0.7)
         adjusted_confidence = max(ai.confidence - confidence_penalty, 0)
 
         # SIGNAL.FACTOR.1: Intelligence-driven confidence boosts (resolved outcome data).
