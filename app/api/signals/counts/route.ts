@@ -38,16 +38,18 @@ export async function GET() {
     const signalsToday = todayRes.count ?? 0
     const sig7dIds = (sig7dRes.data ?? []).map((s: { id: string }) => s.id).filter(Boolean)
 
-    // Active = signals from last 7d that have no resolved outcome
-    // PostgREST doesn't support subqueries in filters, so we do a second query
+    // Active = signals from last 7d with no resolved outcome.
+    // Count DISTINCT signal IDs (not rows): a signal can have PENDING + TP_HIT/SL_HIT/TIMEOUT rows,
+    // so counting rows instead of IDs caused undercounting (multi-row signals subtracted 2+).
     let activeSignals = sig7dIds.length
     if (sig7dIds.length > 0) {
-      const { count: resolvedCount } = await admin
+      const { data: resolvedRows } = await admin
         .from('signal_outcomes')
-        .select('signal_id', { count: 'exact', head: true })
+        .select('signal_id')
         .in('signal_id', sig7dIds)
-        .neq('outcome', 'PENDING')
-      activeSignals = sig7dIds.length - (resolvedCount ?? 0)
+        .in('outcome', ['TP_HIT', 'SL_HIT', 'TIMEOUT'])
+      const resolvedIds = new Set((resolvedRows ?? []).map((r: { signal_id: string }) => r.signal_id))
+      activeSignals = sig7dIds.length - resolvedIds.size
     }
 
     let winRate7d       = 0

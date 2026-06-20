@@ -336,11 +336,19 @@ function FreshnessTag({ sig }: { sig: TacticalSignalRow }) {
 // ── Phase A — Founder Command Center ─────────────────────────────────────────
 
 function FounderCommandCenter({ trackRecord }: { trackRecord: TrackRecordResponse | null }) {
-  if (!trackRecord || !trackRecord.windows) return null
+  if (!trackRecord || !trackRecord.windows) return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-4 text-xs text-zinc-500">
+      No performance data yet — resolved outcomes appear here once signals close.
+    </div>
+  )
   const d7  = trackRecord.windows.d7
   const d30 = trackRecord.windows.d30
   const d90 = trackRecord.windows.d90
-  if (!d7 || !d30 || !d90) return null
+  if (!d7 && !d30 && !d90) return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-4 text-xs text-zinc-500">
+      No resolved signals yet — performance metrics appear once outcomes are recorded.
+    </div>
+  )
   const windows = [
     { label: '7d',  w: d7  },
     { label: '30d', w: d30 },
@@ -1264,7 +1272,7 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
   const [page,            setPage]            = useState(0)
   const [preset, setPreset] = useState<'active'|'sent'|'won'|'lost'|'expired'|'all'>('active')
   const stageMap: Record<string, SignalLifecycleStage[]> = {
-    active:  ['ACTIVE','AI_APPROVED','SCREENED','TELEGRAM_SENT'],
+    active:  ['ACTIVE','TELEGRAM_SENT'],
     sent:    ['TELEGRAM_SENT'],
     won:     ['TP_HIT'],
     lost:    ['SL_HIT'],
@@ -2216,10 +2224,10 @@ export default function SignalsCenterPage() {
 
   const { data: celery,      refresh: refreshCelery  } = useSharedPolling<CeleryStatus|null>('trading:celery',      celeryFetcher,       120_000)
   const { data: regime }                                = useSharedPolling<RegimeData|null>  ('trading:regime',      regimeFetcher,       120_000)
-  const { data: signalCounts }                          = useSharedPolling<SignalCounts|null>('trading:counts',      countsFetcher,       120_000)
+  const { data: signalCounts,  refresh: refreshCounts  } = useSharedPolling<SignalCounts|null>('trading:counts',      countsFetcher,       120_000)
   const { data: cache }                                 = useSharedPolling<CacheTelemetry|null>('trading:cache',     cacheFetcher,        120_000)
   const { data: providers }                             = useSharedPolling<ProviderStatus[]> ('trading:providers',   provFetcher,         120_000)
-  const { data: recentFeed }                            = useSharedPolling<{ signals: TacticalSignalRow[]; dbTotal: number|null }>('trading:tactical-feed',sigFetcher,       120_000)
+  const { data: recentFeed,   refresh: refreshFeed    } = useSharedPolling<{ signals: TacticalSignalRow[]; dbTotal: number|null }>('trading:tactical-feed',sigFetcher,       120_000)
   const recentSignals = recentFeed?.signals.slice(0, 6) ?? null
   const { data: flagsData,  refresh: refreshFlags }     = useSharedPolling<{emergency_stop:boolean;maintenance_mode:boolean;telegram:boolean;ai_validation:boolean;_aiEnabled:boolean}|null>('trading:flags', flagsFetcher, 120_000)
   const { data: scanStats }                             = useSharedPolling<ScanSummaryResponse|null>('trading:scans',scansFetcher,        120_000)
@@ -2272,6 +2280,8 @@ export default function SignalsCenterPage() {
       if (res.status===503) { setOpError(json.detail??'Scanner is disabled or blocked.'); return }
       if (!json.success) { setOpError(json.error??'Scan failed'); return }
       setScanDone(true); scanDoneTimer.current=setTimeout(()=>setScanDone(false),30_000); refreshCelery()
+      // Refresh signal feed and counts ~20s after queuing — allows scan time to complete
+      setTimeout(() => { refreshFeed(); refreshCounts() }, 20_000)
     } catch(e) { setOpError(e instanceof Error?e.message:'Network error') }
     finally { setScanning(false) }
   }
