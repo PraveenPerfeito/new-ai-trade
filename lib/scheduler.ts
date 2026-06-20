@@ -19,7 +19,7 @@
 import { runScan } from './scanner';
 import { ScannerMode, ScanResult } from '@/types';
 import { runStartupCheck } from './startup-check';
-import { startIntelligenceWorkers, preloadIntelligence } from './intelligence';
+import { preloadIntelligence } from './intelligence';
 import { createLogger } from './logger';
 
 const log = createLogger('lib/scheduler');
@@ -400,10 +400,6 @@ if (!g.__market_scanner_sched) {
   }
   g.__market_scanner_sched = new ScanScheduler();
   // Intelligence workers run as Vercel cron jobs (vercel.json) — no setIntervals here.
-  // Calling startIntelligenceWorkers() at module level causes double-execution:
-  // the warm /api/scheduler/status function instance runs its own intervals
-  // alongside the cron jobs, doubling Redis ops. Workers are started explicitly
-  // by startScheduler() only when the TypeScript scanner path is used.
 }
 
 export const scheduler = g.__market_scanner_sched;

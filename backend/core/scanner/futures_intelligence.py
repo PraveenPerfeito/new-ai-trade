@@ -23,6 +23,12 @@ log = get_logger(__name__)
 
 _PRIORITY = {"BTC", "ETH", "SOL"}
 
+# REDIS.REDUCE.1 — in-process dict cache for funding rate history.
+# Eliminates ~1,920 Redis GET ops/day (1 GET/symbol/scan × 40 coins × 48 scans).
+# SETs retained so history persists across worker restarts.
+# GETs only fire once per symbol per worker session (cold-start miss).
+_funding_hist_mem: dict[str, list[float]] = {}
+
 
 # ── Cached data fetchers ──────────────────────────────────────────────────────
 
@@ -88,18 +94,28 @@ FUNDING_TREND_DELTA_REL = 0.25       # 25% of |oldest reading|, whichever is lar
 
 async def _update_funding_history(symbol: str, rate: float) -> list[float]:
     """
-    Append the latest funding rate to the symbol's 3-reading history in Redis.
-    Returns the updated list (oldest first, at most 3 entries).
+    Append the latest funding rate to the symbol's 3-reading history.
+    Serves from in-process dict on subsequent calls (REDIS.REDUCE.1);
+    falls back to Redis GET only on cold-start (first call per symbol per session).
+    Redis SETEX is always written so history survives worker restarts.
     """
     import json  # noqa: PLC0415
     key = FUNDING_HIST_KEY.format(symbol)
     try:
         from backend.cache.redis_cache import get_redis  # noqa: PLC0415
         redis = await get_redis()
-        raw   = await redis.get(key)
-        hist: list[float] = json.loads(raw) if raw else []
+
+        if symbol in _funding_hist_mem:
+            hist = _funding_hist_mem[symbol]
+        else:
+            # Cold-start: load from Redis once, then cache in memory
+            raw  = await redis.get(key)
+            hist = json.loads(raw) if raw else []
+            _funding_hist_mem[symbol] = hist
+
         hist.append(rate)
         hist = hist[-FUNDING_HIST_MAX:]   # keep last N
+        _funding_hist_mem[symbol] = hist
         await redis.setex(key, FUNDING_HIST_TTL, json.dumps(hist))
         return hist
     except Exception as exc:

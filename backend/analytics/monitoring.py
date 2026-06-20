@@ -183,8 +183,21 @@ async def _read_db_scan_stats_24h(now: datetime) -> dict | None:
         return None
 
 
+# REDIS.REDUCE.1 — 300s in-process cache for the monitoring snapshot.
+# Dashboard polls every 120s; caching at 300s cuts Redis reads from ~5/poll
+# to ~1 per 300s → saves ~2,160 ops/day.  Python FastAPI runs as a single
+# long-lived process on Railway, so this cache IS shared across all requests.
+_monitor_cache: dict = {}
+_MONITOR_CACHE_TTL = 300  # seconds
+
+
 async def get_monitoring_snapshot() -> dict:
     """Build today's full operational monitoring snapshot."""
+    import time as _time
+    cached = _monitor_cache.get("snapshot")
+    if cached and (_time.monotonic() - cached["ts"]) < _MONITOR_CACHE_TTL:
+        return cached["data"]
+
     today = _today()
     now   = datetime.now(timezone.utc)
 
@@ -325,7 +338,8 @@ async def get_monitoring_snapshot() -> dict:
 
     anomalies = _detect_anomalies(now, signals, fallback_pct, binance_errs, last_duration_s, ai_enabled=ai_enabled)
 
-    return {
+    import time as _time
+    result = {
         "date":          today,
         "overall_level": worst,
         "metrics":       metrics,
@@ -339,6 +353,8 @@ async def get_monitoring_snapshot() -> dict:
             "redis_counters": "utc_day_fallback",
         },
     }
+    _monitor_cache["snapshot"] = {"data": result, "ts": _time.monotonic()}
+    return result
 
 
 # ── Anomaly detection ─────────────────────────────────────────────────────────

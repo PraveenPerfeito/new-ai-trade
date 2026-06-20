@@ -23,7 +23,5 @@ export type { PreloadResult } from './preloader';
 
 // Background workers
 export {
-  startIntelligenceWorkers,
-  stopIntelligenceWorkers,
   getWorkerStatuses,
 } from './workers';
