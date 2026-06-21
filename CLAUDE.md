@@ -4,7 +4,7 @@
 
 AI-powered crypto trading signal scanner (public brand: **SignalEdge AI**) built with **Next.js 14 App Router** + **TypeScript** + **Python FastAPI** backend. Scans top-**200** coins via **CoinMarketCap** (primary), applies an 11-gate quality pipeline, and surfaces high-probability trade setups via a glassmorphism admin dashboard and Telegram alerts. Deployed on **Vercel** (Next.js) + **Railway** (FastAPI + Celery worker).
 
-**Stack:** Next.js 14 · React 18 · TypeScript · Tailwind CSS · Supabase (PostgreSQL + Auth) · @supabase/ssr · Anthropic Claude Haiku · Binance API · CoinMarketCap API · CoinGecko (fallback) · FastAPI · Celery · Upstash Redis · pino · zod
+**Stack:** Next.js 14 · React 18 · TypeScript · Tailwind CSS · Supabase (PostgreSQL + Auth) · @supabase/ssr · Anthropic Claude Haiku · Binance API · CoinMarketCap API · CoinGecko (fallback) · FastAPI · Celery · Redis Cloud · pino · zod
 
 ---
 
@@ -16,12 +16,12 @@ AI-powered crypto trading signal scanner (public brand: **SignalEdge AI**) built
 4. **`runtime = 'nodejs'`** on all API routes — Edge runtime not used. Exception: `middleware.ts`.
 5. **`globalThis` scheduler singleton** — survives Next.js HMR without duplicate timers.
 6. **Risk engine before AI** — rejects grade-F signals without spending Anthropic tokens.
-7. **AI toggle** — `AISettings.enabled` in system settings; checked by `ai_validator.py` before each Claude call. Toggle from Admin → Analytics → Calibration tab without redeploying. (`/admin/calibration` redirects there — standalone page was merged in ADMIN.CONSOLIDATION.1.)
+7. **AI toggle** — `AISettings.enabled` in system settings; checked by `ai_validator.py` before each Claude call. Toggle from **Admin → System → Settings → Quick Controls** without redeploying.
 8. **Futures intelligence** only runs for `futures` and `high_confidence` modes.
 9. **Admin auth — two-layer:**
    - Layer 1: `middleware.ts` (Edge) — Supabase session validation + email allowlist. `ADMIN_PREFIXES` array is the single source of truth for protected paths; includes `/admin`, `/api/admin`, and `/api/analytics` (all 6 analytics routes).
    - Layer 2: `AdminAuthMiddleware` (FastAPI) — shared `X-Admin-Secret` header from proxy
-10. **Settings — 3-layer cache**: 60s in-process dict → 1h Redis → PostgreSQL. Redis pub/sub propagates changes to workers within ≤ 5s. (`_MEM_TTL = 60`, `_GEN_CHECK_INTERVAL = 120.0` — both raised from 30s/60s in OPS.CONSOLIDATION.1 R3.)
+10. **Settings — 3-layer cache**: 5-min in-process dict → 1h Redis → PostgreSQL. Redis pub/sub propagates changes to workers within ≤ 5s. (`_MEM_TTL = 300`, `_GEN_CHECK_INTERVAL = 600.0` — raised in REDIS.REDUCE.3 for Redis Cloud compatibility.)
 11. **Safety layer** — `backend/system_settings/safety.py` runs before every `patch_group()` write.
 12. **BTC regime cache** — `lib/market-regime.ts` classifies BULL_TREND/BEAR_TREND/SIDEWAYS/HIGH_VOLATILITY/EUPHORIA/CAPITULATION, 5-min module cache.
 13. **Continuation gate before AI** — continuationProbability < 25 rejects without AI tokens.
