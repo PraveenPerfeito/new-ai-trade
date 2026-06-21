@@ -1953,11 +1953,12 @@ export default function SystemPage() {
   const monitorFetcher  = useCallback(() => adminApi.analytics.monitor(), [])
   const tgDeliveryFetcher = useCallback(() => adminApi.analytics.telegramDelivery(), [])
 
-  const { data: health,     loading: hl } = useAutoRefresh<HealthReady>(healthFetcher, 120_000)
-  const { data: provData }                = useAutoRefresh<{ providers: ProviderCheckResult[] }>(providerFetcher, 120_000)
-  const { data: scans }                   = useAutoRefresh<ScanSummaryResponse>(scanFetcher, 120_000)
-  const { data: ai }                      = useAutoRefresh<AiSummaryResponse>(aiFetcher, 120_000)
-  const { data: monitor }                 = useSharedPolling<MonitorSnapshot>('admin:monitor', monitorFetcher, 120_000)
+  // REDIS.REDUCE.3: health/providers/scans/ai → 300s; monitor → 600s (daily counters)
+  const { data: health,     loading: hl } = useAutoRefresh<HealthReady>(healthFetcher, 300_000)
+  const { data: provData }                = useAutoRefresh<{ providers: ProviderCheckResult[] }>(providerFetcher, 300_000)
+  const { data: scans }                   = useAutoRefresh<ScanSummaryResponse>(scanFetcher, 300_000)
+  const { data: ai }                      = useAutoRefresh<AiSummaryResponse>(aiFetcher, 300_000)
+  const { data: monitor }                 = useSharedPolling<MonitorSnapshot>('admin:monitor', monitorFetcher, 600_000)
   const { data: tgDelivery }              = useAutoRefresh<TelegramDeliveryResponse>(tgDeliveryFetcher, 300_000)
 
   // ── Founder operations state (Phase A–C) ──────────────────────────────────

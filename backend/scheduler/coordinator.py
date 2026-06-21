@@ -24,7 +24,7 @@ ScanMode = Literal["standard", "high_confidence", "futures"]
 _LOCK_KEY_PREFIX     = "scheduler:lock:"
 _ENABLED_KEY         = "scheduler:enabled"
 _STATUS_CACHE_KEY    = "scheduler:status_cache"
-_STATUS_CACHE_TTL    = 5   # OPT-7: cache status for 5s — reduces 5 ops/call → 1 GET on hits
+_STATUS_CACHE_TTL    = 300  # REDIS.REDUCE.3: 300s cache — dashboard polls every 120s so >50% are hits, halving ops
 # OPS.CONSOLIDATION.1 discipline: every key must have a TTL. 7 days covers any
 # realistic maintenance window; after 30 min of staleness status() falls back to
 # DB anyway, so expiry never causes a false "never scanned" display.

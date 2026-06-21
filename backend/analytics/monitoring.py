@@ -183,12 +183,11 @@ async def _read_db_scan_stats_24h(now: datetime) -> dict | None:
         return None
 
 
-# REDIS.REDUCE.1 — 300s in-process cache for the monitoring snapshot.
-# Dashboard polls every 120s; caching at 300s cuts Redis reads from ~5/poll
-# to ~1 per 300s → saves ~2,160 ops/day.  Python FastAPI runs as a single
-# long-lived process on Railway, so this cache IS shared across all requests.
+# REDIS.REDUCE.3 — 600s in-process cache (was 300s).
+# Dashboard polls every 120s; at 600s only 1 in 5 polls hits Redis → saves ~80%
+# of monitor reads vs no-cache.  Monitor shows daily counters — 10 min stale is fine.
 _monitor_cache: dict = {}
-_MONITOR_CACHE_TTL = 300  # seconds
+_MONITOR_CACHE_TTL = 600  # seconds
 
 
 async def get_monitoring_snapshot() -> dict:

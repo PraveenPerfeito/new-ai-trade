@@ -37,9 +37,9 @@ log = get_logger(__name__)
 
 T = TypeVar('T', bound=BaseSettingsGroup)
 
-_MEM_TTL            = 60       # seconds (was 30 — settings change rarely; 60s cuts refresh ops by half)
+_MEM_TTL            = 300      # REDIS.REDUCE.3: 5 min — settings change rarely; Celery long-lived process benefits most
 _REDIS_TTL          = 3_600    # 1 hour
-_GEN_CHECK_INTERVAL = 120.0    # seconds between generation counter checks (R3 OPS.CONSOLIDATION.1: was 60.0)
+_GEN_CHECK_INTERVAL = 600.0    # REDIS.REDUCE.3: 10 min between generation counter checks (was 120s)
 
 
 # ── Cache entry ───────────────────────────────────────────────────────────────

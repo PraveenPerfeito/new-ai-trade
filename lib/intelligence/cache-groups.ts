@@ -11,21 +11,24 @@ export interface CacheGroupConfig {
 
 // ─── 4 Intelligence Cache Groups ─────────────────────────────────────────────
 //
-// Refresh cadences are chosen to stay well within 300k monthly credits:
-//   listings  every  5 min → 288 calls/day  = 288 credits/day
-//   global    every 10 min → 144 calls/day  = 144 credits/day
-//   trending  every 10 min → 144 calls/day  = 144 credits/day
-//   categories every 30 min →  48 calls/day  =  48 credits/day
+// REDIS.REDUCE.3: cadences halved to cut Redis worker ops by ~62%
+//   listings  every 15 min →  96 calls/day  =  96 credits/day  (was 5 min / 288)
+//   global    every 30 min →  48 calls/day  =  48 credits/day  (was 10 min / 144)
+//   trending  every 30 min →  48 calls/day  =  48 credits/day  (was 10 min / 144)
+//   categories every 60 min →  24 calls/day  =  24 credits/day  (was 30 min / 48)
 //                                              ───────────────
-//                              Total          = 624 credits/day
-//                              Monthly est.   = 18,720 credits   (6.2% of 300k)
+//                              Total          = 216 credits/day
+//                              Monthly est.   =  6,480 credits   (2.2% of 300k)
+//
+// Price data is still fresh enough: listings 15 min is fine for a signal scanner
+// that runs every 15 min; category rotation moves on hours-long timescales.
 
 export const CACHE_GROUPS: Record<CacheGroupName, CacheGroupConfig> = {
   listings: {
     name:          'listings',
     label:         'Market Snapshot',
     redisKey:      'cache:intel:listings',
-    ttlMs:         5 * 60_000,    // 5 min
+    ttlMs:         15 * 60_000,   // REDIS.REDUCE.3: 15 min (was 5 min)
     creditsPerCall: 1,
     description:   'Top-100 rankings, prices, volumes, breadth (CMC /listings/latest)',
   },
@@ -33,7 +36,7 @@ export const CACHE_GROUPS: Record<CacheGroupName, CacheGroupConfig> = {
     name:          'global',
     label:         'Global Metrics',
     redisKey:      'cache:intel:global',
-    ttlMs:         10 * 60_000,   // 10 min
+    ttlMs:         30 * 60_000,   // REDIS.REDUCE.3: 30 min (was 10 min)
     creditsPerCall: 1,
     description:   'BTC dominance, total market cap, 24h volume (CMC /global-metrics)',
   },
@@ -41,7 +44,7 @@ export const CACHE_GROUPS: Record<CacheGroupName, CacheGroupConfig> = {
     name:          'trending',
     label:         'Trending Engine',
     redisKey:      'cache:intel:trending',
-    ttlMs:         10 * 60_000,   // 10 min
+    ttlMs:         30 * 60_000,   // REDIS.REDUCE.3: 30 min (was 10 min)
     creditsPerCall: 1,
     description:   'Trending assets and narrative momentum (CMC /trending/latest)',
   },
@@ -49,7 +52,7 @@ export const CACHE_GROUPS: Record<CacheGroupName, CacheGroupConfig> = {
     name:          'categories',
     label:         'Sector Intelligence',
     redisKey:      'cache:intel:categories',
-    ttlMs:         30 * 60_000,   // 30 min
+    ttlMs:         60 * 60_000,   // REDIS.REDUCE.3: 60 min (was 30 min)
     creditsPerCall: 1,
     description:   'Ecosystem categories, sector performance, narrative rotation (CMC /categories)',
   },
