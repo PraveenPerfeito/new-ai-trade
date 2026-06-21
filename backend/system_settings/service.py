@@ -434,13 +434,23 @@ class SettingsService:
                     "SELECT * FROM settings_group_audit ORDER BY updated_at DESC LIMIT $1",
                     limit,
                 )
+            def _parse_cf(v: object) -> dict:
+                # asyncpg returns jsonb as a raw JSON string; parse it so the
+                # client receives an object, not a character-iterable string.
+                if isinstance(v, str):
+                    try:
+                        return json.loads(v)
+                    except Exception:
+                        return {}
+                return v if isinstance(v, dict) else {}
+
             return [
                 {
                     "id":             row["id"],
                     "group_name":     row["group_name"],
                     "old_version":    row["old_version"],
                     "new_version":    row["new_version"],
-                    "changed_fields": row["changed_fields"],
+                    "changed_fields": _parse_cf(row["changed_fields"]),
                     "schema_version": row["schema_version"],
                     "updated_by":     row["updated_by"],
                     "updated_at":     row["updated_at"].isoformat()

@@ -1041,6 +1041,24 @@ function formatRelative(iso: string | null | undefined): string {
   return new Date(iso).toLocaleDateString()
 }
 
+function fmtAuditVal(v: unknown): string {
+  if (v === null || v === undefined) return '–'
+  if (typeof v === 'boolean') return v ? 'ON' : 'OFF'
+  if (typeof v === 'number') return String(v)
+  if (typeof v === 'string') return v.length > 22 ? v.slice(0, 22) + '…' : v
+  const s = JSON.stringify(v)
+  return s.length > 28 ? s.slice(0, 28) + '…' : s
+}
+
+function parseChangedFields(cf: unknown): Record<string, { old: unknown; new: unknown }> {
+  if (!cf) return {}
+  if (typeof cf === 'string') {
+    try { return JSON.parse(cf) } catch { return {} }
+  }
+  if (typeof cf === 'object') return cf as Record<string, { old: unknown; new: unknown }>
+  return {}
+}
+
 function validateField(entry: SettingEntry, value: boolean | number | string): string | null {
   if (entry.data_type === 'int' || entry.data_type === 'float') {
     const num = Number(value)
@@ -1894,33 +1912,48 @@ function SettingsTab() {
                             </tr>
                           </thead>
                           <tbody>
-                            {auditLog.map(entry => (
-                              <tr key={entry.id} className="border-b border-zinc-800/30 hover:bg-zinc-700/10">
-                                <td className="py-2.5 px-3 font-mono text-zinc-500/60 text-xs">{SETTINGS_GROUP_LABELS[entry.group_name] ?? entry.group_name}</td>
-                                <td className="py-2.5 px-3 font-mono text-xs whitespace-nowrap">
-                                  <span className="text-zinc-500/50">v{entry.old_version}</span>
-                                  <span className="text-zinc-600"> → </span>
-                                  <span className="text-blue-400">v{entry.new_version}</span>
-                                </td>
-                                <td className="py-2.5 px-3 text-xs max-w-xs">
-                                  <div className="space-y-0.5">
-                                    {Object.entries(entry.changed_fields as Record<string, AuditChangedField>).map(([field, diff]) => (
-                                      <div key={field} className="font-mono">
-                                        <span className="text-zinc-200">{field}</span>
-                                        <span className="text-zinc-500/30"> </span>
-                                        <span className="text-bear-default/70">{JSON.stringify(diff.old)}</span>
-                                        <span className="text-zinc-500/30"> → </span>
-                                        <span className="text-blue-400">{JSON.stringify(diff.new)}</span>
+                            {auditLog.map(entry => {
+                              const cf = parseChangedFields(entry.changed_fields)
+                              const fieldEntries = Object.entries(cf)
+                              return (
+                                <tr key={entry.id} className="border-b border-zinc-800/30 hover:bg-zinc-700/10 align-top">
+                                  <td className="py-2.5 px-3 font-mono text-zinc-400 text-xs whitespace-nowrap">
+                                    {SETTINGS_GROUP_LABELS[entry.group_name] ?? entry.group_name}
+                                  </td>
+                                  <td className="py-2.5 px-3 font-mono text-xs whitespace-nowrap">
+                                    <span className="text-zinc-500/50">v{entry.old_version}</span>
+                                    <span className="text-zinc-600 mx-1">→</span>
+                                    <span className="text-blue-400">v{entry.new_version}</span>
+                                  </td>
+                                  <td className="py-2 px-3 text-xs">
+                                    {fieldEntries.length === 0 ? (
+                                      <span className="text-zinc-600 font-mono">—</span>
+                                    ) : (
+                                      <div className="space-y-1">
+                                        {fieldEntries.map(([field, diff]) => (
+                                          <div key={field} className="flex items-baseline gap-1.5 font-mono">
+                                            <span className="text-zinc-300 shrink-0 min-w-[90px] max-w-[120px] truncate" title={field}>{field}</span>
+                                            <span
+                                              className="text-bear-default/80 shrink-0"
+                                              title={JSON.stringify(diff.old)}
+                                            >{fmtAuditVal(diff.old)}</span>
+                                            <span className="text-zinc-600 shrink-0">→</span>
+                                            <span
+                                              className="text-blue-400 shrink-0"
+                                              title={JSON.stringify(diff.new)}
+                                            >{fmtAuditVal(diff.new)}</span>
+                                          </div>
+                                        ))}
                                       </div>
-                                    ))}
-                                  </div>
-                                </td>
-                                <td className="py-2.5 px-3 font-mono text-zinc-500 text-xs">{entry.updated_by}</td>
-                                <td className="py-2.5 px-3 font-mono text-zinc-500/50 text-xs whitespace-nowrap">
-                                  <span title={new Date(entry.updated_at).toLocaleString()}>{formatRelative(entry.updated_at)}</span>
-                                </td>
-                              </tr>
-                            ))}
+                                    )}
+                                  </td>
+                                  <td className="py-2.5 px-3 font-mono text-zinc-500 text-xs whitespace-nowrap">{entry.updated_by}</td>
+                                  <td className="py-2.5 px-3 font-mono text-zinc-500/50 text-xs whitespace-nowrap">
+                                    <span title={new Date(entry.updated_at).toLocaleString()}>{formatRelative(entry.updated_at)}</span>
+                                  </td>
+                                </tr>
+                              )
+                            })}
                           </tbody>
                         </table>
                       </div>
