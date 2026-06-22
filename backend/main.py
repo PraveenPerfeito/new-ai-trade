@@ -41,13 +41,15 @@ async def lifespan(app: FastAPI):
     from backend.startup_check import run_startup_check
     run_startup_check()
 
-    from backend.metrics.infra_collector import start_infra_collector
     from backend.system_settings.propagation import (
         start_propagation_listener,
         stop_propagation_listener,
     )
     from backend.system_settings.service import get_settings_service
-    start_infra_collector()
+    # REDIS.REDUCE.4: infra_collector disabled — redis.info + 2×llen every 300s
+    # (864 ops/day) for Prometheus gauges no scraper reads. Celery llen calls
+    # always return 0 since broker is CloudAMQP not Redis. Re-enable if Prometheus
+    # scraping is ever configured on Railway.
     svc = get_settings_service()
     await svc.seed_defaults()
     await start_propagation_listener(svc)
