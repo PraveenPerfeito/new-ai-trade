@@ -8,13 +8,13 @@ export interface ProviderCheckResult {
   error?: string
 }
 
-const PROVIDER_ORDER = ['Binance', 'CMC', 'CoinGecko', 'Claude', 'Telegram', 'Supabase', 'Redis', 'CloudAMQP']
+const PROVIDER_ORDER = ['Binance', 'CMC', 'CoinGecko', 'Claude', 'WhatsApp', 'Supabase', 'Redis', 'CloudAMQP']
 const PROVIDER_ROLE: Record<string, string> = {
   Binance:   'OHLCV / Futures',
   CMC:       'Market Intelligence',
   CoinGecko: 'Fallback Data',
   Claude:    'AI Validation',
-  Telegram:  'Alert Delivery',
+  WhatsApp:  'Alert Delivery',
   Supabase:  'Database / Auth',
   Redis:     'Cache / Pub-Sub',
   CloudAMQP: 'Task Broker',

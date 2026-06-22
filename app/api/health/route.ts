@@ -44,10 +44,10 @@ function checkAnthropicConfig(): HealthCheck {
     : { status: 'degraded', message: 'API key not set — heuristic fallback active' };
 }
 
-function checkTelegramConfig(): HealthCheck {
-  return process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID
+function checkWhatsAppConfig(): HealthCheck {
+  return process.env.WHATSAPP_TOKEN
     ? { status: 'ok' }
-    : { status: 'degraded', message: 'Not configured — alerts disabled' };
+    : { status: 'degraded', message: 'Not configured — WhatsApp alerts disabled' };
 }
 
 function checkCoinGeckoConfig(): HealthCheck {
@@ -66,7 +66,7 @@ export async function GET() {
   const checks: Record<string, HealthCheck> = {
     supabase,
     anthropic:  checkAnthropicConfig(),
-    telegram:   checkTelegramConfig(),
+    whatsapp:   checkWhatsAppConfig(),
     coingecko:  checkCoinGeckoConfig(),
   };
 

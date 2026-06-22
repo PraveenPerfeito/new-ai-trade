@@ -73,7 +73,7 @@ def _get_queue() -> "asyncio.Queue[_QueueItem]":
         loop = None
     if _queue is None or (loop is not None and _queue_loop is not loop):
         if _queue is not None and not _queue.empty():
-            log.warning("telegram_queue_recreated_with_pending", pending=_queue.qsize())
+            log.warning("whatsapp_queue_recreated_with_pending", pending=_queue.qsize())
         _queue = asyncio.Queue(maxsize=_QUEUE_MAX)
         _queue_loop = loop
         _worker_task = None
@@ -111,7 +111,7 @@ async def _drain_queue() -> None:
             if item.signal_id:
                 await _record_delivery(item.signal_id, delivered)
         except Exception as exc:
-            log.warning("telegram_drain_error", error=str(exc))
+            log.warning("whatsapp_drain_error", error=str(exc))
             if item.signal_id:
                 await _record_delivery(item.signal_id, False, str(exc)[:200])
         finally:
@@ -133,7 +133,7 @@ async def flush_queue(timeout_s: float = 20.0) -> bool:
         await asyncio.wait_for(_queue.join(), timeout=timeout_s)
         return True
     except asyncio.TimeoutError:
-        log.error("telegram_flush_timeout", remaining=_queue.qsize(), timeout_s=timeout_s)
+        log.error("whatsapp_flush_timeout", remaining=_queue.qsize(), timeout_s=timeout_s)
         return False
 
 
@@ -255,13 +255,13 @@ def _enqueue(text: str, signal_id: str | None = None, dedup_key: str | None = No
             try:
                 dropped = q.get_nowait()       # discard oldest
                 q.task_done()
-                log.warning("telegram_queue_full_dropped_oldest",
+                log.warning("whatsapp_queue_full_dropped_oldest",
                             dropped_signal_id=getattr(dropped, "signal_id", None))
             except asyncio.QueueEmpty:
                 pass
         q.put_nowait(_QueueItem(text, signal_id, dedup_key, confidence))
     except Exception as exc:
-        log.warning("telegram_enqueue_failed", error=str(exc))
+        log.warning("whatsapp_enqueue_failed", error=str(exc))
 
 
 def _grade_emoji(grade: str) -> str:
@@ -375,19 +375,19 @@ async def send_signal_alert(signal: Signal) -> bool:
         tg_cfg   = await get_settings_service().get_group(TelegramSettings)
         flags    = await get_settings_service().get_group(FeatureFlags)
         if not tg_cfg.alerts_enabled:
-            log.info("telegram_alert_blocked_disabled", symbol=signal.symbol)
+            log.info("whatsapp_alert_blocked_disabled", symbol=signal.symbol)
             return False
         if not flags.telegram:
-            log.info("telegram_alert_blocked_feature_flag", symbol=signal.symbol)
+            log.info("whatsapp_alert_blocked_feature_flag", symbol=signal.symbol)
             return False
         if flags.emergency_stop:
-            log.info("telegram_alert_blocked_emergency_stop", symbol=signal.symbol)
+            log.info("whatsapp_alert_blocked_emergency_stop", symbol=signal.symbol)
             return False
         if flags.maintenance_mode:
-            log.info("telegram_alert_blocked_maintenance_mode", symbol=signal.symbol)
+            log.info("whatsapp_alert_blocked_maintenance_mode", symbol=signal.symbol)
             return False
     except Exception as exc:
-        log.warning("telegram_settings_check_failed", error=str(exc))
+        log.warning("whatsapp_settings_check_failed", error=str(exc))
         # fail open — send if settings service is unavailable to avoid silent loss
 
     # Deduplication FIRST — must check before rate counter so duplicates
@@ -401,10 +401,10 @@ async def send_signal_alert(signal: Signal) -> bool:
     if prev_conf is not None:
         if signal.confidence >= prev_conf + DEDUP_UPGRADE_DELTA:
             is_upgrade = True
-            log.info("telegram_alert_upgrade", symbol=signal.symbol, direction=direction_key,
+            log.info("whatsapp_alert_upgrade", symbol=signal.symbol, direction=direction_key,
                      prev_confidence=prev_conf, new_confidence=signal.confidence)
         else:
-            log.info("telegram_alert_skipped_duplicate", symbol=signal.symbol, direction=direction_key,
+            log.info("whatsapp_alert_skipped_duplicate", symbol=signal.symbol, direction=direction_key,
                      cooldown_hours=ALERT_COOLDOWN_HOURS, prev_confidence=prev_conf)
             return False
 
@@ -420,10 +420,10 @@ async def send_signal_alert(signal: Signal) -> bool:
         if count == 1:
             await redis_ratelimit.expire(hour_key, 3700)
         if count > max_per_hr:
-            log.info("telegram_rate_limited", symbol=signal.symbol, count=count, max=max_per_hr)
+            log.info("whatsapp_rate_limited", symbol=signal.symbol, count=count, max=max_per_hr)
             return False
     except Exception as exc:
-        log.warning("telegram_rate_limit_check_failed", error=str(exc))
+        log.warning("whatsapp_rate_limit_check_failed", error=str(exc))
         # fail open — send if Redis is unavailable
 
     is_long    = signal.type.value == "BUY"

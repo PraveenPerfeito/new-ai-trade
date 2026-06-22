@@ -1026,7 +1026,7 @@ const TACTICAL_CONTROLS: TacticalControlDef[] = [
   {
     group: 'scanner', key: 'alert_confidence',
     label: 'Alert Threshold',
-    tagline: 'Minimum confidence to dispatch a Telegram alert',
+    tagline: 'Minimum confidence to dispatch a WhatsApp alert',
     impact: 'Higher → alerts on strongest setups only',
   },
 ]
@@ -1264,7 +1264,7 @@ function SafetyStatusCard({ settings, dirty }: {
         <span className="w-2.5 h-2.5 rounded-full bg-zinc-400 shrink-0" />
         <div>
           <p className="text-sm font-semibold text-zinc-200">Safety status: normal</p>
-          <p className="text-xs text-zinc-500/60">AI validation, Telegram delivery, and operational switches are all in their expected states.</p>
+          <p className="text-xs text-zinc-500/60">AI validation, WhatsApp delivery, and operational switches are all in their expected states.</p>
         </div>
       </div>
     )
@@ -2266,7 +2266,7 @@ export default function SystemPage() {
               <MonitorRow label="Win rate (7d)"          metric={monitor.metrics.win_rate_pct} />
               <MonitorRow label="SL rate (7d)"           metric={monitor.metrics.sl_rate_pct} />
               <MonitorRow label="Resolved outcomes (7d)" metric={monitor.metrics.resolved_7d} />
-              <MonitorRow label="Telegram sends"         metric={monitor.metrics.telegram_sends_per_day} />
+              <MonitorRow label="WhatsApp sends"          metric={monitor.metrics.telegram_sends_per_day} />
             </div>
             <div className="glass-card rounded-xl p-4">
               <p className="text-zinc-500 text-[10px] uppercase tracking-wide mb-2">Scanner</p>
@@ -2290,7 +2290,7 @@ export default function SystemPage() {
         </div>
       )}
 
-      {/* Telegram delivery funnel — TELEGRAM.RELIABILITY.1 WS5 */}
+      {/* WhatsApp delivery funnel — TELEGRAM.RELIABILITY.1 WS5 */}
       <TelegramDeliveryCard data={tgDelivery ?? null} />
 
       {/* Advanced Operations accordion — Phase D */}
