@@ -57,27 +57,25 @@ _scan_ops_alerts_enabled: bool = False  # updated async each scan; default off
 
 
 def _send_failure_alert(mode: str, error: str, attempt: int) -> None:
-    """Fire-and-forget Telegram alert when a scan permanently fails."""
+    """Fire-and-forget WhatsApp alert when a scan permanently fails."""
     if not _scan_ops_alerts_enabled:
         return
     settings = get_settings()
-    token = settings.telegram_bot_token
-    chat_id = settings.telegram_chat_id
-    if not token or not chat_id:
+    if not settings.whatsapp_api_url or not settings.whatsapp_token or not settings.whatsapp_phone:
         return
     text = (
-        f"🚨 <b>Scan Failed — {mode.upper()}</b>\n"
+        f"🚨 Scan Failed — {mode.upper()}\n"
         f"Attempts: {attempt}\n"
         f"Error: {error[:200]}"
     )
     try:
         requests.post(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
+            f"{settings.whatsapp_api_url.rstrip('/')}/messages/chat",
+            json={"token": settings.whatsapp_token, "to": settings.whatsapp_phone, "body": text},
             timeout=5,
         )
     except Exception as exc:
-        logger.warning(f"telegram_failure_alert_failed error={exc}")
+        logger.warning(f"whatsapp_failure_alert_failed error={exc}")
 
 
 def _check_operational_flags(mode: str = "standard") -> str | None:

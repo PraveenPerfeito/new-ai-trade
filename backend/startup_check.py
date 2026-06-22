@@ -43,8 +43,9 @@ _PRODUCTION_REQUIRED = [
 # ── Recommended ───────────────────────────────────────────────────────────────
 _RECOMMENDED = [
     ("REDIS_URL",           "Provider metrics and settings cache will degrade without Redis."),
-    ("TELEGRAM_BOT_TOKEN",  "Scan failure alerts and signal notifications are disabled."),
-    ("TELEGRAM_CHAT_ID",    "Scan failure alerts and signal notifications are disabled."),
+    ("WHATSAPP_API_URL",    "WhatsApp signal delivery is disabled — set in Railway worker env."),
+    ("WHATSAPP_TOKEN",     "WhatsApp signal delivery is disabled — set in Railway worker env."),
+    ("WHATSAPP_PHONE",     "WhatsApp signal delivery is disabled — set in Railway worker env."),
     ("ANTHROPIC_API_KEY",   "AI validation will use heuristic fallback for all signals."),
     ("COINGECKO_API_KEY",   "CoinGecko free tier has low rate limits; provider may hit quota."),
 ]

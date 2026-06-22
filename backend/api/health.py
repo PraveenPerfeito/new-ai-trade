@@ -92,6 +92,30 @@ async def readiness():
     except Exception as exc:
         checks["binance"] = f"error: {type(exc).__name__}"
 
+    # WhatsApp (UltraMsg) — check env var presence only (no live API call)
+    try:
+        from backend.config import get_settings
+        s = get_settings()
+        if s.whatsapp_api_url and s.whatsapp_token and s.whatsapp_phone:
+            checks["whatsapp"] = "configured"
+        else:
+            missing = [k for k, v in {
+                "WHATSAPP_API_URL": s.whatsapp_api_url,
+                "WHATSAPP_TOKEN":   s.whatsapp_token,
+                "WHATSAPP_PHONE":   s.whatsapp_phone,
+            }.items() if not v]
+            checks["whatsapp"] = f"not_configured: {', '.join(missing)} not set"
+    except Exception as exc:
+        checks["whatsapp"] = f"error: {exc}"
+
+    # Anthropic — check env var presence only
+    try:
+        from backend.config import get_settings
+        s = get_settings()
+        checks["anthropic"] = "configured" if s.anthropic_api_key else "not_configured: ANTHROPIC_API_KEY not set"
+    except Exception as exc:
+        checks["anthropic"] = f"error: {exc}"
+
     status_code = 200 if ok else 503
     data = {"status": "ready" if ok else "degraded", "checks": checks}
     _health_cache["data"] = data

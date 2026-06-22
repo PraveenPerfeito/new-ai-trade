@@ -380,30 +380,27 @@ async def _maybe_send_critical_anomaly_alert(anomalies: list) -> None:
     try:
         from backend.config import get_settings
         settings = get_settings()
-        token   = settings.telegram_bot_token
-        chat_id = settings.telegram_chat_id
-        if not token or not chat_id:
+        if not settings.whatsapp_api_url or not settings.whatsapp_token or not settings.whatsapp_phone:
             return
 
-        lines = [f"🚨 <b>Critical Anomaly Detected</b>"]
+        lines = ["🚨 Critical Anomaly Detected"]
         for a in criticals[:3]:  # cap at 3 to keep message compact
-            # Anomaly dataclass uses anomaly_type + description (not type/message)
             if isinstance(a, dict):
                 msg   = a.get("description", "unknown")
                 atype = a.get("anomaly_type", "unknown")
             else:
                 msg   = a.description
                 atype = a.anomaly_type
-            lines.append(f"• <b>{atype}</b>: {msg}")
+            lines.append(f"• {atype}: {msg}")
         if len(criticals) > 3:
             lines.append(f"  …and {len(criticals) - 3} more")
-        lines.append("\n<i>Check SignalEdge Admin → Anomalies</i>")
+        lines.append("\nCheck SignalEdge Admin → Anomalies")
 
         import httpx
         async with httpx.AsyncClient(timeout=5.0) as client:
             await client.post(
-                f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": chat_id, "text": "\n".join(lines), "parse_mode": "HTML"},
+                f"{settings.whatsapp_api_url.rstrip('/')}/messages/chat",
+                json={"token": settings.whatsapp_token, "to": settings.whatsapp_phone, "body": "\n".join(lines)},
             )
         log.info("critical_anomaly_alert_sent", count=len(criticals))
     except Exception as exc:
