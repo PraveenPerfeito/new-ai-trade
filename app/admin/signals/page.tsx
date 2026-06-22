@@ -1327,7 +1327,7 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
   return (
     <div className="space-y-6">
       {/* Lifecycle funnel */}
-      <LifecycleFunnel signals={signals??[]} />
+      <LifecycleFunnel signals={signals??[]} dbTotal={dbTotal} />
 
       {/* Preset pills */}
       <div className="flex gap-1.5 flex-wrap">
@@ -1677,19 +1677,21 @@ function AlphaWatchlist() {
   )
 }
 
-function LifecycleFunnel({ signals }: { signals: TacticalSignalRow[] }) {
+function LifecycleFunnel({ signals, dbTotal }: { signals: TacticalSignalRow[]; dbTotal?: number | null }) {
   if (signals.length === 0) return null
   const counts: Record<string, number> = {}
   for (const s of signals) counts[s.lifecycleStage] = (counts[s.lifecycleStage]??0)+1
 
-  const generated = signals.length
+  // P0-NEW-02: use DB total when available so funnel isn't capped at client limit=200
+  const generated = dbTotal ?? signals.length
   // Every persisted signal is validated (AI or heuristic), so an "Approved" step
   // is always ~100% — show the AI vs Screened split instead.
   const aiCount  = signals.filter(s => s.validationSource === 'CLAUDE' || s.lifecycleStage === 'AI_APPROVED').length
   const scrCount = signals.length - aiCount  // all non-AI signals, including null validationSource
   // PCT-02: use telegram_sent bool only (stage inference double-counts)
   const sent   = signals.filter(s => s.telegramSent).length
-  const active = signals.filter(s => s.lifecycleStage === 'ACTIVE' || s.lifecycleStage === 'TELEGRAM_SENT').length
+  // P0-NEW-03: TELEGRAM_SENT must not be in active — it's already counted in sent; Active > Sent paradox otherwise
+  const active = signals.filter(s => s.lifecycleStage === 'ACTIVE').length
   // PCT-05: null validationSource falls through to Screened (D-03 intentional default —
   // pre-migration rows default to SCREENED to avoid false AI_APPROVED badges)
   const won       = counts['TP_HIT'] ?? 0
@@ -2203,12 +2205,12 @@ export default function SignalsCenterPage() {
   // REDIS.OPTIMIZATION.2: same shared feed as SignalsTab; full 200 passed to OverviewTab
   const sigFetcher     = useCallback(()=>fetch('/api/signals/tactical?limit=200&lifecycleStage=all').then(r=>r.json()).then(j=>({ signals: j.signals??[], dbTotal: j.dbTotal??null })).catch(()=>({ signals: [], dbTotal: null })), [])
   const flagsFetcher   = useCallback(async ()=>{
-    const [featRes,aiRes] = await Promise.all([adminApi.settings.group('features'),adminApi.settings.group('ai')])
+    const [featRes,aiRes,teleRes] = await Promise.all([adminApi.settings.group('features'),adminApi.settings.group('ai'),adminApi.settings.group('telegram')])
     const field = (res: { fields: {key:string;value:unknown}[] }, k: string) => res.fields.find(f=>f.key===k)?.value
     return {
       emergency_stop:   Boolean(field(featRes,'emergency_stop')),
       maintenance_mode: Boolean(field(featRes,'maintenance_mode')),
-      telegram:         Boolean(field(featRes,'telegram')),
+      telegram:         Boolean(field(teleRes,'alerts_enabled')),  // P0-NEW-01: was reading features.telegram (non-existent)
       ai_validation:    Boolean(field(aiRes,'enabled')),
       _aiEnabled:       Boolean(field(aiRes,'enabled')),
     }

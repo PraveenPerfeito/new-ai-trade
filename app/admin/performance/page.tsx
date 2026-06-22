@@ -503,7 +503,7 @@ function WrSparkBar({ wr }: { wr: number | null | undefined }) {
 
 function DimTable({ title, rows }: { title: string; rows: AttributionDimension[] }) {
   const [expanded, setExpanded] = useState(false)
-  if (!rows.length) return null
+  if (!rows?.length) return null
   const visible = expanded ? rows : rows.slice(0, 3)
   return (
     <div>

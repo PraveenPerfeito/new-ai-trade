@@ -45,7 +45,8 @@ export async function GET(req: NextRequest) {
         const { data: outcomes } = await admin
           .from('signal_outcomes')
           .select('signal_id, outcome, rr_achieved, pnl_pct, duration_hours')
-          .in('signal_id', ids);
+          .in('signal_id', ids)
+          .neq('outcome', 'PENDING');
         for (const row of (outcomes ?? []) as { signal_id: string; outcome: string; rr_achieved: number | null; pnl_pct: number | null; duration_hours: number | null }[]) {
           outcomeMap.set(row.signal_id, {
             outcome:       row.outcome as SignalOutcome,
