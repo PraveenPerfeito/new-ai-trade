@@ -1110,7 +1110,7 @@ function TrackRecordTab({ data, loading }: { data: import('@/lib/admin-api').Tra
     <div className="space-y-6">
       <div>
         <h2 className="text-zinc-200 font-semibold mb-0.5">Verified Track Record</h2>
-        <p className="text-zinc-500 text-xs">Source: {data.source} · Outcome-resolved signals only</p>
+        <p className="text-zinc-500 text-xs">Source: {data.source} · Outcome-resolved signals only · WR in % (0–100 scale; Edge tab uses 0–1)</p>
       </div>
 
       {/* Performance windows */}

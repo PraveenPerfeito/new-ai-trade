@@ -20,7 +20,7 @@ export async function GET() {
     const since24h = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
     const since7d  = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
-    const [todayRes, sig7dRes, outcomesRes] = await Promise.all([
+    const [todayRes, sig7dRes, outcomesRes, tgSentRes] = await Promise.all([
       // Signals generated in the last 24 hours
       admin.from('signals').select('id', { count: 'exact', head: true }).gte('created_at', since24h),
 
@@ -33,9 +33,15 @@ export async function GET() {
         .select('outcome, rr_achieved')
         .gte('created_at', since7d)
         .in('outcome', ['TP_HIT', 'SL_HIT', 'TIMEOUT']),
+
+      // DB-authoritative telegram sends (7d) — avoids feed cap of 200
+      admin.from('signals').select('id', { count: 'exact', head: true })
+        .gte('created_at', since7d)
+        .eq('telegram_sent', true),
     ])
 
-    const signalsToday = todayRes.count ?? 0
+    const signalsToday   = todayRes.count ?? 0
+    const telegramSent7d = tgSentRes.count ?? 0
     const sig7dIds = (sig7dRes.data ?? []).map((s: { id: string }) => s.id).filter(Boolean)
 
     // Active = signals from last 7d with no resolved outcome.
@@ -59,20 +65,28 @@ export async function GET() {
     let avgRrAchieved7d = 0
 
     const outcomes = outcomesRes.data ?? []
+    let tpCount7d = 0
+    let slCount7d = 0
     if (outcomes.length > 0) {
       resolved7d   = outcomes.length
       const tpHits = outcomes.filter((o) => o.outcome === 'TP_HIT').length
+      tpCount7d    = tpHits
+      slCount7d    = outcomes.filter((o) => o.outcome === 'SL_HIT').length
       winRate7d    = Math.round((tpHits / resolved7d) * 100)
 
-      const returnsWithValue = outcomes.filter((o) => o.rr_achieved != null)
-      if (returnsWithValue.length > 0) {
-        const sumR = returnsWithValue.reduce((s, o) => s + (o.rr_achieved as number), 0)
-        expectancy7d = Math.round((sumR / returnsWithValue.length) * 100) / 100
+      const tpReturns = outcomes.filter((o) => o.outcome === 'TP_HIT' && o.rr_achieved != null).map((o) => o.rr_achieved as number)
+      const slReturns = outcomes.filter((o) => o.outcome === 'SL_HIT' && o.rr_achieved != null).map((o) => o.rr_achieved as number)
+
+      // Canonical expectancy: winRate × avgWin − lossRate × avgLoss
+      if (tpReturns.length > 0 || slReturns.length > 0) {
+        const winRate  = tpHits / resolved7d
+        const lossRate = slCount7d / resolved7d
+        const avgWin   = tpReturns.length ? tpReturns.reduce((s, v) => s + v, 0) / tpReturns.length : 0
+        const avgLoss  = slReturns.length ? Math.abs(slReturns.reduce((s, v) => s + v, 0) / slReturns.length) : 1
+        expectancy7d   = Math.round((winRate * avgWin - lossRate * avgLoss) * 100) / 100
       }
 
       // Profit factor = gross profit / gross loss
-      const tpReturns = outcomes.filter((o) => o.outcome === 'TP_HIT' && o.rr_achieved != null).map((o) => o.rr_achieved as number)
-      const slReturns = outcomes.filter((o) => o.outcome === 'SL_HIT' && o.rr_achieved != null).map((o) => o.rr_achieved as number)
       if (tpReturns.length > 0 && slReturns.length > 0) {
         const grossProfit = tpReturns.reduce((s, v) => s + v, 0)
         const grossLoss   = Math.abs(slReturns.reduce((s, v) => s + v, 0))
@@ -93,6 +107,9 @@ export async function GET() {
       resolved_7d:          resolved7d,
       profit_factor_7d:     profitFactor7d,
       avg_rr_achieved_7d:   avgRrAchieved7d,
+      tp_count_7d:          tpCount7d,
+      sl_count_7d:          slCount7d,
+      telegram_sent_7d:     telegramSent7d,
     })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to fetch signal counts'
