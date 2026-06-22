@@ -89,21 +89,11 @@ async def _read_db_generated_signals_24h(now: datetime) -> int | None:
         return None
 
 
-async def record_signal() -> None:
-    await _incr("signals")
-
 async def record_scan(coins_scanned: int, duration_ms: int) -> None:
-    await _incr("scans")
-    await _incr("coins_scanned", coins_scanned)
-    try:
-        from backend.cache.redis_cache import get_redis
-        redis = await get_redis()
-        await redis.setex(f"{_PREFIX}:last_scan_duration_ms", 3_600, str(duration_ms))
-        # R1: scan_durations list removed — key was written but never read anywhere.
-        # last_scan_duration_ms (scalar above) is the only duration value consumed by
-        # get_monitoring_snapshot() and the dashboard.
-    except Exception as exc:
-        log.warning("monitor_record_scan_duration_failed", error=str(exc))
+    # REDIS.REDUCE.4: scan stats are DB-authoritative via scan_metrics_log;
+    # Redis INCR counters here were never read when DB available. No-op to save
+    # ~3 Redis ops per scan (~72 ops/day at 24 scans/day).
+    pass
 
 async def record_telegram_send() -> None:
     await _incr("telegram_sends")
@@ -262,11 +252,15 @@ async def get_monitoring_snapshot() -> dict:
             _snapshot_write_state["date"] = today
             _snapshot_write_state["hour"] = now.hour
 
-        # Find the oldest available daily snapshot within the last 7 days
+        # Find the oldest available daily snapshot within the last 7 days.
+        # REDIS.REDUCE.4: pipeline replaces 7 sequential GETs (1 round trip vs up to 7).
+        days_range = [(days_back, (now.date() - timedelta(days=days_back)).isoformat()) for days_back in range(7, 0, -1)]
+        pipe = redis.pipeline()
+        for _, day in days_range:
+            pipe.get(f"intel:quota:snapshot:{day}")
+        snap_results = await pipe.execute()
         oldest_val, oldest_days = None, 0
-        for days_back in range(7, 0, -1):
-            day = (now.date() - timedelta(days=days_back)).isoformat()
-            snap = await redis.get(f"intel:quota:snapshot:{day}")
+        for (days_back, _), snap in zip(days_range, snap_results):
             if snap is not None:
                 oldest_val = int(snap)
                 oldest_days = days_back

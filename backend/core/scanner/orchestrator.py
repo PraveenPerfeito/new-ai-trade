@@ -642,14 +642,6 @@ async def run_scan(mode: ScannerMode | str = ScannerMode.SPOT) -> ScanResult:
             )
             t.add_done_callback(lambda t: _on_task_done(t, "send_scan_summary"))
 
-        # Monitoring: record scan duration + coins (fire-and-forget)
-        try:
-            from backend.analytics.monitoring import record_scan as _mon_scan  # noqa: PLC0415
-            t2 = asyncio.create_task(_mon_scan(progress.scanned, duration_ms))
-            t2.add_done_callback(lambda t: _on_task_done(t, "monitor_scan"))
-        except Exception:
-            pass
-
         scan_runs_total.labels(mode=mode.value, status="completed").inc()
         scan_duration_seconds.labels(mode=mode.value).observe(duration_ms / 1000)
         log.info(

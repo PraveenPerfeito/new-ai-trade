@@ -144,7 +144,7 @@ class RedisCache:
 # ── Shared application caches (mirror lib/cache.ts) ──────────────────────────
 
 coins_cache    = RedisCache("coins",         ttl_seconds=5 * 60)
-signals_cache  = RedisCache("signals",       ttl_seconds=30)
+# REDIS.REDUCE.4: signals_cache removed — had 30s TTL but zero callers; was dead code.
 # OPT-6: TTLs aligned to futures scan cadence (30 min) + 2-min buffer.
 # Previous TTLs (2–5 min) always expired before the next scan fired, causing
 # 100% cache miss rate and ~300 extra Redis ops per futures scan.
