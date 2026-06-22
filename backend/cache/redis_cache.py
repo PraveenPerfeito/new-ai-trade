@@ -29,7 +29,7 @@ async def get_redis() -> aioredis.Redis:
             "socket_connect_timeout": 2,
             "socket_timeout": 2,
         }
-        # Upstash (rediss://) — disable cert verification.
+        # Redis Cloud / rediss:// — disable cert verification.
         # Use string "none" not Python None: redis-py only sets RedisSSLContext.cert_reqs
         # when the value is not None and truthy, so None/CERT_NONE(=0) both cause
         # AttributeError in get(). "none" is truthy and maps to ssl.CERT_NONE internally.

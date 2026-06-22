@@ -176,7 +176,7 @@ def _sync_watcher_loop(service) -> None:
                 "socket_timeout": 30,
                 "socket_connect_timeout": 5,
             }
-            # Upstash (rediss://) — use string "none" not Python None (see redis_cache.py).
+            # Redis Cloud (rediss://) — use string "none" not Python None (see redis_cache.py).
             if settings.redis_url.startswith("rediss://"):
                 kw["ssl_cert_reqs"] = "none"
             client = sync_redis.Redis.from_url(settings.redis_url, **kw)

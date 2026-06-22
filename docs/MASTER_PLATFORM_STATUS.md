@@ -5,7 +5,7 @@
 
 ## CURRENT ARCHITECTURE
 
-**Stack:** Next.js 14 (Vercel) · FastAPI + Celery (Railway) · Supabase PostgreSQL · Upstash Redis · CloudAMQP  
+**Stack:** Next.js 14 (Vercel) · FastAPI + Celery (Railway) · Supabase PostgreSQL · Redis Cloud · CloudAMQP  
 **Admin dashboard:** 3 centers — `/admin/signals` · `/admin/performance` · `/admin/system`  
 **Primary scanner:** Python (`backend/core/scanner/`) — TypeScript `lib/scanner.ts` is legacy  
 **Signal universe:** Top-200 coins via CoinMarketCap (single API call from TypeScript workers → Redis cache → Python reads cache)  

@@ -51,7 +51,7 @@ def create_celery() -> Celery:
         beat_schedule_filename="/tmp/celerybeat-schedule",
     )
 
-    # Upstash (and any other rediss:// provider) requires explicit SSL options.
+    # Redis Cloud (and any other rediss:// provider) requires explicit SSL options.
     # CERT_NONE skips certificate verification — correct for managed cloud Redis.
     # Broker and result backend are checked independently so switching the broker
     # to AMQP (REDIS.FIX.2) still correctly enables SSL for the Redis result backend.

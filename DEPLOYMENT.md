@@ -307,7 +307,7 @@ curl -X POST https://your-app.vercel.app/api/scanner/run \
 | FastAPI logs | Railway → API service → Logs |
 | Celery scan logs | Railway → Worker service → Logs |
 | Next.js logs | Vercel → project → Deployments → Functions |
-| Redis usage | Upstash → database → Metrics |
+| Redis usage | Redis Cloud console → your database → Metrics |
 | DB tables | Supabase → Table Editor → `signals` |
 | Admin dashboard | `/admin/signals` |
 | Scanner control | `/admin/system?tab=health` |

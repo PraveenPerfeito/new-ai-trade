@@ -167,7 +167,7 @@ export default function AboutPage() {
             <div>
               <h2 className="text-xl font-bold mb-2">Where we&apos;re going</h2>
               <p className="text-gray-400 text-sm max-w-lg leading-relaxed">
-                Q3 2026: Stripe subscriptions, premium subscriber dashboard, signal API with webhook delivery. Q4 2026: On-chain data, sentiment layer, portfolio correlation analytics. 2027: White-label signal feeds for institutional desks.
+                Q3 2026: Subscription tiers, premium subscriber dashboard, signal API with webhook delivery. Q4 2026: On-chain data, sentiment layer, portfolio correlation analytics. 2027: White-label signal feeds for institutional desks.
               </p>
             </div>
             <Link href="/investors"

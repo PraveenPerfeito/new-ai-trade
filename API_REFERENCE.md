@@ -221,7 +221,7 @@ Current runtime note: `COINMARKETCAP_API_KEY` is optional for the stabilized Pyt
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | âœ… | Supabase anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | âœ… | Supabase service role (server only) |
 | `DATABASE_URL` | âœ… | Transaction Pooler URL (port 6543) |
-| `REDIS_URL` | âœ… | Upstash `rediss://` URL |
+| `REDIS_URL` | âœ… | Redis Cloud `rediss://` URL |
 | `ADMIN_EMAILS` | âœ… | Comma-separated admin email(s) |
 | `ADMIN_SECRET` | âœ… | 32-byte hex â€” `openssl rand -hex 32` |
 | `BACKEND_URL` | âœ… | Railway FastAPI URL (or `http://localhost:8000`) |

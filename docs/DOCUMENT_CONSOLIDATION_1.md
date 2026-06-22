@@ -33,7 +33,7 @@ All 38 documents inventoried. Dates are from file content where available.
 
 | File | Date | Purpose | Status |
 |------|------|---------|--------|
-| `DEPLOYMENT.md` | No explicit date | Step-by-step deployment guide for Vercel+Railway+Upstash+Supabase | ACTIVE but STALE — missing 6 migrations, stale monitoring URLs |
+| `DEPLOYMENT.md` | No explicit date | Step-by-step deployment guide for Vercel+Railway+Redis Cloud+Supabase | ACTIVE but STALE — missing 6 migrations, stale monitoring URLs |
 | `PRD.md` | 2026-05-30 | Product requirements, functional specs, roadmap | ACTIVE but STALE — SC-08 threshold wrong (72 vs actual 78), AS-01 scan interval wrong (5min vs actual 15min) |
 | `docs/PRODUCTION_READINESS_AUDIT.md` | 2026-05-30 → 2026-06-08 | All production hardening findings tracked through PROD.FIX.1 | ACTIVE — score 9.5/10, 4 deferred P2 items still open |
 | `docs/PLATFORM_AUDIT.md` | 2026-05-28 | 63/100 UX/workflow/mobile audit of 14 original admin pages | ARCHIVED — superseded by ADMIN_CONSOLIDATION_1 and PLATFORM_SIMPLIFICATION_1 |
