@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
       .eq('ai_validated', true)
       .eq('telegram_sent', false)
       .gte('created_at', cutoff)
-      .gte('confidence', 75)
+      .gte('confidence', 80)  // near-miss floor — lowest alert threshold is 82 (futures)
       .order('empirical_wr', { ascending: false, nullsFirst: false })
       .order('confidence', { ascending: false })
       .limit(limit);

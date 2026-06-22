@@ -119,6 +119,8 @@ THRESHOLDS: dict[str, dict] = {
     "cmc_credits_per_day":     {"healthy": 800,   "warning": 1_500,   "critical": 2_500,   "inverted": True},
     "telegram_sends_per_day":  {"healthy": 50,    "warning": 100,     "critical": 200,     "inverted": True},
     "scan_duration_s":         {"healthy": 600,   "warning": 900,     "critical": 1_020,   "inverted": True},
+    # (higher is better)
+    "scans_today":             {"healthy": 8,     "warning": 2,       "critical": -1,      "inverted": False},
 }
 
 
@@ -173,6 +175,23 @@ async def _read_db_scan_stats_24h(now: datetime) -> dict | None:
         return None
 
 
+async def _read_db_telegram_sends_24h(now: datetime) -> int | None:
+    """DB-authoritative rolling-24h telegram sends.
+    Supersedes Redis UTC-day counter which resets at midnight and can undercount.
+    """
+    try:
+        from backend.database.session import get_pool
+        pool = await get_pool()
+        value = await pool.fetchval(
+            "SELECT COUNT(*) FROM signals WHERE telegram_sent = true AND created_at > $1",
+            now - timedelta(hours=24),
+        )
+        return int(value or 0)
+    except Exception as exc:
+        log.warning("monitor_db_telegram_sends_failed", error=str(exc))
+        return None
+
+
 # REDIS.REDUCE.3 — 600s in-process cache (was 300s).
 # Dashboard polls every 120s; at 600s only 1 in 5 polls hits Redis → saves ~80%
 # of monitor reads vs no-cache.  Monitor shows daily counters — 10 min stale is fine.
@@ -211,16 +230,12 @@ async def get_monitoring_snapshot() -> dict:
         scans         = await _read("scans")
         coins_total   = await _read("coins_scanned")
         avg_coins_per_run = round(coins_total / scans) if scans > 0 else 0
-        last_duration_s   = 0
-        try:
-            from backend.cache.redis_cache import get_redis
-            redis = await get_redis()
-            raw   = await redis.get(f"{_PREFIX}:last_scan_duration_ms")
-            last_duration_s = round(int(raw or 0) / 1000)
-        except Exception as exc:
-            log.warning("monitor_read_scan_duration_failed", error=str(exc))
+        last_duration_s   = 0  # DB unavailable — monitor:last_scan_duration_ms key is never written
 
-    tg_sends     = await _read("telegram_sends")
+    # Telegram sends — DB rolling-24h truth; Redis UTC-day counter as fallback.
+    # Redis counter resets at UTC midnight which can make tg_sends < actual at midnight.
+    db_tg_sends = await _read_db_telegram_sends_24h(now)
+    tg_sends    = db_tg_sends if db_tg_sends is not None else await _read("telegram_sends")
     binance_errs = await _read("binance_errors")
 
     # Claude/heuristic from ai_call_log
@@ -303,7 +318,7 @@ async def get_monitoring_snapshot() -> dict:
         },
         "win_rate_pct":           _entry("win_rate_pct",           win_rate_pct,     "%"),
         "sl_rate_pct":            _entry("sl_rate_pct",            sl_rate_pct,      "%"),
-        "scans_today":            {"value": scans,            "unit": "scans",   "level": "healthy"},
+        "scans_today":            _entry("scans_today",            scans,            "scans"),
         "coins_scanned_per_run":  _entry("coins_scanned_per_run",  avg_coins_per_run, "coins"),
         "scan_duration_s":        _entry("scan_duration_s",        last_duration_s,  "s"),
         "claude_calls_per_day":   _entry("claude_calls_per_day",   claude_calls,     "calls"),

@@ -272,8 +272,8 @@ export interface EdgeReport {
     warning?: string
   }
   window_hours: number
-  generated_at: string   // Python key: report_date (mapped here for consistency)
-  report_date?: string   // Python returns this key — alias accepted by the frontend
+  generated_at?: string  // Python returns report_date; generated_at may be absent
+  report_date?: string   // Python key: both accepted
 }
 
 export interface CoinStats {
@@ -589,6 +589,7 @@ export interface TrackRecordWindow {
   resolved: number
   wins: number
   losses: number
+  timeouts?: number
   expectancy: number | null
   pf: number | null
   win_rate: number | null
@@ -647,7 +648,7 @@ export const adminApi = {
     status:  ()             => get<{ scan_id: string | null; mode: string | null; status: string; progress: Record<string, unknown> }>('/scanner/status'),
   },
   scheduler: {
-    status:  () => get<{ success: boolean; data: { enabled: boolean; scanning: boolean; running_modes: string[]; last_scan_at: number | null } }>('/scheduler/status'),
+    status:  () => get<{ success: boolean; data: { enabled: boolean; scanning: boolean; running_modes: string[]; last_scan_at: number | null; next_scan_at?: Record<string, number | null>; is_overdue?: boolean; last_scan_age_seconds?: number | null } }>('/scheduler/status'),
     start:   () => post<{ success: boolean; message: string }>('/scheduler/start', {}),
     stop:    () => post<{ success: boolean; message: string }>('/scheduler/stop',  {}),
   },

@@ -426,7 +426,7 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
                 </tr>
               </thead>
               <tbody>
-                {(edge.coin_performance.best_by_expectancy ?? []).slice(0, 10).map(sym => {
+                {(edge.coin_performance.best_by_expectancy ?? []).slice(0, 5).map(sym => {
                   const c = edge.coin_performance!.coins[sym]
                   if (!c) return null
                   const isBestWR  = (edge.coin_performance!.best_by_win_rate ?? []).includes(sym)
@@ -720,7 +720,7 @@ function RiskGradeAnalysis({ rows }: { rows: AttributionDimension[] }) {
           </tbody>
         </table>
         <p className="px-3 py-2 text-zinc-500/30 text-[10px] font-mono border-t border-zinc-800/20">
-          RISKGRADE.FIX.1: futures penalty +5→+2 · breakout bonus HIGH_MOM +15 · regime quality ±5/−10 for NULL
+          ALPHA.TRUTH.1: futures penalty removed (0.0) · NULL regime hard gate · spot min_confidence raised 80→85
         </p>
       </div>
     </div>
@@ -939,7 +939,7 @@ function CalibrationHealthPanel({
 }) {
   if (!bands?.length && !byGrade?.length) return null
 
-  const gradeOrder = ['A+', 'A', 'B+', 'B', 'C', 'D']
+  const gradeOrder = ['A', 'B', 'C', 'D', 'F']
   const gradeRows = gradeOrder
     .map(g => byGrade?.find(d => d.key === g))
     .filter(Boolean) as AttributionDimension[]
@@ -1146,8 +1146,8 @@ function TrackRecordTab({ data, loading }: { data: import('@/lib/admin-api').Tra
                 </div>
               </div>
               <div className="mt-3 pt-2.5 border-t border-zinc-800/30 flex justify-between items-center">
-                <span className="text-zinc-600 text-[10px]">Wins / Losses</span>
-                <span className="font-mono text-[10px] text-zinc-500">{win.wins}W · {win.losses}L</span>
+                <span className="text-zinc-600 text-[10px]">Wins / Losses / Timeout</span>
+                <span className="font-mono text-[10px] text-zinc-500">{win.wins}W · {win.losses}L{(win.timeouts ?? 0) > 0 ? ` · ${win.timeouts}TO` : ''}</span>
               </div>
             </div>
           </div>

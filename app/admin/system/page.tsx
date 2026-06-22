@@ -110,7 +110,7 @@ function InfraConfigSection() {
 
 function ServiceCard({ name, status, detail }: { name: string; status: string; detail?: string }) {
   const isConfigured = status !== 'not_configured'
-  const isOk       = ['ok', 'ready', 'not_configured', 'HEALTHY'].includes(status)
+  const isOk       = ['ok', 'ready', 'HEALTHY'].includes(status)
   const isDegraded = status === 'DEGRADED'
   const dotCls  = !isConfigured ? 'bg-zinc-600'
     : isDegraded ? 'bg-amber-400 animate-pulse'
@@ -163,7 +163,9 @@ function MonitorRow({ label, metric }: { label: string; metric: { value: number;
 
 const PIPELINE_CANON_KEYS = [
   'BTC_DOWN_BUY', 'TOXIC_DENYLIST', 'SIGNAL_COOLDOWN', 'CONFIDENCE_REJECTION',
-  'CMC_REJECTION', 'REGIME_REJECTION', 'MTF_REJECTION', 'VOLATILITY_REJECTION',
+  'CMC_REJECTION', 'REGIME_REJECTION', 'CONTRA_REGIME_REJECTION',
+  'KLINE_EMPTY', 'KLINE_PARTIAL',
+  'MTF_REJECTION', 'VOLATILITY_REJECTION',
   'TREND_STRENGTH_REJECTION', 'SETUP_REJECTION', 'RR_REJECTION', 'RISK_REJECTION',
 ]
 
@@ -221,7 +223,7 @@ function PipelineIntegrityCard({
       <PipelineRow label="Signals Persisted"  value="100%"  sub="C1: DB-gated accept"  ok />
       <PipelineRow
         label="Gate Accounting"
-        value={`${keysCovered}/12`}
+        value={`${keysCovered}/${PIPELINE_CANON_KEYS.length}`}
         sub={`${gatesPct}% canonical keys`}
         ok={gatesPct === 100}
       />
@@ -232,7 +234,7 @@ function PipelineIntegrityCard({
         ok={resolved7d > 0}
       />
       <PipelineRow
-        label="WhatsApp Delivery"
+        label="Send Rate (of generated)"
         value={telegramPct !== null ? `${telegramPct}%` : '—'}
         sub={`${telegrams24h} sends (24h)`}
         ok
@@ -408,7 +410,7 @@ function AdvancedOperationsAccordion({
               <p className="text-[10px] text-zinc-500/50 uppercase tracking-wide mb-3">Queue & Scanner Diagnostics</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {([
-                  { label: 'Scans Today',   val: monitor.metrics.scans_today.value,             lvl: monitor.metrics.scans_today.level },
+                  { label: 'Scans (24h)',   val: monitor.metrics.scans_today.value,             lvl: monitor.metrics.scans_today.level },
                   { label: 'Last Scan',     val: `${monitor.metrics.scan_duration_s.value}s`,   lvl: monitor.metrics.scan_duration_s.level },
                   { label: 'Binance Err',   val: monitor.metrics.binance_errors_per_day.value,  lvl: monitor.metrics.binance_errors_per_day.level },
                   { label: 'CMC Credits',   val: monitor.metrics.cmc_credits_per_day.value,     lvl: monitor.metrics.cmc_credits_per_day.level },
@@ -816,14 +818,10 @@ function AnomaliesTab() {
         <p className="text-zinc-500 text-xs uppercase tracking-wider mb-3">Monitored Checks</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {[
-            ['win_rate_degradation','Win rate drops ≥12 pp vs 30d baseline'],
-            ['expectancy_negative','Rolling expectancy turns negative (n≥20)'],
-            ['false_positive_spike','SL hit rate exceeds 70%'],
-            ['drawdown_spike','Max drawdown exceeds 5R warning / 10R critical'],
-            ['calibration_drift','ECE exceeds 0.12 or drifts +0.05 from last snapshot'],
-            ['scan_failure_spike','Scan failure rate exceeds 15% / 30%'],
-            ['ai_error_spike','Claude API error rate exceeds 8% / 15%'],
-            ['queue_backlog','Celery queue depth exceeds 10 / 30 tasks'],
+            ['zero_signals','0 signals generated — scanner may be paused or all coins rejected by gates'],
+            ['claude_fallback_spike','Claude fallback rate ≥50% — check ANTHROPIC_API_KEY and daily quota'],
+            ['binance_error_spike','≥15 Binance errors — klines degraded, possible geo-blocking (451)'],
+            ['slow_scan','Last scan duration ≥900s — approaching Celery soft_time_limit (1020s)'],
           ].map(([name,desc])=>(
             <div key={name} className="glass-card rounded-md px-3 py-2 flex gap-2">
               <span className="text-zinc-500/60 font-mono text-xs shrink-0 mt-0.5">→</span>
@@ -2129,7 +2127,7 @@ export default function SystemPage() {
           const apiOk = ['ok', 'ready', 'HEALTHY'].includes(health?.status ?? '')
           const checksOk = Object.entries(health?.checks ?? {})
             .filter(([svc]) => svc !== 'celery_worker_age_s')
-            .every(([, st]) => ['ok', 'ready', 'not_configured', 'HEALTHY'].includes(st))
+            .every(([, st]) => ['ok', 'ready', 'HEALTHY'].includes(st))
           const allHealthy = apiOk && checksOk
 
           if (allHealthy) {

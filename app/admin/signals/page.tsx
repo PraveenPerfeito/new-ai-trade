@@ -9,7 +9,7 @@ import {
   ChevronDown, BarChart2,
 } from 'lucide-react'
 import { adminApi } from '@/lib/admin-api'
-import type { AuditEntry, HealthReady, ScanSummaryResponse, TrackRecordResponse } from '@/lib/admin-api'
+import type { ScanSummaryResponse, TrackRecordResponse } from '@/lib/admin-api'
 import { isActiveStage } from '@/lib/signal-lifecycle'
 import { useSharedPolling } from '@/lib/use-shared-polling'
 import { useAutoRefresh } from '@/lib/use-auto-refresh'
@@ -31,6 +31,7 @@ interface SignalCounts {
   signals_today: number; active_signals: number
   win_rate_7d: number; expectancy_7d: number; resolved_7d: number
   profit_factor_7d?: number; avg_rr_achieved_7d?: number
+  tp_count_7d?: number; sl_count_7d?: number; telegram_sent_7d?: number
 }
 interface OpsFlags {
   emergency_stop: boolean; maintenance_mode: boolean
@@ -370,7 +371,7 @@ function FounderCommandCenter({ trackRecord }: { trackRecord: TrackRecordRespons
               <div className="flex justify-between items-center">
                 <span className="text-[10px] text-zinc-500">Win Rate</span>
                 <span className={`text-xs font-mono font-bold ${wrColor(wr)}`}>
-                  {wr != null ? `${wr}%` : '—'}
+                  {wr != null ? `${Math.round(wr)}%` : '—'}
                 </span>
               </div>
               <div className="flex justify-between items-center">
@@ -400,7 +401,7 @@ function FounderCommandCenter({ trackRecord }: { trackRecord: TrackRecordRespons
               <div key={m.scanner_mode} className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded border bg-zinc-800/40 ${MODE_COLORS[m.scanner_mode] ?? 'text-zinc-400 border-zinc-700'}`}>
                 <span className="font-semibold">{modeDisplayLabel(m.scanner_mode)}</span>
                 <span className="text-zinc-600">·</span>
-                <span className={wrColor(mWr)}>{mWr != null ? `${mWr}% WR` : '—'}</span>
+                <span className={wrColor(mWr)}>{mWr != null ? `${Math.round(mWr)}% WR` : '—'}</span>
                 {mExp != null && <span className={expColor(mExp)}>{mExp > 0 ? '+' : ''}{mExp.toFixed(2)}R</span>}
                 <span className="text-zinc-600">n={m.n}</span>
               </div>
@@ -989,7 +990,8 @@ function SystemStatusBanner({ celery, flags, providers }: {
   if (flags?.maintenance_mode) issues.push('🔧 Maintenance Mode ON')
   if (flags !== null && !flags.telegram)     issues.push('📵 WhatsApp OFF — no alerts sending')
   if (flags !== null && !flags.ai_validation) issues.push('🤖 AI Validation OFF')
-  if (celery?.is_overdue && celery?.enabled) issues.push('⏰ Scanner overdue')
+  if (celery?.enabled && celery?.last_scan_at === null) issues.push('⚠ No scans recorded yet — scanner has not run since deploy')
+  else if (celery?.is_overdue && celery?.enabled) issues.push('⏰ Scanner overdue')
   if (celery !== null && !celery.enabled)    issues.push('⏸ Scanner paused')
   const unhealthy = providers.filter(p => !p.healthy)
   if (unhealthy.length > 0) issues.push(`⚠ ${unhealthy.length} provider${unhealthy.length > 1 ? 's' : ''} down`)
@@ -1042,10 +1044,10 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
   const lc = signals.reduce<Record<string,number>>((a,s)=>{ a[s.lifecycleStage]=(a[s.lifecycleStage]??0)+1; return a }, {})
   const currentRegime = regime?.regime ?? null
 
-  // Grade A% from recent signals (sample indicator)
+  // Grade A% from recent signals (sample indicator); includes A+ for empirical grading
   const withGrade = signals.filter(s => s.riskGrade != null)
   const gradeAPct = withGrade.length >= 3
-    ? Math.round(withGrade.filter(s => s.riskGrade === 'A').length / withGrade.length * 100)
+    ? Math.round(withGrade.filter(s => ['A', 'A+'].includes(s.riskGrade!)).length / withGrade.length * 100)
     : null
 
   return (
@@ -1133,10 +1135,10 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
           {signals.length > 0 && (
             <div className="mt-2 pt-2 border-t border-zinc-800/60 grid grid-cols-4 gap-1.5">
               {[
-                { label: 'Active',  value: signals.filter(s => isActiveStage(s.lifecycleStage)).length, color: 'text-blue-400' },
-                { label: 'Sent',    value: signals.filter(s => s.telegramSent || ['TELEGRAM_SENT','ACTIVE','STALE','TP_HIT','SL_HIT','CLOSED'].includes(s.lifecycleStage)).length, color: 'text-purple-400' },
-                { label: 'TP Hit',  value: lc['TP_HIT']??0,  color: 'text-emerald-400' },
-                { label: 'SL Hit',  value: lc['SL_HIT']??0,  color: 'text-red-400' },
+                { label: 'In Play', value: signals.filter(s => isActiveStage(s.lifecycleStage)).length, color: 'text-blue-400' },
+                { label: 'Sent',    value: signalCounts?.telegram_sent_7d ?? signals.filter(s => s.telegramSent).length, color: 'text-purple-400' },
+                { label: 'TP Hit',  value: signalCounts?.tp_count_7d ?? lc['TP_HIT'] ?? 0,  color: 'text-emerald-400' },
+                { label: 'SL Hit',  value: signalCounts?.sl_count_7d ?? lc['SL_HIT'] ?? 0,  color: 'text-red-400' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="bg-zinc-800/50 rounded-lg px-2 py-2 text-center">
                   <div className={`text-base font-bold font-mono leading-none ${color}`}>{value}</div>
@@ -1195,8 +1197,8 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
           <div className="flex items-center gap-3 mb-2">
             <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">Recent Signals</p>
             <div className="flex items-center gap-1.5 ml-auto">
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/20 text-green-400">{signals.filter(s=>s.type==='BUY').length} BUY</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400">{signals.filter(s=>s.type==='SELL').length} SELL</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/20 text-green-400">{signals.slice(0,6).filter(s=>s.type==='BUY').length} BUY</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20 text-red-400">{signals.slice(0,6).filter(s=>s.type==='SELL').length} SELL</span>
             </div>
           </div>
           <div className="space-y-1.5">
@@ -1288,8 +1290,8 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
   const dbTotal = feed?.dbTotal ?? null
 
   const presetStages = preset === 'all' ? null : (stageMap[preset] ?? null)
-  const filtered = (signals??[]).filter(s=>
-    (!presetStages || presetStages.includes(s.lifecycleStage)) &&
+  // SIGCNT-A2: apply all non-lifecycle filters first so preset badge counts match list length
+  const nonPresetFiltered = (signals??[]).filter(s=>
     (typeFilter==='all'||s.type===typeFilter) &&
     (modeFilter==='all'||s.scannerMode===modeFilter) &&
     (gradeFilter==='all'||(s.empiricalGrade ?? s.riskGrade ?? '')===gradeFilter) &&
@@ -1300,10 +1302,11 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
       (confFilter==='80-84'&& (s.confidence??0)>=80 && (s.confidence??0)<85)) &&
     (search===''||s.symbol.toUpperCase().includes(search.toUpperCase()))
   )
+  const filtered = nonPresetFiltered.filter(s => !presetStages || presetStages.includes(s.lifecycleStage))
 
   const sorted = [...filtered].sort((a, b) => {
     if (sortBy === 'confidence') return b.confidence - a.confidence
-    if (sortBy === 'grade')      return gradeRank(a.riskGrade) - gradeRank(b.riskGrade)
+    if (sortBy === 'grade')      return gradeRank((a.empiricalGrade ?? a.riskGrade) as RiskGrade) - gradeRank((b.empiricalGrade ?? b.riskGrade) as RiskGrade)
     if (sortBy === 'rr')         return (b.rrRatio??0) - (a.rrRatio??0)
     if (sortBy === 'time')       return new Date(String(b.createdAt)).getTime() - new Date(String(a.createdAt)).getTime()
     return 0
@@ -1318,10 +1321,10 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
     {id:'expired', label:'Expired'},
     {id:'all',     label:'All'},
   ]
+  // SIGCNT-A2: count from nonPresetFiltered so badge matches what clicking that preset would show
   const getPresetCount = (id: string) => {
-    if (!signals) return 0
     const map = stageMap[id]
-    return map ? (signals).filter(s => map.includes(s.lifecycleStage)).length : (signals??[]).length
+    return map ? nonPresetFiltered.filter(s => map.includes(s.lifecycleStage)).length : nonPresetFiltered.length
   }
 
   return (
@@ -1490,7 +1493,7 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
         <div className="flex items-center justify-between pt-1">
           <span className="text-xs text-zinc-500">
             {page * SIG_PAGE_SIZE + 1}–{Math.min((page + 1) * SIG_PAGE_SIZE, sorted.length)} of {sorted.length} shown
-            {dbTotal !== null ? <span className="text-zinc-600"> · {dbTotal} in DB</span> : null}
+            {dbTotal !== null ? <span className="text-zinc-600"> · {dbTotal} in DB (all 7d, unfiltered)</span> : null}
           </span>
           <div className="flex gap-2">
             <button disabled={page === 0} onClick={()=>setPage(p=>p-1)}
@@ -1686,8 +1689,8 @@ function LifecycleFunnel({ signals, dbTotal }: { signals: TacticalSignalRow[]; d
   const generated = dbTotal ?? signals.length
   // Every persisted signal is validated (AI or heuristic), so an "Approved" step
   // is always ~100% — show the AI vs Screened split instead.
-  const aiCount  = signals.filter(s => s.validationSource === 'CLAUDE' || s.lifecycleStage === 'AI_APPROVED').length
-  const scrCount = signals.length - aiCount  // all non-AI signals, including null validationSource
+  const aiCount  = signals.filter(s => s.validationSource === 'CLAUDE').length
+  const scrCount = signals.filter(s => s.lifecycleStage === 'SCREENED').length
   // PCT-02: use telegram_sent bool only (stage inference double-counts)
   const sent   = signals.filter(s => s.telegramSent).length
   // P0-NEW-03: TELEGRAM_SENT must not be in active — it's already counted in sent; Active > Sent paradox otherwise
@@ -1720,7 +1723,7 @@ function LifecycleFunnel({ signals, dbTotal }: { signals: TacticalSignalRow[]; d
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-y-1">
         <p className="text-[10px] text-zinc-500 uppercase tracking-wide flex items-center gap-1.5">
-          <BarChart2 className="w-3 h-3"/>Pipeline · last {signals.length} signals
+          <BarChart2 className="w-3 h-3"/>Pipeline · last {dbTotal ?? signals.length} signals
         </p>
         <div className="flex items-center gap-2">
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400" title="Claude AI validated">
@@ -1984,9 +1987,9 @@ function RegimeHardGateCard({ counts24h }: { counts24h: Record<string, number> }
           <p className="text-lg font-bold font-mono text-red-400">{count7d ?? '—'}</p>
         </div>
         <div>
-          <p className="text-[10px] text-zinc-500 mb-0.5">Est. Avoided Loss (7d)</p>
+          <p className="text-[10px] text-zinc-500 mb-0.5">~Est. Avoided Loss (7d)</p>
           <p className="text-lg font-bold font-mono text-emerald-400">
-            {avoided7d != null ? `+${avoided7d.toFixed(1)}R` : '—'}
+            {avoided7d != null ? `~+${avoided7d.toFixed(1)}R` : '—'}
           </p>
         </div>
       </div>
@@ -2215,10 +2218,8 @@ export default function SignalsCenterPage() {
       _aiEnabled:       Boolean(field(aiRes,'enabled')),
     }
   }, [])
-  const scansFetcher       = useCallback(()=>adminApi.analytics.scans(24).catch(()=>null), [])
-  const auditFetcher       = useCallback(()=>adminApi.settings.audit(5).then(r=>r.entries).catch(()=>null), [])
-  const healthReadyFetcher = useCallback(()=>adminApi.health.ready().catch(()=>null), [])
-  const regimePerfFetcher  = useCallback(()=>adminApi.analytics.regime(168).catch(()=>null), [])
+  const scansFetcher      = useCallback(()=>adminApi.analytics.scans(24).catch(()=>null), [])
+  const regimePerfFetcher = useCallback(()=>adminApi.analytics.regime(168).catch(()=>null), [])
   const trackRecordFetcher = useCallback(()=>adminApi.analytics.trackRecord().catch(()=>null), [])
 
   // REDIS.REDUCE.3: operational/real-time hooks stay 120s; analytics/cosmetic hooks raised to 300–600s
@@ -2231,8 +2232,6 @@ export default function SignalsCenterPage() {
   const recentSignals = recentFeed?.signals.slice(0, 6) ?? null
   const { data: flagsData,  refresh: refreshFlags }     = useSharedPolling<{emergency_stop:boolean;maintenance_mode:boolean;telegram:boolean;ai_validation:boolean;_aiEnabled:boolean}|null>('trading:flags', flagsFetcher, 120_000)
   const { data: scanStats }                             = useSharedPolling<ScanSummaryResponse|null>('trading:scans',scansFetcher,        120_000)
-  const { data: auditEntries }                          = useSharedPolling<AuditEntry[]|null>('trading:audit',       auditFetcher,        600_000) // audit log rarely changes
-  const { data: healthReady }                           = useSharedPolling<HealthReady|null> ('trading:health-ready',healthReadyFetcher,  300_000) // health check 5-min is fine
   const { data: regimePerfData }                        = useSharedPolling<Record<string,unknown>|null>('trading:regime-perf', regimePerfFetcher, 600_000) // analytics history
   const { data: trackRecord }                           = useSharedPolling<TrackRecordResponse|null>('trading:track-record',  trackRecordFetcher,  600_000)
 

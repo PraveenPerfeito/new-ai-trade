@@ -91,36 +91,50 @@ async function checkCMC(): Promise<ProviderStatus> {
   }
 }
 
-async function checkClaude(): Promise<ProviderStatus> {
-  // Claude health = Anthropic API key is configured + api.anthropic.com reachable.
-  // We do NOT make a paid API call here — just TCP reachability + key presence.
+async function checkBackendConfigured(): Promise<{ claude: ProviderStatus; whatsapp: ProviderStatus }> {
+  // ANTHROPIC_API_KEY and WHATSAPP_TOKEN live in Railway env, not Vercel.
+  // Proxy to the Python backend /health/ready which reports both as checks.anthropic / checks.whatsapp.
+  const backendUrl = process.env.BACKEND_URL
+  if (!backendUrl) {
+    const err = 'BACKEND_URL not set in Vercel env'
+    return {
+      claude:   { name: 'Claude',   healthy: false, latencyMs: 0, error: err },
+      whatsapp: { name: 'WhatsApp', healthy: false, latencyMs: 0, error: err },
+    }
+  }
   const t0 = Date.now()
-  const hasKey = !!process.env.ANTHROPIC_API_KEY
-  if (!hasKey) {
-    return { name: 'Claude', healthy: false, latencyMs: 0,
-      note: 'key missing', error: 'ANTHROPIC_API_KEY not set — heuristic fallback active' }
-  }
   try {
-    const r = await fetch('https://api.anthropic.com', { method: 'HEAD', signal: AbortSignal.timeout(4000) })
-    // Anthropic returns 404 on HEAD / — that still means the host is reachable
-    const reachable = r.status < 500
-    return { name: 'Claude', healthy: reachable, latencyMs: Date.now() - t0,
-      note: reachable ? 'key set · reachable' : 'host unreachable' }
+    const r = await fetch(`${backendUrl}/health/ready`, { signal: AbortSignal.timeout(5000) })
+    const data = await r.json() as { checks?: Record<string, string> }
+    const latencyMs = Date.now() - t0
+    const c = data.checks ?? {}
+    const claudeOk = c.anthropic === 'configured'
+    const waOk     = c.whatsapp  === 'configured'
+    return {
+      claude: {
+        name: 'Claude',
+        healthy: claudeOk,
+        latencyMs,
+        note: claudeOk ? 'key set · Railway' : 'key missing · Railway',
+        ...(!claudeOk && { error: 'ANTHROPIC_API_KEY not set in Railway env' }),
+      },
+      whatsapp: {
+        name: 'WhatsApp',
+        healthy: waOk,
+        latencyMs,
+        note: waOk ? 'configured · delivery via Railway' : 'not configured',
+        ...(!waOk && { error: 'WHATSAPP_TOKEN / WHATSAPP_API_URL / WHATSAPP_PHONE not set in Railway' }),
+      },
+    }
   } catch (e) {
-    return { name: 'Claude', healthy: false, latencyMs: Date.now() - t0,
-      error: e instanceof Error ? e.message : 'unreachable' }
+    const latencyMs = Date.now() - t0
+    const msg = e instanceof Error ? e.message : 'backend unreachable'
+    log.warn({ error: msg }, 'backend_health_proxy_failed')
+    return {
+      claude:   { name: 'Claude',   healthy: false, latencyMs, error: `backend unreachable: ${msg}` },
+      whatsapp: { name: 'WhatsApp', healthy: false, latencyMs, error: `backend unreachable: ${msg}` },
+    }
   }
-}
-
-async function checkWhatsApp(): Promise<ProviderStatus> {
-  // WhatsApp alerts are sent from the Railway Python worker via UltraMsg.
-  // Token presence = configured; delivery health covered by worker heartbeat check.
-  const token = process.env.WHATSAPP_TOKEN
-  if (!token) {
-    return { name: 'WhatsApp', healthy: false, latencyMs: 0,
-      note: 'not configured', error: 'WHATSAPP_TOKEN not set — alerts disabled' }
-  }
-  return { name: 'WhatsApp', healthy: true, latencyMs: 0, note: 'configured · delivery via Railway worker' }
 }
 
 async function checkSupabase(): Promise<ProviderStatus> {
@@ -189,7 +203,7 @@ async function checkCloudAMQP(): Promise<ProviderStatus> {
     const ageSeconds = Math.max(0, 1800 - ttl)
     const ageMin = Math.round(ageSeconds / 60)
     return { name: 'CloudAMQP', healthy: true, latencyMs,
-      note: `worker alive · heartbeat ${ageMin}m ago` }
+      note: `worker alive · ~${ageMin}m ago (TTL-est.)` }
   } catch (e) {
     return { name: 'CloudAMQP', healthy: false, latencyMs: Date.now() - t0,
       error: e instanceof Error ? e.message : 'check failed' }
@@ -205,22 +219,33 @@ export async function GET() {
 
   log.info('8-provider health check requested')
 
-  const results = await Promise.allSettled([
+  const [binance, cmc, coingecko, backendKeys, supabase, redis, cloudamqp] = await Promise.allSettled([
     checkBinance(),
     checkCMC(),
     checkCoinGecko(),
-    checkClaude(),
-    checkWhatsApp(),
+    checkBackendConfigured(),
     checkSupabase(),
     checkRedis(),
     checkCloudAMQP(),
   ])
 
-  const providers: ProviderStatus[] = results.map(r =>
-    r.status === 'fulfilled'
-      ? r.value
-      : { name: 'unknown', healthy: false, latencyMs: 0, error: 'check threw' },
-  )
+  const bk = backendKeys.status === 'fulfilled'
+    ? backendKeys.value
+    : {
+        claude:   { name: 'Claude',   healthy: false, latencyMs: 0, error: 'check threw' } as ProviderStatus,
+        whatsapp: { name: 'WhatsApp', healthy: false, latencyMs: 0, error: 'check threw' } as ProviderStatus,
+      }
+
+  const providers: ProviderStatus[] = [
+    binance.status   === 'fulfilled' ? binance.value   : { name: 'Binance',   healthy: false, latencyMs: 0, error: 'check threw' },
+    cmc.status       === 'fulfilled' ? cmc.value       : { name: 'CMC',       healthy: false, latencyMs: 0, error: 'check threw' },
+    coingecko.status === 'fulfilled' ? coingecko.value : { name: 'CoinGecko', healthy: false, latencyMs: 0, error: 'check threw' },
+    bk.claude,
+    bk.whatsapp,
+    supabase.status  === 'fulfilled' ? supabase.value  : { name: 'Supabase',  healthy: false, latencyMs: 0, error: 'check threw' },
+    redis.status     === 'fulfilled' ? redis.value     : { name: 'Redis',     healthy: false, latencyMs: 0, error: 'check threw' },
+    cloudamqp.status === 'fulfilled' ? cloudamqp.value : { name: 'CloudAMQP', healthy: false, latencyMs: 0, error: 'check threw' },
+  ]
 
   const allHealthy = providers.every(p => p.healthy)
   const checkedAt  = new Date().toISOString()
