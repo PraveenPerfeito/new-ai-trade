@@ -366,8 +366,15 @@ def _leverage_text(max_lev: int, mode: str) -> str:
 
 
 async def send_signal_alert(signal: Signal) -> bool:
-    """Format and enqueue a detailed signal alert. Skips if same symbol+direction was alerted within 4h."""
-    # ── Operational gate: check all Telegram / emergency switches ────────────
+    """Format and enqueue a detailed signal alert. Skips if same symbol+direction was alerted within 1h."""
+    # Fast-fail: log clearly if WhatsApp is unconfigured so it shows in Railway logs
+    if not _is_configured():
+        log.warning("whatsapp_not_configured_alert_dropped",
+                    symbol=signal.symbol, confidence=signal.confidence,
+                    hint="Set WHATSAPP_API_URL, WHATSAPP_TOKEN, WHATSAPP_PHONE in Railway worker env vars")
+        return False
+
+    # ── Operational gate: check all WhatsApp / emergency switches ────────────
     tg_cfg = None
     try:
         from backend.system_settings.service import get_settings_service

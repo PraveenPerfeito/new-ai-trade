@@ -123,6 +123,15 @@ async def _run_scan_task(mode: ScannerMode) -> None:
             log.warning("record_scan_failed", mode=mode.value, error=str(exc))
     except Exception as exc:
         log.error("background_scan_failed", mode=mode.value, error=str(exc))
+    finally:
+        # Drain any queued WhatsApp alerts before this task exits — the FastAPI
+        # event loop persists but the drain worker may not get scheduled before
+        # the next scan starts, causing message ordering issues.
+        try:
+            from backend.core.scanner.telegram_notifier import flush_queue
+            await flush_queue(timeout_s=30.0)
+        except Exception as exc:
+            log.warning("whatsapp_flush_failed", mode=mode.value, error=str(exc))
 
 
 @router.get("/status")
@@ -183,3 +192,42 @@ async def scan_metrics_summary() -> dict[str, Any]:
         "active_modes":  [k.split(":")[0] for k in active],
         "latest_scan":   latest.model_dump() if latest else None,
     }
+
+
+@router.post("/test-whatsapp")
+async def test_whatsapp() -> dict[str, Any]:
+    """
+    Send a test WhatsApp message to verify UltraMsg configuration.
+    Protected by AdminAuthMiddleware (X-Admin-Secret header required).
+    """
+    from backend.core.scanner.telegram_notifier import _is_configured, _send_with_retry
+    from backend.config import get_settings
+
+    s = get_settings()
+    configured = _is_configured()
+
+    if not configured:
+        missing = [
+            k for k, v in {
+                "WHATSAPP_API_URL": s.whatsapp_api_url,
+                "WHATSAPP_TOKEN":   s.whatsapp_token,
+                "WHATSAPP_PHONE":   s.whatsapp_phone,
+            }.items() if not v
+        ]
+        return {
+            "configured": False,
+            "sent":       False,
+            "error":      f"Missing Railway env vars: {', '.join(missing)}",
+        }
+
+    text = (
+        "🧪 *SignalEdge AI — Test Message*\n\n"
+        "WhatsApp alerts are configured and working correctly.\n"
+        "You will receive signal notifications at this number."
+    )
+    try:
+        sent = await _send_with_retry(text)
+        return {"configured": True, "sent": sent,
+                "error": None if sent else "UltraMsg returned sent=false — check token/phone"}
+    except Exception as exc:
+        return {"configured": True, "sent": False, "error": str(exc)}
