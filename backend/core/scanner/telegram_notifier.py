@@ -11,6 +11,7 @@ Retry policy:
 from __future__ import annotations
 
 import asyncio
+import re as _re
 import time
 from typing import Any
 
@@ -168,8 +169,6 @@ def _is_configured() -> bool:
     s = get_settings()
     return bool(s.whatsapp_api_url and s.whatsapp_token and s.whatsapp_phone)
 
-
-import re as _re
 
 def _html_to_whatsapp(text: str) -> str:
     """Convert Telegram HTML markup to WhatsApp markdown."""

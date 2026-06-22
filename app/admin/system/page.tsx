@@ -2127,7 +2127,7 @@ export default function SystemPage() {
           const apiOk = ['ok', 'ready', 'HEALTHY'].includes(health?.status ?? '')
           const checksOk = Object.entries(health?.checks ?? {})
             .filter(([svc]) => svc !== 'celery_worker_age_s')
-            .every(([, st]) => ['ok', 'ready', 'HEALTHY'].includes(st))
+            .every(([, st]) => ['ok', 'ready', 'HEALTHY', 'configured'].includes(st))
           const allHealthy = apiOk && checksOk
 
           if (allHealthy) {

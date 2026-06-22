@@ -71,11 +71,11 @@ export async function GET() {
       resolved7d   = outcomes.length
       const tpHits = outcomes.filter((o) => o.outcome === 'TP_HIT').length
       tpCount7d    = tpHits
-      slCount7d    = outcomes.filter((o) => o.outcome === 'SL_HIT').length
+      slCount7d    = outcomes.filter((o) => o.outcome === 'SL_HIT' || o.outcome === 'TIMEOUT').length
       winRate7d    = Math.round((tpHits / resolved7d) * 100)
 
       const tpReturns = outcomes.filter((o) => o.outcome === 'TP_HIT' && o.rr_achieved != null).map((o) => o.rr_achieved as number)
-      const slReturns = outcomes.filter((o) => o.outcome === 'SL_HIT' && o.rr_achieved != null).map((o) => o.rr_achieved as number)
+      const slReturns = outcomes.filter((o) => (o.outcome === 'SL_HIT' || o.outcome === 'TIMEOUT') && o.rr_achieved != null).map((o) => o.rr_achieved as number)
 
       // Canonical expectancy: winRate × avgWin − lossRate × avgLoss
       if (tpReturns.length > 0 || slReturns.length > 0) {
