@@ -81,10 +81,9 @@ async function checkCMC(): Promise<ProviderStatus> {
     if (ttl === -1 || ttl > 600) {
       return { name: 'CMC', healthy: true, latencyMs, note: 'cache warm (no TTL)' }
     }
-    // ttl > 0 — key present and expiring normally
-    const ageSeconds = 300 - ttl  // 300s = 5-min TTL; negative if TTL > 300s
-    const ageMin = Math.max(0, Math.round(ageSeconds / 60))
-    return { name: 'CMC', healthy: true, latencyMs, note: `cache ${ageMin}m old` }
+    // ttl > 0 — key present and expiring normally; show remaining TTL directly
+    const ttlMin = Math.round(ttl / 60)
+    return { name: 'CMC', healthy: true, latencyMs, note: `cache warm · ~${ttlMin}m TTL left` }
   } catch (e) {
     return { name: 'CMC', healthy: false, latencyMs: Date.now() - t0,
       error: e instanceof Error ? e.message : 'cache check failed' }

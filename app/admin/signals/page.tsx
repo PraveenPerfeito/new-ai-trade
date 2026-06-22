@@ -434,11 +434,12 @@ function FounderCommandCenter({ trackRecord }: { trackRecord: TrackRecordRespons
 
 // ── Phase F — Grade Validation Strip ─────────────────────────────────────────
 
-function GradeValidationStrip() {
-  type GradeRow = { grade: string; n: number; wr: number | null; exp: number | null; pf: number | null }
-  type VerifyData = { grades?: { heuristic?: GradeRow[]; empirical?: GradeRow[] } }
-  const fetcher = useCallback(() => adminApi.analytics.performanceVerification<VerifyData>().catch(() => null), [])
-  const { data } = useAutoRefresh<VerifyData | null>(fetcher, 300_000)
+type GradeRow = { grade: string; n: number; wr: number | null; exp: number | null; pf: number | null }
+type VerifyData = { grades?: { heuristic?: GradeRow[]; empirical?: GradeRow[] } }
+
+// Data is fetched by the parent page via useSharedPolling; passed here as a prop
+// to avoid an independent useAutoRefresh interval on every render/remount.
+function GradeValidationStrip({ data }: { data: VerifyData | null | undefined }) {
   const empirical = (data?.grades?.empirical ?? []).filter(g => g.n >= 10)
   const heuristic = (data?.grades?.heuristic ?? []).filter(g => g.n >= 10)
   if (empirical.length === 0 && heuristic.length === 0) return null
@@ -1033,13 +1034,13 @@ function ProviderHealthRow({ providers }: { providers: ProviderStatus[] }) {
 
 function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, countdown, flags, trackRecord,
   scanMode, onScanModeChange, onScanNow, scanning, scanDone, scanError,
-  onTogglePause, pausing }: {
+  onTogglePause, pausing, verifyData }: {
   celery: CeleryStatus | null; regime: RegimeData | null; signalCounts: SignalCounts | null
   providers: ProviderStatus[]; cache: CacheTelemetry | null; flags: OpsFlags | null
   signals: TacticalSignalRow[]; countdown: number | null; trackRecord: TrackRecordResponse | null
   scanMode: ScannerMode; onScanModeChange: (m: ScannerMode) => void
   onScanNow: () => void; scanning: boolean; scanDone: boolean; scanError: string | null
-  onTogglePause: () => void; pausing: boolean
+  onTogglePause: () => void; pausing: boolean; verifyData: VerifyData | null
 }) {
   const lc = signals.reduce<Record<string,number>>((a,s)=>{ a[s.lifecycleStage]=(a[s.lifecycleStage]??0)+1; return a }, {})
   const currentRegime = regime?.regime ?? null
@@ -1186,7 +1187,7 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
       <FounderCommandCenter trackRecord={trackRecord} />
 
       {/* Phase F — Grade Validation Strip */}
-      <GradeValidationStrip />
+      <GradeValidationStrip data={verifyData} />
 
       {/* Provider Health Row */}
       <ProviderHealthRow providers={providers} />
@@ -1269,9 +1270,12 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
   const [expandedId,      setExpandedId]      = useState<string|null>(null)
   const [search,          setSearch]          = useState('')
   const [page,            setPage]            = useState(0)
-  const [preset, setPreset] = useState<'active'|'sent'|'won'|'lost'|'expired'|'all'>('active')
+  const [preset, setPreset] = useState<'active'|'pending'|'sent'|'won'|'lost'|'expired'|'all'>('active')
   const stageMap: Record<string, SignalLifecycleStage[]> = {
-    active:  ['ACTIVE','TELEGRAM_SENT'],
+    // H-04: Active = signals live in market (ACTIVE window + STALE past window but not resolved).
+    // Pre-send states (SCREENED, AI_APPROVED, TELEGRAM_SENT) moved to Pending preset.
+    active:  ['ACTIVE', 'STALE'],
+    pending: ['SCREENED', 'AI_APPROVED', 'TELEGRAM_SENT'],
     sent:    ['TELEGRAM_SENT'],
     won:     ['TP_HIT'],
     lost:    ['SL_HIT'],
@@ -1315,6 +1319,7 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
 
   const presetDefs = [
     {id:'active',  label:'Active'},
+    {id:'pending', label:'Pending'},
     {id:'sent',    label:'Sent'},
     {id:'won',     label:'Won'},
     {id:'lost',    label:'Lost'},
@@ -1923,22 +1928,18 @@ function RegimePreviewModal({ targetPreset, regimeLabel, onConfirm, onClose }: {
  * backed by HIGH_MOMENTUM_BREAKOUT or aligned OI. Avoided-loss estimate uses
  * the audited contra-regime expectancy of −0.405R per trade (PHASE.9, n=200).
  */
-function RegimeHardGateCard({ counts24h }: { counts24h: Record<string, number> }) {
-  const [enabled,  setEnabled]  = useState<boolean | null>(null)
+// enabled and count7d are lifted to the parent (RegimeTab / SignalsCenterPage)
+// to avoid independent per-mount API calls. The toggle is local UI state only.
+function RegimeHardGateCard({ counts24h, enabled: enabledProp, count7d }: {
+  counts24h: Record<string, number>
+  enabled: boolean | null
+  count7d: number | null
+}) {
+  const [enabled,  setEnabled]  = useState<boolean | null>(enabledProp)
   const [patching, setPatching] = useState(false)
-  const [count7d,  setCount7d]  = useState<number | null>(null)
 
-  useEffect(() => {
-    adminApi.settings.group('features')
-      .then(res => {
-        const f = res.fields.find(f => f.key === 'regime_hard_gate_v2')
-        setEnabled(f ? Boolean(f.value) : false)
-      })
-      .catch(() => setEnabled(null))
-    adminApi.analytics.scans(168)
-      .then(res => setCount7d(res.gate_rejections?.['CONTRA_REGIME_REJECTION'] ?? 0))
-      .catch(() => setCount7d(null))
-  }, [])
+  // Sync prop changes (e.g. after parent re-polls) into local toggle state
+  useEffect(() => { setEnabled(enabledProp) }, [enabledProp])
 
   async function toggle() {
     if (enabled === null || patching) return
@@ -1997,10 +1998,12 @@ function RegimeHardGateCard({ counts24h }: { counts24h: Record<string, number> }
   )
 }
 
-function RegimeTab({ regime, scanStats, regimePerfData }: {
+function RegimeTab({ regime, scanStats, regimePerfData, regimeGateEnabled, scans7d }: {
   regime: RegimeData | null
   scanStats: ScanSummaryResponse | null
   regimePerfData: Record<string, unknown> | null
+  regimeGateEnabled: boolean | null
+  scans7d: ScanSummaryResponse | null
 }) {
   const [applying,     setApplying]     = useState(false)
   const [applyResult,  setApplyResult]  = useState<string|null>(null)
@@ -2129,7 +2132,11 @@ function RegimeTab({ regime, scanStats, regimePerfData }: {
         )}
 
         {/* REGIME.HARD.GATE.V2 */}
-        <RegimeHardGateCard counts24h={gateRejections} />
+        <RegimeHardGateCard
+          counts24h={gateRejections}
+          enabled={regimeGateEnabled}
+          count7d={scans7d?.gate_rejections?.['CONTRA_REGIME_REJECTION'] ?? null}
+        />
 
         {/* Apply Regime Settings */}
         <div className="glass-card rounded-xl p-4 flex items-start sm:items-center justify-between gap-4 flex-col sm:flex-row">
@@ -2211,16 +2218,19 @@ export default function SignalsCenterPage() {
     const [featRes,aiRes,teleRes] = await Promise.all([adminApi.settings.group('features'),adminApi.settings.group('ai'),adminApi.settings.group('telegram')])
     const field = (res: { fields: {key:string;value:unknown}[] }, k: string) => res.fields.find(f=>f.key===k)?.value
     return {
-      emergency_stop:   Boolean(field(featRes,'emergency_stop')),
-      maintenance_mode: Boolean(field(featRes,'maintenance_mode')),
-      telegram:         Boolean(field(teleRes,'alerts_enabled')),  // P0-NEW-01: was reading features.telegram (non-existent)
-      ai_validation:    Boolean(field(aiRes,'enabled')),
-      _aiEnabled:       Boolean(field(aiRes,'enabled')),
+      emergency_stop:       Boolean(field(featRes,'emergency_stop')),
+      maintenance_mode:     Boolean(field(featRes,'maintenance_mode')),
+      telegram:             Boolean(field(teleRes,'alerts_enabled')),  // P0-NEW-01: was reading features.telegram (non-existent)
+      ai_validation:        Boolean(field(aiRes,'enabled')),
+      _aiEnabled:           Boolean(field(aiRes,'enabled')),
+      regime_hard_gate_v2:  Boolean(field(featRes,'regime_hard_gate_v2')),
     }
   }, [])
   const scansFetcher      = useCallback(()=>adminApi.analytics.scans(24).catch(()=>null), [])
+  const scans7dFetcher    = useCallback(()=>adminApi.analytics.scans(168).catch(()=>null), [])
   const regimePerfFetcher = useCallback(()=>adminApi.analytics.regime(168).catch(()=>null), [])
   const trackRecordFetcher = useCallback(()=>adminApi.analytics.trackRecord().catch(()=>null), [])
+  const verifyFetcher     = useCallback(()=>adminApi.analytics.performanceVerification<VerifyData>().catch(()=>null), [])
 
   // REDIS.REDUCE.3: operational/real-time hooks stay 120s; analytics/cosmetic hooks raised to 300–600s
   const { data: celery,      refresh: refreshCelery  } = useSharedPolling<CeleryStatus|null>('trading:celery',      celeryFetcher,       120_000)
@@ -2230,10 +2240,12 @@ export default function SignalsCenterPage() {
   const { data: providers }                             = useSharedPolling<ProviderStatus[]> ('trading:providers',   provFetcher,         300_000) // provider health changes slowly
   const { data: recentFeed,   refresh: refreshFeed    } = useSharedPolling<{ signals: TacticalSignalRow[]; dbTotal: number|null }>('trading:tactical-feed',sigFetcher,       120_000)
   const recentSignals = recentFeed?.signals.slice(0, 6) ?? null
-  const { data: flagsData,  refresh: refreshFlags }     = useSharedPolling<{emergency_stop:boolean;maintenance_mode:boolean;telegram:boolean;ai_validation:boolean;_aiEnabled:boolean}|null>('trading:flags', flagsFetcher, 120_000)
+  const { data: flagsData,  refresh: refreshFlags }     = useSharedPolling<{emergency_stop:boolean;maintenance_mode:boolean;telegram:boolean;ai_validation:boolean;_aiEnabled:boolean;regime_hard_gate_v2:boolean}|null>('trading:flags', flagsFetcher, 120_000)
   const { data: scanStats }                             = useSharedPolling<ScanSummaryResponse|null>('trading:scans',scansFetcher,        120_000)
+  const { data: scans7d }                               = useSharedPolling<ScanSummaryResponse|null>('trading:scans-7d', scans7dFetcher,  600_000) // 7d gate data for RegimeHardGateCard
   const { data: regimePerfData }                        = useSharedPolling<Record<string,unknown>|null>('trading:regime-perf', regimePerfFetcher, 600_000) // analytics history
   const { data: trackRecord }                           = useSharedPolling<TrackRecordResponse|null>('trading:track-record',  trackRecordFetcher,  600_000)
+  const { data: verifyData }                            = useSharedPolling<VerifyData|null>('trading:verify', verifyFetcher, 300_000) // grade validation strip
 
   // ── Scanner countdown ──────────────────────────────────────────────────────
   const [countdown, setCountdown] = useState<number|null>(null)
@@ -2322,6 +2334,7 @@ export default function SignalsCenterPage() {
           scanMode={scanMode} onScanModeChange={setScanMode}
           onScanNow={handleScanNow} scanning={scanning} scanDone={scanDone} scanError={opError}
           onTogglePause={handlePause} pausing={pausing}
+          verifyData={verifyData??null}
         />
       )}
       {tab==='signals'  && <SignalsTab  currentRegime={currentRegime} />}
@@ -2330,6 +2343,8 @@ export default function SignalsCenterPage() {
           regime={regime??null}
           scanStats={scanStats??null}
           regimePerfData={regimePerfData??null}
+          regimeGateEnabled={flagsData?.regime_hard_gate_v2 ?? null}
+          scans7d={scans7d??null}
         />
       )}
     </div>

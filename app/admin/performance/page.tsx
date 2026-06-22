@@ -486,14 +486,16 @@ function EdgeValidationTab({ edge, loading, intel, intelLoading }: {
 
 // ─── Attribution tab ──────────────────────────────────────────────────────────
 
+// WrSparkBar expects win-rate on the 0–100 scale (e.g. 42.5 for 42.5%).
+// AttributionDimension.winRate is 0–1, so callers must pass d.winRate * 100.
 function WrSparkBar({ wr }: { wr: number | null | undefined }) {
   if (wr == null) return <span className="text-zinc-500/40">—</span>
-  const fill = Math.min(100, Math.max(0, wr * 100))
+  const fill = Math.min(100, Math.max(0, wr))
   const color = fill >= 55 ? 'bg-bull-default' : fill >= 45 ? 'bg-signal-high' : 'bg-bear-default'
   const textColor = fill >= 55 ? 'text-bull-default' : fill >= 45 ? 'text-signal-high' : 'text-bear-default'
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className={`font-mono ${textColor}`}>{pct(wr)}</span>
+      <span className={`font-mono ${textColor}`}>{wr.toFixed(1)}%</span>
       <span className="w-10 h-1.5 rounded-full bg-zinc-800/40 overflow-hidden shrink-0">
         <span className={`block h-full rounded-full ${color}`} style={{ width: `${fill}%` }} />
       </span>
@@ -524,7 +526,7 @@ function DimTable({ title, rows }: { title: string; rows: AttributionDimension[]
               <tr key={d.key} className="border-b border-zinc-800/30 hover:bg-zinc-700/10">
                 <td className="py-2 px-3 text-zinc-200 font-medium">{d.label}</td>
                 <td className="py-2 px-3 font-mono text-zinc-500">{d.total}</td>
-                <td className="py-2 px-3"><WrSparkBar wr={d.winRate} /></td>
+                <td className="py-2 px-3"><WrSparkBar wr={d.winRate != null ? d.winRate * 100 : null} /></td>
                 <td className="py-2 px-3 font-mono text-zinc-500 hidden sm:table-cell">{rr(d.avgRRAchieved)}</td>
                 <td className="py-2 px-3 font-mono hidden sm:table-cell">
                   {d.expectancy != null

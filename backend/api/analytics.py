@@ -154,7 +154,8 @@ async def track_record() -> dict[str, Any]:
                    count(*) FILTER (WHERE outcome='TP_HIT')  AS wins,
                    count(*) FILTER (WHERE outcome='SL_HIT')  AS losses,
                    count(*) FILTER (WHERE outcome='TIMEOUT') AS timeouts,
-                   round(avg(rr_achieved)::numeric, 4)       AS expectancy,
+                   round(avg(rr_achieved) FILTER (WHERE outcome='TP_HIT')::numeric, 4)                    AS avg_win,
+                   round(abs(avg(rr_achieved) FILTER (WHERE outcome IN ('SL_HIT','TIMEOUT')))::numeric, 4) AS avg_loss,
                    round((sum(rr_achieved) FILTER (WHERE rr_achieved > 0)
                      / NULLIF(abs(sum(rr_achieved) FILTER (WHERE rr_achieved < 0)), 0))::numeric, 4) AS pf
             FROM signal_outcomes
@@ -164,22 +165,51 @@ async def track_record() -> dict[str, Any]:
             days,
         )
         d = dict(row)
-        # PC-01/02: include TIMEOUT in denominator to match Edge tab (avoids WR inflation)
+        # PC-01: TIMEOUT counts as a loss — denominator is wins + losses + timeouts
         total = (d["wins"] or 0) + (d["losses"] or 0) + (d["timeouts"] or 0)
         d["win_rate"] = round((d["wins"] or 0) / total * 100, 2) if total else None
+        # PC-02: canonical expectancy = (WR × avgWin) − (lossRate × avgLoss)
+        if total:
+            win_rate  = (d["wins"] or 0) / total
+            loss_rate = 1.0 - win_rate
+            avg_win   = float(d["avg_win"])  if d["avg_win"]  is not None else 0.0
+            avg_loss  = float(d["avg_loss"]) if d["avg_loss"] is not None else 1.0
+            d["expectancy"] = round(win_rate * avg_win - loss_rate * avg_loss, 4)
+        else:
+            d["expectancy"] = None
+        d.pop("avg_win", None)
+        d.pop("avg_loss", None)
         return d
 
-    by_mode = await pool.fetch(
+    by_mode_rows = await pool.fetch(
         """
-        SELECT scanner_mode, count(*) AS n,
-               round(count(*) FILTER (WHERE outcome='TP_HIT')::numeric
-                 / NULLIF(count(*), 0) * 100, 1) AS wr,
-               round(avg(rr_achieved)::numeric, 3) AS exp
+        SELECT scanner_mode,
+               count(*)                                                AS n,
+               count(*) FILTER (WHERE outcome='TP_HIT')               AS wins,
+               count(*) FILTER (WHERE outcome IN ('SL_HIT','TIMEOUT')) AS losses,
+               round(avg(rr_achieved) FILTER (WHERE outcome='TP_HIT')::numeric, 4)                    AS avg_win,
+               round(abs(avg(rr_achieved) FILTER (WHERE outcome IN ('SL_HIT','TIMEOUT')))::numeric, 4) AS avg_loss
         FROM signal_outcomes
         WHERE outcome IN ('TP_HIT','SL_HIT','TIMEOUT') AND created_at > NOW() - INTERVAL '30 days'
         GROUP BY 1 ORDER BY 2 DESC
         """
     )
+    # PC-01+02: canonical WR and expectancy for each mode
+    by_mode = []
+    for r in by_mode_rows:
+        n      = int(r["n"])
+        wins   = int(r["wins"]   or 0)
+        losses = int(r["losses"] or 0)
+        wr     = round(wins / n * 100, 1) if n else None
+        if n:
+            win_rate  = wins / n
+            loss_rate = losses / n
+            avg_win   = float(r["avg_win"])  if r["avg_win"]  is not None else 0.0
+            avg_loss  = float(r["avg_loss"]) if r["avg_loss"] is not None else 1.0
+            exp = round(win_rate * avg_win - loss_rate * avg_loss, 3)
+        else:
+            exp = None
+        by_mode.append({"scanner_mode": r["scanner_mode"], "n": n, "wr": wr, "exp": exp})
 
     # Probability accuracy — stamped prediction vs realized outcome (signals
     # carrying empirical_wr that have since resolved)
@@ -198,7 +228,7 @@ async def track_record() -> dict[str, Any]:
 
     return {
         "windows": {"d7": await _window(7), "d30": await _window(30), "d90": await _window(90)},
-        "by_mode_30d": [dict(r) for r in by_mode],
+        "by_mode_30d": by_mode,
         "probability_accuracy": dict(acc) if acc else None,
         "source": "signal_outcomes (database-derived; no manual adjustments)",
     }
