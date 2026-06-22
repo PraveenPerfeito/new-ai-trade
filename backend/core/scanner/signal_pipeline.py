@@ -1163,6 +1163,31 @@ async def scan_coin(
             confidence_penalty = round(confidence_penalty * 0.7)
         adjusted_confidence = max(ai.confidence - confidence_penalty, 0)
 
+        # SIGNAL.QUALITY.4: Setup-score ceiling on raw AI confidence.
+        # Prevents Claude overrating borderline setups (pre_score 78–86) into the
+        # 90-94 band on FUTURES/TRENDING where the spot-only caps don't apply.
+        # Data: 90-94 band WR=31.4% vs 85-89 WR=42.1% (CONFIDENCE.CALIBRATION.2).
+        # HIGH_MOMENTUM_BREAKOUT (WR 81.8%) is exempt — its edge justifies 90+.
+        if setup.breakout_strength != "HIGH_MOMENTUM_BREAKOUT":
+            if setup.pre_score < 83 and adjusted_confidence > 87:
+                log.info(
+                    "setup_score_confidence_cap",
+                    symbol=coin.symbol,
+                    pre_score=setup.pre_score,
+                    original=adjusted_confidence,
+                    capped=87,
+                )
+                adjusted_confidence = 87
+            elif setup.pre_score < 87 and adjusted_confidence > 89:
+                log.info(
+                    "setup_score_confidence_cap",
+                    symbol=coin.symbol,
+                    pre_score=setup.pre_score,
+                    original=adjusted_confidence,
+                    capped=89,
+                )
+                adjusted_confidence = 89
+
         # SIGNAL.FACTOR.1: Intelligence-driven confidence boosts (resolved outcome data).
         # Applied after penalty so the net is fair; clamped to 100.
         # OI_NEUTRAL / STABLE_funding / HIGH_MOMENTUM_BREAKOUT / 20d_low are futures-only

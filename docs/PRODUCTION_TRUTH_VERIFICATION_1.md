@@ -172,3 +172,146 @@ Phase E (Redis key audit) and Phase I (end-to-end scan-to-Telegram trace) agents
 ---
 
 *Audit completed: 2026-06-19 · 7 agents · 9 phases attempted · 7 phases completed · 64 findings*
+
+---
+
+## SECOND PASS ADDENDUM — 2026-06-22
+
+**Method:** 4 parallel agents re-audited phases A, E, F+G, H with full file reads. All 9 phases now complete.  
+**New findings:** 32 additional bugs (4 new P0, 14 new P1, 14 new P2) beyond the June 19 report.
+
+### New P0 Findings
+
+#### P0-NEW-01 · `flags.telegram` always `false` — SystemStatusBanner permanently shows "TELEGRAM OFF"
+
+**Files:** `app/admin/signals/page.tsx:2208–2218`
+
+`flagsFetcher` in `signals/page.tsx` fetches only the `features` group and reads `field(featRes, 'telegram')`. The `features` group has no `telegram` key — that key lives in `telegram.alerts_enabled`. The field lookup returns `undefined` → `Boolean(undefined) = false` → `flags.telegram` is permanently `false`. The SystemStatusBanner always displays "TELEGRAM OFF" regardless of actual state.
+
+**Context:** H-02 (fixed in `57e9cea`) corrected `features.ai_validation` → `ai.enabled` for the AI banner. That same fix was NOT applied to the Telegram banner. The same pattern broke in both places.
+
+**Fix (5 min):** In `flagsFetcher`, add `adminApi.settings.group('telegram')` to the Promise.all, then read `field(teleRes, 'alerts_enabled')` for `flags.telegram`. The correct implementation is already in `system/page.tsx:sysFlagsFetcher`.
+
+---
+
+#### P0-NEW-02 · LifecycleFunnel "Generated" count is capped at `limit=200`, not the true DB total
+
+**Files:** `app/admin/signals/page.tsx:1287,1683–1714`
+
+Funnel "Generated" = number of signals returned by the tactical feed (capped at `limit=200`). When there are 300+ signals in the 7-day window, the funnel shows "Generated = 200" and all downstream conversion rates are wrong. The true DB total (`dbTotal`) is available in the API response but is never passed to `LifecycleFunnel`.
+
+**Fix (15 min):** Pass `dbTotal` as a prop to `LifecycleFunnel` and use it for the "Generated" step.
+
+---
+
+#### P0-NEW-03 · LifecycleFunnel double-counts `TELEGRAM_SENT` — Active > Sent paradox
+
+**Files:** `app/admin/signals/page.tsx:1697`
+
+`TELEGRAM_SENT` signals are counted in both the `sent` funnel step and the `active` funnel step. This makes Active > Sent mathematically possible, producing >100% conversion in the funnel display.
+
+**Fix (5 min):** Remove `s.lifecycleStage === 'TELEGRAM_SENT'` from the `active` filter in `LifecycleFunnel`. `TELEGRAM_SENT` is already in `sentStages`.
+
+---
+
+#### P0-NEW-04 · Tactical route outcome map non-deterministic — resolved signals may appear ACTIVE
+
+**Files:** `app/api/signals/tactical/route.ts:43–59`
+
+The outcome fetch has no `ORDER BY` and no `.neq('outcome', 'PENDING')` filter. If a signal has both a PENDING row and a TP_HIT row in `signal_outcomes`, the `outcomeMap.set(signal_id, row)` loop keeps whichever row DB returns last. Row order is undefined without `ORDER BY`. A resolved signal shows as ACTIVE intermittently depending on Postgres execution plan.
+
+**Fix (5 min):** Add `.neq('outcome', 'PENDING')` to the outcome query. If a signal has no non-PENDING row, it correctly gets no outcome → ACTIVE/SCREENED/etc.
+
+---
+
+### New P1 Findings — Signal Counts (Phase A)
+
+| ID | Title | File | Fix |
+|----|-------|------|-----|
+| SIGCNT-A1 | `signals_today` is rolling 24h window labeled "Today" — does not reset at midnight, drifts throughout day | `api/signals/counts/route.ts:20–25` | Rename label to "Last 24h" or change to calendar-day query |
+| SIGCNT-A2 | Active preset badge counts use unfiltered `signals` array — ignore `modeFilter`, `typeFilter`, `gradeFilter`. Badge shows "Active (47)" but list shows 8 results after mode filter. | `signals/page.tsx:1324–1328` | Compute counts from post-filter `filtered` array |
+| SIGCNT-A3 | Mode filter is client-side only. API is called without `mode` param. With >200 signals in 7d, filtered results from signals #201+ are silently absent. | `signals/page.tsx`, `api/signals/tactical/route.ts` | Pass mode/type/grade as API query params |
+| SIGCNT-A4 | Pagination footer "N of M in last 7d" — M is unfiltered DB count. With mode filter active: "5 of 847" → user thinks 842 results are hidden. | `signals/page.tsx:1494–1497` | Show "5 matched · 847 total (unfiltered)" |
+| SIGCNT-A5 | AI/Screened funnel chips use `validationSource === 'CLAUDE' \|\| lifecycleStage === 'AI_APPROVED'` — can double-count signals that match both conditions | `signals/page.tsx:1691–1692` | Use `lifecycleStage === 'AI_APPROVED'` and `=== 'SCREENED'` only |
+| SIGCNT-A6 | "Sent" defined differently in 3 places: preset `['TELEGRAM_SENT']`, OverviewTab broadens to include ACTIVE/STALE/TP_HIT/SL_HIT, LifecycleFunnel uses union. Three "sent" counts on same page. | `signals/page.tsx:1140,1274–1280,1695–1696` | Standardise to `telegramSent === true` everywhere |
+
+---
+
+### New P1 Findings — Dashboard Wiring (Phase E)
+
+| ID | Title | File | Fix |
+|----|-------|------|-----|
+| DASH-E1 | `adminApi.scheduler.status()` return type missing `next_scan_at`, `is_overdue`, `last_scan_age_seconds` — Scanner tab "Next Scan" countdown and "Overdue" indicator always show `—` / `false` | `lib/admin-api.ts` | Extend return type with three optional fields |
+| DASH-E2 | `AlphaWatchlist` uses raw `fetch('/api/signals/watchlist')` outside `adminApi`; `.catch(() => [])` swallows all errors (401, 404, network) — silent empty list | `signals/page.tsx:AlphaWatchlist` | Add `adminApi.signals.watchlist()` typed method; surface errors |
+| DASH-E3 | `WrSparkBar` expects win_rate as 0–1 (multiplies by 100); `TrackRecordTab` expects 0–100 (appends `%`). `AttributionDimension.winRate` — one consumer is always wrong. | `performance/page.tsx`, `types/index.ts` | Check backend scale; normalize and document in the type |
+| DASH-E4 | `DimTable` calls `rows.length` without null guard — throws `TypeError` if a dimension key is absent from the attribution response | `performance/page.tsx:DimTable` | Change `if (!rows.length)` to `if (!rows?.length)` |
+| DASH-E5 | `RegimeHardGateCard` and `GradeValidationStrip` bypass shared polling, fire `useEffect` on every tab mount — duplicate API calls outside the 120s polling budget | `signals/page.tsx` | Lift to parent page polling registry or increase intervals |
+
+---
+
+### New P1 Findings — API Consistency (Phase F)
+
+| ID | Title | File | Fix |
+|----|-------|------|-----|
+| APIC-F1 | (Confirms FG-05 with root cause) Three `/api/signals/counts`, `monitoring.py`, `analytics.py` compute win_rate with different TIMEOUT inclusion — max divergence ≥15pp | See above FG-05 | Delegate all three to `expectancy.py:compute_stats()` |
+| APIC-F2 | Tactical route `dbTotal` counts signals with only `minConfidence` applied — when type/mode filters are active, pagination "of N" refers to unfiltered DB count | `api/signals/tactical/route.ts:24–32` | Rename `dbTotal` → `dbTotalUnfiltered` in response and update UI label |
+| APIC-F3 | Tactical route outcome fetch failure returns HTTP 200 with empty outcome map — all lifecycle stages silently show as ACTIVE. No way to detect from response. | `api/signals/tactical/route.ts:57–59` | Add `outcomesError: boolean` to response; show stale-data warning in UI |
+
+---
+
+### New P1 Findings — Redis Consistency (Phase G)
+
+| ID | Title | File | Fix |
+|----|-------|------|-----|
+| REDIS-G1 | `telegram_sends_per_day` counter is Redis-only. Returns 0 on quota exhaustion — monitoring shows "0 Telegram sends" precisely when you most need to see it. No DB fallback. | `monitoring.py:108–109` | Add DB fallback: `SELECT COUNT(*) FROM signals WHERE telegram_sent AND created_at > NOW() - INTERVAL '24h'` |
+| REDIS-G2 | `binance_errors_per_day` is Redis-only. Anomaly detection `if binance_errs >= 15` silently stops working during Redis outage — the exact scenario most likely to coincide with Binance errors. | `monitoring.py:111,234,389` | Accept limitation; add warning log when counter returns 0 after a scan |
+
+---
+
+### New P2 Findings
+
+| ID | Title | File |
+|----|-------|------|
+| P2-N01 | `VALIDATED` stage unreachable by design but in `STAGE_META`, `STAGE_TIPS`, `tacticalQuerySchema`, `isTerminalStage` (also noted as PCT-03) | `lib/signal-lifecycle.ts`, `lib/validate.ts`, `signals/page.tsx` |
+| P2-N02 | `ANALYZED` stage: `computeLifecycleStage()` never returns it but in `isTerminalStage()`, `STAGE_META`, `STAGE_TIPS`, schema enum — always 0 results | same files |
+| P2-N03 | `adminApi.analytics.regime()` typed as `Record<string,unknown>` — double `as` cast hides backend field rename risk | `lib/admin-api.ts` |
+| P2-N04 | `/api/analytics/attribution` not in `adminApi` — raw fetch with silent error swallow on non-200 response | `performance/page.tsx`, `lib/admin-api.ts` |
+| P2-N05 | `ai?.verdicts ?? ai?.verdict_distribution` dual-key fallback in AttributionTab — masks which field name backend actually returns | `performance/page.tsx` |
+| P2-N06 | `intel:quota:used` billing-cycle reset: after counter resets to 0, prior-month snapshots cause `cmc_credits_per_day = 0` for first 7 days of each billing month | `monitoring.py:249–279` |
+| P2-N07 | `_initialized_keys` set in `monitoring.py` never prunes — grows ~5 entries/day indefinitely in long-running worker | `monitoring.py:43–55` |
+| P2-N08 | `signals_cache` TTL = 30s; dashboard polling interval = 60–120s — every second poll is a cache miss, defeating the cache purpose | `backend/cache/redis_cache.py:147` |
+| P2-N09 | SystemPage provider health fetch is raw `fetch()` outside `adminApi` — errors silently produce empty provider list | `system/page.tsx` |
+| P2-N10 | `MonitorRow` calls `.toLocaleString()` on metric value without null guard — renders "NaN" if any counter is NULL on first day of deployment | `system/page.tsx:MonitorRow` |
+| P2-N11 | `PipelineIntegrityCard` hardcodes `"12"` in gate coverage display — stale when a gate is added to `PIPELINE_CANON_KEYS` | `system/page.tsx` |
+| P2-N12 | `GradeValidationStrip` has its own unshared 300s poll — fires on every signals page mount outside the shared polling registry | `signals/page.tsx:442–443` |
+| P2-N13 | `AlphaWatchlist` polls at 120s even when section is collapsed and invisible | `signals/page.tsx:AlphaWatchlist` |
+| P2-N14 | All `SignalsTab` filter/sort state lost on tab navigation — remount resets to defaults silently | `signals/page.tsx:2329` |
+
+---
+
+### Updated Open P1 Backlog — Priority Order (post-second-pass)
+
+1. **P0-NEW-01** — Fix `flags.telegram` → read `telegram.alerts_enabled` (5 min, eliminates false TELEGRAM OFF banner)
+2. **P0-NEW-04** — Add `.neq('outcome','PENDING')` to tactical outcome query (5 min, fixes intermittent resolved→ACTIVE)
+3. **P0-NEW-03** — Remove TELEGRAM_SENT from LifecycleFunnel `active` filter (5 min, eliminates Active > Sent paradox)
+4. **P0-NEW-02** — Pass `dbTotal` to LifecycleFunnel as "Generated" (15 min, funnel conversion rates become meaningful)
+5. **SIGCNT-A2** — Compute preset badge counts from filtered array (30 min, badge N matches list length)
+6. **APIC-F3** — Add `outcomesError` to tactical response (15 min, operators know when lifecycle data is stale)
+7. **PC-01/PC-02** — Align Track Record WR formula with Edge tab (1 hr, three surfaces show same win rate)
+8. **REDIS-G1** — Add DB fallback for telegram_sends_per_day (1 hr, monitoring survives Redis quota exhaustion)
+9. **DASH-E1** — Extend `adminApi.scheduler.status()` return type (15 min, next-scan countdown renders)
+10. **DASH-E4** — Null guard in `DimTable.rows.length` (5 min, prevents Attribution tab crash)
+
+---
+
+### Documentation Gaps (new)
+
+| ID | Issue | File |
+|----|-------|------|
+| DOC-01 | `DEPLOYMENT.md` Step 5d and Step 6b placeholder `REDIS_URL` still shows `...upstash.io:6379` — wrong host format for Redis Cloud (should be `...db.redis.io:<port>`) | `DEPLOYMENT.md:176,230` |
+| DOC-02 | `README.md` local dev section lists only 5 migration files; `DEPLOYMENT.md` lists 21. A developer following README misses 16 required migrations. | `README.md:174–177` |
+| DOC-03 | `API_REFERENCE.md` local URLs table references pages consolidated in ADMIN.CONSOLIDATION.1 (`/admin/scanner`, `/admin/calibration`, `/admin/anomalies`, etc.) | `API_REFERENCE.md:12–19` |
+
+---
+
+*Second pass completed: 2026-06-22 · 4 agents · phases A, E, F+G, H re-audited · 32 additional findings*

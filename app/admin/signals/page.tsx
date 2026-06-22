@@ -2219,19 +2219,20 @@ export default function SignalsCenterPage() {
   const regimePerfFetcher  = useCallback(()=>adminApi.analytics.regime(168).catch(()=>null), [])
   const trackRecordFetcher = useCallback(()=>adminApi.analytics.trackRecord().catch(()=>null), [])
 
+  // REDIS.REDUCE.3: operational/real-time hooks stay 120s; analytics/cosmetic hooks raised to 300–600s
   const { data: celery,      refresh: refreshCelery  } = useSharedPolling<CeleryStatus|null>('trading:celery',      celeryFetcher,       120_000)
   const { data: regime }                                = useSharedPolling<RegimeData|null>  ('trading:regime',      regimeFetcher,       120_000)
   const { data: signalCounts,  refresh: refreshCounts  } = useSharedPolling<SignalCounts|null>('trading:counts',      countsFetcher,       120_000)
-  const { data: cache }                                 = useSharedPolling<CacheTelemetry|null>('trading:cache',     cacheFetcher,        120_000)
-  const { data: providers }                             = useSharedPolling<ProviderStatus[]> ('trading:providers',   provFetcher,         120_000)
+  const { data: cache }                                 = useSharedPolling<CacheTelemetry|null>('trading:cache',     cacheFetcher,        600_000) // cosmetic
+  const { data: providers }                             = useSharedPolling<ProviderStatus[]> ('trading:providers',   provFetcher,         300_000) // provider health changes slowly
   const { data: recentFeed,   refresh: refreshFeed    } = useSharedPolling<{ signals: TacticalSignalRow[]; dbTotal: number|null }>('trading:tactical-feed',sigFetcher,       120_000)
   const recentSignals = recentFeed?.signals.slice(0, 6) ?? null
   const { data: flagsData,  refresh: refreshFlags }     = useSharedPolling<{emergency_stop:boolean;maintenance_mode:boolean;telegram:boolean;ai_validation:boolean;_aiEnabled:boolean}|null>('trading:flags', flagsFetcher, 120_000)
   const { data: scanStats }                             = useSharedPolling<ScanSummaryResponse|null>('trading:scans',scansFetcher,        120_000)
-  const { data: auditEntries }                          = useSharedPolling<AuditEntry[]|null>('trading:audit',       auditFetcher,        120_000)
-  const { data: healthReady }                           = useSharedPolling<HealthReady|null> ('trading:health-ready',healthReadyFetcher,  120_000)
-  const { data: regimePerfData }                        = useSharedPolling<Record<string,unknown>|null>('trading:regime-perf', regimePerfFetcher, 120_000)
-  const { data: trackRecord }                           = useSharedPolling<TrackRecordResponse|null>('trading:track-record',  trackRecordFetcher,  300_000)
+  const { data: auditEntries }                          = useSharedPolling<AuditEntry[]|null>('trading:audit',       auditFetcher,        600_000) // audit log rarely changes
+  const { data: healthReady }                           = useSharedPolling<HealthReady|null> ('trading:health-ready',healthReadyFetcher,  300_000) // health check 5-min is fine
+  const { data: regimePerfData }                        = useSharedPolling<Record<string,unknown>|null>('trading:regime-perf', regimePerfFetcher, 600_000) // analytics history
+  const { data: trackRecord }                           = useSharedPolling<TrackRecordResponse|null>('trading:track-record',  trackRecordFetcher,  600_000)
 
   // ── Scanner countdown ──────────────────────────────────────────────────────
   const [countdown, setCountdown] = useState<number|null>(null)

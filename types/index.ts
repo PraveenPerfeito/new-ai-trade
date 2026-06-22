@@ -565,8 +565,6 @@ export interface AppUser {
   id:                    string;
   email:                 string;
   planId:                PlanId;
-  stripeCustomerId?:     string;
-  stripeSubscriptionId?: string;
   subscriptionStatus:    'active' | 'trialing' | 'past_due' | 'canceled' | 'none';
   planExpiresAt?:        Date;
   createdAt:             Date;

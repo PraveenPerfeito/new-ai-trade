@@ -1381,9 +1381,10 @@ export default function PerformancePage() {
   const intelFetcher = useCallback(() => adminApi.analytics.intelligence(), [])
   const aiFetcher    = useCallback(() => adminApi.analytics.ai(24), [])
 
-  const { data: edge,   loading: edgeLoading  } = useAutoRefresh<EdgeReport>(edgeFetcher, 120_000)
-  const { data: intel,  loading: intelLoading } = useAutoRefresh<IntelligenceSummary>(intelFetcher, 120_000)
-  const { data: aiData, loading: aiLoading    } = useAutoRefresh<import('@/lib/admin-api').AiSummaryResponse>(aiFetcher, 120_000)
+  // REDIS.REDUCE.3: analytics data changes on hourly timescales — 300s is fine
+  const { data: edge,   loading: edgeLoading  } = useAutoRefresh<EdgeReport>(edgeFetcher, 300_000)
+  const { data: intel,  loading: intelLoading } = useAutoRefresh<IntelligenceSummary>(intelFetcher, 300_000)
+  const { data: aiData, loading: aiLoading    } = useAutoRefresh<import('@/lib/admin-api').AiSummaryResponse>(aiFetcher, 300_000)
 
   const attrFetcher = useCallback(() =>
     fetch('/api/analytics/attribution?hours=720', { cache: 'no-store' })

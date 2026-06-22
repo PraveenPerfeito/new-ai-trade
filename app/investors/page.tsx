@@ -44,7 +44,7 @@ const INFRA_PILLARS = [
 
 const ROADMAP = [
   { phase: 'Q2 2026', title: 'Platform Foundation', status: 'done', items: ['Quantitative signal pipeline', 'Admin Command Center', 'Telegram alert delivery', 'Supabase auth + RLS', 'Public landing experience'] },
-  { phase: 'Q3 2026', title: 'SaaS Commercialization', status: 'active', items: ['Subscription tiers (Free / Pro / Institutional)', 'Stripe billing integration', 'Premium subscriber dashboard', 'Signal API with webhook delivery', 'Performance transparency pages'] },
+  { phase: 'Q3 2026', title: 'SaaS Commercialization', status: 'active', items: ['Subscription tiers (Free / Pro / Institutional)', 'Subscription billing (future phase)', 'Premium subscriber dashboard', 'Signal API with webhook delivery', 'Performance transparency pages'] },
   { phase: 'Q4 2026', title: 'Intelligence Expansion', status: 'planned', items: ['On-chain data integration (DeFi, whale wallets)', 'Sentiment layer (news, social volume)', 'Portfolio correlation & regime analytics', 'Custom model fine-tuning for institutional', 'Mobile-first PWA'] },
   { phase: '2027', title: 'Institutional & White-Label', status: 'planned', items: ['White-label signal feeds for funds', 'Multi-asset coverage (forex, equities)', 'Co-location signal delivery SLA', 'Institutional API partner program', 'Regulatory compliance framework'] },
 ]

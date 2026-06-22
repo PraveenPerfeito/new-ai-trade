@@ -17,7 +17,7 @@ router = APIRouter(tags=["health"])
 # Caching the result for 90s means every other probe hits this dict instead
 # of Redis+Postgres+Binance, halving the per-probe Redis ops (~43K ops/month
 # saved).  The result is still fresh enough for operational awareness.
-_HEALTH_CACHE_TTL = 90.0
+_HEALTH_CACHE_TTL = 300.0  # REDIS.REDUCE.3: 5 min — Railway probes ~60s; saves 4/5 of health-check Redis pings
 _health_cache: dict = {"data": None, "status_code": 200, "ts": 0.0}
 
 

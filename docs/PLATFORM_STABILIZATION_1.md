@@ -125,7 +125,7 @@ Full audit across 10 domains (Scanner, Signal Quality, Probability Engine, Redis
 ### P1-03 — `scheduler:enabled` has no TTL — orphan key on full redeploy
 **Classification:** FIX · **Status:** ✅ Fixed (2026-06-19 — SIGNAL_ENGINE_TRUTH_1 pass)  
 **Domain:** Redis  
-**Impact:** `coordinator.py` writes `scheduler:enabled` with SET (no TTL) when enable()/disable() is called. If the Redis instance is wiped and the key is lost, `is_enabled()` returns True (fail-open) which is correct. But if a deployment resets the Upstash instance, the key persists across instances. More importantly: the key accumulates indefinitely with no expiry. This is intentional for toggle-state persistence, but a 90-day safety TTL would self-clean zombie keys after major redeployments.  
+**Impact:** `coordinator.py` writes `scheduler:enabled` with SET (no TTL) when enable()/disable() is called. If the Redis instance is wiped and the key is lost, `is_enabled()` returns True (fail-open) which is correct. But if a deployment resets the Redis Cloud instance, the key persists across instances. More importantly: the key accumulates indefinitely with no expiry. This is intentional for toggle-state persistence, but a 90-day safety TTL would self-clean zombie keys after major redeployments.  
 **Risk:** Low (operational) / Medium (ops hygiene)  
 **Effort:** Low  
 **Files:** `backend/scheduler/coordinator.py` — `enable()` / `disable()`  
@@ -149,7 +149,7 @@ Full audit across 10 domains (Scanner, Signal Quality, Probability Engine, Redis
 ### P2-01 — `providers:metrics` Redis hashes/lists have no TTL
 **Classification:** FIX · **Status:** ✅ Fixed (2026-06-19)  
 **Domain:** Redis  
-**Impact:** Six provider metric hash keys (`providers:metrics:{name}:meta`, `:latency`, `:errors`) have no TTL. They are bounded in size (latency/errors lists LTRIM'd to 100 entries) but the keys themselves persist forever. On decommission or provider removal, these keys accumulate in Upstash indefinitely.  
+**Impact:** Six provider metric hash keys (`providers:metrics:{name}:meta`, `:latency`, `:errors`) have no TTL. They are bounded in size (latency/errors lists LTRIM'd to 100 entries) but the keys themselves persist forever. On decommission or provider removal, these keys accumulate in Redis Cloud indefinitely.  
 **Risk:** Low  
 **Effort:** Low  
 **Files:** `lib/market-data/metrics.ts` (TypeScript writes), `backend/core/scanner/market_fetcher.py` (Binance writes)  
@@ -265,12 +265,12 @@ Full audit across 10 domains (Scanner, Signal Quality, Probability Engine, Redis
 
 After applying remaining P1–P2 fixes, verify:
 
-- [ ] `scheduler:enabled` key has TTL visible in Upstash key browser
+- [ ] `scheduler:enabled` key has TTL visible in Redis Cloud console
 - [ ] `providers:metrics:coinmarketcap:meta` — confirm `requestsToday` increments on CMC calls (not the now-removed quota hash)
 - [ ] System → Health tab shows TelegramDeliveryCard with delivery rate ≥ 0
 - [ ] After Vercel cold start: `/api/intelligence/cron/categories` fires within 30min; sector_status fields populate
 - [ ] AVAX SELL / DOGE SELL (heuristic, adjusted confidence 81–85) reach Telegram within next 2 scan cycles
-- [ ] `monitor:{today}:binance_errors` increments when a Binance kline fetch fails (verify in Upstash)
+- [ ] `monitor:{today}:binance_errors` increments when a Binance kline fetch fails (verify in Redis Cloud console)
 - [ ] Binance error anomaly threshold fires at ≥15 errors/day (visible in System → Health → anomalies)
 - [ ] System → Settings → Feature Flags: `probability_gate_expectancy_filter` phantom card is gone
 - [ ] Signals showing heuristic validation show SCREENED (sky-400), not AI_APPROVED (purple)

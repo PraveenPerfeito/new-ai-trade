@@ -37,9 +37,9 @@ log = get_logger(__name__)
 
 T = TypeVar('T', bound=BaseSettingsGroup)
 
-_MEM_TTL            = 60       # seconds (was 30 — settings change rarely; 60s cuts refresh ops by half)
+_MEM_TTL            = 300      # REDIS.REDUCE.3: 5 min — settings change rarely; Celery long-lived process benefits most
 _REDIS_TTL          = 3_600    # 1 hour
-_GEN_CHECK_INTERVAL = 120.0    # seconds between generation counter checks (R3 OPS.CONSOLIDATION.1: was 60.0)
+_GEN_CHECK_INTERVAL = 600.0    # REDIS.REDUCE.3: 10 min between generation counter checks (was 120s)
 
 
 # ── Cache entry ───────────────────────────────────────────────────────────────
@@ -434,13 +434,23 @@ class SettingsService:
                     "SELECT * FROM settings_group_audit ORDER BY updated_at DESC LIMIT $1",
                     limit,
                 )
+            def _parse_cf(v: object) -> dict:
+                # asyncpg returns jsonb as a raw JSON string; parse it so the
+                # client receives an object, not a character-iterable string.
+                if isinstance(v, str):
+                    try:
+                        return json.loads(v)
+                    except Exception:
+                        return {}
+                return v if isinstance(v, dict) else {}
+
             return [
                 {
                     "id":             row["id"],
                     "group_name":     row["group_name"],
                     "old_version":    row["old_version"],
                     "new_version":    row["new_version"],
-                    "changed_fields": row["changed_fields"],
+                    "changed_fields": _parse_cf(row["changed_fields"]),
                     "schema_version": row["schema_version"],
                     "updated_by":     row["updated_by"],
                     "updated_at":     row["updated_at"].isoformat()

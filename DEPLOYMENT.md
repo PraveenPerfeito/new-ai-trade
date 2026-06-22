@@ -1,6 +1,6 @@
 # Deployment Guide
 
-Production stack: **Vercel** (Next.js) · **Railway** (FastAPI + Celery worker) · **Upstash** (Redis) · **Supabase** (Postgres + Auth) · **Anthropic** (Claude Haiku) · **CoinMarketCap** (coin data)
+Production stack: **Vercel** (Next.js) · **Railway** (FastAPI + Celery worker) · **Redis Cloud** (Redis) · **Supabase** (Postgres + Auth) · **Anthropic** (Claude Haiku) · **CoinMarketCap** (coin data)
 
 ---
 
@@ -10,10 +10,10 @@ Production stack: **Vercel** (Next.js) · **Railway** (FastAPI + Celery worker) 
 Browser
   └─▶ Vercel  (Next.js 14 · App Router · Edge middleware)
         ├─▶ Supabase  (Auth + Postgres)
-        ├─▶ Upstash Redis  (intelligence cache · scheduler · rate limit)
+        ├─▶ Redis Cloud  (intelligence cache · scheduler · rate limit)
         └─▶ Railway Web Service — FastAPI :PORT
               ├─▶ Supabase Postgres  (direct asyncpg, Transaction Pooler port 6543)
-              ├─▶ Upstash Redis  (same instance)
+              ├─▶ Redis Cloud  (same instance)
               └─▶ Railway Background Worker — Celery + Beat
                     ├─▶ Binance API  (spot + futures klines)
                     ├─▶ CoinMarketCap API  (200 coins, primary)
@@ -30,7 +30,7 @@ Browser
 | **Vercel** | Next.js hosting + CDN | Free tier: 100 GB bandwidth, unlimited deploys |
 | **Railway** | FastAPI + Celery worker | Separate services from same Dockerfile |
 | **Supabase** | Postgres + Auth | Use Transaction Pooler URL (port 6543) for Railway |
-| **Upstash** | Redis (`rediss://`) | Use Singapore region if Railway is Singapore |
+| **Redis Cloud** | Redis (`rediss://`) | Free tier: 30 MB storage, zero command billing |
 | **Anthropic** | Claude Haiku AI | Toggle on/off from Admin → System → Settings → Quick Controls to save credits |
 | **CoinMarketCap** | 200 coins per scan | Startup Plan: 10,000 credits/month |
 
@@ -94,18 +94,21 @@ From **Settings → API**:
 
 ---
 
-## Step 2 — Upstash Redis
+## Step 2 — Redis Cloud (free tier)
 
-1. Go to [upstash.com](https://upstash.com) → **New Database**
-2. Name: `crypto-scanner`, type: **Redis**
-3. Region: same as your Railway region (e.g. Singapore `ap-southeast-1`)
-4. Copy the **Redis URL** — starts with `rediss://`
+1. Go to [redis.io/try-free](https://redis.io/try-free) → **Get started free**
+2. Create a subscription → **Free** plan (30 MB, zero command billing)
+3. Create a database — any name (e.g. `new-ai`)
+4. Click the database → **Connect** → copy the public endpoint + password
+5. Construct the URL:
 
 ```
-rediss://default:<password>@<host>.upstash.io:6379
+rediss://default:<password>@<host>.db.redis.io:<port>
 ```
 
 This single URL is used by **all services** (Vercel, Railway API, Railway Worker).
+
+> **Why Redis Cloud instead of Upstash?** Upstash bills per command (~$0.20/100K ops). Redis Cloud free tier bills by storage only — command count is unlimited. This app uses ~50K commands/day at peak, which costs $0 on Redis Cloud vs ~$3/month on Upstash.
 
 ---
 
@@ -304,7 +307,7 @@ curl -X POST https://your-app.vercel.app/api/scanner/run \
 | FastAPI logs | Railway → API service → Logs |
 | Celery scan logs | Railway → Worker service → Logs |
 | Next.js logs | Vercel → project → Deployments → Functions |
-| Redis usage | Upstash → database → Metrics |
+| Redis usage | Redis Cloud console → your database → Metrics |
 | DB tables | Supabase → Table Editor → `signals` |
 | Admin dashboard | `/admin/signals` |
 | Scanner control | `/admin/system?tab=health` |

@@ -37,7 +37,7 @@ cd simulation-engine/new-ai-trade
 | Field | Where to get it |
 |-------|----------------|
 | `DATABASE_URL` | Supabase → Settings → Database → Transaction Pooler URI (port 6543) |
-| `REDIS_URL` | Upstash dashboard → copy the `rediss://` URL |
+| `REDIS_URL` | Redis Cloud console → connect → copy the `rediss://` URL |
 | `COINMARKETCAP_API_KEY` | coinmarketcap.com → API Keys → Startup Plan key |
 | `ADMIN_EMAILS` | Your Supabase Auth user email |
 | `ADMIN_SECRET` | Run `openssl rand -hex 32` |
@@ -156,8 +156,8 @@ SUPABASE_SERVICE_ROLE_KEY=<service role key>
 # Database — Transaction Pooler (port 6543, not 5432)
 DATABASE_URL=postgresql://postgres.<project>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres
 
-# Redis — Upstash
-REDIS_URL=rediss://default:<password>@<host>.upstash.io:6379
+# Redis — Redis Cloud (free tier: redis.io/try-free)
+REDIS_URL=rediss://default:<password>@<host>.db.redis.io:<port>
 
 # Admin auth — REQUIRED
 ADMIN_EMAILS=your@email.com

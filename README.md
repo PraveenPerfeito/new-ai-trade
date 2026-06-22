@@ -2,7 +2,7 @@
 
 AI-powered cryptocurrency trading signal scanner. Scans a cached large-cap and mid-cap universe, applies an 11-gate quality pipeline with advanced technical analysis, and surfaces high-probability setups via a glassmorphism admin dashboard and Telegram alerts.
 
-**Stack:** Next.js 14 · TypeScript · FastAPI (Python 3.12) · Supabase · Upstash Redis · Claude Haiku · Binance API · CoinMarketCap · Railway
+**Stack:** Next.js 14 · TypeScript · FastAPI (Python 3.12) · Supabase · Redis Cloud · Claude Haiku · Binance API · CoinMarketCap · Railway
 
 ---
 
@@ -95,7 +95,7 @@ Sidebar groups: **TRADING DESK** (Overview/Signals/Tactical/Settings) · **MARKE
 | Frontend | Next.js 14 (App Router) · TypeScript 5 · React 18 · Tailwind CSS |
 | Backend | FastAPI + Uvicorn · Python 3.12 · asyncio · Pydantic v2 |
 | Task queue | Celery 5 + Celery Beat |
-| Cache / pub-sub | Upstash Redis (`rediss://`) |
+| Cache / pub-sub | Redis Cloud (`rediss://`) |
 | Message broker | CloudAMQP (AMQP) -- Celery tasks only |
 | Database | Supabase PostgreSQL · asyncpg |
 | Auth | Supabase Auth + `@supabase/ssr` |
@@ -144,7 +144,7 @@ Sidebar groups: **TRADING DESK** (Overview/Signals/Tactical/Settings) · **MARKE
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | yes | Supabase anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | yes | Supabase service role key (server-side only) |
 | `DATABASE_URL` | yes | PostgreSQL DSN -- use Supabase Transaction Pooler (port 6543) |
-| `REDIS_URL` | yes | Upstash `rediss://` URL |
+| `REDIS_URL` | yes | Redis Cloud `rediss://` URL |
 | `ADMIN_EMAILS` | yes | Comma-separated allowed admin emails |
 | `ADMIN_SECRET` | yes | 32-byte hex -- `openssl rand -hex 32` |
 | `BACKEND_URL` | yes | Railway API service URL |
