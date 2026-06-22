@@ -1,14 +1,12 @@
 """
-Telegram alert delivery for scanner signals.
+WhatsApp alert delivery for scanner signals (via UltraMsg).
 
 Sends are serialised through an asyncio.Queue so concurrent callers never
-block each other and we never exceed Telegram's ~30 msg/s global + 1 msg/s
-per-chat limits.
+block each other and we stay within UltraMsg free-tier limits (500 msgs/month).
 
 Retry policy:
-  - 429  → honour Retry-After header, then retry (up to MAX_RETRIES)
   - 5xx  → exponential back-off (0.5 s, 1 s, 2 s …)
-  - other → log and discard
+  - other 4xx → log and discard
 """
 from __future__ import annotations
 
@@ -166,62 +164,75 @@ async def _mark_alert_cooldown(dedup_key: str, confidence: int | None = None) ->
         log.warning("alert_cooldown_mark_failed", key=dedup_key, error=str(exc))
 
 
+def _is_configured() -> bool:
+    s = get_settings()
+    return bool(s.whatsapp_api_url and s.whatsapp_token and s.whatsapp_phone)
+
+
+import re as _re
+
+def _html_to_whatsapp(text: str) -> str:
+    """Convert Telegram HTML markup to WhatsApp markdown."""
+    text = _re.sub(r'<b>(.*?)</b>', r'*\1*', text, flags=_re.DOTALL)
+    text = _re.sub(r'<i>(.*?)</i>', r'_\1_', text, flags=_re.DOTALL)
+    text = _re.sub(r'<code>(.*?)</code>', r'`\1`', text, flags=_re.DOTALL)
+    text = text.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+    text = _re.sub(r'<[^>]+>', '', text)
+    return text.strip()
+
+
 async def _send_with_retry(text: str) -> bool:
-    """POST to Telegram sendMessage with exponential back-off on transient errors."""
+    """POST to UltraMsg sendMessage with exponential back-off on transient errors."""
     if not _is_configured():
         return False
 
     s = get_settings()
-    url     = f"https://api.telegram.org/bot{s.telegram_bot_token}/sendMessage"
-    payload = {"chat_id": s.telegram_chat_id, "text": text, "parse_mode": "HTML"}
-    delay   = 0.5
+    url   = f"{s.whatsapp_api_url.rstrip('/')}/messages/chat"
+    body  = _html_to_whatsapp(text)
+    delay = 0.5
 
     for attempt in range(_MAX_RETRIES):
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post(url, json=payload)
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(
+                    url,
+                    data={"token": s.whatsapp_token, "to": s.whatsapp_phone, "body": body},
+                )
 
             if resp.status_code == 200:
-                return True
-
-            if resp.status_code == 429:
-                retry_after = float(resp.headers.get("Retry-After", "5"))
-                log.warning("telegram_rate_limited", retry_after=retry_after, attempt=attempt)
-                external_api_errors_total.labels(service="telegram", error_type="rate_limit").inc()
-                await asyncio.sleep(retry_after)
-                continue
+                data = resp.json() if resp.content else {}
+                if str(data.get("sent", "")).lower() == "true":
+                    return True
+                # UltraMsg returns 200 even on soft errors — check payload
+                log.warning("whatsapp_send_soft_error", response=str(data)[:200])
+                return False
 
             if resp.status_code >= 500:
-                log.warning("telegram_server_error", status=resp.status_code, attempt=attempt)
-                external_api_errors_total.labels(service="telegram", error_type="server_error").inc()
+                log.warning("whatsapp_server_error", status=resp.status_code, attempt=attempt)
+                external_api_errors_total.labels(service="whatsapp", error_type="server_error").inc()
                 await asyncio.sleep(delay)
                 delay *= 2
                 continue
 
-            # 4xx (not 429) — permanent error, discard
-            log.error("telegram_client_error", status=resp.status_code, body=resp.text[:200])
+            log.error("whatsapp_client_error", status=resp.status_code, body=resp.text[:200])
             return False
 
         except httpx.TimeoutException:
-            log.warning("telegram_timeout", attempt=attempt)
-            external_api_errors_total.labels(service="telegram", error_type="timeout").inc()
+            log.warning("whatsapp_timeout", attempt=attempt)
+            external_api_errors_total.labels(service="whatsapp", error_type="timeout").inc()
             await asyncio.sleep(delay)
             delay *= 2
         except Exception as exc:
-            log.warning("telegram_send_failed", error=str(exc), attempt=attempt)
-            external_api_errors_total.labels(service="telegram", error_type="network").inc()
+            log.warning("whatsapp_send_failed", error=str(exc), attempt=attempt)
+            external_api_errors_total.labels(service="whatsapp", error_type="network").inc()
             await asyncio.sleep(delay)
             delay *= 2
 
-    log.error("telegram_max_retries_exceeded")
+    log.error("whatsapp_max_retries_exceeded")
     return False
 
 
 # ── Public helpers ────────────────────────────────────────────────────────────
-
-def _is_configured() -> bool:
-    s = get_settings()
-    return bool(s.telegram_bot_token and s.telegram_chat_id)
 
 
 async def _ops_alerts_enabled() -> bool:

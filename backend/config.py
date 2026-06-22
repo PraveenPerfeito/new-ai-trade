@@ -54,7 +54,12 @@ class Settings(BaseSettings):
     # ── CoinGecko (fallback) ──────────────────────────────────────────────────
     coingecko_api_key: str = ""
 
-    # ── Telegram ─────────────────────────────────────────────────────────────
+    # ── WhatsApp (UltraMsg) ───────────────────────────────────────────────────
+    whatsapp_api_url: str = ""        # e.g. https://api.ultramsg.com/instance181885/
+    whatsapp_token: str = ""          # UltraMsg instance token
+    whatsapp_phone: str = ""          # recipient number with country code e.g. +919876543210
+
+    # ── Telegram (deprecated — replaced by WhatsApp) ──────────────────────────
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
 
