@@ -33,12 +33,10 @@ def create_celery() -> Celery:
         # Reliability
         task_acks_late=True,
         task_reject_on_worker_lost=True,
+        task_ignore_result=True,        # no code reads task results (CLAUDE.md #29); skip result backend writes
         worker_prefetch_multiplier=1,   # one task at a time per worker process
         worker_concurrency=2,           # cap prefork processes; default=cpu_count() causes OOM on Railway
         broker_connection_retry_on_startup=True,
-
-        # Result expiry — keep results for 1 hour
-        result_expires=3600,
 
         # Explicit task module imports (autodiscover only finds 'tasks.py' by default)
         imports=[
@@ -65,11 +63,15 @@ def create_celery() -> Celery:
     # before re-polling when the queue is idle.  Reduces Redis ops from ~86K/day to
     # ~2,880/day (~97% reduction) while adding at most 30s latency on manual scans.
     # Scheduled tasks (every 15 min) are completely unaffected.
+    # broker_pool_limit=1: forces connection reuse rather than opening new sockets on
+    # retry — prevents the cascade where "max clients reached" triggers rapid reconnects
+    # that each open new connections before closing failed ones.
     if settings.broker_url.startswith(("redis://", "rediss://")):
         conf["broker_transport_options"] = {
             "socket_timeout": 30,
             "socket_keepalive": True,
         }
+        conf["broker_pool_limit"] = 1
 
     app.conf.update(conf)
 
