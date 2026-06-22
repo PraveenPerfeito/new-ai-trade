@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { tickGlobal } from '@/lib/intelligence/workers';
+import { closeRedis } from '@/lib/redis';
 
 export const runtime    = 'nodejs';
 export const maxDuration = 30;
@@ -10,5 +11,6 @@ export async function GET(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   await tickGlobal();
+  await closeRedis();
   return NextResponse.json({ ok: true });
 }

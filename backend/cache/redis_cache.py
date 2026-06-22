@@ -35,7 +35,7 @@ async def get_redis() -> aioredis.Redis:
         # AttributeError in get(). "none" is truthy and maps to ssl.CERT_NONE internally.
         if settings.redis_url.startswith("rediss://"):
             kw["ssl_cert_reqs"] = "none"
-        _redis_client = aioredis.from_url(settings.redis_url, **kw)
+        _redis_client = aioredis.from_url(settings.redis_url, max_connections=5, **kw)
     return _redis_client
 
 
