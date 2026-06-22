@@ -232,7 +232,7 @@ function PipelineIntegrityCard({
         ok={resolved7d > 0}
       />
       <PipelineRow
-        label="Telegram Delivery"
+        label="WhatsApp Delivery"
         value={telegramPct !== null ? `${telegramPct}%` : '—'}
         sub={`${telegrams24h} sends (24h)`}
         ok
@@ -311,7 +311,7 @@ const FLAG_META: Record<string, {
   high_confidence_mode_enabled:       { tier: 'quality',     p0: true, recommendedState: false, p0Note: '0/9 wins last 7D · disable to stop active losses' },
   regime_hard_gate_v2:                { tier: 'quality',     p0: true, recommendedState: true,  p0Note: 'Contra-regime BUY: 19% WR, −0.405R · enable hard gate' },
   early_breakout_penalty_v1:          { tier: 'quality',     p0: true, recommendedState: true,  p0Note: 'BUY+EARLY_BREAKOUT unpenalized · enable −8 setup score' },
-  probability_gate_v1:                { tier: 'quality',     p0: true, recommendedState: true,  p0Note: '2/3 live signals in WR<40% cohorts · enable Telegram gate' },
+  probability_gate_v1:                { tier: 'quality',     p0: true, recommendedState: true,  p0Note: '2/3 live signals in WR<40% cohorts · enable probability gate' },
   riskgrade_v2:                       { tier: 'quality',     p0: true, recommendedState: true,  p0Note: 'Heuristic grades inverted (Grade A < Grade C) · enable empirical grades' },
   futures_intelligence:               { tier: 'quality' },
   ai_validation:                      { tier: 'operational' },
@@ -328,7 +328,7 @@ const FLAG_META: Record<string, {
   attribution_snapshots:              { tier: 'advanced' },
 }
 
-// ── Telegram Delivery Card ────────────────────────────────────────────────────
+// ── WhatsApp Delivery Card ────────────────────────────────────────────────────
 
 function TelegramDeliveryCard({ data }: { data: TelegramDeliveryResponse | null }) {
   if (!data) return null
@@ -346,7 +346,7 @@ function TelegramDeliveryCard({ data }: { data: TelegramDeliveryResponse | null 
   return (
     <div className="glass-card rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-zinc-300 text-sm font-medium">Telegram Delivery</p>
+        <p className="text-zinc-300 text-sm font-medium">WhatsApp Delivery</p>
         <span className={`text-xs font-mono px-2 py-0.5 rounded-full ${
           deliveryRate === null ? 'bg-zinc-800 text-zinc-500'
           : deliveryRate >= 90  ? 'bg-emerald-900/40 text-emerald-400'
@@ -412,7 +412,7 @@ function AdvancedOperationsAccordion({
                   { label: 'Last Scan',     val: `${monitor.metrics.scan_duration_s.value}s`,   lvl: monitor.metrics.scan_duration_s.level },
                   { label: 'Binance Err',   val: monitor.metrics.binance_errors_per_day.value,  lvl: monitor.metrics.binance_errors_per_day.level },
                   { label: 'CMC Credits',   val: monitor.metrics.cmc_credits_per_day.value,     lvl: monitor.metrics.cmc_credits_per_day.level },
-                  { label: 'Tg Sends',      val: monitor.metrics.telegram_sends_per_day.value,  lvl: monitor.metrics.telegram_sends_per_day.level },
+                  { label: 'WA Sends',      val: monitor.metrics.telegram_sends_per_day.value,  lvl: monitor.metrics.telegram_sends_per_day.level },
                   { label: 'Claude Calls',  val: monitor.metrics.claude_calls_per_day.value,    lvl: monitor.metrics.claude_calls_per_day.level },
                   { label: 'Heuristic',     val: monitor.metrics.heuristic_calls_per_day.value, lvl: monitor.metrics.heuristic_calls_per_day.level },
                   { label: 'AI Fallback',   val: `${monitor.metrics.claude_fallback_pct.value}%`, lvl: monitor.metrics.claude_fallback_pct.level },
@@ -483,7 +483,7 @@ function FounderOperationsCard({
   const items: StatusItem[] = [
     { label: 'Scanner',        value: celery === null ? '…' : celery.scanning ? 'SCANNING' : celery.enabled ? 'ACTIVE' : 'DISABLED', level: celery === null ? 'neutral' : celery.enabled ? 'green' : 'amber'         },
     { label: 'Claude AI',      value: flags  === null ? '…' : flags.ai_enabled ? 'ACTIVE'  : 'DISABLED',                             level: flags  === null ? 'neutral' : flags.ai_enabled ? 'green' : 'amber'        },
-    { label: 'Telegram',       value: flags  === null ? '…' : flags.telegram_enabled ? 'ACTIVE' : 'DISABLED',                        level: flags  === null ? 'neutral' : flags.telegram_enabled ? 'green' : 'amber'  },
+    { label: 'WhatsApp',       value: flags  === null ? '…' : flags.telegram_enabled ? 'ACTIVE' : 'DISABLED',                        level: flags  === null ? 'neutral' : flags.telegram_enabled ? 'green' : 'amber'  },
     { label: 'Emergency Stop', value: flags  === null ? '…' : flags.emergency_stop ? 'ON'   : 'OFF',                                 level: flags  === null ? 'neutral' : flags.emergency_stop ? 'red' : 'green'      },
     { label: 'Maintenance',    value: flags  === null ? '…' : flags.maintenance_mode ? 'ON' : 'OFF',                                 level: flags  === null ? 'neutral' : flags.maintenance_mode ? 'amber' : 'green'  },
     { label: 'Last Scan',      value: lastScanText,                                                                                   level: 'neutral'                                                                   },
@@ -562,7 +562,7 @@ function FounderOperationsCard({
             Claude AI {flags === null ? '…' : flags.ai_enabled ? 'ON' : 'OFF'}
           </button>
 
-          {/* Telegram ON/OFF */}
+          {/* WhatsApp ON/OFF */}
           <button onClick={() => flags && onPatchFlag('telegram', 'alerts_enabled', !flags.telegram_enabled)}
             disabled={opLoading || flags === null}
             className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
@@ -571,7 +571,7 @@ function FounderOperationsCard({
                 : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-700'
             }`}>
             <Activity size={11} />
-            Telegram {flags === null ? '…' : flags.telegram_enabled ? 'ON' : 'OFF'}
+            WhatsApp {flags === null ? '…' : flags.telegram_enabled ? 'ON' : 'OFF'}
           </button>
 
           {/* Divider before destructive controls */}
@@ -842,7 +842,7 @@ const SETTINGS_GROUP_LABELS: Record<string, string> = {
   scanner:  'Scanner',
   signals:  'Signal Thresholds',
   ai:       'AI',
-  telegram: 'Telegram',
+  telegram: 'WhatsApp Alerts',
   risk:     'Risk',
   anomaly:  'Anomaly Detection',
   features: 'Feature Flags',
@@ -852,7 +852,7 @@ const SETTINGS_GROUP_DESCRIPTIONS: Record<string, string> = {
   scanner:  'Scan cadence, coin limits, and confidence thresholds',
   signals:  'Minimum quality bar for signals to pass the pipeline',
   ai:       'Claude Haiku validation model and API parameters',
-  telegram: 'Alert delivery and daily summary configuration',
+  telegram: 'WhatsApp alert delivery and daily summary configuration',
   risk:     'Grade filters, leverage caps, and portfolio risk limits',
   anomaly:  'Burn-in health check thresholds and alert levels',
   features: 'Enable or disable major system capabilities',

@@ -43,7 +43,7 @@ const INFRA_PILLARS = [
 ]
 
 const ROADMAP = [
-  { phase: 'Q2 2026', title: 'Platform Foundation', status: 'done', items: ['Quantitative signal pipeline', 'Admin Command Center', 'Telegram alert delivery', 'Supabase auth + RLS', 'Public landing experience'] },
+  { phase: 'Q2 2026', title: 'Platform Foundation', status: 'done', items: ['Quantitative signal pipeline', 'Admin Command Center', 'WhatsApp alert delivery', 'Supabase auth + RLS', 'Public landing experience'] },
   { phase: 'Q3 2026', title: 'SaaS Commercialization', status: 'active', items: ['Subscription tiers (Free / Pro / Institutional)', 'Subscription billing (future phase)', 'Premium subscriber dashboard', 'Signal API with webhook delivery', 'Performance transparency pages'] },
   { phase: 'Q4 2026', title: 'Intelligence Expansion', status: 'planned', items: ['On-chain data integration (DeFi, whale wallets)', 'Sentiment layer (news, social volume)', 'Portfolio correlation & regime analytics', 'Custom model fine-tuning for institutional', 'Mobile-first PWA'] },
   { phase: '2027', title: 'Institutional & White-Label', status: 'planned', items: ['White-label signal feeds for funds', 'Multi-asset coverage (forex, equities)', 'Co-location signal delivery SLA', 'Institutional API partner program', 'Regulatory compliance framework'] },
@@ -81,7 +81,7 @@ export default function InvestorsPage() {
             <a href="https://t.me/signaledgeai" target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-1.5 text-sm px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-[#070711] font-bold transition-colors">
               <ExternalLink size={13} />
-              Connect via Telegram
+              Connect via WhatsApp
             </a>
             <Link href="/about"
               className="text-sm px-5 py-2.5 rounded-xl border border-white/[0.1] text-gray-300 hover:text-white hover:border-white/[0.2] transition-all">
@@ -260,7 +260,7 @@ export default function InvestorsPage() {
           <TrendingUp size={32} className="text-cyan-400 mx-auto mb-4" />
           <h2 className="text-2xl font-bold mb-3">Interested in the project?</h2>
           <p className="text-gray-500 text-sm mb-6 leading-relaxed">
-            We&apos;re building the quantitative intelligence infrastructure that retail and institutional crypto traders need. Reach out via Telegram to discuss partnership, investment, or API integration.
+            We&apos;re building the quantitative intelligence infrastructure that retail and institutional crypto traders need. Reach out via WhatsApp to discuss partnership, investment, or API integration.
           </p>
           <a href="https://t.me/signaledgeai" target="_blank" rel="noopener noreferrer"
             className="inline-flex items-center gap-2 text-sm px-8 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-[#070711] font-bold transition-colors shadow-[0_0_24px_rgba(0,212,255,0.3)]">

@@ -58,7 +58,7 @@ const PIPELINE = [
   { icon: '⚖️', label: 'Risk Engine',      desc: 'Grade A–F, max leverage cap' },
   { icon: '🔮', label: 'Futures Intel',    desc: 'Funding rate, OI, liquidation zones' },
   { icon: '🤖', label: 'Claude AI',        desc: 'Haiku validation + reasoning' },
-  { icon: '✅', label: 'Signal Output',    desc: 'Realtime alert via Telegram' },
+  { icon: '✅', label: 'Signal Output',    desc: 'Realtime alert via WhatsApp' },
 ]
 
 // ── Features ──────────────────────────────────────────────────────────────────
@@ -178,7 +178,7 @@ export default function HomePage() {
                 sub:     'Free access',
                 color:   'text-gray-400',
                 border:  'border-white/[0.07]',
-                features: ['Live market overview', 'Sample signal previews', 'AI market commentary', 'Trend indicators', 'Public Telegram channel'],
+                features: ['Live market overview', 'Sample signal previews', 'AI market commentary', 'Trend indicators', 'WhatsApp signal alerts'],
               },
               {
                 icon:    Zap,
@@ -421,7 +421,7 @@ export default function HomePage() {
                 price:    '$0',
                 sub:      'forever',
                 color:    'border-white/[0.07]',
-                features: ['Market overview', 'Signal previews (delayed)', 'Free Telegram channel', 'Basic watchlist'],
+                features: ['Market overview', 'Signal previews (delayed)', 'WhatsApp signal alerts', 'Basic watchlist'],
                 cta:      'Get Started',
                 ctaStyle: 'bg-white/[0.06] hover:bg-white/[0.10] text-white border border-white/[0.09]',
               },
@@ -489,7 +489,7 @@ export default function HomePage() {
             Join the Intelligence Community
           </h2>
           <p className="text-gray-400 text-base mb-10 leading-relaxed">
-            Free Telegram channel with market commentary, regime analysis, and curated intelligence. Premium channel delivers realtime AI-validated signals.
+            WhatsApp signal alerts with market commentary, regime analysis, and curated intelligence. Premium alerts deliver realtime AI-validated signals.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <a href="https://t.me/signaledgeai" target="_blank" rel="noopener noreferrer"

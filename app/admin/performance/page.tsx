@@ -749,7 +749,7 @@ function DailyReportTrigger() {
     <div className="glass-card rounded-lg p-5">
       <p className="text-zinc-500 text-xs uppercase tracking-wide mb-3">Founder Daily Report</p>
       <p className="text-zinc-500 text-xs mb-4 leading-relaxed">
-        Sends a Telegram message with 24h regime performance, top edge pattern, AI vs heuristic breakdown, and calibration alerts.
+        Sends a WhatsApp message with 24h regime performance, top edge pattern, AI vs heuristic breakdown, and calibration alerts.
       </p>
       <div className="flex items-center gap-4 flex-wrap">
         <button

@@ -29,7 +29,7 @@ const PIPELINE_STEPS = [
   { n: '06', label: 'Risk Engine', desc: 'Grade A–F; grade F rejected without AI tokens spent' },
   { n: '07', label: 'Futures Intelligence', desc: 'OI, funding rate, L/S ratio, liquidation zones' },
   { n: '08', label: 'Claude AI Validation', desc: 'Anthropic Haiku validates quality + confidence' },
-  { n: '09', label: 'Signal Delivery', desc: 'Telegram alert + dashboard + supabase persist' },
+  { n: '09', label: 'Signal Delivery', desc: 'WhatsApp alert + dashboard + supabase persist' },
 ]
 
 export default function AboutPage() {
@@ -70,7 +70,7 @@ export default function AboutPage() {
             <TrendingUp size={22} className="text-emerald-400 mb-4" />
             <h2 className="text-lg font-bold mb-3">What we built</h2>
             <p className="text-gray-400 text-sm leading-relaxed">
-              A production-grade AI signal platform: a 9-step quantitative pipeline that scans 100+ coins continuously, validates setups with Claude AI, scores risk deterministically, and delivers only high-confidence setups — with full metadata — via Telegram and API.
+              A production-grade AI signal platform: a 9-step quantitative pipeline that scans 100+ coins continuously, validates setups with Claude AI, scores risk deterministically, and delivers only high-confidence setups — with full metadata — via WhatsApp and API.
             </p>
           </div>
         </div>

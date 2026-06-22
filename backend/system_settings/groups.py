@@ -294,7 +294,7 @@ class AISettings(BaseSettingsGroup):
     )
 
 
-# ── 4. Telegram ───────────────────────────────────────────────────────────────
+# ── 4. WhatsApp (UltraMsg) — stored under group name 'telegram' for DB compat ──
 
 class TelegramSettings(BaseSettingsGroup):
     GROUP_NAME:     ClassVar[str] = 'telegram'
@@ -303,7 +303,7 @@ class TelegramSettings(BaseSettingsGroup):
     alerts_enabled: bool = Field(
         True,
         title='Signal Alerts Enabled',
-        description='Send signal alert messages via Telegram',
+        description='Send signal alert messages via WhatsApp',
     )
     min_confidence: int = Field(
         85, ge=50, le=100,
@@ -313,12 +313,12 @@ class TelegramSettings(BaseSettingsGroup):
     max_alerts_per_hour: int = Field(
         10, ge=1, le=100,
         title='Max Alerts / Hour',
-        description='Rate cap on outgoing Telegram signal alerts',
+        description='Rate cap on outgoing WhatsApp signal alerts',
     )
     daily_summary_enabled: bool = Field(
         False,
         title='Daily Summary Enabled',
-        description='Send a nightly performance summary message',
+        description='Send a nightly performance summary message via WhatsApp',
     )
     daily_summary_hour_utc: int = Field(
         8, ge=0, le=23,
@@ -333,7 +333,7 @@ class TelegramSettings(BaseSettingsGroup):
     ops_alerts_enabled: bool = Field(
         False,
         title='Ops Alerts Enabled',
-        description='Send operational alerts (anomalies, scan failures, degradation) via Telegram. Off by default — only signal alerts are sent.',
+        description='Send operational alerts (anomalies, scan failures, degradation) via WhatsApp. Off by default — only signal alerts are sent.',
     )
 
 

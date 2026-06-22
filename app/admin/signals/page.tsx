@@ -88,7 +88,7 @@ const STAGE_META: Record<string, { label: string; color: string }> = {
 const STAGE_TIPS: Record<string, string> = {
   AI_APPROVED:   'Claude AI reviewed & approved · confidence ≥ 80%',
   SCREENED:      'Heuristic rules approved · fires when AI is disabled or setup score < 78',
-  TELEGRAM_SENT: 'Alert delivered to Telegram channel · first 30 min after send',
+  TELEGRAM_SENT: 'Alert delivered via WhatsApp · first 30 min after send',
   ACTIVE:        'Signal is live within its trading window · 1h → 8h · 4h → 24h · 1d → 72h',
   STALE:         'Trading window expired — not a loss, just outside the signal\'s time window',
   TP_HIT:        'Take-profit target reached · winning trade · outcome recorded',
@@ -987,7 +987,7 @@ function SystemStatusBanner({ celery, flags, providers }: {
   const issues: string[] = []
   if (flags?.emergency_stop)   issues.push('🛑 Emergency Stop ACTIVE')
   if (flags?.maintenance_mode) issues.push('🔧 Maintenance Mode ON')
-  if (flags !== null && !flags.telegram)     issues.push('📵 Telegram OFF — no alerts sending')
+  if (flags !== null && !flags.telegram)     issues.push('📵 WhatsApp OFF — no alerts sending')
   if (flags !== null && !flags.ai_validation) issues.push('🤖 AI Validation OFF')
   if (celery?.is_overdue && celery?.enabled) issues.push('⏰ Scanner overdue')
   if (celery !== null && !celery.enabled)    issues.push('⏸ Scanner paused')
@@ -1000,7 +1000,7 @@ function SystemStatusBanner({ celery, flags, providers }: {
       ok ? 'border border-zinc-800' : 'bg-amber-500/5 border border-amber-500/25')}>
       <span className={`w-2 h-2 rounded-full shrink-0 mt-1 ${ok ? 'bg-zinc-600' : 'bg-amber-400 animate-pulse'}`} />
       <span className={`text-sm ${ok ? 'text-zinc-500' : 'text-amber-300'}`}>
-        {ok ? 'All Systems Operational — scanner active, Telegram enabled' : issues.join('  ·  ')}
+        {ok ? 'All Systems Operational — scanner active, WhatsApp enabled' : issues.join('  ·  ')}
       </span>
     </div>
   )
@@ -1709,7 +1709,7 @@ function LifecycleFunnel({ signals, dbTotal }: { signals: TacticalSignalRow[]; d
 
   const steps = [
     { label: 'Generated', count: generated, tip: '' },
-    { label: 'Sent',      count: sent,      tip: 'Delivered to Telegram channel' },
+    { label: 'Sent',      count: sent,      tip: 'Delivered via WhatsApp' },
     { label: 'Active',    count: active,    tip: 'Live within trading window · Signals that expire (STALE) are not losses — just outside the time window' },
   ]
   const resolved = won + lost

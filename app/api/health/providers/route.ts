@@ -112,17 +112,15 @@ async function checkClaude(): Promise<ProviderStatus> {
   }
 }
 
-async function checkTelegram(): Promise<ProviderStatus> {
-  // Telegram alerts are sent from the Railway Python worker — not from Vercel.
-  // Calling api.telegram.org directly from Vercel is unreliable (geo-restrictions
-  // and latency spikes cause false DOWN readings). Instead: token configured = bot
-  // is wired; delivery health is covered by the CloudAMQP / worker heartbeat check.
-  const token = process.env.TELEGRAM_BOT_TOKEN
+async function checkWhatsApp(): Promise<ProviderStatus> {
+  // WhatsApp alerts are sent from the Railway Python worker via UltraMsg.
+  // Token presence = configured; delivery health covered by worker heartbeat check.
+  const token = process.env.WHATSAPP_TOKEN
   if (!token) {
-    return { name: 'Telegram', healthy: false, latencyMs: 0,
-      note: 'not configured', error: 'TELEGRAM_BOT_TOKEN not set — alerts disabled' }
+    return { name: 'WhatsApp', healthy: false, latencyMs: 0,
+      note: 'not configured', error: 'WHATSAPP_TOKEN not set — alerts disabled' }
   }
-  return { name: 'Telegram', healthy: true, latencyMs: 0, note: 'configured · delivery via Railway worker' }
+  return { name: 'WhatsApp', healthy: true, latencyMs: 0, note: 'configured · delivery via Railway worker' }
 }
 
 async function checkSupabase(): Promise<ProviderStatus> {
@@ -212,7 +210,7 @@ export async function GET() {
     checkCMC(),
     checkCoinGecko(),
     checkClaude(),
-    checkTelegram(),
+    checkWhatsApp(),
     checkSupabase(),
     checkRedis(),
     checkCloudAMQP(),

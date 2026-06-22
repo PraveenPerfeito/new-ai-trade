@@ -29,7 +29,7 @@ const TIERS = [
       { label: 'Futures intelligence (OI, funding)', included: false },
       { label: 'Win rate & expectancy metrics', included: false },
       { label: 'API access', included: false },
-      { label: 'Priority Telegram alerts', included: false },
+      { label: 'Priority WhatsApp alerts', included: false },
     ],
   },
   {
@@ -101,7 +101,7 @@ const FAQ = [
   },
   {
     q: 'How do I get API access?',
-    a: 'API access is available on the Institutional plan. Authentication uses bearer tokens; endpoints return structured JSON. Reach out via Telegram for documentation and onboarding.',
+    a: 'API access is available on the Institutional plan. Authentication uses bearer tokens; endpoints return structured JSON. Reach out via WhatsApp for documentation and onboarding.',
   },
 ]
 
