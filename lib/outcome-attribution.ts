@@ -35,12 +35,13 @@ function groupStats(rows: AttributionRow[]): GroupStats {
   const lossRate = losses.length / total;
   const rrVals = rows.filter(r => r.rrAchieved != null).map(r => r.rrAchieved!);
   const avgRRAchieved = rrVals.length ? mean(rrVals) : null;
-  const avgWinRR = wins.length ? mean(wins.map(r => r.rrAchieved ?? r.rrRatio)) : 0;
+  const avgWinRR  = wins.length   ? mean(wins.map(r => r.rrAchieved ?? r.rrRatio)) : 0;
+  const avgLossRR = losses.length ? Math.abs(mean(losses.map(r => r.rrAchieved ?? -1))) : 1;
   return {
     total,
     winRate,
     avgRRAchieved,
-    expectancy: winRate * avgWinRR - lossRate * 1,
+    expectancy: winRate * avgWinRR - lossRate * avgLossRR,
     tpHitRate:  winRate,
     avgConfidence,
   };

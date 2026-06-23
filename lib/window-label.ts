@@ -8,8 +8,5 @@ export function analyticsWindowLabel(hours: number | null | undefined): string {
 }
 
 export function explicitWindowNote(hours: number | null | undefined): string {
-  const label = analyticsWindowLabel(hours)
-  return label.startsWith('Historical')
-    ? `${label} window, not post-deploy`
-    : `${label} window`
+  return `${analyticsWindowLabel(hours)} window`
 }

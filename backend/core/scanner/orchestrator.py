@@ -57,7 +57,7 @@ def _on_task_done(task: asyncio.Task, label: str) -> None:
 # Configurable concurrency (coins scanned in parallel)
 MAX_CONCURRENT = 5
 COIN_TIMEOUT   = 45.0  # seconds per coin (includes 2 kline fetches + 1 AI call)
-PROGRESS_TTL   = 3600  # Redis key TTL for progress tracking
+PROGRESS_TTL   = 900   # Redis key TTL for progress tracking (CMC_REDIS_TRUTH_1.md opt: 1h→15min)
 
 _PRIORITY = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "ADA", "AVAX", "LINK", "SUI"]
 

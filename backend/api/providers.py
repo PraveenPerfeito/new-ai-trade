@@ -41,7 +41,7 @@ FAILOVER_LOG_KEY    = "providers:failover:log"
 CONFIG_KEY          = "settings:d:providers"
 COINS_CACHE_PAT     = "cache:market-data:*"
 HEALTH_SNAPSHOT_KEY = "providers:health:snapshot"
-HEALTH_SNAPSHOT_TTL = 30  # seconds — reduces ~37,440 Redis ops/day to ~1,440
+HEALTH_SNAPSHOT_TTL = 60  # seconds — CMC_REDIS_TRUTH_1.md opt #1: 30s→60s saves ~1,440 ops/day
 
 _DEFAULT_PRIORITY: dict[str, int] = {
     "coinmarketcap": 1, "coingecko": 2, "binance": 3,
@@ -293,6 +293,7 @@ async def force_failover(body: ForceFailoverBody) -> dict:
     }
     await redis.lpush(FAILOVER_LOG_KEY, json.dumps(event))
     await redis.ltrim(FAILOVER_LOG_KEY, 0, 49)
+    await redis.expire(FAILOVER_LOG_KEY, 30 * 24 * 60 * 60)  # CMC_REDIS_TRUTH_1 opt: 30-day TTL prevents orphaned key
 
     log.warning("provider_force_failover", from_provider=body.from_provider)
     return {"success": True, "disabled": body.from_provider, "event": event}

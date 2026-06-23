@@ -408,7 +408,7 @@ async def edge_regime(
     window_hours: int = Query(default=720, ge=24, le=2160),
 ) -> dict[str, Any]:
     """
-    Market regime analysis by volatility_regime (LOW/NORMAL/HIGH/EXTREME).
+    Market regime analysis by market_regime (BTC context: BULL_TREND/BEAR_TREND/SIDEWAYS/etc.).
     Determines which regimes produce profitable signals and which to avoid.
     """
     return await market_regime_analysis(window_hours)

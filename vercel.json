@@ -1,8 +1,8 @@
 {
   "crons": [
     { "path": "/api/intelligence/cron/listings",   "schedule": "*/15 * * * *" },
-    { "path": "/api/intelligence/cron/global",     "schedule": "*/30 * * * *" },
+    { "path": "/api/intelligence/cron/global",     "schedule": "0 * * * *" },
     { "path": "/api/intelligence/cron/trending",   "schedule": "*/30 * * * *" },
-    { "path": "/api/intelligence/cron/categories", "schedule": "*/30 * * * *" }
+    { "path": "/api/intelligence/cron/categories", "schedule": "0 * * * *" }
   ]
 }

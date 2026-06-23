@@ -186,7 +186,7 @@ export async function tickTrending(): Promise<void> {
   log.debug({ count: snap.trending.length }, 'worker_trending_refreshed');
 }
 
-async function tickCategories(): Promise<void> {
+export async function tickCategories(): Promise<void> {
   const quota = getQuotaGuard();
   if (!(await quota.canConsume(1))) return;
   const raw  = await fetchCategories();

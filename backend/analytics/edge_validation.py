@@ -352,8 +352,10 @@ async def setup_score_analysis(window_hours: int = 720) -> dict:
 
 async def market_regime_analysis(window_hours: int = 720) -> dict:
     """
-    Breakdown by volatility_regime: LOW, NORMAL, HIGH, EXTREME.
-    Determines which regimes are profitable and which should be avoided.
+    Breakdown by market_regime (BTC context): BULL_TREND, BEAR_TREND, SIDEWAYS,
+    HIGH_VOLATILITY, EUPHORIA, CAPITULATION.
+    Previously grouped by volatility_regime (LOW/NORMAL/HIGH/EXTREME — Phase 4 concept,
+    replaced by ALPHA.TRUTH.1; volatility_regime is never populated in signal_outcomes).
     """
     pool = await _pool()
     if pool is None:
@@ -361,12 +363,12 @@ async def market_regime_analysis(window_hours: int = 720) -> dict:
 
     all_rows = await _fetch_outcomes(pool, window_hours)
 
-    regimes   = ["LOW", "NORMAL", "HIGH", "EXTREME"]
+    regimes   = ["BULL_TREND", "BEAR_TREND", "SIDEWAYS", "HIGH_VOLATILITY", "EUPHORIA", "CAPITULATION"]
     by_regime: dict[str, list[dict]] = {r: [] for r in regimes}
     unknown   = []
 
     for row in all_rows:
-        reg = (row.get("volatility_regime") or "").upper()
+        reg = (row.get("market_regime") or "").upper()
         if reg in by_regime:
             by_regime[reg].append(row)
         else:
@@ -391,11 +393,23 @@ async def market_regime_analysis(window_hours: int = 720) -> dict:
     avoid = [reg for reg, exp in ranked if exp < 0]
     prefer = [reg for reg, exp in ranked if exp >= 0]
 
+    # by_regime array — matches the shape RegimeTab expects: {regime, n, win_rate, expectancy}
+    by_regime_arr = [
+        {
+            "regime":     reg,
+            "n":          results[reg.lower()].get("total", 0),
+            "win_rate":   results[reg.lower()].get("win_rate"),
+            "expectancy": results[reg.lower()].get("expectancy"),
+        }
+        for reg in regimes
+    ]
+
     total = len(all_rows)
     return {
         "window_hours": window_hours,
         "total_resolved": total,
         "regimes": results,
+        "by_regime": by_regime_arr,
         "ranked_by_expectancy": [r for r, _ in ranked],
         "recommended_avoid": avoid,
         "recommended_prefer": prefer,
