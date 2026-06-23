@@ -71,7 +71,7 @@ def _send_failure_alert(mode: str, error: str, attempt: int) -> None:
     try:
         requests.post(
             f"{settings.whatsapp_api_url.rstrip('/')}/messages/chat",
-            json={"token": settings.whatsapp_token, "to": settings.whatsapp_phone, "body": text},
+            data={"token": settings.whatsapp_token, "to": settings.whatsapp_phone, "body": text},
             timeout=5,
         )
     except Exception as exc:

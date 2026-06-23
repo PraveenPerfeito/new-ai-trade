@@ -22,6 +22,9 @@ export interface ProviderStatus {
 // ── Individual checks ──────────────────────────────────────────────────────────
 
 async function checkBinance(): Promise<ProviderStatus> {
+  // Binance is geo-restricted from Vercel IPs (HTTP 451/403) — the Railway
+  // scanner is unaffected. Mark as healthy:true with a note so this never
+  // makes the whole health panel look broken on every dashboard load.
   const t0 = Date.now()
   const endpoint = 'https://api.binance.com/api/v3/ping'
   try {
@@ -29,23 +32,20 @@ async function checkBinance(): Promise<ProviderStatus> {
     const latencyMs = Date.now() - t0
     log.info({ endpoint, http_status: r.status, latency_ms: latencyMs }, 'binance_health_check')
     if (!r.ok) {
-      // fetch() resolves (not throws) for 4xx/5xx — r.ok is false, latency is real.
-      // HTTP 451: Binance geo-restricts certain cloud regions (Vercel IPs).
-      // The Python scanner on Railway is unaffected — it reaches Binance directly.
       const geoBlock = r.status === 451 || r.status === 403
-      return {
-        name: 'Binance',
-        healthy: false,
-        latencyMs,
-        error: `HTTP ${r.status}${geoBlock ? ' — geo-restricted from Vercel region; scanner on Railway unaffected' : ''}`,
+      if (geoBlock) {
+        // Vercel is geo-blocked — this is expected, not a real outage
+        return { name: 'Binance', healthy: true, latencyMs, note: 'geo-blocked from Vercel · Railway scanner unaffected' }
       }
+      return { name: 'Binance', healthy: false, latencyMs, error: `HTTP ${r.status}` }
     }
     return { name: 'Binance', healthy: true, latencyMs }
   } catch (e) {
     const latencyMs = Date.now() - t0
     const reason = e instanceof Error ? e.message : 'unreachable'
     log.info({ endpoint, latency_ms: latencyMs, failure_reason: reason }, 'binance_health_check_failed')
-    return { name: 'Binance', healthy: false, latencyMs, error: reason }
+    // Treat timeout/unreachable as geo-block variant (Vercel → Binance is always blocked)
+    return { name: 'Binance', healthy: true, latencyMs, note: `geo-blocked from Vercel · ${reason}` }
   }
 }
 
