@@ -56,6 +56,7 @@ class SchedulerCoordinator:
             decode_responses=True,
             socket_connect_timeout=2,
             socket_timeout=2,
+            max_connections=1,
             **ssl_opts,
         )
 

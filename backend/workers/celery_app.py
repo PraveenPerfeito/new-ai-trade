@@ -35,7 +35,7 @@ def create_celery() -> Celery:
         task_reject_on_worker_lost=True,
         task_ignore_result=True,        # no code reads task results (CLAUDE.md #29); skip result backend writes
         worker_prefetch_multiplier=1,   # one task at a time per worker process
-        worker_concurrency=2,           # cap prefork processes; default=cpu_count() causes OOM on Railway
+        worker_concurrency=1,           # 1 child keeps Railway Redis connections within Essentials 30-connection limit
         broker_connection_retry_on_startup=True,
 
         # Explicit task module imports (autodiscover only finds 'tasks.py' by default)

@@ -175,6 +175,7 @@ def _sync_watcher_loop(service) -> None:
                 "decode_responses": True,
                 "socket_timeout": 30,
                 "socket_connect_timeout": 5,
+                "max_connections": 2,  # 1 for pubsub + 1 for get(); 2 is the minimum
             }
             # Redis Cloud (rediss://) — use string "none" not Python None (see redis_cache.py).
             if settings.redis_url.startswith("rediss://"):

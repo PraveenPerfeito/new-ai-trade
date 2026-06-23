@@ -12,6 +12,7 @@ function createClient(): Redis {
     maxRetriesPerRequest: 2,
     connectTimeout: 2000,
     lazyConnect: true,
+    enableOfflineQueue: false,  // don't queue commands when disconnected — fail fast, use in-memory fallback
     // Vercel serverless requires explicit TLS options for rediss:// URLs
     ...(url.startsWith('rediss://') ? { tls: {} } : {}),
   });
