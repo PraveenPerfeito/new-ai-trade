@@ -20,7 +20,7 @@ GATE_REJECTION_KEYS: tuple[str, ...] = (
     "CMC_REJECTION",
     "REGIME_REJECTION",
     "CONTRA_REGIME_REJECTION",   # REGIME.HARD.GATE.V2 — contra-regime reject (flag-gated)
-    "SIDEWAYS_REJECTION",        # SIDEWAYS.REGIME.DECISION.1 — BTC SIDEWAYS + no HIGH_MOMENTUM (WR=30.47%)
+    "SIDEWAYS_REJECTION",        # SIDEWAYS.EXEMPTION.1 — BTC SIDEWAYS, no HIGH_MOMENTUM or CONFIRMED_BREAKOUT (overall WR=30.22%)
     # KLINE.EMPTY.TELEMETRY.1 — kline fetch failure visibility (June 6–9 silent-death signature)
     "KLINE_EMPTY",     # every timeframe returned 0 candles (API outage / geo-block)
     "KLINE_PARTIAL",   # <60 candles on a required timeframe (thin or new listing)

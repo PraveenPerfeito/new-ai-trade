@@ -1081,10 +1081,14 @@ async def scan_coin(
             log.info("rejected_null_regime", symbol=coin.symbol, signal_type=signal_type.value)
             return None
 
-        # SIDEWAYS.REGIME.DECISION.1: SIDEWAYS gate — N=361, WR=30.47%, PF=0.986, Exp=-0.009R.
-        # WR=30.47% < 32.3% breakeven at median 2.1:1 RR. Hard reject.
-        # HIGH_MOMENTUM_BREAKOUT exempt: WR=81.8% regardless of regime.
-        if btc_regime == "SIDEWAYS" and setup.breakout_strength != "HIGH_MOMENTUM_BREAKOUT":
+        # SIDEWAYS.REGIME.DECISION.1 + SIDEWAYS.EXEMPTION.1: SIDEWAYS gate.
+        # SIDEWAYS overall: N=364, WR=30.22%, PF=0.974, Exp=-0.017R — below 32.3% breakeven.
+        # Exempt breakouts that exit the sideways range rather than trade within it:
+        #   HIGH_MOMENTUM_BREAKOUT: WR=81.8% — institutional momentum, valid in any regime.
+        #   CONFIRMED_BREAKOUT: WR=45.9%, Exp=+0.418R, N=61 — breakout above 30D resistance.
+        if btc_regime == "SIDEWAYS" and setup.breakout_strength not in (
+            "HIGH_MOMENTUM_BREAKOUT", "CONFIRMED_BREAKOUT"
+        ):
             _record_gate_rejection("SIDEWAYS_REJECTION", gate_rejections)
             log.info("rejected_sideways_regime", symbol=coin.symbol, signal_type=signal_type.value)
             return None
