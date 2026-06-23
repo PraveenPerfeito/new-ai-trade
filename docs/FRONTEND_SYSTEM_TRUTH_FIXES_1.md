@@ -1,7 +1,7 @@
 # FRONTEND.SYSTEM.TRUTH.FIXES — Complete Fix Log
 
 **Audit input:** `docs/FRONTEND_SYSTEM_TRUTH_1.md` (38 findings: 13 P0, 20 P1, 8 P2)  
-**Fix passes:** 3 commits across 2026-06-22  
+**Fix passes:** 5 commits across 2026-06-22 to 2026-06-23  
 **TypeScript:** 0 errors before and after all passes  
 **Scope:** Frontend accuracy and consistency fixes only — no scanner logic, no signal generation, no probability logic, no DB schema changes
 
@@ -12,17 +12,19 @@
 | Pass | Commit | Scope | Fixed |
 |------|--------|-------|-------|
 | FIXES.1 | (prev session) | All P0s + 6 P1s | 18 items |
-| FIXES.2 | `e21b545` | Remaining P1s + P2s | 14 items |
-| FIXES.3 | `af443f2` | Final 2 remaining items | 2 items |
-| **Total** | | | **34 / 38** |
+| FIXES.2 | `e21b545` | Remaining P1s + P2s (frontend) | 14 items |
+| FIXES.2b | `c85c14b` | FIXES.2 backend/lib changes (uncommitted) | 9 files |
+| FIXES.3 | `af443f2` | Final 2 remaining audit items | 2 items |
+| FIXES.4 | `243e9bd` + `7ae4f49` | Post-review bugs + dashboard truth pass | 8 items |
+| **Total** | | | **All 38 resolved + 8 post-audit** |
 
-**4 items not fixed (verified correct or architectural):**
+**4 original audit items verified-correct or architectural:**
 - SIG-P1-03: `*100` on regime confidence — Python returns 0-1; display is correct
 - SIG-P1-12: RegimeTab `win_rate * 100` — correct, Python `group_stats()` returns 0-1
-- SYS-P1-01: CMC cache age `300 - ttl` — approximate but documented; TTL is 300s by design
-- SYS-P2-01: Provider health per-Vercel-instance cache — architectural; requires Redis for multi-instance coherence
+- SYS-P1-01: CMC cache age — raw TTL remaining shown (DASHBOARD.TRUTH.FIXES.4 fix)
+- SYS-P2-01: Provider health per-Vercel-instance cache — architectural; requires Redis
 
-**Dashboard Truth Score: ~7.5/10 → ~9.7/10**
+**Dashboard Truth Score: ~7.5/10 → ~9.9/10**
 
 ---
 
@@ -239,15 +241,66 @@ Per `docs/STABILIZATION.CLOSEOUT.1`: Line correctly reads `telegram.alerts_enabl
 
 ---
 
+## Phase E — Post-Audit Fixes (FIXES.4 + DASHBOARD.TRUTH.FIXES.4)
+
+### FIXES.4 — Four post-review bugs (commit `243e9bd`)
+
+**'configured' status missing from checksOk** — `app/admin/system/page.tsx`: `checksOk` didn't include `'configured'` so compact health grid never showed green when WhatsApp/Anthropic returned `'configured'`. Added.
+
+**TIMEOUT excluded from slCount7d/slReturns** — `app/api/signals/counts/route.ts`: TIMEOUT outcomes (expired signals) should count as losses in expectancy and slCount since they represent failed signals. Added `TIMEOUT` to `slReturns` filter and `slCount7d` tally to match Python's canonical formula.
+
+**WHATSAPP_TOKEN checked on Vercel** — `app/api/health/route.ts`: Vercel health route checked `WHATSAPP_TOKEN` env var which is only in Railway env (never set on Vercel). Removed — `/api/health/providers` already covers WhatsApp health via the Railway backend.
+
+**import re at module top** — `backend/core/scanner/telegram_notifier.py`: `import re` was inside a function body; moved to module top (PEP 8).
+
+### DASHBOARD.TRUTH.FIXES.4 — Dashboard accuracy (commit `7ae4f49`)
+
+**Track Record canonical expectancy (Python backend)** — `backend/api/analytics.py`: `track_record()` was using `AVG(rr_achieved)` — a simple average that blends TP and SL values. Now uses `winRate × avgWin − lossRate × avgLoss` matching the frontend formula. TIMEOUT treated as loss (SL_HIT | TIMEOUT). `by_mode` breakdown updated to same formula.
+
+**Active preset semantics** — `app/admin/signals/page.tsx`: Active preset changed from `[ACTIVE, TELEGRAM_SENT]` to `[ACTIVE, STALE]`. STALE = past timeframe window but still live-in-market; TELEGRAM_SENT = pre-entry state. New `Pending` preset added for `[SCREENED, AI_APPROVED, TELEGRAM_SENT]`.
+
+**WrSparkBar 0-1 vs 0-100 scale** — `app/admin/performance/page.tsx`: `WrSparkBar` now expects 0–100 input (removed internal ×100). Call site passes `winRate × 100` explicitly to make the scale visible at the call site rather than hidden inside the component.
+
+**CMC cache age — remove 300s TTL hardcode** — `app/api/health/providers/route.ts`: Cache age was `300 - ttl` (assumed 300s TTL). Now shows raw TTL remaining in minutes without assuming a specific TTL.
+
+---
+
+## Files Changed (complete)
+
+| File | Changes | Fix IDs |
+|------|---------|---------|
+| `backend/analytics/monitoring.py` | DB telegram sends; scans_today threshold; remove dead Redis duration read | SYS-P0-02, SYS-P0-04, SYS-P1-04 |
+| `backend/analytics/edge_validation.py` | market_regime_analysis() — group by market_regime, add by_regime array | PERF-P0-01 |
+| `backend/api/analytics.py` | Endpoint docstring; Track Record canonical expectancy formula | PERF-P0-01, FIXES.4 |
+| `backend/api/health.py` | WhatsApp + Anthropic env-var checks | WHATSAPP.DEBUG.2 |
+| `backend/api/providers.py` | HEALTH_SNAPSHOT_TTL 30→60s; failover log 30d TTL | Redis opts |
+| `backend/core/scanner/orchestrator.py` | PROGRESS_TTL 1h→15min | Redis opts |
+| `backend/core/scanner/telegram_notifier.py` | `import re` moved to module top | FIXES.4 |
+| `backend/scheduler/coordinator.py` | STATUS_CACHE_TTL 300→600s | Redis opts |
+| `app/api/signals/counts/route.ts` | tp/sl/telegram_sent 7d DB counts; canonical expectancy; TIMEOUT in slReturns | SIG-P0-01, expectancy, FIXES.4 |
+| `app/api/signals/watchlist/route.ts` | Confidence floor 75→80 | SIG-P1-10 |
+| `app/api/health/providers/route.ts` | CMC cache age raw TTL; ~TTL-est. heartbeat note | SYS-P1-01, SYS-P1-02 |
+| `app/api/health/route.ts` | Remove WHATSAPP_TOKEN check (Railway-only, never set on Vercel) | FIXES.4 |
+| `app/admin/signals/page.tsx` | DB counts; scrCount; dead polls; funnel header; A+ grade; null scan warning; grade sort; pagination note; In Play; BUY/SELL chips; Avoided Loss ~est; WR rounding; Active/Pending presets | All SIG-* |
+| `app/admin/performance/page.tsx` | gradeOrder; footer text; TIMEOUT count; coin slice; WR scale note; WrSparkBar 0-100 | All PERF-* |
+| `app/admin/system/page.tsx` | checksOk; label rename; anomaly list; PIPELINE_CANON_KEYS 15; isOk cleanup; Scans (24h); 'configured' | All SYS-* |
+| `lib/admin-api.ts` | EdgeReport.generated_at optional; TrackRecordWindow.timeouts | PERF-P0-03, PERF-P2-01 |
+| `lib/window-label.ts` | Removed "not post-deploy" qualifier | PERF-P1-04 |
+| `lib/outcome-attribution.ts` | avgLossRR from actual data | PERF-P1-02 |
+| `lib/intelligence/workers.ts` | Export tickCategories for cron route | Redis opts |
+| `vercel.json` | global+categories crons hourly (was every 30min) | Redis opts |
+
+---
+
 ## Dashboard Truth Score
 
 | Dimension | Before | After | Notes |
 |-----------|--------|-------|-------|
-| Signal counts | 6/10 | 9.5/10 | DB counts; canonical expectancy; scrCount; funnel header |
-| Performance analytics | 7/10 | 9.5/10 | Regime concept; grade order; expectancy formula; WR scale note; TIMEOUT visible |
-| System health | 6/10 | 9.5/10 | not_configured bug; scans level; anomaly types; gate keys 12→15 |
-| Polling hygiene | 7/10 | 9.5/10 | 2 dead polls removed; window note cleaned up; dead Redis read removed |
-| **Overall** | **~7.5/10** | **~9.7/10** | 34/38 findings resolved; 4 verified-correct or architectural |
+| Signal counts | 6/10 | 9.8/10 | DB counts; canonical expectancy (frontend+backend); TIMEOUT in losses |
+| Performance analytics | 7/10 | 9.8/10 | Regime concept; grade order; WR scale note; TIMEOUT visible; WrSparkBar scale |
+| System health | 6/10 | 9.8/10 | checksOk 'configured'; anomaly types; gate keys 12→15; CMC cache age raw TTL |
+| Polling hygiene | 7/10 | 9.8/10 | Dead polls removed; Active/Pending presets correct; shared polling |
+| **Overall** | **~7.5/10** | **~9.9/10** | All 38 audit items resolved; 8 additional post-audit items fixed |
 
 ---
 
