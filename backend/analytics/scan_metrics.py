@@ -20,6 +20,7 @@ GATE_REJECTION_KEYS: tuple[str, ...] = (
     "CMC_REJECTION",
     "REGIME_REJECTION",
     "CONTRA_REGIME_REJECTION",   # REGIME.HARD.GATE.V2 — contra-regime reject (flag-gated)
+    "SIDEWAYS_REJECTION",        # SIDEWAYS.REGIME.DECISION.1 — BTC SIDEWAYS + no HIGH_MOMENTUM (WR=30.47%)
     # KLINE.EMPTY.TELEMETRY.1 — kline fetch failure visibility (June 6–9 silent-death signature)
     "KLINE_EMPTY",     # every timeframe returned 0 candles (API outage / geo-block)
     "KLINE_PARTIAL",   # <60 candles on a required timeframe (thin or new listing)
@@ -58,6 +59,8 @@ _GATE_ALIASES = {
     "regime_rejection": "REGIME_REJECTION",
     "contra_regime": "CONTRA_REGIME_REJECTION",
     "contra_regime_rejection": "CONTRA_REGIME_REJECTION",
+    "sideways_rejection": "SIDEWAYS_REJECTION",
+    "sideways": "SIDEWAYS_REJECTION",
     "kline_empty": "KLINE_EMPTY",
     "kline_partial": "KLINE_PARTIAL",
     # PIPELINE.HARDENING.1 — lowercase aliases for pre-hardening rows

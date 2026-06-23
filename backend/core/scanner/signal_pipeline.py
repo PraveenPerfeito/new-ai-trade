@@ -1081,6 +1081,14 @@ async def scan_coin(
             log.info("rejected_null_regime", symbol=coin.symbol, signal_type=signal_type.value)
             return None
 
+        # SIDEWAYS.REGIME.DECISION.1: SIDEWAYS gate — N=361, WR=30.47%, PF=0.986, Exp=-0.009R.
+        # WR=30.47% < 32.3% breakeven at median 2.1:1 RR. Hard reject.
+        # HIGH_MOMENTUM_BREAKOUT exempt: WR=81.8% regardless of regime.
+        if btc_regime == "SIDEWAYS" and setup.breakout_strength != "HIGH_MOMENTUM_BREAKOUT":
+            _record_gate_rejection("SIDEWAYS_REJECTION", gate_rejections)
+            log.info("rejected_sideways_regime", symbol=coin.symbol, signal_type=signal_type.value)
+            return None
+
         # Step 11: AI validation
         draft = Signal(
             symbol=coin.symbol,
