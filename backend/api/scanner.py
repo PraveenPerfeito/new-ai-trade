@@ -194,6 +194,23 @@ async def scan_metrics_summary() -> dict[str, Any]:
     }
 
 
+@router.post("/cmc-backup")
+async def trigger_cmc_backup() -> dict[str, Any]:
+    """
+    One-time CMC data capture: saves sectors, coin memberships, and rankings to Postgres.
+    Run this ONCE before the CMC Startup plan expires to preserve full coins[] arrays.
+    Protected by AdminAuthMiddleware (X-Admin-Secret header required).
+    """
+    try:
+        from backend.core.scanner.cmc_backup import capture_full_backup
+        result = await capture_full_backup()
+        log.info("cmc_backup_triggered_via_api", result=result)
+        return {"success": True, "result": result}
+    except Exception as exc:
+        log.error("cmc_backup_api_failed", error=str(exc))
+        return {"success": False, "error": str(exc)}
+
+
 @router.post("/test-whatsapp")
 async def test_whatsapp() -> dict[str, Any]:
     """
