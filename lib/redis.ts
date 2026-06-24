@@ -10,10 +10,11 @@ function createClient(): Redis {
   const url = process.env.REDIS_URL ?? 'redis://localhost:6379/0';
   const client = new Redis(url, {
     maxRetriesPerRequest: 2,
-    connectTimeout: 2000,
+    connectTimeout: 3000,
     lazyConnect: true,
-    enableOfflineQueue: false,  // don't queue commands when disconnected — fail fast, use in-memory fallback
-    // Vercel serverless requires explicit TLS options for rediss:// URLs
+    // enableOfflineQueue defaults to true — commands queue during cold-start connection
+    // establishment instead of immediately throwing "Stream isn't writeable".
+    // maxRetriesPerRequest: 2 still ensures truly-down Redis fails within ~6s.
     ...(url.startsWith('rediss://') ? { tls: {} } : {}),
   });
   client.on('error', (err) => {

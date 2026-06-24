@@ -324,3 +324,56 @@ async def test_partial_postgres_data_still_allows_scan():
 
     assert len(result.coins) == 10  # 10 coins available — scan proceeds
     assert result.is_fresh is False  # correctly marked as stale
+
+
+# ── 8. Categories: Redis has CoinGecko data (coins=[]) → Postgres fallback ──────
+
+@pytest.mark.asyncio
+async def test_categories_redis_coingecko_coins_empty_falls_back_to_postgres():
+    """
+    When tickCategories() wrote CoinGecko data to Redis (coins:[] — no symbols),
+    read_categories() must NOT return those empty-coin categories.
+    It must fall through to _fallback_db_sectors() which has real coins[] from CMC backup.
+
+    This was a bug: read_categories() returned Redis hit directly without checking
+    whether coins[] were populated. CoinGecko-sourced Redis data silently shadowed
+    the Postgres backup, leaving sector intelligence with no coin membership.
+    """
+    # Redis has CoinGecko categories: performance metrics present but coins:[] empty
+    cg_categories = [
+        {"id": "defi", "name": "DeFi", "title": "DeFi", "coinCount": 0,
+         "avgPriceChange": 3.5, "marketCapChange": 2.1, "marketCap": 5e10,
+         "volume24h": 0.0, "coins": []},
+        {"id": "layer-1", "name": "Layer 1", "title": "Layer 1", "coinCount": 0,
+         "avgPriceChange": 1.2, "marketCapChange": 0.8, "marketCap": 2e12,
+         "volume24h": 0.0, "coins": []},
+    ]
+    redis_snap = json.dumps({"categories": cg_categories, "refreshedAt": "2026-06-24T00:00:00Z"})
+
+    mock_redis = AsyncMock()
+    mock_redis.get = AsyncMock(return_value=redis_snap)
+
+    with (
+        patch("backend.core.scanner.intelligence_cache.get_redis", return_value=mock_redis),
+        patch("backend.core.scanner.intelligence_cache._fallback_db_sectors") as mock_db,
+    ):
+        mock_db.return_value = (
+            [
+                {"id": "defi", "name": "DeFi", "title": "DeFi",
+                 "coinCount": 45, "avgPriceChange": 3.5, "marketCapChange": 2.1,
+                 "marketCap": 5e10, "volume24h": 0.0,
+                 "coins": ["UNI", "AAVE", "COMP", "MKR", "CRV"]},
+                {"id": "layer-1", "name": "Layer 1", "title": "Layer 1",
+                 "coinCount": 12, "avgPriceChange": 1.2, "marketCapChange": 0.8,
+                 "marketCap": 2e12, "volume24h": 0.0,
+                 "coins": ["BTC", "ETH", "SOL", "ADA", "AVAX"]},
+            ],
+            "2026-06-24T01:00:00",
+        )
+        cats, source = await read_categories()
+
+    # Must have reached Postgres — CoinGecko Redis data was silently empty
+    mock_db.assert_called_once()
+    assert len(cats) == 2
+    assert len(cats[0]["coins"]) > 0, "Postgres coins[] should be populated"
+    assert "UNI" in cats[0]["coins"]

@@ -68,22 +68,40 @@ async def _fetch_category_coins(
     Returns (symbols, http_status, error_msg).
     The /cryptocurrency/categories (plural) endpoint returns metadata only — no coin lists.
     Coin lists require /cryptocurrency/category (singular) per category.
+
+    Rate-limit aware: retries once on 429 after a 10s back-off.
     """
-    try:
-        resp = await client.get(
-            f"{CMC_BASE}/cryptocurrency/category",
-            headers={"X-CMC_PRO_API_KEY": api_key},
-            params={"id": category_id, "limit": 100},
-        )
-        if resp.status_code != 200:
-            return [], resp.status_code, resp.text[:200]
-        data = resp.json().get("data") or {}
-        coins = data.get("coins") or []
-        symbols = [c["symbol"].upper() for c in coins if isinstance(c, dict) and c.get("symbol")]
-        return symbols, 200, ""
-    except Exception as exc:
-        log.warning("cmc_category_coins_fetch_failed", category_id=category_id, error=str(exc))
-        return [], 0, str(exc)[:200]
+    for attempt in range(2):
+        try:
+            resp = await client.get(
+                f"{CMC_BASE}/cryptocurrency/category",
+                headers={"X-CMC_PRO_API_KEY": api_key},
+                params={"id": category_id, "limit": 100},
+            )
+            if resp.status_code == 429 and attempt == 0:
+                log.warning("cmc_category_rate_limited", category_id=category_id)
+                await asyncio.sleep(10)
+                continue
+            if resp.status_code != 200:
+                log.warning(
+                    "cmc_category_coins_fetch_error",
+                    category_id=category_id, status=resp.status_code,
+                    body=resp.text[:200],
+                )
+                return [], resp.status_code, resp.text[:200]
+            raw  = resp.json()
+            data = raw.get("data") or {}
+            # Defensive: data can be a dict (normal) or unexpectedly a list
+            if isinstance(data, list):
+                data = data[0] if data else {}
+            coins   = data.get("coins") or []
+            symbols = [c["symbol"].upper() for c in coins if isinstance(c, dict) and c.get("symbol")]
+            return symbols, 200, ""
+        except Exception as exc:
+            log.warning("cmc_category_coins_fetch_failed", category_id=category_id,
+                        attempt=attempt, error=str(exc))
+            return [], 0, str(exc)[:200]
+    return [], 429, "rate_limited"
 
 
 async def capture_sectors(api_key: str) -> dict[str, Any]:
@@ -113,11 +131,12 @@ async def capture_sectors(api_key: str) -> dict[str, Any]:
             reverse=True,
         )[:100]
 
-        # Fetch coin lists concurrently in batches of 10 to stay within rate limits
+        # Fetch coin lists in batches of 3 (conservative — avoids CMC rate limits).
+        # 1s delay between batches; retry-on-429 is inside _fetch_category_coins.
         cat_coins: dict[str, list[str]] = {}
         errors_by_status: dict[int, int] = {}
-        for i in range(0, len(cats_with_tokens), 10):
-            batch = cats_with_tokens[i:i + 10]
+        for i in range(0, len(cats_with_tokens), 3):
+            batch = cats_with_tokens[i:i + 3]
             tasks = [
                 _fetch_category_coins(client, api_key, cat["id"])
                 for cat in batch
@@ -131,6 +150,8 @@ async def capture_sectors(api_key: str) -> dict[str, Any]:
                         errors_by_status[status] = errors_by_status.get(status, 0) + 1
                 else:
                     cat_coins[cat["id"]] = []
+            if i + 3 < len(cats_with_tokens):
+                await asyncio.sleep(1.0)  # 1s gap between batches
 
     pool = await get_pool()
     sectors_written = assignments_written = 0
@@ -178,6 +199,22 @@ async def capture_sectors(api_key: str) -> dict[str, Any]:
                     sym, cat["id"], cat["name"],
                 )
                 assignments_written += 1
+
+    if errors_by_status:
+        log.warning(
+            "cmc_category_fetch_errors_summary",
+            errors_by_status=errors_by_status,
+            # 402 = plan restriction; 401 = bad key; 429 = rate limited
+            hint="402=plan_restriction; 401=bad_key; 429=rate_limited",
+        )
+    if assignments_written == 0 and len(cats_with_tokens) > 0:
+        log.error(
+            "cmc_backup_zero_assignments",
+            categories_attempted=len(cats_with_tokens),
+            errors_by_status=errors_by_status,
+            message="No coin symbols captured — sector intelligence will be empty. "
+                    "Check errors_by_status: 402 means plan restriction (needs Startup+).",
+        )
 
     log.info("cmc_backup_sectors_captured",
              sectors=sectors_written, assignments=assignments_written,

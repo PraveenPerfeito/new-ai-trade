@@ -198,7 +198,14 @@ async def read_categories() -> tuple[list[dict], str]:
             snapshot     = json.loads(raw)
             categories   = snapshot.get("categories", [])
             refreshed_at = snapshot.get("refreshedAt", "")
-            return categories, refreshed_at
+            # CoinGecko fallback writes coins: [] (image URLs only — no symbols).
+            # If all categories have empty coins[], the Redis snapshot came from CoinGecko.
+            # Fall through to Postgres which holds full coins[] from the CMC backup.
+            total_coins = sum(len(c.get("coins", [])) for c in categories)
+            if total_coins > 0:
+                return categories, refreshed_at
+            log.info("categories_redis_coins_empty_falling_back_to_db",
+                     category_count=len(categories))
     except Exception as exc:
         log.warning("intel_categories_read_error", error=str(exc))
 
