@@ -73,6 +73,26 @@ def create_celery() -> Celery:
         }
         conf["broker_pool_limit"] = 1
 
+    # AMQP broker (CloudAMQP): reconnect backoff + disable gossip traffic.
+    # Without backoff, Celery retries 5×/second on connection failure → burns
+    # CloudAMQP's 1M monthly quota in minutes (the reconnect-storm incident).
+    # Gossip heartbeats (default: every 2s per worker) add ~86,400 msgs/day with
+    # 2 workers — alone exceeding the free plan limit. Task events add another
+    # ~2,400/day. Disabling both drops usage to ~24,000 msgs/month (task delivery
+    # only — 2.4% of the free plan limit).
+    # The --without-gossip and --without-mingle flags MUST also be set in the
+    # Railway worker start command (config options don't control the gossip daemon).
+    if settings.broker_url.startswith(("amqp://", "amqps://")):
+        conf["broker_transport_options"] = {
+            "max_retries": 10,
+            "interval_start": 2,    # first retry after 2s
+            "interval_step": 2,     # add 2s per subsequent retry
+            "interval_max": 30,     # cap at 30s between retries
+        }
+        conf["broker_connection_max_retries"] = 10
+        conf["worker_send_task_events"] = False   # disables task lifecycle event messages to celeryev
+        conf["task_send_sent_event"] = False       # disables task-sent event messages
+
     app.conf.update(conf)
 
     return app
