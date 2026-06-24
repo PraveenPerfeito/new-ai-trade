@@ -61,10 +61,13 @@ def _mcap_tier(market_cap: float | None) -> str:
 
 # ── One-time capture ──────────────────────────────────────────────────────────
 
-async def _fetch_category_coins(client: httpx.AsyncClient, api_key: str, category_id: str) -> list[str]:
+async def _fetch_category_coins(
+    client: httpx.AsyncClient, api_key: str, category_id: str
+) -> tuple[list[str], int, str]:
     """
-    Fetch coin symbols for one category via /cryptocurrency/category (singular).
+    Returns (symbols, http_status, error_msg).
     The /cryptocurrency/categories (plural) endpoint returns metadata only — no coin lists.
+    Coin lists require /cryptocurrency/category (singular) per category.
     """
     try:
         resp = await client.get(
@@ -73,12 +76,14 @@ async def _fetch_category_coins(client: httpx.AsyncClient, api_key: str, categor
             params={"id": category_id, "limit": 100},
         )
         if resp.status_code != 200:
-            return []
-        coins = resp.json().get("data", {}).get("coins", [])
-        return [c["symbol"].upper() for c in coins if isinstance(c, dict) and c.get("symbol")]
+            return [], resp.status_code, resp.text[:200]
+        data = resp.json().get("data") or {}
+        coins = data.get("coins") or []
+        symbols = [c["symbol"].upper() for c in coins if isinstance(c, dict) and c.get("symbol")]
+        return symbols, 200, ""
     except Exception as exc:
         log.warning("cmc_category_coins_fetch_failed", category_id=category_id, error=str(exc))
-        return []
+        return [], 0, str(exc)[:200]
 
 
 async def capture_sectors(api_key: str) -> dict[str, Any]:
@@ -110,6 +115,7 @@ async def capture_sectors(api_key: str) -> dict[str, Any]:
 
         # Fetch coin lists concurrently in batches of 10 to stay within rate limits
         cat_coins: dict[str, list[str]] = {}
+        errors_by_status: dict[int, int] = {}
         for i in range(0, len(cats_with_tokens), 10):
             batch = cats_with_tokens[i:i + 10]
             tasks = [
@@ -118,7 +124,13 @@ async def capture_sectors(api_key: str) -> dict[str, Any]:
             ]
             results = await asyncio.gather(*tasks, return_exceptions=True)
             for cat, result in zip(batch, results):
-                cat_coins[cat["id"]] = result if isinstance(result, list) else []
+                if isinstance(result, tuple):
+                    symbols, status, _err = result
+                    cat_coins[cat["id"]] = symbols
+                    if status != 200:
+                        errors_by_status[status] = errors_by_status.get(status, 0) + 1
+                else:
+                    cat_coins[cat["id"]] = []
 
     pool = await get_pool()
     sectors_written = assignments_written = 0
@@ -168,8 +180,15 @@ async def capture_sectors(api_key: str) -> dict[str, Any]:
                 assignments_written += 1
 
     log.info("cmc_backup_sectors_captured",
-             sectors=sectors_written, assignments=assignments_written)
-    return {"sectors": sectors_written, "assignments": assignments_written}
+             sectors=sectors_written, assignments=assignments_written,
+             categories_fetched=len(cats_with_tokens),
+             errors_by_status=errors_by_status)
+    return {
+        "sectors": sectors_written,
+        "assignments": assignments_written,
+        "categories_fetched": len(cats_with_tokens),
+        "errors_by_status": errors_by_status,
+    }
 
 
 async def capture_listings(api_key: str) -> dict[str, Any]:
