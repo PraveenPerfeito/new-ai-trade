@@ -4,7 +4,7 @@ import { QuotaGuardState, QuotaWarningLevel } from './types';
 
 const log = createLogger('lib/intelligence/quota-guard');
 
-const MONTHLY_BUDGET  = 300_000;
+const MONTHLY_BUDGET  = 10_000; // CMC Free plan (was 300_000 for Startup)
 const PER_MINUTE_LIMIT = 30;
 
 const KEY_USED        = 'intel:quota:used';

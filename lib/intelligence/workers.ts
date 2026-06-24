@@ -98,7 +98,8 @@ function registerWorker(
 }
 
 // ─── CoinGecko fallback for plan-restricted CMC endpoints ────────────────────
-// Used when CMC API plan doesn't include listings/global/trending endpoints.
+// Priority: CMC Free → CoinGecko Free → existing Postgres cache (read_categories DB fallback)
+// tickListings: CG already implemented. tickTrending/tickCategories/tickGlobal: added below.
 
 const CG_BASE    = 'https://api.coingecko.com/api/v3';
 const CG_TIMEOUT = 15_000;
@@ -141,6 +142,70 @@ async function _cgFetchListings(limit: number): Promise<CmcListingCoin[]> {
   }));
 }
 
+async function _cgFetchTrending(): Promise<CmcTrendingCoin[]> {
+  const res = await axios.get(`${CG_BASE}/search/trending`, { timeout: CG_TIMEOUT });
+  const items = (res.data?.coins ?? []) as Array<{ item: {
+    symbol: string; name: string; market_cap_rank: number;
+    data?: { price_change_percentage_24h?: { usd?: number }; total_volume?: string; market_cap?: string };
+  }}>;
+  return items.slice(0, 20).map((c, i) => ({
+    id:       i + 1,
+    name:     c.item.name,
+    symbol:   c.item.symbol.toUpperCase(),
+    cmc_rank: c.item.market_cap_rank ?? 999,
+    quote: {
+      USD: {
+        price:              0,
+        volume_24h:         0,
+        percent_change_1h:  0, // CoinGecko trending does not provide 1h change
+        percent_change_24h: c.item.data?.price_change_percentage_24h?.usd ?? 0,
+        market_cap:         0,
+        last_updated:       new Date().toISOString(),
+      },
+    },
+  }));
+}
+
+async function _cgFetchCategories(): Promise<CmcCategory[]> {
+  const res = await axios.get(`${CG_BASE}/coins/categories`, { timeout: CG_TIMEOUT });
+  return (res.data as Array<{
+    id: string; name: string;
+    market_cap: number; market_cap_change_24h: number; volume_24h: number;
+  }>).map((c) => ({
+    id:               c.id,
+    name:             c.name,
+    title:            c.name,
+    num_tokens:       0,
+    avg_price_change: c.market_cap_change_24h ?? 0, // best available proxy from CoinGecko
+    volume:           c.volume_24h ?? 0,
+    market_cap:       c.market_cap ?? 0,
+    market_cap_change: c.market_cap_change_24h ?? 0,
+    coins:            [], // CoinGecko top_3_coins are image URLs; full list lives in Postgres cmc_sectors
+  }));
+}
+
+async function _cgFetchGlobal(): Promise<CmcGlobalMetrics> {
+  const res = await axios.get(`${CG_BASE}/global`, { timeout: CG_TIMEOUT });
+  const d = res.data?.data ?? {};
+  const mcap = d.total_market_cap ?? {};
+  const vol  = d.total_volume ?? {};
+  const dom  = d.market_cap_percentage ?? {};
+  return {
+    btc_dominance:  dom.btc ?? 0,
+    eth_dominance:  dom.eth ?? 0,
+    active_cryptocurrencies: d.active_cryptocurrencies ?? 0,
+    last_updated:   new Date().toISOString(),
+    quote: {
+      USD: {
+        total_market_cap:    mcap.usd ?? 0,
+        total_volume_24h:    vol.usd  ?? 0,
+        total_market_cap_yesterday_percentage_change: d.market_cap_change_percentage_24h_usd ?? 0,
+        last_updated:        new Date().toISOString(),
+      },
+    },
+  };
+}
+
 // ─── Individual tick handlers ─────────────────────────────────────────────────
 
 export async function tickListings(): Promise<void> {
@@ -167,34 +232,67 @@ export async function tickListings(): Promise<void> {
 export async function tickGlobal(): Promise<void> {
   const quota = getQuotaGuard();
   if (!(await quota.canConsume(1))) return;
-  const raw  = await fetchGlobalMetrics();
+
+  let raw: CmcGlobalMetrics;
+  let usedCmc = true;
+  try {
+    raw = await fetchGlobalMetrics();
+  } catch (cmcErr) {
+    log.warn({ err: cmcErr }, 'cmc_global_plan_restricted_falling_back_to_coingecko');
+    raw     = await _cgFetchGlobal();
+    usedCmc = false;
+  }
+
   const snap = normalizeGlobal(raw);
   const redis = getRedis();
   await redis.set(CACHE_GROUPS.global.redisKey, JSON.stringify(snap), 'PX', CACHE_GROUPS.global.ttlMs * 6);
-  await quota.consume(1);
-  log.debug('worker_global_refreshed');
+  if (usedCmc) await quota.consume(1);
+  log.debug({ source: usedCmc ? 'cmc' : 'coingecko' }, 'worker_global_refreshed');
 }
 
 export async function tickTrending(): Promise<void> {
   const quota = getQuotaGuard();
   if (!(await quota.canConsume(1))) return;
-  const raw  = await fetchTrending(20);
+
+  let raw: CmcTrendingCoin[];
+  let usedCmc = true;
+  try {
+    raw = await fetchTrending(20);
+  } catch (cmcErr) {
+    log.warn({ err: cmcErr }, 'cmc_trending_plan_restricted_falling_back_to_coingecko');
+    raw     = await _cgFetchTrending();
+    usedCmc = false;
+  }
+
   const snap = normalizeTrending(raw);
   const redis = getRedis();
   await redis.set(CACHE_GROUPS.trending.redisKey, JSON.stringify(snap), 'PX', CACHE_GROUPS.trending.ttlMs * 6);
-  await quota.consume(1);
-  log.debug({ count: snap.trending.length }, 'worker_trending_refreshed');
+  if (usedCmc) await quota.consume(1);
+  log.debug({ count: snap.trending.length, source: usedCmc ? 'cmc' : 'coingecko' }, 'worker_trending_refreshed');
 }
 
 export async function tickCategories(): Promise<void> {
   const quota = getQuotaGuard();
   if (!(await quota.canConsume(1))) return;
-  const raw  = await fetchCategories();
+
+  let raw: CmcCategory[];
+  let usedCmc = true;
+  try {
+    raw = await fetchCategories();
+  } catch (cmcErr) {
+    log.warn({ err: cmcErr }, 'cmc_categories_plan_restricted_falling_back_to_coingecko');
+    raw     = await _cgFetchCategories();
+    usedCmc = false;
+  }
+
+  // Note: CoinGecko categories have coins:[] (no full coin lists).
+  // Full sector membership is preserved in Postgres cmc_sectors.coins[].
+  // The Python read_categories() DB fallback restores full membership when Redis is cold.
   const snap = normalizeCategories(raw);
   const redis = getRedis();
   await redis.set(CACHE_GROUPS.categories.redisKey, JSON.stringify(snap), 'PX', CACHE_GROUPS.categories.ttlMs * 6);
-  await quota.consume(1);
-  log.debug({ count: snap.categories.length }, 'worker_categories_refreshed');
+  if (usedCmc) await quota.consume(1);
+  log.debug({ count: snap.categories.length, source: usedCmc ? 'cmc' : 'coingecko' }, 'worker_categories_refreshed');
 }
 
 async function tickQuotaSync(): Promise<void> {

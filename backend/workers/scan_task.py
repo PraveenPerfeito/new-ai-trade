@@ -330,3 +330,77 @@ def check_signal_outcomes(self) -> dict:
         celery_tasks_total.labels(task_name="outcome_tracker", status="failure").inc()
         logger.error(f"outcome_check_failed error={str(exc)}")
         raise
+
+
+# ── CMC.REMOVAL.IMPLEMENTATION.1: backup tasks ───────────────────────────────
+
+@shared_task(
+    name="backend.workers.scan_task.capture_cmc_backup",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=300,
+    soft_time_limit=4 * 60,
+    time_limit=5 * 60,
+)
+def capture_cmc_backup(self) -> dict:
+    """
+    One-time full CMC backup: /cryptocurrency/categories + /listings/latest.
+    Costs ~2 CMC credits. Run manually before Startup plan expires.
+    Trigger: capture_cmc_backup.delay()
+    """
+    try:
+        from backend.core.scanner.cmc_backup import capture_full_backup  # noqa: PLC0415
+        result = asyncio.run(capture_full_backup())
+        logger.info(f"capture_cmc_backup_ok {result}")
+        return result
+    except Exception as exc:
+        logger.error(f"capture_cmc_backup_failed error={str(exc)}")
+        raise self.retry(exc=exc)
+
+
+@shared_task(
+    name="backend.workers.scan_task.refresh_cmc_backup",
+    bind=True,
+    max_retries=1,
+    default_retry_delay=600,
+    soft_time_limit=3 * 60,
+    time_limit=4 * 60,
+)
+def refresh_cmc_backup(self) -> dict:
+    """
+    Nightly (01:00 UTC): upsert today's coin_rankings_history from Redis cache.
+    Updates cmc_sectors performance metrics from CoinGecko.
+    Does NOT overwrite coins[] — full sector membership is protected.
+    """
+    try:
+        from backend.core.scanner.cmc_backup import run_nightly_refresh  # noqa: PLC0415
+        result = asyncio.run(run_nightly_refresh())
+        logger.info(f"refresh_cmc_backup_ok {result}")
+        return result
+    except Exception as exc:
+        logger.error(f"refresh_cmc_backup_failed error={str(exc)}")
+        raise self.retry(exc=exc)
+
+
+@shared_task(
+    name="backend.workers.scan_task.refresh_sector_membership",
+    bind=True,
+    max_retries=1,
+    default_retry_delay=1800,
+    soft_time_limit=3 * 60,
+    time_limit=4 * 60,
+)
+def refresh_sector_membership(self) -> dict:
+    """
+    Weekly (Sunday 02:00 UTC): heartbeat for cmc_sectors.refreshed_at.
+    CoinGecko top_3_coins are image URLs so no symbol appending is possible.
+    Primary value: confirms sector table is alive; updates refresh timestamps.
+    """
+    try:
+        from backend.core.scanner.cmc_backup import run_sector_membership_refresh  # noqa: PLC0415
+        result = asyncio.run(run_sector_membership_refresh())
+        logger.info(f"refresh_sector_membership_ok {result}")
+        return result
+    except Exception as exc:
+        logger.error(f"refresh_sector_membership_failed error={str(exc)}")
+        raise self.retry(exc=exc)

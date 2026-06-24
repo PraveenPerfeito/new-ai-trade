@@ -104,4 +104,25 @@ BEAT_SCHEDULE = {
             "queue": "celery",
         },
     },
+    # CMC.REMOVAL.IMPLEMENTATION.1 — nightly coin rankings + sector perf refresh: 01:00 UTC
+    # Reads Redis cache:intel:listings (already populated by TS workers) → coin_rankings_history.
+    # Updates cmc_sectors market performance from CoinGecko. Never overwrites coins[].
+    # Cost: 0 CMC credits (reads Redis only; CoinGecko is free). ~1 msg/day CloudAMQP.
+    "refresh-cmc-backup-nightly": {
+        "task": "backend.workers.scan_task.refresh_cmc_backup",
+        "schedule": crontab(hour="1", minute="0"),
+        "options": {
+            "expires": 3600,
+            "queue": "celery",
+        },
+    },
+    # Weekly sector membership heartbeat: Sunday 02:00 UTC (~4 msgs/month CloudAMQP)
+    "refresh-sector-membership-weekly": {
+        "task": "backend.workers.scan_task.refresh_sector_membership",
+        "schedule": crontab(day_of_week="0", hour="2", minute="0"),
+        "options": {
+            "expires": 7200,
+            "queue": "celery",
+        },
+    },
 }

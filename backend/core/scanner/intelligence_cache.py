@@ -1,24 +1,27 @@
 """
 Intelligence cache reader — Python side of the CMC intelligence pipeline.
 
-Architecture (new):
-  CMC API
-    ↓  (TypeScript workers — lib/intelligence/workers.ts — every 5 min)
-  Redis  cache:intel:listings
+Architecture:
+  CMC API (Free plan: /listings/latest + /global-metrics)
+    ↓  (TypeScript workers — lib/intelligence/workers.ts)
+  Redis  cache:intel:listings  /  cache:intel:categories  /  cache:intel:trending
     ↓  (this module)
-  Python Scanner
-    ↓
-  Signals
+  Python Scanner → Signals
 
-The TypeScript Next.js process is the sole CMC API caller.
-Python reads the pre-populated Redis key; it never calls CMC directly.
-This eliminates quota double-spending and centralises credit accounting
-in the TypeScript quota guard (lib/intelligence/quota-guard.ts).
+CMC plan priority: CMC Free → CoinGecko Free → Postgres snapshot.
+The TypeScript quota guard is updated to 10,000 credits/month (Free plan).
 
-Fallback chain on cache miss:
-  Redis intelligence cache (cache:intel:listings)
-    → CoinGecko public API  (100 coins, rate-limited)
-    → empty list            (logged as error, scan proceeds with 0 coins)
+Fallback chain — listings:
+  Redis cache:intel:listings
+    → CMC direct (Python, if key set — available on Free)
+    → CoinGecko /coins/markets
+    → Postgres coins table  (snapshot from last successful scan)
+    → empty list
+
+Fallback chain — categories / sectors:
+  Redis cache:intel:categories
+    → Postgres cmc_sectors  (CMC backup — preserves full coins[] membership)
+    → empty list
 """
 from __future__ import annotations
 
@@ -135,13 +138,17 @@ async def read_intelligence_listings(limit: int = 200) -> IntelligenceCacheResul
     except Exception as exc:
         log.warning("intel_cache_read_error", error=str(exc))
 
-    # ── Cache miss or read error: try CMC direct first, then CoinGecko ───────
+    # ── Cache miss or read error: CMC direct → CoinGecko → Postgres ─────────
     from backend.config import get_settings as _get_settings  # noqa: PLC0415
     if _get_settings().coinmarketcap_api_key:
         result = await _fallback_cmc_direct(limit)
         if result.coins:
             return result
-    return await _fallback_coingecko(limit)
+    cg_result = await _fallback_coingecko(limit)
+    if cg_result.coins:
+        return cg_result
+    # Last resort: Postgres coins table (snapshot from last successful scan)
+    return await _fallback_db_listings(limit)
 
 
 # ── Additional intelligence readers ──────────────────────────────────────────
@@ -178,7 +185,11 @@ async def read_categories() -> tuple[list[dict], str]:
     volume24h, marketCap, marketCapChange, coins (list[str]).
     refreshed_at is the ISO-8601 timestamp of the snapshot — used by
     sector_intelligence.analyze_sectors() for baseline change detection.
-    Returns ([], "") on cache miss or error.
+
+    Fallback chain:
+      1. Redis cache:intel:categories
+      2. Postgres cmc_sectors (CMC backup with full coins[] membership)
+      3. ([], "")
     """
     try:
         redis = await get_redis()
@@ -190,7 +201,68 @@ async def read_categories() -> tuple[list[dict], str]:
             return categories, refreshed_at
     except Exception as exc:
         log.warning("intel_categories_read_error", error=str(exc))
-    return [], ""
+
+    # Postgres fallback — preserves full coin membership from CMC backup
+    return await _fallback_db_sectors()
+
+
+async def _fallback_db_sectors() -> tuple[list[dict], str]:
+    """
+    Query cmc_sectors when cache:intel:categories is cold or Redis is unavailable.
+    Returns camelCase dicts matching the TypeScript snapshot format consumed by
+    sector_intelligence.analyze_sectors() and trending_universe._parse_rising_sectors().
+
+    Critical: cmc_sectors.coins[] contains the full CMC sector membership
+    (thousands of coins per sector), unlike CoinGecko which returns top_3_coins only.
+    """
+    try:
+        from backend.database.session import get_pool  # noqa: PLC0415
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT category_id, name, avg_price_change, market_cap_change_24h,
+                       market_cap, coin_count, coins, refreshed_at
+                FROM cmc_sectors
+                WHERE coin_count > 0
+                ORDER BY refreshed_at DESC
+                LIMIT 200
+                """
+            )
+
+        if not rows:
+            log.warning("categories_db_fallback_empty")
+            return [], ""
+
+        refreshed_at = rows[0]["refreshed_at"].isoformat() if rows[0]["refreshed_at"] else ""
+        age_s = max(0.0, (
+            datetime.now(timezone.utc) - rows[0]["refreshed_at"]
+        ).total_seconds()) if rows[0]["refreshed_at"] else 0.0
+
+        # Map to camelCase format matching TypeScript CategoryData / CategoriesSnapshot
+        categories = [
+            {
+                "id":              r["category_id"],
+                "name":            r["name"],
+                "title":           r["name"],
+                "coinCount":       r["coin_count"] or 0,
+                # avg_price_change from CMC; fall back to market_cap_change_24h (CoinGecko proxy)
+                "avgPriceChange":  float(r["avg_price_change"] or r["market_cap_change_24h"] or 0),
+                "marketCapChange": float(r["market_cap_change_24h"] or 0),
+                "marketCap":       float(r["market_cap"] or 0),
+                "volume24h":       0.0,
+                "coins":           list(r["coins"] or []),
+            }
+            for r in rows
+        ]
+
+        log.info("categories_db_fallback_ok",
+                 count=len(categories), age_s=round(age_s))
+        return categories, refreshed_at
+
+    except Exception as exc:
+        log.warning("categories_db_fallback_failed", error=str(exc))
+        return [], ""
 
 
 async def read_top_movers() -> list[str]:
@@ -372,5 +444,82 @@ async def _fallback_coingecko(limit: int, reason: str = "cache_cold") -> Intelli
         )
     except Exception as exc:
         log.error("intel_coingecko_fallback_failed", error=str(exc))
-        # Last resort: try CMC API directly from Python backend
-        return await _fallback_cmc_direct(limit)
+        return IntelligenceCacheResult(
+            coins=[], cache_source="empty", cache_hit=False,
+            cache_age_seconds=0.0, is_fresh=False,
+        )
+
+
+async def _fallback_db_listings(limit: int) -> IntelligenceCacheResult:
+    """
+    Postgres fallback when Redis AND CoinGecko are both unavailable.
+    Reads the existing `coins` table populated by db.upsert_coins() at scan end.
+    Staleness: data is as fresh as the last successful scan — acceptable last resort.
+    """
+    try:
+        from backend.database.session import get_pool  # noqa: PLC0415
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT symbol, name, rank, market_cap, volume_24h,
+                       price, price_change_24h, binance_symbol,
+                       has_futures, last_updated
+                FROM coins
+                WHERE symbol IS NOT NULL
+                ORDER BY rank ASC NULLS LAST
+                LIMIT $1
+                """,
+                limit,
+            )
+
+        if not rows:
+            log.warning("db_listings_fallback_empty")
+            return IntelligenceCacheResult(
+                coins=[], cache_source="empty", cache_hit=False,
+                cache_age_seconds=0.0, is_fresh=False,
+            )
+
+        # Compute age from the most recently updated row
+        latest_ts = rows[0]["last_updated"]
+        age_s = max(0.0, (
+            datetime.now(timezone.utc) - latest_ts.replace(tzinfo=timezone.utc)
+        ).total_seconds()) if latest_ts else 0.0
+
+        coins: list[CoinData] = []
+        for i, r in enumerate(rows):
+            sym = str(r["symbol"]).upper()
+            coins.append(CoinData(
+                id=sym,
+                symbol=sym,
+                name=str(r["name"] or sym),
+                rank=int(r["rank"] or i + 1),
+                price=float(r["price"] or 0),
+                market_cap=float(r["market_cap"] or 0),
+                volume_24h=float(r["volume_24h"] or 0),
+                price_change_24h=float(r["price_change_24h"] or 0),
+                binance_symbol=str(r["binance_symbol"] or f"{sym}USDT"),
+                has_futures=bool(r["has_futures"] or False),
+                image="",
+            ))
+
+        log.warning(
+            "intel_db_listings_fallback_ok",
+            count=len(coins),
+            age_s=round(age_s),
+        )
+        intelligence_cache_hits_total.labels(source="db_fallback").inc()
+        return IntelligenceCacheResult(
+            coins=coins,
+            cache_source="db_fallback",
+            cache_hit=False,
+            cache_age_seconds=age_s,
+            is_fresh=age_s < 3600,  # consider fresh if last scan < 1h ago
+        )
+
+    except Exception as exc:
+        log.error("db_listings_fallback_failed", error=str(exc))
+        return IntelligenceCacheResult(
+            coins=[], cache_source="empty", cache_hit=False,
+            cache_age_seconds=0.0, is_fresh=False,
+        )
