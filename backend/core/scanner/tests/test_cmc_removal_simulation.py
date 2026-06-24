@@ -84,20 +84,22 @@ async def test_listings_redis_cache_hit():
 
 @pytest.mark.asyncio
 async def test_listings_falls_back_to_coingecko_on_redis_miss():
-    """When Redis returns None, the CoinGecko fallback is attempted."""
+    """When Redis returns None and CMC direct is unavailable, CoinGecko is used.
+
+    The actual chain is Redis → CMC direct → CoinGecko → Postgres.
+    Both Redis and CMC direct must be mocked empty to reach CoinGecko.
+    """
     mock_redis = AsyncMock()
     mock_redis.get = AsyncMock(return_value=None)
 
-    cg_coins = [
-        {
-            "symbol": "BTC", "name": "Bitcoin", "market_cap_rank": 1,
-            "current_price": 50_000, "market_cap": 1e12, "total_volume": 5e10,
-            "price_change_percentage_24h": 2.0, "last_updated": "2024-01-01T00:00:00Z",
-        }
-    ]
+    _empty = IntelligenceCacheResult(
+        coins=[], cache_source="empty", cache_hit=False,
+        cache_age_seconds=0.0, is_fresh=False,
+    )
 
     with (
         patch("backend.core.scanner.intelligence_cache.get_redis", return_value=mock_redis),
+        patch("backend.core.scanner.intelligence_cache._fallback_cmc_direct", return_value=_empty),
         patch("backend.core.scanner.intelligence_cache._fallback_coingecko") as mock_cg,
     ):
         mock_cg.return_value = IntelligenceCacheResult(
@@ -121,46 +123,26 @@ async def test_listings_falls_back_to_coingecko_on_redis_miss():
 @pytest.mark.asyncio
 async def test_listings_falls_back_to_postgres_when_coingecko_fails():
     """
-    When Redis is empty AND CoinGecko raises, the Postgres coins table is used.
-    This is the CMC-off scenario: only local data is available.
+    When Redis, CMC direct, and CoinGecko all fail, Postgres coins table is used.
+    Full outage scenario: all three external sources return empty; Postgres saves the scan.
+
+    Actual chain: Redis → CMC direct → CoinGecko → Postgres.
+    All three must be mocked empty to reach the Postgres path.
     """
     mock_redis = AsyncMock()
     mock_redis.get = AsyncMock(return_value=None)
 
-    pg_rows = [
-        _make_asyncpg_row(
-            symbol="BTC", name="Bitcoin", rank=1,
-            market_cap=1e12, volume_24h=5e10,
-            price=50_000.0, price_change_24h=2.0,
-            binance_symbol="BTCUSDT", has_futures=True,
-            last_updated=datetime.now(timezone.utc),
-        ),
-        _make_asyncpg_row(
-            symbol="ETH", name="Ethereum", rank=2,
-            market_cap=5e11, volume_24h=2e10,
-            price=3_000.0, price_change_24h=1.5,
-            binance_symbol="ETHUSDT", has_futures=True,
-            last_updated=datetime.now(timezone.utc),
-        ),
-    ]
-
-    mock_conn  = AsyncMock()
-    mock_conn.fetch = AsyncMock(return_value=pg_rows)
-    mock_pool  = AsyncMock()
-    mock_pool.acquire = MagicMock(return_value=AsyncMock(
-        __aenter__=AsyncMock(return_value=mock_conn),
-        __aexit__=AsyncMock(return_value=False),
-    ))
+    _empty = IntelligenceCacheResult(
+        coins=[], cache_source="empty", cache_hit=False,
+        cache_age_seconds=0.0, is_fresh=False,
+    )
 
     with (
         patch("backend.core.scanner.intelligence_cache.get_redis", return_value=mock_redis),
-        patch("backend.core.scanner.intelligence_cache._fallback_coingecko") as mock_cg,
+        patch("backend.core.scanner.intelligence_cache._fallback_cmc_direct", return_value=_empty),
+        patch("backend.core.scanner.intelligence_cache._fallback_coingecko", return_value=_empty),
         patch("backend.core.scanner.intelligence_cache._fallback_db_listings") as mock_db,
     ):
-        mock_cg.return_value = IntelligenceCacheResult(
-            coins=[], cache_source="empty", cache_hit=False,
-            cache_age_seconds=0.0, is_fresh=False,
-        )
         mock_db.return_value = IntelligenceCacheResult(
             coins=[
                 CoinData(id="BTC", symbol="BTC", name="Bitcoin", rank=1,
@@ -258,7 +240,8 @@ async def test_fallback_db_sectors_returns_full_coin_list():
         __aexit__=AsyncMock(return_value=False),
     ))
 
-    with patch("backend.core.scanner.intelligence_cache.get_pool", return_value=mock_pool):
+    # get_pool is imported inside _fallback_db_sectors — patch at the source module
+    with patch("backend.database.session.get_pool", return_value=mock_pool):
         cats, source = await _fallback_db_sectors()
 
     assert len(cats) == 1
@@ -280,18 +263,17 @@ async def test_full_outage_returns_empty_not_crash():
     mock_redis = AsyncMock()
     mock_redis.get = AsyncMock(return_value=None)
 
+    _empty = IntelligenceCacheResult(
+        coins=[], cache_source="empty", cache_hit=False,
+        cache_age_seconds=0.0, is_fresh=False,
+    )
     with (
         patch("backend.core.scanner.intelligence_cache.get_redis", return_value=mock_redis),
-        patch(
-            "backend.core.scanner.intelligence_cache._fallback_coingecko",
-            side_effect=Exception("CoinGecko down"),
-        ),
+        patch("backend.core.scanner.intelligence_cache._fallback_cmc_direct", return_value=_empty),
+        patch("backend.core.scanner.intelligence_cache._fallback_coingecko", return_value=_empty),
         patch(
             "backend.core.scanner.intelligence_cache._fallback_db_listings",
-            return_value=IntelligenceCacheResult(
-                coins=[], cache_source="empty", cache_hit=False,
-                cache_age_seconds=0.0, is_fresh=False,
-            ),
+            return_value=_empty,
         ),
     ):
         result = await read_intelligence_listings(limit=10)
@@ -321,15 +303,16 @@ async def test_partial_postgres_data_still_allows_scan():
                                   "ADA", "AVAX", "DOT", "LINK", "MATIC"])
     ]
 
+    _empty = IntelligenceCacheResult(
+        coins=[], cache_source="empty", cache_hit=False,
+        cache_age_seconds=0.0, is_fresh=False,
+    )
     with (
         patch("backend.core.scanner.intelligence_cache.get_redis", return_value=mock_redis),
-        patch("backend.core.scanner.intelligence_cache._fallback_coingecko") as mock_cg,
+        patch("backend.core.scanner.intelligence_cache._fallback_cmc_direct", return_value=_empty),
+        patch("backend.core.scanner.intelligence_cache._fallback_coingecko", return_value=_empty),
         patch("backend.core.scanner.intelligence_cache._fallback_db_listings") as mock_db,
     ):
-        mock_cg.return_value = IntelligenceCacheResult(
-            coins=[], cache_source="empty", cache_hit=False,
-            cache_age_seconds=0.0, is_fresh=False,
-        )
         mock_db.return_value = IntelligenceCacheResult(
             coins=partial_coins,
             cache_source="db_fallback",
