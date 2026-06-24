@@ -145,6 +145,7 @@ Earlier migrations (also applied):
 | Item | Notes |
 |------|-------|
 | Set `ANTHROPIC_API_KEY` in Railway | Currently 100% heuristic. WR=33.52% achieved heuristically — not urgent but limits future alpha |
+| **Re-run CMC one-time sector capture** | Initial run returned `assignments: 0` (rate limit). Fix deployed Jun 24 (commit `c187ab2`). Run: `python -c "import asyncio; from backend.core.scanner.cmc_backup import capture_full_backup; print(asyncio.run(capture_full_backup()))"` from Railway shell. Expect `assignments: 3000+`. Without this, sector intelligence falls back to metadata-only (no coin membership). |
 
 ### P1 — Act post June 30
 | Item | Notes |

@@ -1,5 +1,7 @@
 # CMC.FREE.PLAN.READINESS.1 — CoinMarketCap Free Plan Readiness Audit
 
+> **RESOLVED June 24, 2026** — Both "needs fix" items (`tickTrending()` + `tickCategories()` CoinGecko fallbacks) are deployed. See `CMC_REMOVAL_IMPLEMENTATION_1.md` for full migration status and `CMC_MIGRATION_EXECUTION_1.md` for execution log.
+
 **Date:** 2026-06-24  
 **Sources audited:** `lib/intelligence/cmc-client.ts` · `lib/intelligence/workers.ts` · `lib/intelligence/cache-groups.ts` · `lib/intelligence/normalizer.ts` · `backend/core/scanner/intelligence_cache.py` · `backend/core/scanner/orchestrator.py` · `lib/market-data/providers/coingecko.ts`
 

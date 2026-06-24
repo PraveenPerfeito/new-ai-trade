@@ -1,7 +1,9 @@
 # CELERY.BROKER.POST_DEPLOY_VALIDATION.1
 
+> **HISTORICAL — Incident resolved June 24, 2026.** CloudAMQP new instance (`warthog.lmq.cloudamqp.com/nykbebbj`) is live with `--without-gossip --concurrency=1`. Celery broker is confirmed AMQP (not Redis). See `CELERY_BROKER_VERIFICATION_1.md` for the post-fix state.
+
 **Date:** June 24, 2026  
-**Status:** DEPLOYED — New instance configured + gossip fix applied. Live verification of Redis state pending.  
+**Status:** RESOLVED — New CloudAMQP instance active + gossip disabled.  
 **Previous incident:** Old instance quota exhausted by gossip heartbeat storm (1M msgs/month limit hit within hours).
 
 ---

@@ -1,5 +1,7 @@
 # REDIS.PRODUCTION.TRUTH.1 — Production Redis Measurement
 
+> **HISTORICAL — Pre-fix snapshot (June 24, 2026).** The critical finding below (Celery using Redis as broker) was resolved the same day by migrating to CloudAMQP AMQP broker. Current state: Celery broker = `amqps://cloudamqp.com`, Redis is result/cache only.
+
 **Date:** 2026-06-24  
 **Host:** smell-aware-macromodern-12096.db.redis.io:15686  
 **Redis version:** 8.4.0 · Uptime at measurement: 3.28 days  

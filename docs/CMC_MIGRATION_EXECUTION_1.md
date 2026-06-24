@@ -41,7 +41,9 @@ SELECT 'coin_rankings_history',          COUNT(*)         FROM coin_rankings_his
 
 ## Phase 2 — Initial Data Capture
 
-**Status: ACTION REQUIRED — run one-time capture before Startup plan expires**
+**Status: CODE FIX DEPLOYED — re-run capture (commit `c187ab2`, June 24, 2026)**
+
+Initial attempt returned `assignments: 0`. Root cause: 10 concurrent per-category requests triggered CMC rate limiting. Fix: batch size reduced 10→3, 1s inter-batch delay, retry-on-429 with 10s back-off, ERROR log when assignments=0. Re-run capture from Railway to complete:
 
 The Celery tasks are deployed (pushed in commit `ecd8b1a`). Run the one-time CMC capture from Railway:
 
@@ -90,7 +92,7 @@ FROM coin_rankings_history;
 -- Expect: ~200 rows for today's date
 ```
 
-**PASS criteria:** No table is empty. `cmc_sectors.coins[]` has ≥10 members per major category. ✓ (pending execution)
+**PASS criteria:** No table is empty. `cmc_sectors.coins[]` has ≥10 members per major category. ⏳ (pending re-run with batch-size fix)
 
 > **Important:** Run before the Startup plan expires. The `/cryptocurrency/categories` endpoint (which populates `coins[]`) is not available on the Free plan. This is a one-time operation — the `coins[]` array is never overwritten by the nightly refresh.
 

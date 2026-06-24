@@ -35,6 +35,8 @@ Four new tables extend the existing `coins` table without modifying it:
 
 **Time-sensitive:** Once CMC Startup plan expires, `/cryptocurrency/categories` is blocked on Free plan. The full `coins[]` array per sector is only available now. Run the one-time capture task before the plan rolls over.
 
+> **Status June 24, 2026:** Initial capture attempt returned `assignments: 0` (rate limiting — batch size was 10 concurrent requests). Fix deployed in commit `c187ab2`: batch size 3, 1s inter-batch delay, retry-on-429. **Re-run capture from Railway shell to complete.**
+
 ---
 
 ## Database Schema
