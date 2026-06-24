@@ -61,28 +61,71 @@ def _mcap_tier(market_cap: float | None) -> str:
 
 # ── One-time capture ──────────────────────────────────────────────────────────
 
+async def _fetch_category_coins(client: httpx.AsyncClient, api_key: str, category_id: str) -> list[str]:
+    """
+    Fetch coin symbols for one category via /cryptocurrency/category (singular).
+    The /cryptocurrency/categories (plural) endpoint returns metadata only — no coin lists.
+    """
+    try:
+        resp = await client.get(
+            f"{CMC_BASE}/cryptocurrency/category",
+            headers={"X-CMC_PRO_API_KEY": api_key},
+            params={"id": category_id, "limit": 100},
+        )
+        if resp.status_code != 200:
+            return []
+        coins = resp.json().get("data", {}).get("coins", [])
+        return [c["symbol"].upper() for c in coins if isinstance(c, dict) and c.get("symbol")]
+    except Exception as exc:
+        log.warning("cmc_category_coins_fetch_failed", category_id=category_id, error=str(exc))
+        return []
+
+
 async def capture_sectors(api_key: str) -> dict[str, Any]:
     """
-    Fetch /cryptocurrency/categories (limit=200) from CMC.
+    Fetch /cryptocurrency/categories (limit=200) from CMC for metadata,
+    then /cryptocurrency/category?id=<id> for each category's coin list.
     Writes to cmc_sectors + coin_sector_assignments.
     Run once before Startup plan expires — coins[] is the critical field.
+
+    Credit cost: 1 (categories listing) + N (one per category with coins) ≈ 50–200 credits.
+    Only fetches coin lists for categories with num_tokens > 0, limited to top 100.
     """
     async with httpx.AsyncClient(timeout=CMC_TIMEOUT) as client:
         resp = await client.get(
             f"{CMC_BASE}/cryptocurrency/categories",
             headers={"X-CMC_PRO_API_KEY": api_key},
-            params={"limit": 200, "convert": "USD"},
+            params={"limit": 200},
         )
         resp.raise_for_status()
         categories = resp.json().get("data", [])
+
+        # Sort by num_tokens descending — fetch coin lists for top 100 categories only
+        # (smaller categories contribute little to sector intelligence)
+        cats_with_tokens = sorted(
+            [c for c in categories if c.get("num_tokens", 0) > 0],
+            key=lambda c: c.get("num_tokens", 0),
+            reverse=True,
+        )[:100]
+
+        # Fetch coin lists concurrently in batches of 10 to stay within rate limits
+        cat_coins: dict[str, list[str]] = {}
+        for i in range(0, len(cats_with_tokens), 10):
+            batch = cats_with_tokens[i:i + 10]
+            tasks = [
+                _fetch_category_coins(client, api_key, cat["id"])
+                for cat in batch
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for cat, result in zip(batch, results):
+                cat_coins[cat["id"]] = result if isinstance(result, list) else []
 
     pool = await get_pool()
     sectors_written = assignments_written = 0
 
     async with pool.acquire() as conn:
         for cat in categories:
-            coins = [c["symbol"].upper() if isinstance(c, dict) else str(c).upper()
-                     for c in (cat.get("coins") or [])]
+            coins = cat_coins.get(cat["id"], [])
 
             await conn.execute(
                 """
@@ -97,13 +140,15 @@ async def capture_sectors(api_key: str) -> dict[str, Any]:
                     market_cap_change_24h = EXCLUDED.market_cap_change_24h,
                     market_cap            = EXCLUDED.market_cap,
                     coin_count            = EXCLUDED.coin_count,
-                    coins                 = EXCLUDED.coins,
+                    coins                 = CASE WHEN array_length(EXCLUDED.coins, 1) > 0
+                                                 THEN EXCLUDED.coins
+                                                 ELSE cmc_sectors.coins END,
                     refreshed_at          = now(),
                     source                = 'cmc'
                 """,
                 cat["id"], cat["name"], cat.get("title"),
                 cat.get("market_cap"), cat.get("market_cap_change"),
-                cat.get("avg_price_change"), len(coins), coins,
+                cat.get("avg_price_change"), cat.get("num_tokens", 0), coins,
             )
             sectors_written += 1
 
