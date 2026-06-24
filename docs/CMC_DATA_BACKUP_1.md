@@ -372,10 +372,10 @@ async def run_nightly_refresh() -> dict[str, Any]:
     Does NOT touch coins[] — full membership protected from CG top-3 overwrite.
     """
     import json
-    from backend.core.scanner.market_fetcher import get_redis_client
+    from backend.cache.redis_cache import get_redis  # async aioredis client
 
     pool   = await get_pool()
-    redis  = get_redis_client()
+    redis  = await get_redis()
     result = {"rankings": 0, "sectors_refreshed": 0}
 
     # 1. Rankings from Redis intel cache (populated every 15 min by TS worker)
@@ -496,22 +496,22 @@ return await _fallback_db_sectors()
 
 ### Before Startup plan expires (P0 — do now)
 
-- [ ] Run `database/cmc-backup-migration.sql` in Supabase SQL Editor
-- [ ] Create `backend/core/scanner/cmc_backup.py`
-- [ ] Add `capture_cmc_backup` Celery task to `scan_task.py`
-- [ ] Trigger capture on Railway before plan rollover
+- [x] Run `database/cmc-backup-migration.sql` in Supabase SQL Editor *(done June 24, 2026)*
+- [x] Create `backend/core/scanner/cmc_backup.py` *(commit `ecd8b1a`)*
+- [x] Add `capture_cmc_backup` Celery task to `scan_task.py` *(commit `ecd8b1a`)*
+- [ ] **Trigger capture on Railway before plan rollover** ← ONLY REMAINING ACTION
 - [ ] Verify: `SELECT COUNT(*) FROM cmc_sectors` ≥ 150; `coin_sector_assignments` ≥ 3,000
 
 ### After capture (P0 — scanner integration)
 
-- [ ] Patch `read_categories()` in `intelligence_cache.py` with DB fallback
-- [ ] Add `refresh_cmc_backup` + `refresh_sector_membership` Celery tasks to `scan_task.py`
-- [ ] Add nightly + weekly beat entries to `beat_schedule.py`
+- [x] Patch `read_categories()` in `intelligence_cache.py` with DB fallback *(commit `ecd8b1a`)*
+- [x] Add `refresh_cmc_backup` + `refresh_sector_membership` Celery tasks to `scan_task.py` *(commit `ecd8b1a`)*
+- [x] Add nightly + weekly beat entries to `beat_schedule.py` *(commit `ecd8b1a`)*
 
 ### After plan expiry (P1 — verify)
 
-- [ ] Confirm `tickTrending()` and `tickCategories()` catch blocks active (CMC_FREE_PLAN_READINESS_1 Stage 1)
-- [ ] Verify `cmc_sectors.refreshed_at` updates nightly
+- [x] `tickTrending()` and `tickCategories()` CoinGecko catch blocks deployed *(commit `b90b8b3`)*
+- [ ] Verify `cmc_sectors.refreshed_at` updates nightly (check after first 01:00 UTC run)
 - [ ] Verify `sector_status` appears on WhatsApp alerts
 
 ---

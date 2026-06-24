@@ -29,7 +29,10 @@ AFTER (Free plan):
     ↓  Postgres (cmc_sectors, coins)        [ NEW: last-resort fallback ]
 ```
 
-The TypeScript intelligence workers already call CMC — they now fall through to CoinGecko when a CMC endpoint returns 402/403 (plan restriction). The Python scanner's `intelligence_cache.py` already reads Redis — it now has a Postgres fallback when Redis is cold AND external APIs are unavailable.
+The TypeScript intelligence workers already call CMC — they now fall through to CoinGecko when a CMC endpoint returns 402/403 (plan restriction). The Python scanner's `intelligence_cache.py` already reads Redis — it now has a full fallback chain when Redis is cold:
+
+- **Listings**: Redis → CMC direct (CMC Free `/listings/latest` still works) → CoinGecko → Postgres `coins` table
+- **Categories**: Redis → Postgres `cmc_sectors` (full `coins[]` membership preserved from CMC capture)
 
 ---
 
@@ -171,9 +174,9 @@ python -m pytest backend/core/scanner/tests/test_cmc_removal_simulation.py -v
 
 ### Step 1: Before plan expiry (do this now)
 
-- [ ] Run `database/cmc-backup-migration.sql` in Supabase SQL Editor
+- [x] Run `database/cmc-backup-migration.sql` in Supabase SQL Editor *(done June 24, 2026)*
 - [ ] Verify table creation: `SELECT COUNT(*) FROM cmc_sectors;` → expect ≥150
-- [ ] Trigger one-time CMC backup: `capture_cmc_backup.delay()` from Railway Celery shell
+- [ ] **Trigger one-time CMC backup** (ONLY REMAINING ACTION): `capture_cmc_backup.delay()` from Railway shell
 - [ ] Verify backup: `SELECT COUNT(*), MAX(refreshed_at) FROM coin_sector_assignments;`
 - [ ] Confirm `cmc_sectors.coins` has data: `SELECT name, array_length(coins, 1) FROM cmc_sectors LIMIT 5;`
 
@@ -181,21 +184,21 @@ python -m pytest backend/core/scanner/tests/test_cmc_removal_simulation.py -v
 
 Files changed in this implementation:
 
-| File | Change |
-|------|--------|
-| `database/cmc-backup-migration.sql` | NEW — 4 tables + RLS policies |
-| `backend/core/scanner/cmc_backup.py` | NEW — capture + refresh functions |
-| `backend/core/scanner/intelligence_cache.py` | Added `_fallback_db_listings()` + `_fallback_db_sectors()` |
-| `backend/workers/scan_task.py` | Added 3 Celery tasks |
-| `backend/workers/beat_schedule.py` | Added 2 beat schedule entries |
-| `lib/intelligence/workers.ts` | Added CoinGecko fallback functions + updated tick handlers |
-| `lib/intelligence/quota-guard.ts` | Updated `MONTHLY_BUDGET` 300K → 10K |
-| `backend/core/scanner/tests/test_cmc_removal_simulation.py` | NEW — 7 simulation tests |
+| File | Change | Status |
+|------|--------|--------|
+| `database/cmc-backup-migration.sql` | NEW — 4 tables + RLS policies | ✓ deployed |
+| `backend/core/scanner/cmc_backup.py` | NEW — capture + refresh functions | ✓ deployed |
+| `backend/core/scanner/intelligence_cache.py` | Added `_fallback_db_listings()` + `_fallback_db_sectors()` | ✓ deployed |
+| `backend/workers/scan_task.py` | Added 3 Celery tasks | ✓ deployed |
+| `backend/workers/beat_schedule.py` | Added 2 beat schedule entries | ✓ deployed |
+| `lib/intelligence/workers.ts` | Added CoinGecko fallback functions + updated tick handlers | ✓ deployed |
+| `lib/intelligence/quota-guard.ts` | Updated `MONTHLY_BUDGET` 300K → 10K | ✓ deployed |
+| `backend/core/scanner/tests/test_cmc_removal_simulation.py` | NEW — 7 simulation tests (7/7 pass) | ✓ deployed |
 
-- [ ] Deploy Railway backend (Python changes)
-- [ ] Deploy Vercel (TypeScript changes)
+- [x] Deploy Railway backend (Python changes) *(commit `ecd8b1a`, June 24, 2026)*
+- [x] Deploy Vercel (TypeScript changes) *(commit `b90b8b3`, June 24, 2026)*
 - [ ] Monitor Railway logs for `cmc_categories_plan_restricted_falling_back_to_coingecko` — confirms fallback is active
-- [ ] Monitor for `intel_db_listings_fallback_ok` — confirms Postgres fallback is reachable (should NOT appear in normal operation)
+- [ ] Monitor for `intel_db_listings_fallback_ok` — confirms Postgres fallback reachable (should NOT appear in normal operation)
 
 ### Step 3: After plan expiry / downgrade
 

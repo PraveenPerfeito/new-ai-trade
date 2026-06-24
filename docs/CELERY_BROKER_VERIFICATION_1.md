@@ -1,8 +1,8 @@
 # CELERY.BROKER.VERIFICATION.1
 
 **Date:** June 2026  
-**Status:** CONFIRMED — Celery IS using Redis as broker. Fix pending deployment.  
-**Root cause:** `CELERY_BROKER_URL` not set in Railway worker service → falls back to `REDIS_URL`
+**Status:** DEPLOYED — Celery now on CloudAMQP with gossip fix applied. Live verification pending.  
+**Root cause (resolved):** `CELERY_BROKER_URL` was not set in Railway worker service → fell back to `REDIS_URL`. Now fixed.
 
 ---
 
@@ -137,20 +137,16 @@ if settings.result_backend and settings.result_backend.startswith("rediss://"):
 
 ### Required Railway configuration
 
-Set these 2 environment variables in Railway **worker service** (not the API service):
+**✓ DONE (confirmed June 24, 2026)** — User set these variables in Railway worker service:
 
 ```
-CELERY_BROKER_URL=amqps://kbvaoiaz:wgbiAJsPZlP2BSe2TOlIeRa-MubCLV0B@armadillo.rmq.cloudamqp.com/kbvaoiaz
+CELERY_BROKER_URL=amqps://nykbebbj:mt6OsDy-iQUPGGKav3mbfHj3I4_2scZH@warthog.lmq.cloudamqp.com/nykbebbj
 CELERY_RESULT_BACKEND=rpc://
 ```
 
-**How to set in Railway dashboard:**
-1. Open [railway.app](https://railway.app) → your project
-2. Click the **worker** service (the one with custom start command `celery ... worker --beat ...`)
-3. Go to **Variables** tab
-4. Add `CELERY_BROKER_URL` = value above
-5. Add `CELERY_RESULT_BACKEND` = `rpc://`
-6. Click **Deploy** to restart the worker
+**✓ Start command also updated** — `--without-gossip --without-mingle --concurrency=1` flags added.
+
+Note: The original URL (`armadillo.rmq.cloudamqp.com/kbvaoiaz`) was the first instance — quota exhausted. Migrated to new instance (`warthog.lmq.cloudamqp.com/nykbebbj`).
 
 ### Post-restart Redis cleanup
 
@@ -224,13 +220,14 @@ Required changes (CELERY.CLOUDAMQP.GOSSIP.FIX.1):
 
 ### Verification checklist (post-deploy)
 
-- [ ] Worker restarts without error in Railway logs
+- [x] Worker deployed — new start command + new CloudAMQP URL set in Railway (confirmed June 24, 2026)
+- [ ] Worker restarts cleanly — verify Railway logs show `celery@<hostname> ready`, no `530 NOT_ALLOWED`
 - [ ] `celery inspect ping` (via Railway shell) returns responses
-- [ ] Redis `_kombu.binding.*` keys = 0 after cleanup
+- [ ] Redis `_kombu.binding.*` keys = 0 after cleanup (run the cleanup script in Part D above)
 - [ ] Redis `connected_clients` drops from 26 → ~20–22
 - [ ] Redis `blocked_clients` = 0
-- [ ] Scans continue running normally (check signal generation)
-- [ ] Worker heartbeat refreshes (Railway → worker logs show `worker_heartbeat` task firing)
+- [ ] Scans continue running normally (check signal generation in Signals dashboard)
+- [ ] Worker heartbeat refreshes (Railway → worker logs show `worker_heartbeat` task firing every 600s)
 
 ---
 
@@ -242,7 +239,7 @@ Required changes (CELERY.CLOUDAMQP.GOSSIP.FIX.1):
 | `CELERY_BROKER_URL` never set in Railway | — | **Gap: code assumed env var; Railway never got it** |
 | REDIS.PRODUCTION.TRUTH.1 audit flags 27,972 BRPOP/day | June 2026 | Root cause identified |
 | CELERY.BROKER.VERIFICATION.1 confirms Redis-as-broker | June 2026 | `_kombu.binding.*` keys confirmed live |
-| Fix: Set `CELERY_BROKER_URL` in Railway worker | **Pending** | Requires Railway dashboard action |
+| Fix: Set `CELERY_BROKER_URL` + gossip flags in Railway worker | **✓ Done June 24, 2026** | New instance `nykbebbj`, `--without-gossip --concurrency=1` |
 
 ---
 

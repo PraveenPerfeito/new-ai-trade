@@ -1,7 +1,7 @@
 # CELERY.BROKER.POST_DEPLOY_VALIDATION.1
 
 **Date:** June 24, 2026  
-**Status:** READY TO DEPLOY — New CloudAMQP instance. Gossip fix applied. See Immediate Fix section.  
+**Status:** DEPLOYED — New instance configured + gossip fix applied. Live verification of Redis state pending.  
 **Previous incident:** Old instance quota exhausted by gossip heartbeat storm (1M msgs/month limit hit within hours).
 
 ---
@@ -78,9 +78,9 @@ This estimate puts Redis well within the 200K ops/month target from OPS.CONSOLID
 
 ## Part E — Verdict
 
-**FAILED** — Worker is down due to stale CloudAMQP credentials.
+**DEPLOYED** — New CloudAMQP instance `nykbebbj` configured + gossip fix applied. Live Redis state verification still pending.
 
-The architectural goal (Celery on AMQP, not Redis) is correct and the code change worked. The blocker is a credential mismatch, not a code issue.
+The root cause was twofold: (1) Old instance `kbvaoiaz` exhausted its 1M monthly quota from gossip heartbeats. (2) Gossip protocol generates 2.6M msgs/month with `--concurrency=2` — 2.6× the free plan limit. Both fixed: new instance + `--without-gossip --concurrency=1` brings projected usage to ~24,000 msgs/month (2.4% of limit).
 
 ---
 
@@ -109,39 +109,33 @@ In addition, task lifecycle events (`celeryev` queue) add ~2,400 msgs/day.
 
 ## Immediate Fix: Migrate to New CloudAMQP Instance
 
-### Step 1 — Update Railway worker start command
+### Step 1 — Update Railway worker start command ✓ DONE
 
-In Railway → **worker service** → **Settings** → **Start command**, change from:
-```
-celery -A backend.workers.celery_app.celery_app worker --beat --loglevel=info --concurrency=2 -Q celery,scanner
-```
-to:
+**Confirmed June 24, 2026** — Start command set to:
 ```
 celery -A backend.workers.celery_app.celery_app worker --beat --loglevel=info --concurrency=1 -Q celery,scanner --without-gossip --without-mingle
 ```
 
-Key changes:
-- `--concurrency=2` → `--concurrency=1` — 1 worker process (aligns with `worker_concurrency=1` in config; was being overridden by CLI flag)
+Key changes applied:
+- `--concurrency=2` → `--concurrency=1` — 1 worker process
 - `--without-gossip` — **disables the 86,400 msgs/day heartbeat storm**
 - `--without-mingle` — disables startup synchronization (saves ~10 msgs per restart)
 
-### Step 2 — Set env vars in Railway worker service
+### Step 2 — Set env vars in Railway worker service ✓ DONE
 
-In Railway → **worker service** → **Variables**:
+**Confirmed June 24, 2026** — Variables set in Railway worker service:
 
-| Variable | Value |
-|----------|-------|
-| `CELERY_BROKER_URL` | `amqps://nykbebbj:mt6OsDy-iQUPGGKav3mbfHj3I4_2scZH@warthog.lmq.cloudamqp.com/nykbebbj` |
-| `CELERY_RESULT_BACKEND` | `rpc://` |
+| Variable | Value | Status |
+|----------|-------|--------|
+| `CELERY_BROKER_URL` | `amqps://nykbebbj:...@warthog.lmq.cloudamqp.com/nykbebbj` | ✓ Set |
+| `CELERY_RESULT_BACKEND` | `rpc://` | ✓ Set |
 
-### Step 3 — Deploy and verify
-
-Click **Deploy** in Railway. Worker should start cleanly within 30 seconds.
+### Step 3 — Verify live state
 
 Check Railway logs for:
-- `Connected to amqps://nykbebbj@warthog.lmq.cloudamqp.com//nykbebbj` ✓
-- `celery@<hostname> ready` ✓
-- No `530 NOT_ALLOWED` errors ✓
+- [ ] `Connected to amqps://nykbebbj@warthog.lmq.cloudamqp.com//nykbebbj`
+- [ ] `celery@<hostname> ready`
+- [ ] No `530 NOT_ALLOWED` errors
 
 ### Option B — Upgrade if needed (~$19/mo)
 
