@@ -10,29 +10,24 @@ from fastapi.responses import JSONResponse
 
 from backend.logging.setup import get_logger
 from backend.middleware.rate_limit import limiter, SCHEDULER_LIMIT
-from backend.scheduler.coordinator import SchedulerCoordinator
+from backend.scheduler.coordinator import get_coordinator
 
 log = get_logger(__name__)
 router = APIRouter(prefix="/api/scheduler", tags=["scheduler"])
-
-
-def _coordinator() -> SchedulerCoordinator:
-    return SchedulerCoordinator()
 
 
 @router.get("/status")
 @limiter.limit(SCHEDULER_LIMIT)
 async def get_status(request: Request):
     # P0.1: use status_async() — avoids asyncio.run() inside an already-running event loop
-    status = await _coordinator().status_async()
+    status = await get_coordinator().status_async()
     return {"success": True, "data": status}
 
 
 @router.post("/start")
 @limiter.limit(SCHEDULER_LIMIT)
 async def start_scheduler(request: Request):
-    coord = _coordinator()
-    coord.enable()
+    get_coordinator().enable()
     log.info("scheduler_start_requested", remote=request.client.host if request.client else "unknown")
     return {"success": True, "message": "Scheduler enabled"}
 
@@ -40,7 +35,6 @@ async def start_scheduler(request: Request):
 @router.post("/stop")
 @limiter.limit(SCHEDULER_LIMIT)
 async def stop_scheduler(request: Request):
-    coord = _coordinator()
-    coord.disable()
+    get_coordinator().disable()
     log.info("scheduler_stop_requested", remote=request.client.host if request.client else "unknown")
     return {"success": True, "message": "Scheduler disabled"}

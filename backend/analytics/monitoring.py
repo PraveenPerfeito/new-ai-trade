@@ -38,12 +38,19 @@ _snapshot_write_state: dict = {"hour": -1, "date": ""}
 
 # R5: Track keys that already have their TTL set; skip EXPIRE on subsequent
 # calls.  Keys include today's date, so new-day keys automatically miss the
-# set and get their TTL on first write.  At most ~5 entries grow per day
-# (signals, scans, coins_scanned, telegram_sends, binance_errors).
+# set and get their TTL on first write.  At most ~5 entries grow per day.
+# _initialized_keys_day tracks the current date so the set is cleared on
+# day rollover — prevents unbounded growth from accumulated stale date-keys.
 _initialized_keys: set[str] = set()
+_initialized_keys_day: str = ""
 
 
 async def _incr(metric: str, amount: int = 1) -> None:
+    global _initialized_keys_day
+    today = _today()
+    if _initialized_keys_day != today:
+        _initialized_keys.clear()
+        _initialized_keys_day = today
     try:
         from backend.cache.redis_cache import get_redis
         redis = await get_redis()
@@ -121,6 +128,8 @@ THRESHOLDS: dict[str, dict] = {
     "scan_duration_s":         {"healthy": 600,   "warning": 900,     "critical": 1_020,   "inverted": True},
     # (higher is better)
     "scans_today":             {"healthy": 8,     "warning": 2,       "critical": -1,      "inverted": False},
+    # (lower is better) — warn when AI cost spikes; 0 when AI is off (always healthy)
+    "estimated_cost_usd":      {"healthy": 5.0,  "warning": 10.0,    "critical": 20.0,    "inverted": True},
 }
 
 
@@ -322,9 +331,9 @@ async def get_monitoring_snapshot() -> dict:
         "coins_scanned_per_run":  _entry("coins_scanned_per_run",  avg_coins_per_run, "coins"),
         "scan_duration_s":        _entry("scan_duration_s",        last_duration_s,  "s"),
         "claude_calls_per_day":   _entry("claude_calls_per_day",   claude_calls,     "calls"),
-        "heuristic_calls_per_day": {"value": heuristic_calls, "unit": "calls",   "level": "healthy"},
+        "heuristic_calls_per_day": _entry("heuristic_calls_per_day", heuristic_calls, "calls"),
         "claude_fallback_pct":    _entry("claude_fallback_pct",    fallback_pct,     "%"),
-        "estimated_cost_usd":     {"value": estimated_cost_usd, "unit": "USD",  "level": "healthy"},
+        "estimated_cost_usd":     _entry("estimated_cost_usd",     estimated_cost_usd, "USD"),
         "cmc_credits_per_day":    _entry("cmc_credits_per_day",    cmc_credits_day,  "credits"),
         "telegram_sends_per_day": _entry("telegram_sends_per_day", tg_sends,         "sends"),
         "binance_errors_per_day": _entry("binance_errors_per_day", binance_errs,     "errors"),

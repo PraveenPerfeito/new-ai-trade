@@ -99,16 +99,22 @@ export async function getRecentSignals(
   limit = 50,
   minConfidence = 70,
   windowDays = 7,
+  mode?: string,
+  signalType?: string,
 ): Promise<TradingSignal[]> {
   const cutoff = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000).toISOString();
-  const { data, error } = await db()
+  let query = db()
     .from('signals')
     .select('*')
     .gte('confidence', minConfidence)
     .gte('created_at', cutoff)
-    .order('created_at', { ascending: false })   // newest first
-    .order('confidence', { ascending: false })   // then by quality
-    .limit(limit);
+    .order('created_at', { ascending: false })
+    .order('confidence', { ascending: false });
+
+  if (mode) query = query.eq('scanner_mode', mode);
+  if (signalType) query = query.eq('type', signalType);
+
+  const { data, error } = await query.limit(limit);
 
   if (error) { log.error({ error: error.message }, 'db getRecentSignals failed'); return []; }
   return (data ?? []).map(rowToSignal);

@@ -22,7 +22,7 @@ from backend.core.scanner.orchestrator import (
     get_latest_progress,
 )
 from backend.logging.setup import get_logger
-from backend.scheduler.coordinator import SchedulerCoordinator
+from backend.scheduler.coordinator import get_coordinator
 from backend.system_settings.service import get_settings_service
 from backend.system_settings.groups import FeatureFlags
 
@@ -62,7 +62,7 @@ async def trigger_scan(request: Request, body: Annotated[TriggerRequest, Body()]
         raise HTTPException(status_code=422, detail=f"Invalid mode. Choose from: {valid}")
 
     # ── Operational gate: honour scheduler toggle and emergency/maintenance flags ──
-    coord = SchedulerCoordinator()
+    coord = get_coordinator()
     if not coord.is_enabled():
         raise HTTPException(status_code=503, detail="Scanner is disabled. Enable it from the Operations dashboard first.")
 

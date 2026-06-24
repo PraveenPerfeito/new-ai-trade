@@ -28,7 +28,9 @@ interface RegimeData {
   btcAtrPct: number; btc24hChange: number; computedAt: string
 }
 interface SignalCounts {
-  signals_today: number; active_signals: number
+  signals_today: number
+  // open_signals = unresolved 7d signals (includes STALE); active_signals is a legacy alias for the same value
+  open_signals?: number; active_signals: number
   win_rate_7d: number; expectancy_7d: number; resolved_7d: number
   profit_factor_7d?: number; avg_rr_achieved_7d?: number
   tp_count_7d?: number; sl_count_7d?: number; telegram_sent_7d?: number
@@ -1136,8 +1138,8 @@ function OverviewTab({ celery, regime, signalCounts, providers, cache, signals, 
           {signals.length > 0 && (
             <div className="mt-2 pt-2 border-t border-zinc-800/60 grid grid-cols-4 gap-1.5">
               {[
-                { label: 'In Play', value: signals.filter(s => isActiveStage(s.lifecycleStage)).length, color: 'text-blue-400' },
-                { label: 'Sent',    value: signalCounts?.telegram_sent_7d ?? signals.filter(s => s.telegramSent).length, color: 'text-purple-400' },
+                { label: 'In Play',   value: signals.filter(s => isActiveStage(s.lifecycleStage)).length, color: 'text-blue-400' },
+                { label: 'Sent (7d)', value: signalCounts?.telegram_sent_7d ?? signals.filter(s => s.telegramSent).length, color: 'text-purple-400' },
                 { label: 'TP Hit',  value: signalCounts?.tp_count_7d ?? lc['TP_HIT'] ?? 0,  color: 'text-emerald-400' },
                 { label: 'SL Hit',  value: signalCounts?.sl_count_7d ?? lc['SL_HIT'] ?? 0,  color: 'text-red-400' },
               ].map(({ label, value, color }) => (
@@ -1288,10 +1290,11 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
   // + Overview (was 3 separate polls of the same endpoint at 60-120s)
   const fetcher = useCallback(() =>
     fetch('/api/signals/tactical?limit=200&lifecycleStage=all')
-      .then(r=>r.json()).then(j=>({ signals: j.signals??[], dbTotal: j.dbTotal??null })).catch(()=>({ signals: [], dbTotal: null })), [])
-  const { data: feed, loading } = useSharedPolling<{ signals: TacticalSignalRow[]; dbTotal: number|null }>('trading:tactical-feed', fetcher, 120_000)
+      .then(r=>r.json()).then(j=>({ signals: j.signals??[], dbTotal: j.dbTotal??null, outcomesAvailable: j.outcomesAvailable!==false })).catch(()=>({ signals: [], dbTotal: null, outcomesAvailable: true })), [])
+  const { data: feed, loading } = useSharedPolling<{ signals: TacticalSignalRow[]; dbTotal: number|null; outcomesAvailable: boolean }>('trading:tactical-feed', fetcher, 120_000)
   const signals = feed?.signals ?? null
   const dbTotal = feed?.dbTotal ?? null
+  const outcomesAvailable = feed?.outcomesAvailable ?? true
 
   const presetStages = preset === 'all' ? null : (stageMap[preset] ?? null)
   // SIGCNT-A2: apply all non-lifecycle filters first so preset badge counts match list length
@@ -1320,7 +1323,7 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
   const presetDefs = [
     {id:'active',  label:'Active'},
     {id:'pending', label:'Pending'},
-    {id:'sent',    label:'Sent'},
+    {id:'sent',    label:'Just Sent'},
     {id:'won',     label:'Won'},
     {id:'lost',    label:'Lost'},
     {id:'expired', label:'Expired'},
@@ -1336,6 +1339,14 @@ function SignalsTab({ currentRegime }: { currentRegime: MarketRegime | null }) {
     <div className="space-y-6">
       {/* Lifecycle funnel */}
       <LifecycleFunnel signals={signals??[]} dbTotal={dbTotal} />
+
+      {/* Outcomes DB unavailable — lifecycle stages may show ACTIVE instead of resolved */}
+      {!outcomesAvailable && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs">
+          <span className="shrink-0">⚠</span>
+          <span>Outcome data unavailable — resolved signals may appear as Active. Lifecycle stages are approximate.</span>
+        </div>
+      )}
 
       {/* Preset pills */}
       <div className="flex gap-1.5 flex-wrap">

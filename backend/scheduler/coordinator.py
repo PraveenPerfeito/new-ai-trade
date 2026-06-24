@@ -19,7 +19,7 @@ from backend.metrics.prometheus import scheduler_active, scheduler_scanning
 
 log = get_logger(__name__)
 
-ScanMode = Literal["standard", "high_confidence", "futures"]
+ScanMode = Literal["standard", "high_confidence", "futures", "trending"]
 
 _LOCK_KEY_PREFIX     = "scheduler:lock:"
 _ENABLED_KEY         = "scheduler:enabled"
@@ -308,3 +308,16 @@ class SchedulerCoordinator:
             self._redis.delete(_STATUS_CACHE_KEY)
         except Exception as exc:
             log.warning("record_scan_complete_redis_error", error=str(exc))
+
+
+# ── Process-level singleton ───────────────────────────────────────────────────
+
+_coordinator_singleton: SchedulerCoordinator | None = None
+
+
+def get_coordinator() -> SchedulerCoordinator:
+    """Return the process-level singleton. Avoids creating a new Redis pool on every call."""
+    global _coordinator_singleton
+    if _coordinator_singleton is None:
+        _coordinator_singleton = SchedulerCoordinator()
+    return _coordinator_singleton

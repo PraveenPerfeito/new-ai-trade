@@ -101,6 +101,8 @@ export async function GET() {
     return NextResponse.json({
       success:              true,
       signals_today:        signalsToday,
+      // open_signals = unresolved 7d signals (includes STALE past window); differs from ACTIVE stage (within window only)
+      open_signals:         activeSignals,
       active_signals:       activeSignals,
       win_rate_7d:          winRate7d,
       expectancy_7d:        expectancy7d,

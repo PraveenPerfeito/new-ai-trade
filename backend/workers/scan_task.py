@@ -19,7 +19,7 @@ from backend.metrics.prometheus import (
     scheduler_scanning,
     scheduler_last_scan_timestamp,
 )
-from backend.scheduler.coordinator import SchedulerCoordinator
+from backend.scheduler.coordinator import get_coordinator
 
 logger = get_task_logger(__name__)
 
@@ -119,7 +119,7 @@ def run_scheduled_scan(self, mode: ScanMode = "standard") -> dict:
     start = time.monotonic()
     task_label = f"scan_{mode}"
 
-    coordinator = SchedulerCoordinator()
+    coordinator = get_coordinator()
 
     # ── Operational gate: check enable flag and emergency stop BEFORE acquiring lock ──
     # This prevents queued tasks from executing after the operator disables the scheduler.
@@ -286,9 +286,8 @@ _HEARTBEAT_TTL = 1800  # 30 minutes — 3× the 600s beat interval (A2 PLATFORM.
 def write_worker_heartbeat() -> None:
     """Write the worker heartbeat key synchronously. Safe to call from signals."""
     try:
-        from backend.scheduler.coordinator import SchedulerCoordinator
-        coord = SchedulerCoordinator()
-        coord._redis.setex(_HEARTBEAT_KEY, _HEARTBEAT_TTL, str(time.time()))
+        from backend.scheduler.coordinator import get_coordinator
+        get_coordinator()._redis.setex(_HEARTBEAT_KEY, _HEARTBEAT_TTL, str(time.time()))
     except Exception as exc:
         logger.warning(f"worker_heartbeat_write_failed error={exc}")
 

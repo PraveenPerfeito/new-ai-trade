@@ -31,13 +31,20 @@ export async function GET(req: NextRequest) {
       dbTotal = count;
     } catch { /* non-fatal — UI degrades gracefully */ }
 
-    // Fetch more than needed to allow filtering
-    const raw = await getRecentSignals(limit * 2, minConfidence);
+    // Fetch with DB-level mode/type filtering so pagination isn't limited by client-side post-filter
+    const raw = await getRecentSignals(
+      limit * 2,
+      minConfidence,
+      7,
+      mode !== 'all' ? mode : undefined,
+      type !== 'all' ? type : undefined,
+    );
 
     // Fetch outcome statuses + realized results for these signals
     const ids = raw.map((s) => s.id).filter(Boolean) as string[];
     interface OutcomeRec { outcome: SignalOutcome; rrAchieved: number | null; pnlPct: number | null; durationHours: number | null }
     const outcomeMap = new Map<string, OutcomeRec>();
+    let outcomesAvailable = true;
 
     if (ids.length > 0) {
       try {
@@ -56,7 +63,7 @@ export async function GET(req: NextRequest) {
           });
         }
       } catch {
-        // Non-fatal — outcome status is optional
+        outcomesAvailable = false;
       }
     }
 
@@ -75,15 +82,9 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    // Apply filters
+    // Apply lifecycle filter (mode/type already applied at DB level)
     if (lifecycleStage !== 'all') {
       rows = rows.filter((r) => r.lifecycleStage === (lifecycleStage as SignalLifecycleStage));
-    }
-    if (type !== 'all') {
-      rows = rows.filter((r) => r.type === type);
-    }
-    if (mode !== 'all') {
-      rows = rows.filter((r) => r.scannerMode === mode);
     }
 
     const sliced = rows.slice(0, limit);
@@ -92,7 +93,8 @@ export async function GET(req: NextRequest) {
       success: true,
       signals: sliced,
       total:   sliced.length,
-      dbTotal,              // DB count of all signals in 7d window matching minConfidence
+      dbTotal,
+      outcomesAvailable,    // false when signal_outcomes DB query failed — UI shows degraded banner
       filters: {
         applied: { lifecycleStage, type, mode, minConfidence },
         totalBeforeFilter,

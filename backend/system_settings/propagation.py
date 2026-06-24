@@ -169,17 +169,19 @@ def _sync_watcher_loop(service) -> None:
     settings = get_settings()
     backoff   = 1.0
 
+    kw: dict = {
+        "decode_responses": True,
+        "socket_timeout": 30,
+        "socket_connect_timeout": 5,
+        "max_connections": 2,  # 1 for pubsub + 1 for get(); 2 is the minimum
+    }
+    # Redis Cloud (rediss://) — use string "none" not Python None (see redis_cache.py).
+    if settings.redis_url.startswith("rediss://"):
+        kw["ssl_cert_reqs"] = "none"
+
     while True:
+        client = None
         try:
-            kw: dict = {
-                "decode_responses": True,
-                "socket_timeout": 30,
-                "socket_connect_timeout": 5,
-                "max_connections": 2,  # 1 for pubsub + 1 for get(); 2 is the minimum
-            }
-            # Redis Cloud (rediss://) — use string "none" not Python None (see redis_cache.py).
-            if settings.redis_url.startswith("rediss://"):
-                kw["ssl_cert_reqs"] = "none"
             client = sync_redis.Redis.from_url(settings.redis_url, **kw)
             pubsub = client.pubsub()
             pubsub.subscribe("settings_changed")
@@ -225,6 +227,14 @@ def _sync_watcher_loop(service) -> None:
                         error=str(exc), backoff=backoff)
             time.sleep(backoff)
             backoff = min(backoff * 2, 60.0)
+        finally:
+            # Always close the pool before reconnecting — prevents connection leak
+            # where each reconnect iteration left an abandoned pool alive until GC.
+            if client is not None:
+                try:
+                    client.connection_pool.disconnect()
+                except Exception:
+                    pass
 
 
 def start_celery_config_watcher(service) -> None:
