@@ -10,6 +10,9 @@ import {
   fetchCategories,
   fetchKeyInfo,
   type CmcListingCoin,
+  type CmcGlobalMetrics,
+  type CmcTrendingCoin,
+  type CmcCategory,
 } from './cmc-client';
 import {
   normalizeListings,
