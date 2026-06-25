@@ -86,9 +86,10 @@ All 10 stages defined in `STAGE_META` in `app/admin/signals/page.tsx`.
 | STALE | zinc | `telegram_sent=true + past timeframe window` | Yes |
 | TP_HIT | green | `outcome === 'TP_HIT'` | Yes |
 | SL_HIT | red | `outcome === 'SL_HIT'` | Yes |
-| TIMEOUT | gray | `outcome === 'TIMEOUT'` | Yes |
 | ANALYZED | blue-gray | `outcome === 'ANALYZED'` | Yes but rare |
-| CLOSED | gray-600 | `outcome === 'CLOSED'` | Yes |
+| CLOSED | gray-600 | `outcome === 'CLOSED'` OR `outcome === 'TIMEOUT'` | Yes |
+
+**Note:** `TIMEOUT` is a DB outcome value (signal expired without resolution), not a lifecycle stage. `computeLifecycleStage()` maps `outcome === 'TIMEOUT'` → `CLOSED` stage.
 
 **Timeframe windows for ACTIVE:**
 - 1h signals: 8h window

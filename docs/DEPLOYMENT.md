@@ -33,9 +33,11 @@ REDIS_URL=rediss://...
 CELERY_BROKER_URL=amqps://...@cloudamqp.com/...
 CELERY_RESULT_BACKEND=rpc://
 BINANCE_API_KEY=
+BINANCE_SECRET_KEY=
 COINMARKETCAP_API_KEY=
-WHATSAPP_API_URL=https://api.ultramsg.com/instance.../messages/chat
+WHATSAPP_API_URL=https://api.ultramsg.com/instanceXXXXX/
 WHATSAPP_TOKEN=
+WHATSAPP_PHONE=
 ADMIN_SECRET=<same 32-byte hex as Vercel>
 ```
 
