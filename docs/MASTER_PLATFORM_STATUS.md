@@ -1,5 +1,5 @@
 # MASTER PLATFORM STATUS — SignalEdge AI
-<!-- Single source of truth. Updated: 2026-06-23. Supersedes all historical audit docs. -->
+<!-- Single source of truth. Updated: 2026-06-25. Supersedes all historical audit docs. -->
 <!-- Consolidated from: SYSTEM_STABILIZATION_FINAL_1, STABILIZATION_CLOSEOUT_1, PLATFORM_STABILIZATION_1, SIGNAL_QUALITY_END_TO_END_VALIDATION_1, DOCUMENT_CONSOLIDATION_1 -->
 
 ---
@@ -8,9 +8,11 @@
 
 **Stack:** Next.js 14 (Vercel) · FastAPI + Celery (Railway) · Supabase PostgreSQL · Redis Cloud · CloudAMQP  
 **Admin dashboard:** 3 centers — `/admin/signals` · `/admin/performance` · `/admin/system`  
+**Member dashboard:** `/dashboard` — 5 pages (Overview / Active Signals / Closed Signals / Performance / Settings). Auth-gated (any Supabase user). No scanner internals exposed. See `docs/USER_DASHBOARD_1.md`.  
 **Primary scanner:** Python (`backend/core/scanner/`) — TypeScript `lib/scanner.ts` is legacy  
 **Signal universe:** Top-200 coins via CoinMarketCap (TypeScript workers → Redis cache → Python reads cache)  
 **Signal delivery:** WhatsApp via UltraMsg (instance181885, +919600190022). Source code says "Telegram" — that's the old channel name, never renamed.  
+**Landing page:** Outcome-first copy (SAAS.POSITIONING.1, June 25) — hero: "High-Probability Crypto Signals / Delivered to WhatsApp". Real 30D metrics (WR 34.8%, Exp +0.10R). Performance section above Features. See `docs/SAAS_POSITIONING_1.md`.  
 **Production score:** 9.5/10 (PROD.FIX.1 complete + FRONTEND.SYSTEM.TRUTH.FIXES complete)  
 **Current status:** Monitoring freeze June 23–30. No strategy changes permitted.
 
@@ -167,7 +169,9 @@ Earlier migrations (also applied):
 
 ---
 
-## KEY ADMIN ROUTES
+## KEY ROUTES
+
+### Admin (email allowlist required)
 
 | Route | Purpose |
 |-------|---------|
@@ -178,6 +182,16 @@ Earlier migrations (also applied):
 | `/admin/analytics` | → `/admin/performance` (redirect) |
 | `/admin/intelligence` | → `/admin/system?tab=system` (redirect) |
 | `/admin/settings` | → `/admin/system?tab=settings` (redirect) |
+
+### Member Dashboard (any authenticated user)
+
+| Route | Purpose |
+|-------|---------|
+| `/dashboard` | Overview — stat tiles, recent signals, 7D perf snapshot |
+| `/dashboard/signals/active` | Live active signals with dir/mode filter chips |
+| `/dashboard/signals/closed` | Closed signals with period selector + outcome filter |
+| `/dashboard/performance` | WR / PF / Exp by period, by mode, by grade |
+| `/dashboard/settings` | Account · WhatsApp number · Plan · Security |
 
 AI toggle: **System → Settings → Quick Controls**  
 Feature flags: **System → Settings → Feature Flags**  

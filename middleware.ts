@@ -2,7 +2,8 @@ import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 
 // ─── Protected path prefixes ──────────────────────────────────────────────────
-// Everything under these prefixes requires an authenticated admin session.
+// Admin paths require an authenticated admin session (email allowlist).
+// Member paths require any authenticated Supabase session.
 // /login, /auth/callback, /api/health, and all public routes pass through freely.
 
 const ADMIN_PREFIXES = [
@@ -13,8 +14,18 @@ const ADMIN_PREFIXES = [
   '/api/analytics',
 ]
 
+const MEMBER_PREFIXES = [
+  '/dashboard',
+]
+
 function isAdminPath(pathname: string): boolean {
   return ADMIN_PREFIXES.some(
+    p => pathname === p || pathname.startsWith(p + '/'),
+  )
+}
+
+function isMemberPath(pathname: string): boolean {
+  return MEMBER_PREFIXES.some(
     p => pathname === p || pathname.startsWith(p + '/'),
   )
 }
@@ -69,8 +80,8 @@ export async function middleware(req: NextRequest) {
   const { method, nextUrl: { pathname } } = req
   const requestId = crypto.randomUUID()
 
-  // ── Auth gate ─────────────────────────────────────────────────────────────
-  if (isAdminPath(pathname)) {
+  // ── Auth gate (admin + member paths) ─────────────────────────────────────
+  if (isAdminPath(pathname) || isMemberPath(pathname)) {
     // @supabase/ssr middleware client: reads session from cookies and refreshes
     // tokens by writing updated cookies to the response.
     let supabaseRes = NextResponse.next({ request: req })
@@ -94,26 +105,14 @@ export async function middleware(req: NextRequest) {
 
     // getUser() validates the JWT with Supabase — not just a local cookie check
     const { data: { user } } = await supabase.auth.getUser()
-    const email     = user?.email?.toLowerCase() ?? null
-    const allowlist = getAllowedEmails()
 
-    // Must be authenticated AND email must be in the allowlist.
-    // In production, an empty allowlist blocks everyone (fail-safe).
-    // In development, an empty allowlist allows any authenticated user.
-    const allowlistConfigured = allowlist.length > 0
-    const isAllowed = !!user && (
-      (!isProduction() && !allowlistConfigured) ||
-      (allowlistConfigured && !!email && allowlist.includes(email))
-    )
-
-    if (!isAllowed) {
-      console.warn(
-        `[auth] blocked ${user ? 'authenticated non-admin user' : 'unauthenticated'} → ${pathname}`,
-      )  // Fix 4: email address removed from logs (PII)
+    // All protected paths require authentication
+    if (!user) {
+      console.warn(`[auth] unauthenticated → ${pathname}`)
 
       if (pathname.startsWith('/api/')) {
         return NextResponse.json(
-          { error: 'Unauthorized', message: 'Admin authentication required' },
+          { error: 'Unauthorized', message: 'Authentication required' },
           { status: 401 },
         )
       }
@@ -123,7 +122,34 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(loginUrl)
     }
 
-    // Authenticated — stamp headers and return with refreshed session cookies
+    // Admin paths additionally require email allowlist membership
+    if (isAdminPath(pathname)) {
+      const email     = user.email?.toLowerCase() ?? null
+      const allowlist = getAllowedEmails()
+
+      const allowlistConfigured = allowlist.length > 0
+      const isAllowed = (
+        (!isProduction() && !allowlistConfigured) ||
+        (allowlistConfigured && !!email && allowlist.includes(email))
+      )
+
+      if (!isAllowed) {
+        console.warn(`[auth] authenticated non-admin blocked → ${pathname}`)
+
+        if (pathname.startsWith('/api/')) {
+          return NextResponse.json(
+            { error: 'Unauthorized', message: 'Admin authentication required' },
+            { status: 401 },
+          )
+        }
+
+        const loginUrl = new URL('/login', req.url)
+        loginUrl.searchParams.set('next', pathname)
+        return NextResponse.redirect(loginUrl)
+      }
+    }
+
+    // Authenticated (and admin if required) — stamp headers and return
     supabaseRes.headers.set('X-Request-Id', requestId)
     for (const [k, v] of SECURITY_HEADERS) supabaseRes.headers.set(k, v)
     return supabaseRes

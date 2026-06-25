@@ -18,7 +18,7 @@ function adminDb() {
   return createClient(url, key);
 }
 
-async function getUserPlan(userId: string): Promise<PlanId> {
+export async function getUserPlan(userId: string): Promise<PlanId> {
   try {
     const { data } = await adminDb()
       .from('users')
@@ -63,8 +63,13 @@ export async function getAccessContext(req: NextRequest): Promise<AccessContext>
       { cookies: { getAll: () => cookieStore.getAll() } },
     );
     const { data: { user } } = await supabase.auth.getUser();
-    if (user?.email && isAdminEmail(user.email)) {
-      return { userId: user.id, planId: 'enterprise', plan: getPlan('enterprise') };
+    if (user) {
+      if (user.email && isAdminEmail(user.email)) {
+        return { userId: user.id, planId: 'enterprise', plan: getPlan('enterprise') };
+      }
+      // Regular authenticated user — resolve their plan from DB
+      const planId = await getUserPlan(user.id);
+      return { userId: user.id, planId, plan: getPlan(planId) };
     }
   } catch {
     // session check failed — fall through to free tier
