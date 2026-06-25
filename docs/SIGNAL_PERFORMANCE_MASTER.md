@@ -106,10 +106,10 @@ Permitted changes: Infrastructure, logging, dashboarding, documentation.
 ### Alert Thresholds
 | Alert | Threshold | Baseline | Classification |
 |-------|-----------|----------|---------------|
-| WR CRITICAL | < 30% | 33.15% | Hard alert — act immediately |
+| WR CRITICAL | < 30% | 33.52% | Hard alert — act immediately |
 | PF CRITICAL | < 1.0 | 1.204 | Hard alert |
 | Expectancy CRITICAL | < 0 | +0.1245R | Hard alert |
-| WR WARNING | < 32.3% (breakeven) | 33.15% | Monitor only |
+| WR WARNING | < 32.3% (breakeven) | 33.52% | Monitor only |
 | Volume WARNING | < 20 generated/day | 66/day | Check BTC regime first |
 | SIDEWAYS exemption WR | < 40% on n≥10 | 45.9% | Revert exemption |
 
@@ -170,7 +170,7 @@ IF SIDEWAYS|SELL|CONFIRMED WR < 40% (n≥10):
 ### P2 — Monitor
 | ID | Risk | Notes |
 |----|------|-------|
-| PR-P2-1 | WR near warning threshold (33.15% vs 32.3% breakeven) | Only 0.85pp above breakeven — single bad day pushes into warning |
+| PR-P2-1 | WR near warning threshold (33.52% vs 32.3% breakeven) | Only 1.22pp above breakeven — single bad day pushes into warning |
 | PR-P2-2 | Regime dependency — edge concentrated in BEAR_TREND (68.4%) | If BTC shifts regime, platform goes silent |
 | PR-P2-3 | KLINE_EMPTY elevated | 10.1% of coin-scans — API outage signature |
 | PR-P2-4 | TRENDING mode negative 30D | WR=28.2%, Exp=−0.151R — probability gate blocks delivery correctly |

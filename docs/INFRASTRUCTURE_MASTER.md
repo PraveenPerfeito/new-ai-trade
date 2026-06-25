@@ -28,7 +28,7 @@
 - **Fail-open:** `is_enabled()` and `acquire_scan_lock()` catch all Redis exceptions and return `True`
 
 ### CloudAMQP
-- **URL:** `armadillo.rmq.cloudamqp.com` (note: URL has had SSL issues — verify active state)
+- **URL:** `warthog.lmq.cloudamqp.com/nykbebbj` (new instance after old `armadillo` quota exhausted June 24)
 - **Purpose:** Celery task broker only (not SchedulerCoordinator)
 - **Heartbeat:** 600s (was 60s → saves 4,320 msgs/month)
 
@@ -135,7 +135,7 @@ All are safe to re-run. For a fresh deploy: run all 7 files in Supabase SQL Edit
 ## SECTION 5 — Operations Budget Targets
 
 ### Redis (target: <200K ops/month)
-- Actual: ~44K ops/day × 30 = ~1.32M ops/month [CMC_REDIS_TRUTH_1 audit]
+- Actual: ~44K ops/day × 30 = ~1.32M ops/month [post-OPS.CONSOLIDATION.1 estimate; CMC_REDIS_TRUTH_1 measured ~77K/day before CloudAMQP]
 - Note: SYSTEM_STABILIZATION_FINAL estimated ~66K/month — CMC_REDIS_TRUTH_1 is more accurate
 - Savings applied: CloudAMQP broker (−34,560 BLPOP/day), kline batching (−98%), heartbeat 600s, hourly cron
 
@@ -219,7 +219,7 @@ HIGH_CONFIDENCE scan: **removed from beat schedule** (permanently disabled since
 ```
 SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 REDIS_URL=redis://default:...@smell-aware-macromodern-12096.db.redis.io:15686
-CELERY_BROKER_URL=amqps://...@armadillo.rmq.cloudamqp.com/...
+CELERY_BROKER_URL=amqps://nykbebbj:...@warthog.lmq.cloudamqp.com/nykbebbj
 CELERY_RESULT_BACKEND=rpc://
 ADMIN_SECRET=<32-byte hex>
 BINANCE_API_KEY, BINANCE_SECRET_KEY

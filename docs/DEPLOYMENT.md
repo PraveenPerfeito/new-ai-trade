@@ -45,7 +45,7 @@ Run all files in `database/` via Supabase SQL Editor (all are idempotent — saf
 1. `admin-auth-migration.sql`
 2. `analytics-schema.sql`
 3. `phase-7-4a-intelligence-migration.sql`
-4. `cmc-backup-migration.sql`
+4. `cmc-backup-migration.sql` **(must run before CMC capture task below)**
 5. All remaining `*.sql` files in any order
 
 ## First-Time CMC Data Capture

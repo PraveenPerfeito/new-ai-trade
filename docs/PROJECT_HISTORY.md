@@ -104,6 +104,7 @@ Key decisions that are non-obvious or contradict default assumptions:
 | P1-DB-1 | `telegram_delivered=NULL` for pre-WS2 signals | INFRASTRUCTURE_MASTER §7 | Expected state — ~626 signals pre-fix |
 | P1-UI-1 | No CMC cache manual refresh UI entry point | PLATFORM_TRUTH_MASTER §4 | Deleted in PLATFORM_SIMPLIFICATION_1 |
 | P1-PERF-1 | Probability accuracy MAE=40.9pp | SIGNAL_PERFORMANCE_MASTER §5 | Monitor; no action until ≥200 stamped |
+| P1-TEST-1 | `test_probability_engine.py:129` — `riskgrade_v2` default `OFF` in test but `ON` in production | `backend/analytics/tests/test_probability_engine.py:129` | Update test default to `True` |
 
 ### P2 — Act within 30 days
 | ID | Item | Source |
