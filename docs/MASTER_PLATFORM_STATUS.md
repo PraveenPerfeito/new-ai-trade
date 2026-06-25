@@ -107,12 +107,15 @@ HIGH_CONFIDENCE: removed from beat schedule entirely (permanently disabled — 0
 
 ## REDIS BUDGET
 
-Key reductions implemented (OPS.CONSOLIDATION.1 + PROD.FIX.1):
+Key reductions implemented (OPS.CONSOLIDATION.1 + PROD.FIX.1 + 2026-06-22):
 - Broker: CloudAMQP AMQP (eliminates ~34,560 Redis BLPOP ops/day)
 - Result backend: `rpc://` (zero Redis for task results)
 - Worker heartbeat: 600s (was 60s)
 - Kline metric batching: 5s window, single pipeline (~98% reduction)
 - `scan_durations` key retired; hit/miss counters retired; quota snapshot hourly
+- **REDIS.REDUCE.4** — Dead monitoring metrics removed from `monitoring.py`; AI summary counters removed from `orchestrator.py`
+- **REDIS.REDUCE.4b** — `infra_collector` background task disabled in `main.py` (864 dead ops/day saved)
+- **REDIS.CONN.1** — aioredis pool capped at 5 connections; ioredis closed after each Intelligence cron tick (prevents connection leak on Vercel)
 
 **Actual ops:** ~44K ops/day (~1.32M/month) — higher than 200K/month original target. Re-evaluate Redis Cloud plan limits (P2).
 
@@ -199,7 +202,9 @@ Emergency stop: **System → Settings → Quick Controls** (red when ON)
    - `ADMIN_SECRET` (same as Vercel)
    - `BINANCE_API_KEY`, `BINANCE_SECRET_KEY`
    - `COINMARKETCAP_API_KEY`
-   - `ULTRAMSG_TOKEN`, `ULTRAMSG_INSTANCE`
+   - `WHATSAPP_API_URL` (e.g. `https://api.ultramsg.com/instance181885/`)
+   - `WHATSAPP_TOKEN` (UltraMsg instance token)
+   - `WHATSAPP_PHONE` (recipient number with country code, e.g. `+919600190022`)
    - `ANTHROPIC_API_KEY` (**P0 open item** — unset currently)
 
 3. **Database:** Run all files in `database/` via Supabase SQL Editor (idempotent)
