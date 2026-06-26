@@ -68,12 +68,12 @@ Public route. No authentication. No Supabase session check.
 │   May 2026     401      36.2%        1.31           +0.19R
 │   ...
 │
-├── SIGNAL LOG — last 100 closed signals  [BUY | SELL | All]  [TP | SL | All]
+├── SIGNAL LOG — last 50 closed signals (paginated)  [BUY | SELL | All]  [TP | SL | All]
 │   Symbol    Dir    Outcome    R      Duration    Closed
 │   BTC       BUY    TP HIT    +2.1R    6h        Jun 23
 │   ETH       SELL   SL HIT   -1.0R    2h        Jun 23
 │   ...       ...    ...        ...      ...       ...
-│   [Load more]
+│   [Load more — 50 per page]
 │
 └── FOOTER
     "All data sourced directly from the SignalEdge AI database.
@@ -83,7 +83,7 @@ Public route. No authentication. No Supabase session check.
 
 ### 3.2 Window toggle behaviour
 
-Selecting 7D / 30D / 90D updates only the hero stats row. Monthly table and signal log are independent of the window toggle (always show last 12 months / last 100 respectively).
+Selecting 7D / 30D / 90D updates only the hero stats row. Monthly table and signal log are independent of the window toggle (always show last 12 months / last 50 respectively).
 
 "All-time" queries the full `signal_outcomes` table without a date filter.
 
@@ -93,7 +93,7 @@ Selecting 7D / 30D / 90D updates only the hero stats row. Monthly table and sign
 |-------|--------|-------|
 | `symbol` | `signal_outcomes.symbol` | e.g. "BTC/USDT" |
 | `signal_type` | `signal_outcomes.signal_type` | BUY or SELL |
-| `outcome` | `signal_outcomes.outcome` | TP HIT / SL HIT / TIMEOUT |
+| `outcome` | `signal_outcomes.outcome` | DB value is `TP_HIT` / `SL_HIT` / `TIMEOUT` — display as `outcome.replace(/_/g, ' ')` → `TP HIT` / `SL HIT` / `TIMEOUT` |
 | `rr_achieved` | `signal_outcomes.rr_achieved` | e.g. +2.1R or -1.0R |
 | `duration_hours` | `signal_outcomes.duration_hours` | formatted: "4h" / "2d 3h" |
 | `resolved_at` | `signal_outcomes.resolved_at` | date only, no time (privacy) |

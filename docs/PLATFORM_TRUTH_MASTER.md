@@ -232,7 +232,7 @@ Fields that exist in DB and are correctly mapped in API/frontend (verified June 
 `id, symbol, signal_type, mode, confidence, setup_score, market_regime, btc_regime, breakout_strength, oi_interpretation, funding_trend, positioning_context, momentum_score, trend_score, sector_status, validation_source, telegram_sent, telegram_delivered, telegram_delivery_error, empirical_wr, empirical_n, empirical_grade, entry_price, take_profit, stop_loss, risk_reward, created_at, indicators (JSONB)`
 
 **`signal_outcomes` table (key fields):**
-`id, signal_id, outcome, rr_achieved, pnl_pct, duration_hours, market_regime, resolution_source, resolved_at, created_at`
+`id, signal_id, symbol, signal_type, timeframe, scanner_mode, entry_price, target_price, stop_loss, rr_ratio, confidence, ai_validated, risk_grade, outcome (PENDING/TP_HIT/SL_HIT/TIMEOUT), rr_achieved, pnl_pct, duration_hours, market_regime, resolution_source, resolved_at, created_at`
 
 **`attribution_snapshots` table:**
 `id, snapshot_date, dimension, dimension_value, win_rate, expectancy, profit_factor, n, regime, signal_type, breakout_strength, created_at`

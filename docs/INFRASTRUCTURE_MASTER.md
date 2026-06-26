@@ -10,7 +10,7 @@
 - **FastAPI** + uvicorn, `PORT` env var
 - **Celery worker:** `python -m celery -A backend.workers.celery_app worker`
 - **Beat scheduler:** `celery -A backend.workers.celery_app beat`
-- **Health check:** `GET /health/ready` → checks Redis, PostgreSQL, Binance, Anthropic, WhatsApp
+- **Health check:** `GET /health/ready` → checks Redis, PostgreSQL, Binance, Anthropic, WhatsApp. **Note:** Anthropic shows `DEGRADED` (not `DOWN`) when `ANTHROPIC_API_KEY` is unset — this is expected; the system runs 100% heuristic mode.
 - **Worker heartbeat:** writes `celery:worker:last_heartbeat` on `worker_ready` + refreshes every **600s** via beat task
 - **Broker:** CloudAMQP (AMQP) — eliminates ~34,560 Redis BLPOP ops/day
 - **Result backend:** `rpc://` — zero Redis for task results

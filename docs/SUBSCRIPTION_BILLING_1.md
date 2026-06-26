@@ -275,8 +275,10 @@ After the existing admin alert send (unchanged), add:
 ```python
 async def _fanout_to_subscribers(self, text: str) -> None:
     """Send signal alert to all active PRO/PREMIUM subscribers."""
-    if not _ops_alerts_enabled():  # reuse existing flag check
-        return
+    # IMPORTANT: Do NOT gate on _ops_alerts_enabled() here — that flag defaults
+    # to False and controls ops/system alerts, not subscriber signal alerts.
+    # send_signal_alert() is already gated on telegram.alerts_enabled before
+    # calling this function, so no additional gate is needed.
     subscribers = await get_active_subscribers(self._pool)
     if not subscribers:
         return
@@ -400,6 +402,10 @@ export function SubscribeButton({ planId }: { planId: 'pro' | 'premium' }) {
       body: JSON.stringify({ planId }),
       headers: { 'Content-Type': 'application/json' },
     });
+    if (!res.ok) {
+      setLoading(false);
+      throw new Error(`Subscription creation failed: ${res.status}`);
+    }
     const { subscriptionId, key } = await res.json();
 
     // Lazily load Razorpay SDK (not CDN — inject inline to stay CSP-safe)
@@ -491,6 +497,18 @@ npm install razorpay
 ```
 
 Add to `package.json` dependencies. No backend Python SDK needed.
+
+### 7.5 CSP configuration — `next.config.mjs`
+
+The Razorpay checkout modal loads `checkout.razorpay.com/v1/checkout.js`. If a `Content-Security-Policy` header is set, add `checkout.razorpay.com` to `script-src` and `frame-src`:
+
+```js
+// next.config.mjs — in headers() or security headers middleware
+"script-src 'self' 'unsafe-inline' checkout.razorpay.com",
+"frame-src 'self' checkout.razorpay.com api.razorpay.com",
+```
+
+Without this, the checkout modal will be blocked by CSP on browsers that enforce it.
 
 ---
 

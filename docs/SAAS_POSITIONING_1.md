@@ -40,7 +40,7 @@ Rationale: Performance data is the key conversion signal for traders; it should 
   - Expectancy: +0.14R — blue
   - Signals (7D): `—` with Live badge — gray (live count placeholder)
   - Delivered: `—` with Live badge — gray (live count placeholder)
-- **30-day track record banner:** Win Rate 34.8% · Expectancy +0.10R · 1,800+ signals analyzed
+- **30-day track record banner:** Win Rate 34.8% · Expectancy +0.10R · 2,100+ signals analyzed
 - **Disclaimer:** Updated to reference TP_HIT/SL_HIT/TIMEOUT outcome methodology; "Not financial advice" added
 
 ### 4. CTA Section — Telegram Removed
