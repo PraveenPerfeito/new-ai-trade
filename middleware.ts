@@ -16,6 +16,7 @@ const ADMIN_PREFIXES = [
 
 const MEMBER_PREFIXES = [
   '/dashboard',
+  '/api/member',
 ]
 
 function isAdminPath(pathname: string): boolean {

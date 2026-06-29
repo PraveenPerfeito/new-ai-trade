@@ -4,6 +4,7 @@ import { tacticalQuerySchema } from '@/lib/validate';
 import { getRecentSignals } from '@/lib/supabase';
 import { computeLifecycleStage } from '@/lib/signal-lifecycle';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { getAccessContext } from '@/lib/access-control';
 import type { TacticalSignalRow, SignalLifecycleStage, SignalOutcome } from '@/types';
 
 export const runtime  = 'nodejs';
@@ -16,6 +17,12 @@ export async function GET(req: NextRequest) {
 
   const { limit, minConfidence, lifecycleStage, type, mode } = parsed.data;
 
+  // Resolve caller's plan and apply confidence floor — prevents free/pro users from
+  // seeing signals below their plan threshold via direct API calls. Admin (enterprise)
+  // plan threshold is 70, so this is always a no-op for admin dashboard callers.
+  const ctx = await getAccessContext(req);
+  const effectiveMinConf = Math.max(minConfidence, ctx.plan.minSignalConfidence);
+
   try {
     // Count total DB signals matching criteria — returned as dbTotal so the UI
     // can show "showing X of Y" without a second API call.
@@ -26,7 +33,7 @@ export async function GET(req: NextRequest) {
       const { count } = await adminForCount
         .from('signals')
         .select('*', { count: 'exact', head: true })
-        .gte('confidence', minConfidence)
+        .gte('confidence', effectiveMinConf)
         .gte('created_at', cutoff);
       dbTotal = count;
     } catch { /* non-fatal — UI degrades gracefully */ }
@@ -34,7 +41,7 @@ export async function GET(req: NextRequest) {
     // Fetch with DB-level mode/type filtering so pagination isn't limited by client-side post-filter
     const raw = await getRecentSignals(
       limit * 2,
-      minConfidence,
+      effectiveMinConf,
       7,
       mode !== 'all' ? mode : undefined,
       type !== 'all' ? type : undefined,
