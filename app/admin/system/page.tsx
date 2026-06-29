@@ -323,11 +323,12 @@ const FLAG_META: Record<string, {
   anomaly_detection:                  { tier: 'operational' },
   output_collapse_alert:              { tier: 'operational' },
   paper_trading_monitor:              { tier: 'advanced' },
-  backtesting:                        { tier: 'advanced' },
+  backtest:                           { tier: 'advanced' },
   daily_analytics_snapshot:           { tier: 'advanced' },
   rate_limiting:                      { tier: 'advanced' },
   confidence_calibration_v2:          { tier: 'advanced' },
   attribution_snapshots:              { tier: 'advanced' },
+  probability_gate_enabled:           { tier: 'advanced' },
 }
 
 // ── WhatsApp Delivery Card ────────────────────────────────────────────────────
@@ -532,7 +533,7 @@ function FounderOperationsCard({
           <button onClick={onScanNow}
             disabled={scanning || opLoading || !celery || flags?.emergency_stop || flags?.maintenance_mode}
             className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
-              scanDone  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' :
+              scanDone  ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' :
               scanning  ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' :
                           'bg-zinc-950 border-zinc-800 text-zinc-200 hover:border-zinc-700'
             }`}>
