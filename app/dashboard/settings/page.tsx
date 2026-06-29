@@ -8,8 +8,9 @@ import Link from 'next/link'
 
 const PLAN_FEATURES: Record<PlanId, string[]> = {
   free:       ['10 signals/day', 'Spot mode only', 'Dashboard access'],
-  pro:        ['Unlimited signals', 'All scan modes', 'Telegram alerts', 'Priority support'],
-  enterprise: ['Everything in Pro', 'API access', 'Custom integrations', 'Dedicated support'],
+  pro:        ['Unlimited signals', 'All scan modes', 'Alerts', 'Priority support'],
+  premium:    ['Unlimited signals', 'All scan modes', 'Confidence ≥ 75%', 'Real-time alerts'],
+  enterprise: ['Everything in Premium', 'API access', 'Custom integrations', 'Dedicated support'],
 }
 
 export default function SettingsPage() {

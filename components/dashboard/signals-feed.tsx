@@ -869,11 +869,13 @@ function McapTierBadge({ tier }: { tier: McapTier }) {
 
 function RiskGradeBadge({ grade }: { grade: RiskGrade }) {
   const styles: Record<RiskGrade, { bg: string; text: string; border: string }> = {
-    A: { bg: 'bg-bull-muted',          text: 'text-bull-text',      border: 'border-bull-DEFAULT/30' },
-    B: { bg: 'bg-teal-900/20',         text: 'text-teal-400',       border: 'border-teal-500/30' },
-    C: { bg: 'bg-blue-900/20',         text: 'text-blue-400',       border: 'border-blue-500/30' },
-    D: { bg: 'bg-yellow-900/20',       text: 'text-yellow-400',     border: 'border-yellow-500/30' },
-    F: { bg: 'bg-bear-muted',          text: 'text-bear-text',      border: 'border-bear-DEFAULT/30' },
+    'A+': { bg: 'bg-bull-muted',          text: 'text-bull-text',      border: 'border-bull-DEFAULT/30' },
+    A:    { bg: 'bg-bull-muted',          text: 'text-bull-text',      border: 'border-bull-DEFAULT/30' },
+    'B+': { bg: 'bg-teal-900/20',         text: 'text-teal-400',       border: 'border-teal-500/30' },
+    B:    { bg: 'bg-teal-900/20',         text: 'text-teal-400',       border: 'border-teal-500/30' },
+    C:    { bg: 'bg-blue-900/20',         text: 'text-blue-400',       border: 'border-blue-500/30' },
+    D:    { bg: 'bg-yellow-900/20',       text: 'text-yellow-400',     border: 'border-yellow-500/30' },
+    F:    { bg: 'bg-bear-muted',          text: 'text-bear-text',      border: 'border-bear-DEFAULT/30' },
   };
   const s = styles[grade];
   return (

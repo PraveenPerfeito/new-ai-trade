@@ -13,7 +13,7 @@ interface InstitutionalScoreInput {
 }
 
 const GRADE_SCORE: Record<RiskGrade, number> = {
-  A: 100, B: 80, C: 60, D: 35, F: 0,
+  'A+': 100, A: 95, 'B+': 80, B: 70, C: 55, D: 35, F: 0,
 };
 
 /**

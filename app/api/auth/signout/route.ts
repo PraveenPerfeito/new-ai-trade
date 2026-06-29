@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { logAuthEvent } from '@/lib/auth-audit'
 
 export async function POST(_req: NextRequest) {
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
 
   // Capture email before signing out
   const { data: { user } } = await supabase.auth.getUser()

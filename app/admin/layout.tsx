@@ -8,7 +8,7 @@ export const metadata = { title: 'Admin — Scanner Command Center' }
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   // Secondary auth check — middleware is the primary gate, this is defence-in-depth.
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) redirect('/login')

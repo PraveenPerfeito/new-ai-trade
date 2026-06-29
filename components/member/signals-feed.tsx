@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { ArrowUpRight, ArrowDownRight, Loader2, RefreshCw } from 'lucide-react'
+import { fmtPx, timeAgo } from '@/lib/member-utils'
 import type { TacticalSignalRow } from '@/types'
 
 interface Props {
@@ -32,21 +33,6 @@ const GRADE_COLORS: Record<string, string> = {
   F:    'text-red-400',
 }
 
-function fmtPrice(n: number | null | undefined): string {
-  if (n == null) return '—'
-  if (n >= 1000) return `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-  if (n >= 1)    return `$${n.toFixed(4)}`
-  return `$${n.toFixed(6)}`
-}
-
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime()
-  const mins = Math.floor(diff / 60_000)
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  return `${Math.floor(hrs / 24)}d ago`
-}
 
 export function MemberSignalsFeed({ limit = 20 }: Props) {
   const [signals, setSignals] = useState<TacticalSignalRow[]>([])
@@ -168,9 +154,9 @@ export function MemberSignalsFeed({ limit = 20 }: Props) {
 
               {/* Price levels row */}
               <div className="flex items-center gap-4 mt-1.5 text-xs text-gray-500 flex-wrap">
-                <span>Entry <span className="text-gray-300">{fmtPrice(sig.entryPrice)}</span></span>
-                <span>TP <span className="text-emerald-400">{fmtPrice(sig.targetPrice)}</span></span>
-                <span>SL <span className="text-red-400">{fmtPrice(sig.stopLoss)}</span></span>
+                <span>Entry <span className="text-gray-300">{fmtPx(sig.entryPrice)}</span></span>
+                <span>TP <span className="text-emerald-400">{fmtPx(sig.targetPrice)}</span></span>
+                <span>SL <span className="text-red-400">{fmtPx(sig.stopLoss)}</span></span>
                 {sig.rrRatio && (
                   <span className="text-cyan-400 font-medium">{sig.rrRatio.toFixed(1)}R</span>
                 )}

@@ -244,7 +244,7 @@ function assignGrade(riskScore: number, qualityScore: number): RiskGrade {
 // ─── Position sizing ──────────────────────────────────────────────────────────
 
 function positionMultiplier(grade: RiskGrade): number {
-  const map: Record<RiskGrade, number> = { A: 1.0, B: 0.75, C: 0.5, D: 0.35, F: 0 };
+  const map: Record<RiskGrade, number> = { 'A+': 1.0, A: 1.0, 'B+': 0.75, B: 0.75, C: 0.5, D: 0.35, F: 0 };
   return map[grade];
 }
 

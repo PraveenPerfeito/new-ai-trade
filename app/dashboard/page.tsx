@@ -1,10 +1,8 @@
 import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
 import { createSupabaseAdminClient } from '@/lib/supabase/admin'
-import { getUserPlan } from '@/lib/access-control'
 import { MessageCircle } from 'lucide-react'
 import { OverviewSignalsFeed } from '@/components/member/overview-signals-feed'
-import type { PlanId } from '@/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,7 +36,6 @@ export default async function MemberOverviewPage() {
     { cookies: { getAll: () => cookieStore.getAll() } },
   )
   const { data: { user } } = await supabase.auth.getUser()
-  const planId = (user ? await getUserPlan(user.id) : 'free') as PlanId
 
   // ── Stats ──────────────────────────────────────────────────────────────────
   const admin  = createSupabaseAdminClient()
@@ -106,8 +103,6 @@ export default async function MemberOverviewPage() {
     ? `${expectancy7d > 0 ? '+' : ''}${expectancy7d.toFixed(2)}R`
     : '—'
   const pfDisplay       = profitFactor  != null ? profitFactor.toFixed(2)            : '—'
-
-  void planId
 
   return (
     <div>

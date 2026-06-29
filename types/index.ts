@@ -45,7 +45,7 @@ export interface TechnicalIndicators {
 export type SignalType = 'BUY' | 'SELL' | 'NEUTRAL';
 export type ScannerMode = 'spot' | 'futures' | 'high_confidence' | 'trending';
 export type Timeframe = '15m' | '1h' | '4h' | '1d';
-export type RiskGrade = 'A' | 'B' | 'C' | 'D' | 'F';
+export type RiskGrade = 'A+' | 'A' | 'B+' | 'B' | 'C' | 'D' | 'F';
 
 // ─── Phase 6.2 — Adaptive Quant Intelligence ─────────────────────────────────
 
@@ -548,7 +548,7 @@ export interface DailySummaryData {
 
 // ─── SaaS / Monetisation ─────────────────────────────────────────────────────
 
-export type PlanId = 'free' | 'pro' | 'enterprise';
+export type PlanId = 'free' | 'pro' | 'premium' | 'enterprise';
 
 export interface Plan {
   id:                    PlanId;
@@ -557,6 +557,7 @@ export interface Plan {
   dailySignalLimit:      number;    // -1 = unlimited
   monthlyApiCalls:       number;    // -1 = unlimited
   maxScanTriggers:       number;    // per day; -1 = unlimited
+  signalDelayHours?:     number;    // 0 = real-time; >0 = delayed feed (free tier)
   allowedModes:          ScannerMode[];
   features:              string[];
 }

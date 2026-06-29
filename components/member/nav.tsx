@@ -13,6 +13,7 @@ interface Props {
 const PLAN_STYLES: Record<PlanId, string> = {
   free:       'bg-gray-500/15 text-gray-400 border-gray-500/25',
   pro:        'bg-cyan-400/10 text-cyan-400 border-cyan-400/20',
+  premium:    'bg-blue-500/15 text-blue-400 border-blue-500/25',
   enterprise: 'bg-purple-500/15 text-purple-400 border-purple-500/25',
 }
 

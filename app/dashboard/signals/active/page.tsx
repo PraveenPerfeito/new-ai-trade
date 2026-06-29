@@ -6,7 +6,7 @@ import { fmtPx, timeAgo } from '@/lib/member-utils'
 import type { TacticalSignalRow } from '@/types'
 
 const ACTIVE_STAGES = new Set([
-  'ACTIVE', 'TELEGRAM_SENT', 'AI_APPROVED', 'SCREENED', 'VALIDATED',
+  'ACTIVE', 'TELEGRAM_SENT', 'AI_APPROVED', 'SCREENED',
 ])
 
 const STAGE_COLORS: Record<string, string> = {
@@ -14,7 +14,7 @@ const STAGE_COLORS: Record<string, string> = {
   TELEGRAM_SENT: 'bg-blue-400/10 text-blue-400',
   AI_APPROVED:   'bg-purple-400/10 text-purple-400',
   SCREENED:      'bg-sky-400/10 text-sky-400',
-  VALIDATED:     'bg-gray-500/10 text-gray-400',
+
 }
 
 const GRADE_BADGE: Record<string, string> = {

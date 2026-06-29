@@ -1572,8 +1572,8 @@ function SettingsTab() {
           ))}
         </div>
         <p className="text-[10px] text-zinc-500/40 leading-relaxed">
-          Presets that set confidence below 85 (Aggressive, Futures Tactical, Rotation Hunter) conflict with the
-          ALPHA.TRUTH.1 audit — the 80–85 band ran negative expectancy over 30d. Prefer Balanced/Conservative for live capital.
+          Presets that set confidence below 85 (Balanced, Aggressive, Futures Tactical, Rotation Hunter) conflict with the
+          ALPHA.TRUTH.1 audit — the 80–85 band ran negative expectancy over 30d. Use Conservative for live capital.
         </p>
       </div>
 

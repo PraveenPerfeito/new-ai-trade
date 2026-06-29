@@ -18,6 +18,25 @@ export const PLANS: Record<PlanId, Plan> = {
     ],
   },
 
+  premium: {
+    id:                  'premium',
+    name:                'Premium',
+    minSignalConfidence: 75,
+    dailySignalLimit:    -1,
+    monthlyApiCalls:     25_000,
+    maxScanTriggers:     -1,
+    signalDelayHours:    0,
+    allowedModes:        ['spot', 'futures', 'high_confidence', 'trending'],
+    features: [
+      'Unlimited signals',
+      'All scan modes',
+      'Confidence ≥ 75%',
+      'Unlimited manual scans',
+      '25,000 API calls/month',
+      'Priority WhatsApp alerts',
+    ],
+  },
+
   pro: {
     id:                  'pro',
     name:                'Pro',

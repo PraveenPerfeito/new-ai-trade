@@ -55,14 +55,14 @@ function calcExpectancy(tp: number, total: number, winners: OutcomeRow[]): numbe
   return (wr * avgWinnerRR) - ((1 - wr) * 1.0)
 }
 
-function calcProfitFactor(outcomes: OutcomeRow[]): number {
+function calcProfitFactor(outcomes: OutcomeRow[]): number | null {
   const grossProfit = outcomes
     .filter(o => o.outcome === 'TP_HIT')
     .reduce((sum, o) => sum + (o.rr_achieved ?? 2.0), 0)
   const grossLoss = outcomes
     .filter(o => o.outcome === 'SL_HIT')
     .reduce((sum, o) => sum + Math.abs(o.rr_achieved ?? 1.0), 0)
-  if (grossLoss === 0) return grossProfit > 0 ? 99 : 1
+  if (grossLoss === 0) return grossProfit > 0 ? null : 1
   return grossProfit / grossLoss
 }
 
